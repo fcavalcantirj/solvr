@@ -7523,3 +7523,114 @@ git status at journal time [REAL]: M backend/internal/db/posts_list.go, M backen
 
 UAT (for when idx 77 closes, not now): as slice 20's list. This slice changes no runtime behaviour, so it
   adds nothing to UAT.
+
+2026-10-01 12:45 — Task idx 77 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Make indexes, counters, search projections, and analytics rebuildable from authoritative records"
+SLICE 22 of N: step 4. Each raw event table's retention, and the longest window of every metric that
+reads it, are now stated in code (RawEventSources). Tests hold that list to the windows the readers offer,
+to the production code that deletes rows, and to a clean installation's schema. Three distinct counts
+are pinned as exact over the whole window, so they can never become a sum of per-day distinct counts.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 77-95, 97, 98; no open
+  URGENT (96 is true). 24/67 acceptance (skipped as before); 68 waits on the owner. idx 77 first
+  buildable. Tree clean at start, HEAD 9c454539. Followed slice 21's REMAINING order (step 4 next).
+
+SURVEY [REAL, code read + grep + local schema on solvr_test this session]:
+  - No table stores a time-bucketed aggregate. Every chart (searchSeries, apiCallSeries, messageSeries,
+    ServiceCheckRepository.GetDailyAggregates) groups raw rows at read time. Every distinct count on a
+    window is one COUNT(DISTINCT) over the whole window: GetSummary unique_queries, GetAPIUsagePulse
+    RoomKnowledgeOperations, GetRoomPulse RoomsWithConversation / TwoWayExchangeRooms. No code sums
+    bucket-level distinct counts. No windowed unique-USER metric exists. unique_participant_count is
+    all-time per room; agents online is "now".
+  - Retention: nothing prunes search_queries, api_request_events, funnel_events, post_views or
+    service_checks by age. SearchAnalyticsRepository.DeleteOlderThan and ServiceCheckRepository.
+    DeleteOlderThan are the only production SQL deleting from them, and nothing calls either.
+    post_views go with their post (FK ON DELETE CASCADE). room_events and messages are views over
+    room_entries; entries go with their room (FK CASCADE). The only age-pruned table is
+    idempotency_keys (24 h), which no metric reads.
+  - Longest windows: homepage search, API usage and rooms, and admin activation: 30d (RoomStatsWindows).
+    /v1/data: 7d (windowToInterval). /v1/status: 30 days (literal in StatusHandler). Briefing trending
+    views: 7d. These read all history: admin search analytics (days chosen by the caller), cohorts (from
+    launch, a creator is new by its first step ever), the RecordParticipantJoined ordinal and flow id,
+    posts.view_count, API usage InstrumentedSince, the room pulse ActivationInstrumentedSince, and the
+    historical multi-author count.
+
+WHAT CHANGED [REAL, git status --porcelain: 2 ??; git diff --stat empty (no tracked file modified)]:
+  ?? backend/internal/db/metric_retention.go (134 lines): header stating the read-time / no-stored-
+    aggregate / whole-window-distinct rule; KeptIndefinitely, AllHistory; MetricReader, RawEventSource
+    (Table, TimeColumn, Retention, PrunedBy, RemovedWith, Readers); longestRoomStatsWindow();
+    RawEventSources for search_queries, api_request_events, funnel_events, post_views, room_entries,
+    service_checks. Each one is KeptIndefinitely, and each reader has its longest window. Nothing calls
+    it at runtime: it is documentation that the tests enforce. No behaviour change.
+  ?? backend/internal/db/metric_retention_test.go (268 lines):
+    - TestRawEventSources_RetentionCoversEveryReader (unit): no duplicates, and every reader's window
+      is <= its table's retention (all history only on a table kept indefinitely).
+    - TestRawEventSources_StateTheWindowsTheReadersOffer (unit): the 4 selector-driven readers equal the
+      longest RoomStatsWindow (30d). windowToInterval accepts 7d and rejects 14d/30d/90d/365d, and the
+      /v1/data reader states 7d.
+    - TestRawEventSources_NothingPrunesThemByAge (go/ast scan of non-test .go under internal/ and cmd/):
+      the functions whose SQL deletes from a source table (or the messages/room_events views) must be
+      exactly the two DeleteOlderThan methods. No production call of a DeleteOlderThan is allowed, and
+      every source must be KeptIndefinitely with no PrunedBy.
+    - TestRawEventSources_CleanInstallation (scratch DB, migrations 0 -> 131): every source is a BASE
+      TABLE whose time column is timestamptz. Each distinct-count subtest records one identity on days
+      1, 2 and 3 ago and a second identity once, and first asserts the per-day distinct sum would be 4
+      (rooms: 3). Expected results: GetSummary(7) TotalSearches 4 and UniqueQueries 2; GetSearchPulse(7d)
+      Eligible 4 and its series summing to Eligible; GetAPIUsagePulse(7d) SuccessfulCalls 4 and
+      RoomKnowledgeOperations 2; GetRoomPulse(7d) RoomsWithConversation 1.
+  No migration, index, cache, job or service. No existing test deleted, skipped or loosened.
+
+VERIFICATION [this session; DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test (local
+  docker solvr-postgres); the CleanInstallation test runs in its own scratch DB; logs in
+  /tmp/solvr_idx77_s22/]:
+  [TEST] RED (tdd/red.log): `go vet ./internal/db` with only the test file -> undefined: RawEventSources,
+    KeptIndefinitely, AllHistory.
+  [TEST] GREEN (tdd/green.log): `go test ./internal/db -count=1 -p 1 -v -run 'TestRawEventSources_'` ->
+    ok, 4 tests + 4 subtests PASS, 0 FAIL, 0 SKIP.
+  MUTATIONS [TEST] (mut/m1..m5.log), all FAIL as intended:
+    m1 GetSummary COUNT(DISTINCT (query_normalized, day)) -> unique_queries expected 2, actual 4.
+    m2 GetAPIUsagePulse COUNT(DISTINCT (operation, day)) -> expected 2, actual 4.
+    m3 GetRoomPulse per_room GROUP BY room and day -> expected 1, actual 3.
+    m4 search_queries Retention 7d -> RetentionCovers FAIL (30d and all-history readers) and
+       NothingPrunes FAIL (expected 0s, actual 168h).
+    m5 a production file calling SearchAnalyticsRepository.DeleteOlderThan -> NothingPrunes FAIL.
+    Sources restored: `shasum -c mut/orig.sha` OK for all 4 files; the zz_mut_prune.go file was removed.
+  [TEST] tdd/narrow.log: `go test ./internal/db -count=1 -p 1 -v -run 'TestRawEventSources|
+    TestSearchAnalytics|TestSearchPulse|TestAPIUsagePulse|TestRecordRequests|TestGetRoomPulse|
+    TestRecordRoomActivation|TestDataAnalytics|TestRoomStatsWindows|TestServiceCheck|TestFunnel|
+    TestActivation|TestCohort'` -> 60 PASS, 8 FAIL, 0 SKIP. All 8 failures are in /tmp/solvr_idx77_s13/
+    fail.now: TestSearchAnalyticsRepository_GetTrending/_GetZeroResults, TestServiceCheckRepository_
+    GetUptimePercentage(_Empty)/_GetAvgResponseTime(_Empty), TestSearchPulse_PublishesOnlyPublicScopeTerms,
+    TestSearchPulse_WithResultsCountsOnlyProductiveSearches. They come from rows left in the shared DB,
+    for example "expected uptime ~75%, got 72.34%" and "expected 3 test trending results, got 0". None of
+    them reads the new file.
+  [REAL] go build ./... ok; go vet ./internal/db ok; gofmt -l clean on both files;
+    ./scripts/check-file-size.sh reports the same 33 oversize files as before, and neither new file
+    (134 / 268 lines) is listed.
+  NOT RUN: the full serial backend run (still owed before idx 77 closes); frontend (no frontend file
+    touched).
+
+FINDINGS, NOT FIXED:
+  - [REAL, code read] PresenceReaperJob hard-deletes a room past expires_at (rooms.go DeleteExpiredRooms:
+    `DELETE FROM rooms`, although presence_reaper.go's comment says soft-delete), and its room_entries
+    cascade. So an expiring room's messages and activation leave every window figure within ~60 s of
+    expiry. TestGetRoomPulse_ExpiredRoomsLeaveLiveFiguresButKeepTheirHistory holds only until the reaper
+    runs. The rooms create handler never sets ExpiresAt [REAL]. Only imported rooms can carry one
+    [INFERRED, cmd/migrate-quorum writes expires_at].
+  - [REAL] The 5 raw event tables grow without bound. Pruning any of them is an owner decision: it would
+    change posts.view_count, the cohorts, InstrumentedSince and the RecordParticipantJoined ordinals.
+  - [UNVERIFIED binding] The status page's 30 days is a literal inside StatusHandler.GetStatus. The
+    registry states it, but no test binds it.
+
+REMAINING for idx 77 (next slices, in order) [UNVERIFIED plan]:
+  step 5: reconcile counters and sampled search results after migration and periodic rebuilds (slices
+    7/9/10/11 already cover the prompt removal of public projections).
+  step 6: this slice added no index, cache or service.
+  Before closing idx 77: one full serial backend run, compared against slice 13's fail.now.
+
+git status at journal time [REAL]: ?? backend/internal/db/metric_retention.go, ?? backend/internal/db/
+  metric_retention_test.go, plus M progress.txt (this entry). spec.json unchanged; idx 77 stays false.
+
+UAT (for when idx 77 closes, not now): as slice 21's list. This slice changes no runtime behaviour, so it
+  adds nothing to UAT.

@@ -6134,3 +6134,198 @@ UAT (for when idx 77 closes, not now): as slice 10's list, plus apply 000124 on 
   'rooms_overview_changed_delete','agents_removed_presence_end')` = 3; rename one public test room on
   https://solvr.dev and confirm the homepage activity shows the new name on the next load; delete a
   test agent that is present in a public room and confirm /rooms/{slug} stops listing it as online.
+
+2026-10-01 07:50 — Task idx 77 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Make indexes, counters, search projections, and analytics rebuildable from authoritative records"
+SLICE 12 of N: step 1 "index ... search time windows using measured query plans from representative
+data". Measured every step-1 lookup on a scaled copy of the schema; the search windows were the
+worst (30-day homepage search section 9.8 s), and the cost was not the access path but the per-search
+monitor test. GetSearchPulse now classifies each distinct user agent once per call: 9.77 s -> 0.91 s
+(30d) and 3.91 s -> 0.86 s (7d) on the same data, same results. No index added, no migration.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 77-95, 97, 98; no open
+  URGENT (96 is true). idx 24 and 67 are acceptance tasks (skipped as in every earlier entry). idx 68
+  still waits for the owner call on step 1 and owner decision 4 for steps 5-6. idx 77 is the first
+  buildable task; slice 11's REMAINING list puts step 1 next. Tree clean at start; HEAD 25826045.
+
+SPIKE [REAL, /tmp/solvr_idx77_s12/spike/]: throwaway DB solvr_idx77_s12_spike, all 124 up migrations,
+  seed.sql with triggers off (session_replication_role=replica): 20k users, 20k agents, 200k posts
+  (5% family, 3% deleted), 1M replies (half on 2,000 hot posts), 20k rooms, 2M room_entries (half in
+  20 hot rooms), 20k room_members + tokens, 2M search_queries over 180 days; ua.sql then spread the
+  search user agents to 166 distinct strings, 30% NULL (production dump solvr_cutover_rehearsal: 139
+  distinct over 3,545 rows, 46 NULL). A throwaway pgx-tracer harness (zz_idx77_spike_test.go, deleted
+  before commit; copy kept as spike/zz_idx77_spike_test.go.txt) called the REAL repository methods and
+  ran EXPLAIN (ANALYZE, BUFFERS) on every captured SELECT -> plans1.txt (HEAD, 2-UA data), plans_head
+  .txt (HEAD, 166-UA data), plans2.txt (this change). Production today is far smaller (2,225 posts
+  pre-purge, 3,510 replies, 3,629 room entries, 3,545 searches), where every plan is a seq scan of a
+  few pages, so it cannot show what grows.
+  Step-1 lookups, HEAD [REAL, plans1/plans2; wall = Go call incl. round trips]:
+    membership  IsMember/Get/ListByRoom: room_members_room_*_key index, exec <= 0.01 ms; wall 1-3 ms. OK.
+    timeline replay  RoomEntryRepository.ListPage (after sequence) idx_room_entries_room_seq 0.04 ms;
+      MessageRepository.ListAfter/ListBefore/ListRecent room_entries_pkey / message index <= 0.4 ms. OK.
+    token lookup  ResolveByHash room_agent_tokens_pkey + agents_pkey 0.03 ms; IsLive 1 ms wall. OK.
+    reply pagination  ListPageByPost (hot post, 500 replies): count idx_replies_post index-only
+      0.1 ms; page 28.7 ms, of which 22 ms is a Seq Scan + sort of ALL users for the join on
+      u.id::text = rp.author_id (grows with users). FINDING, not fixed.
+    public post listing  PostRepository.List default 0.40 s, page 200 0.80-0.93 s, sort=votes 0.66
+      s: the reply-count LEFT JOIN aggregates ALL 975k live replies (Parallel Seq Scan + HashAggregate
+      100,950 groups, ~250-300 ms) on every page, plus a users Seq Scan for the u.id::text join; the
+      COUNT(*) is a 25-33 ms seq scan. FINDING, not fixed (next slice).
+    room activity  RoomRepository.ListFiltered recent 1.72 s / active 1.48 s: per listed room a
+      COUNT(DISTINCT author) over all its messages (~70 ms each for a 50k-message room);
+      HomepageRepository.ListPublicRoomFeed 1.51 s (Seq Scan of 1.8M room_entries + top-N sort);
+      GetRoomPulse 7d 0.99 s (several parallel seq scans of room_entries). FINDING, not fixed.
+    search time windows  GetSearchPulse 7d 3.91 s, 30d 9.77 s (HEAD, 166-UA data; statements 6,272
+      / 1,190 / 1,017 / 1,283 ms). SearchAnalyticsRepository.GetSummary(7) (admin) 0.53-0.56 s.
+  Why the search section was slow [REAL, spike/variants*.log, bench/bench*.txt, medians of 5]: the
+    window read itself is cheap (idx_search_queries_searched_at / _public_scope bitmap scans; reading
+    the 333k rows' columns = 107 ms). The cost is COALESCE(user_agent, '') ILIKE ANY(18 patterns):
+    ILIKE lower()s text and pattern again for every pattern, per search; and the totals statement
+    inlined the subquery's `monitored` into its 6 FILTER clauses, so it ran 6x per search (totals
+    6,357 ms vs series 1,199 ms on the same rows). Variants measured (30d, results compared equal):
+    lower() once + LIKE ANY: totals 990, series 298, top 289, recent 525 (window-function sort
+    spills to disk at work_mem 4MB) — but its cached generic plan lost parallelism for the series
+    (444 -> 670 ms; the scale test saw 645 -> 974 ms from the 6th call); group per user agent then
+    classify: totals 109; recent as aggregate-per-term + LATERAL latest row: 275; per-statement
+    DISTINCT user-agent CTE + anti-join: 389-858 (planner pushed the ILIKE below the DISTINCT, or
+    sorted the strings). Chosen: classify each distinct agent ONCE per call (totals, grouped per
+    agent), carry the monitored agent strings to the other three statements as a hashed NOT IN —
+    custom and forced-generic plans both ~200-360 ms per statement (generic*.log).
+
+WHAT CHANGED [REAL, git status --porcelain: 1 M + 1 ??; git diff --stat: homepage_search.go 68+/37-]:
+  M backend/internal/db/homepage_search.go (345 lines):
+    - searchTotals groups the window per (user_agent, searcher_type, public_scope IS NULL), applies
+      monitoredExpr (unchanged ILIKE definition, KnownMonitoringAgents) to those groups only, sums the
+      six figures, and returns the monitored agent strings (array_agg DISTINCT COALESCE(ua, '')).
+    - new notMonitoredExpr: COALESCE(user_agent, '') NOT IN (SELECT unnest($2::text[])); searchSeries,
+      topSearchTerms and recentSearchTerms take the monitored list and use it instead of per-search
+      ILIKE. Comments state that monitoredExpr only ever runs per distinct agent, why, and the one-read
+      race (an agent string first seen after searchTotals is not on that call's list).
+    - recentSearchTerms: aggregate per term (COUNT, MAX(searched_at), HAVING >= 2, newest first,
+      query_normalized as tie-break, LIMIT) then LATERAL-read each chosen term's latest eligible
+      search for searcher_type / results_count, instead of ROW_NUMBER over every search.
+    - SearchPulse, GetSearchPulse's signature, the eligibility and text rules: unchanged.
+  A backend/internal/db/homepage_search_scale_test.go (217, package db, scratch DB):
+    TestSearchPulse_AMonthOfSearchesAtGrowthVolumeMatchesTheDefinitionsInBoundedWork — seeds 300k
+    searches 10 s apart (250k inside 29 days, 50k older than 32 days so nothing ages out of the window
+    between two reads), 166 user agents incl. mixed-case monitors, a withheld hot term; one-connection
+    pool so calls 6-7 run on the server's cached plan; 7 calls of GetSearchPulse(30d): calls 1 and 7
+    must EQUAL expectedSearchPulse (totals, series, top, recent, withheld computed from the per-search
+    definitions: EXISTS(unnest patterns, ILIKE), DISTINCT ON latest, the same text policy), and the
+    slowest call must cost <= 30 window reads (readFloor: min of 3 plain reads of the same rows).
+  No test deleted, skipped or loosened; no existing test edited.
+
+VERIFICATION [this session; DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test (local
+  docker solvr-postgres, at 124 dirty=f); the scale test makes its own scratch DB; logs
+  /tmp/solvr_idx77_s12/]:
+  [TEST] RED (tdd/red.log, HEAD code): FAIL :213 "slowest call 10.389s, one read 23ms" (calls 1-7:
+    9.33-10.39 s); the equality checks on calls 1 and 7 passed, i.e. HEAD returns the definitions.
+  [TEST] GREEN (tdd/green2.log): the new test PASS, calls 1-7 281-301 ms (~13 reads); the 10 existing
+    TestSearchPulse_* tests: 8 PASS, PublishesOnlyPublicScopeTerms and WithResultsCountsOnlyProductive
+    Searches FAIL "[] should have 1 item(s)". Same 2 FAIL on HEAD code (tdd/head_two.log, file
+    stashed and restored, shasum equal): solvr_test holds 619 leftover searches in the last 24 h with
+    terms counted 5-46 (test 46, zqxfamsearch 32, ...), which push a 2-3-count fixture term out of the
+    11-row top read. On a fresh DB at 124 (solvr_idx77_s12_clean, tdd/green_clean.log) all 10 PASS,
+    0 SKIP, with this change.
+  MUTATIONS [TEST] (mut/mut.py + M1-M5.log; restored, shasum -c OK): M1 totals per search again ->
+    :213 15.574 s; M2 no exclusion in series/top/recent -> :210 not equal; M3 totals return no
+    monitored agents -> :210; M4 series ILIKE per search -> :213 2.49 s; M5 recent not newest-first
+    -> :210.
+  [TEST] same-data before/after through the real code (spike harness, 2M searches): 30d 9.77 s ->
+    0.91 s (141 / 313 / 153 / 148 ms), 7d 3.91 s -> 0.86 s (172 / 145 / 127 / 131 ms; heap fetches of
+    randomly placed spike rows — real rows are written in time order, the scale test's 250k-row read
+    takes 23 ms).
+  [TEST] FULL BACKEND (once) `go test ./... -count=1 -p 1 -v -timeout 45m` on solvr_test at 124 ->
+    full.log, exit 1: FAIL internal/api and internal/db only; 3289 top-level PASS, 67 FAIL, 14 SKIP.
+    FAIL set vs slice 11's serial baseline (/tmp/solvr_idx77_s11/full.log): 67 identical, 0 new; the 2
+    extras slice 11 recorded (TestCommentsEndpoints, TestPinsCreateWithAgentAPIKey) passed this time.
+    The 67 include the two TestSearchPulse_* ambient-data failures above (also in the baseline).
+    SKIP set = baseline + 1: TestCommentsCount_FeedShowsCommentCount, its own t.Skip at
+    router_comments_test.go:232 "post did not become open within 35s - GROQ rate limited or slow"
+    (external moderation API; no comment/post code touched). The new scale test PASSES in full.log
+    (calls 279-295 ms, read 22 ms).
+  check-file-size.sh -> filesize.log "Found 34 file(s) exceeding 800 lines", same count as slices
+    1-11; neither touched file is on it. go build ./... ok; go vet ./internal/db ok; gofmt -l clean
+    on both touched files.
+  NOT RUN: frontend (no frontend file touched; the response shape is unchanged); golangci-lint
+    (config/version mismatch, slice 31).
+  Leftovers [REAL]: solvr_idx77_s12_spike and solvr_idx77_s12_clean dropped (0 solvr_idx77* /
+    solvr_scratch* databases); :8099/:3099 free; no zz_* harness file in the tree. The spike seed,
+    UA, variant and bench scripts stay in /tmp/solvr_idx77_s12/spike/ for the next step-1 slice
+    (seed takes ~2 min). solvr_search_docs_1790841569608279000 predates this session (left alone).
+
+STEP 6 NOTE [REAL]: the bottleneck was CPU in the read, so no index, cache or service was added; the
+  existing idx_search_queries_searched_at / idx_search_queries_public_scope serve every window read.
+
+FINDINGS, NOT FIXED [REAL, spike plans]:
+  - search_queries keeps every raw search forever: SearchAnalyticsRepository.DeleteOlderThan has no
+    production caller (grep). Step 4 (retention windows per metric) is where that gets decided.
+  - The series statement's generic plan cannot bound the window (date_trunc($1, NOW()) - ...), so a
+    cached generic plan seq-scans the whole table (spike: 2M rows, 365 ms). PostgreSQL keeps custom
+    plans while they are cheaper, which they are for short windows [INFERRED from plan_cache_mode
+    behaviour; the 30-day forced-generic run measured 365-380 ms].
+  - The step-1 hot spots listed above (post listing reply counts, users joins on u.id::text, room
+    list participant counts, public room feed, room pulse) are the next slices.
+
+REMAINING for idx 77 (next slices, in order) [UNVERIFIED plan]:
+  step 1: public post listing (reply counts for the page only, users join), reply pagination users
+    join, room activity (ListFiltered participants, ListPublicRoomFeed, GetRoomPulse) — measured above.
+  step 4: raw eligible search events vs time buckets + retention windows; no summed distincts.
+  step 5: reconcile counters/sampled search after migration and rebuilds.
+  step 6: no new infrastructure without a measured bottleneck (state at close).
+
+git status at journal time [REAL, git status --porcelain]: M backend/internal/db/homepage_search.go,
+  ?? backend/internal/db/homepage_search_scale_test.go, M progress.txt (this entry). spec.json
+  unchanged, idx 77 passes stays false.
+
+UAT (for when idx 77 closes, not now): as slice 11's list. This slice adds no migration; after the API
+  deploy that carries it, open https://solvr.dev with the 30-day window and confirm the search section
+  loads and its numbers match the 24h/7d/30d figures it showed before the deploy.
+CORRECTION to the UAT line above: the figures move with live traffic, so do not compare them with the
+  pre-deploy page; confirm instead that the 30-day search section loads promptly and its chart's days add up
+  to the search total shown above it.
+
+2026-10-01 07:54: RALPH ITERATION TIMEOUT — claude was killed after 45m with no result (iteration 1). Ledger untouched.
+
+2026-10-01 08:15 — Task idx 77 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Make indexes, counters, search projections, and analytics rebuildable from authoritative records"
+VERIFY AND COMMIT slice 12 (the 07:50 entry above), which the 07:54 iteration timeout left uncommitted.
+No code written this iteration.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 77-95, 97, 98; no open
+  URGENT. 24 and 67 are acceptance tasks; 68 waits on the owner (as in the 07:50 entry). idx 77 is the
+  first buildable task, and its slice 12 sat in the tree uncommitted.
+
+STATE FOUND [REAL, git status --porcelain / git diff --stat at start]: M backend/internal/db/homepage_search.go
+  (68+/37-), ?? backend/internal/db/homepage_search_scale_test.go (217 lines), M progress.txt (the 07:50
+  slice 12 entry + the harness timeout line). HEAD 25826045. spec.json unchanged.
+  homepage_search.go sha1 688604bb = /tmp/solvr_idx77_s12/mut/orig.go = tdd/homepage_search.go.new, i.e.
+  byte-identical to the code the 07:50 entry's GREEN, mutation and full-suite runs used. Read the diff:
+  matches the 07:50 description. Checked by hand: every series window starts at or after the totals
+  window (date_trunc(unit, NOW()) - (N-1) units >= NOW() - N units for 24h/hour, 7d/day, 30d/day), so
+  the monitored list from searchTotals covers every agent the series reads; the list has no NULLs
+  (COALESCE), so NOT IN cannot turn NULL; an empty list keeps every search.
+
+VERIFICATION [this session]:
+  [TEST] fresh local DB solvr_idx77_s12v_clean (docker solvr-postgres :5435, `migrate ... up` to 124,
+    dirty=f): `go test ./internal/db -run TestSearchPulse -count=1 -v` -> /tmp/solvr_idx77_s12v/pulse.log
+    ok 40.8 s, 11 PASS (the 10 existing TestSearchPulse_* + the new
+    TestSearchPulse_AMonthOfSearchesAtGrowthVolumeMatchesTheDefinitionsInBoundedWork, calls 279-325 ms,
+    window read floor 22 ms), 0 SKIP, 0 FAIL. Database dropped afterwards.
+  [TEST, previous session, same code by sha] RED on HEAD code (tdd/red.log, 9.3-10.4 s per call),
+    mutations M1-M5 and the full serial backend run (/tmp/solvr_idx77_s12/full.log): not re-run.
+    Rechecked from the saved files only: fail.now (67) is fail.base minus TestCommentsEndpoints and
+    TestPinsCreateWithAgentAPIKey, 0 new failures; skip.now = skip.base + TestCommentsCount_FeedShows
+    CommentCount (its own GROQ-timeout t.Skip); the new scale test PASSES in full.log.
+  [REAL] gofmt -l clean on both files; go build ./... ok; go vet ./internal/db ok;
+    check-file-size.sh "Found 34 file(s) exceeding 800 lines" (unchanged count), neither file listed.
+  NOT RUN: frontend (no frontend file touched).
+  Leftover [REAL]: local database solvr_idx77_s12b_clean exists, from the 07:50 session (not created
+    here); left alone for the owner to drop.
+
+WHAT THIS COMMIT CARRIES [REAL, git status --porcelain before commit]: M backend/internal/db/homepage_search.go,
+  A backend/internal/db/homepage_search_scale_test.go, M progress.txt (07:50 entry, timeout line, this
+  entry). spec.json unchanged; idx 77 passes stays false. REMAINING list and UAT: as the 07:50 entry
+  (next: step 1 public post listing reply counts + users join, reply pagination, room activity).

@@ -121,23 +121,24 @@ func (r *HomepageRepository) GetSearchPulse(ctx context.Context, window RoomStat
 
 	pulse := SearchPulse{Window: window}
 
-	if err := r.searchTotals(ctx, window, &pulse); err != nil {
+	monitored, err := r.searchTotals(ctx, window, &pulse)
+	if err != nil {
 		return pulse, err
 	}
 
-	series, err := r.searchSeries(ctx, window)
+	series, err := r.searchSeries(ctx, window, monitored)
 	if err != nil {
 		return pulse, err
 	}
 	pulse.Series = series
 
-	top, topWithheld, err := r.topSearchTerms(ctx, window, limit)
+	top, topWithheld, err := r.topSearchTerms(ctx, window, limit, monitored)
 	if err != nil {
 		return pulse, err
 	}
 	pulse.Top = top
 
-	recent, recentWithheld, err := r.recentSearchTerms(ctx, window, limit)
+	recent, recentWithheld, err := r.recentSearchTerms(ctx, window, limit, monitored)
 	if err != nil {
 		return pulse, err
 	}
@@ -155,45 +156,64 @@ func (r *HomepageRepository) GetSearchPulse(ctx context.Context, window RoomStat
 // monitoredExpr is the single definition of "this was known monitoring".
 // COALESCE matters: user_agent is NULL for most callers, and NULL ILIKE ANY
 // is NULL, which would drop every such row out of the count entirely.
+//
+// It is only ever applied to DISTINCT user agents (searchTotals), never per
+// search: ILIKE ANY lowers the text and every pattern again for each pattern,
+// and per search it was nearly all of a 30-day read at growth volume (9.8 s of
+// a ~0.1 s window read, spec.json idx 77 slice 12).
 const monitoredExpr = `(COALESCE(user_agent, '') ILIKE ANY($2::text[]))`
 
-// searchTotals reads the counted view in one pass.
-func (r *HomepageRepository) searchTotals(ctx context.Context, window RoomStatsWindow, pulse *SearchPulse) error {
+// notMonitoredExpr keeps a search whose user agent searchTotals did not
+// classify as known monitoring. $2 is that list of exact agent strings, so this
+// is one hashed lookup per search. An agent string first seen after
+// searchTotals read the window is not on the list for that one read.
+const notMonitoredExpr = `COALESCE(user_agent, '') NOT IN (SELECT unnest($2::text[]))`
+
+// searchTotals reads the counted view in one pass and returns the user agents
+// it classified as known monitoring. Searches are grouped per user agent
+// first, so monitoredExpr runs once per agent string in the window.
+func (r *HomepageRepository) searchTotals(ctx context.Context, window RoomStatsWindow, pulse *SearchPulse) ([]string, error) {
+	var monitored []string
 	err := r.pool.QueryRow(ctx, `
 		SELECT
-		  COUNT(*) FILTER (WHERE NOT monitored),
-		  COUNT(*) FILTER (WHERE NOT monitored AND searcher_type = 'agent'),
-		  COUNT(*) FILTER (WHERE NOT monitored AND searcher_type = 'human'),
-		  COUNT(*) FILTER (WHERE NOT monitored AND searcher_type = 'anonymous'),
-		  COUNT(*) FILTER (WHERE monitored),
-		  COUNT(*) FILTER (WHERE NOT monitored AND public_scope IS NULL)
+		  COALESCE(SUM(n) FILTER (WHERE NOT monitored), 0)::bigint,
+		  COALESCE(SUM(n) FILTER (WHERE NOT monitored AND searcher_type = 'agent'), 0)::bigint,
+		  COALESCE(SUM(n) FILTER (WHERE NOT monitored AND searcher_type = 'human'), 0)::bigint,
+		  COALESCE(SUM(n) FILTER (WHERE NOT monitored AND searcher_type = 'anonymous'), 0)::bigint,
+		  COALESCE(SUM(n) FILTER (WHERE monitored), 0)::bigint,
+		  COALESCE(SUM(n) FILTER (WHERE NOT monitored AND unknown_scope), 0)::bigint,
+		  COALESCE(array_agg(DISTINCT COALESCE(user_agent, '')) FILTER (WHERE monitored), '{}')::text[]
 		  FROM (
-		    SELECT searcher_type, public_scope, `+monitoredExpr+` AS monitored
-		      FROM search_queries
-		     WHERE searched_at >= NOW() - $1::interval
+		    SELECT user_agent, searcher_type, unknown_scope, n, `+monitoredExpr+` AS monitored
+		      FROM (
+		        SELECT user_agent, searcher_type, public_scope IS NULL AS unknown_scope, COUNT(*) AS n
+		          FROM search_queries
+		         WHERE searched_at >= NOW() - $1::interval
+		         GROUP BY user_agent, searcher_type, public_scope IS NULL
+		      ) per_agent
 		  ) s
 	`, window.interval(), KnownMonitoringAgents).Scan(
 		&pulse.Eligible, &pulse.Agent, &pulse.Human, &pulse.Anonymous,
-		&pulse.Monitoring, &pulse.UnknownScope,
+		&pulse.Monitoring, &pulse.UnknownScope, &monitored,
 	)
 	if err != nil {
 		LogQueryError(ctx, "searchTotals", "search_queries", err)
-		return fmt.Errorf("search totals: %w", err)
+		return nil, fmt.Errorf("search totals: %w", err)
 	}
-	return nil
+	return monitored, nil
 }
 
 // searchSeries returns exactly window.Buckets buckets, oldest first, zeros
 // filled in. It uses the same eligibility as the totals, so the chart and the
 // numbers above it can never tell different stories.
-func (r *HomepageRepository) searchSeries(ctx context.Context, window RoomStatsWindow) ([]BucketCount, error) {
+func (r *HomepageRepository) searchSeries(ctx context.Context, window RoomStatsWindow, monitored []string) ([]BucketCount, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT date_trunc($1, searched_at) AS bucket, COUNT(*)
 		  FROM search_queries
 		 WHERE searched_at >= date_trunc($1, NOW()) - ($3::int - 1) * $4::interval
-		   AND NOT `+monitoredExpr+`
+		   AND `+notMonitoredExpr+`
 		 GROUP BY bucket
-	`, window.BucketUnit, KnownMonitoringAgents, window.Buckets, window.bucketInterval())
+	`, window.BucketUnit, monitored, window.Buckets, window.bucketInterval())
 	if err != nil {
 		LogQueryError(ctx, "searchSeries", "search_queries", err)
 		return nil, fmt.Errorf("search series: %w", err)
@@ -229,7 +249,7 @@ func (r *HomepageRepository) searchSeries(ctx context.Context, window RoomStatsW
 //
 // public_scope is required in SQL, so a family-scoped search is never even
 // read out of the table; PublicQueryText then decides on the text.
-func (r *HomepageRepository) topSearchTerms(ctx context.Context, window RoomStatsWindow, limit int) ([]SearchTerm, int, error) {
+func (r *HomepageRepository) topSearchTerms(ctx context.Context, window RoomStatsWindow, limit int, monitored []string) ([]SearchTerm, int, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT query_normalized,
 		       COUNT(*) AS searches,
@@ -237,12 +257,12 @@ func (r *HomepageRepository) topSearchTerms(ctx context.Context, window RoomStat
 		  FROM search_queries
 		 WHERE searched_at >= NOW() - $1::interval
 		   AND public_scope
-		   AND NOT `+monitoredExpr+`
+		   AND `+notMonitoredExpr+`
 		 GROUP BY query_normalized
 		HAVING COUNT(*) >= $3
 		 ORDER BY searches DESC, query_normalized
 		 LIMIT $4
-	`, window.interval(), KnownMonitoringAgents, searchTermMinOccurrences, limit+searchTermOverfetch)
+	`, window.interval(), monitored, searchTermMinOccurrences, limit+searchTermOverfetch)
 	if err != nil {
 		LogQueryError(ctx, "topSearchTerms", "search_queries", err)
 		return nil, 0, fmt.Errorf("top search terms: %w", err)
@@ -269,24 +289,35 @@ func (r *HomepageRepository) topSearchTerms(ctx context.Context, window RoomStat
 }
 
 // recentSearchTerms reads the most recently searched publishable terms, each
-// at its latest search, with the searcher type that request recorded.
-func (r *HomepageRepository) recentSearchTerms(ctx context.Context, window RoomStatsWindow, limit int) ([]RecentSearchTerm, int, error) {
+// at its latest search, with the searcher type that request recorded. Terms
+// are aggregated first and only the chosen terms' latest searches are read
+// back, instead of ranking every search in the window.
+func (r *HomepageRepository) recentSearchTerms(ctx context.Context, window RoomStatsWindow, limit int, monitored []string) ([]RecentSearchTerm, int, error) {
 	rows, err := r.pool.Query(ctx, `
-		WITH publishable AS (
-		  SELECT query_normalized, searcher_type, results_count, searched_at,
-		         ROW_NUMBER() OVER (PARTITION BY query_normalized ORDER BY searched_at DESC) AS rn,
-		         COUNT(*)    OVER (PARTITION BY query_normalized)                            AS occurrences
+		WITH candidates AS (
+		  SELECT query_normalized, COUNT(*) AS occurrences, MAX(searched_at) AS last_searched
 		    FROM search_queries
 		   WHERE searched_at >= NOW() - $1::interval
 		     AND public_scope
-		     AND NOT `+monitoredExpr+`
+		     AND `+notMonitoredExpr+`
+		   GROUP BY query_normalized
+		  HAVING COUNT(*) >= $3
+		   ORDER BY last_searched DESC, query_normalized
+		   LIMIT $4
 		)
-		SELECT query_normalized, searcher_type, results_count, searched_at, occurrences
-		  FROM publishable
-		 WHERE rn = 1 AND occurrences >= $3
-		 ORDER BY searched_at DESC
-		 LIMIT $4
-	`, window.interval(), KnownMonitoringAgents, searchTermMinOccurrences, limit+searchTermOverfetch)
+		SELECT c.query_normalized, latest.searcher_type, latest.results_count, c.last_searched, c.occurrences
+		  FROM candidates c
+		 CROSS JOIN LATERAL (
+		   SELECT searcher_type, results_count
+		     FROM search_queries
+		    WHERE query_normalized = c.query_normalized
+		      AND searched_at = c.last_searched
+		      AND public_scope
+		      AND `+notMonitoredExpr+`
+		    LIMIT 1
+		 ) latest
+		 ORDER BY c.last_searched DESC, c.query_normalized
+	`, window.interval(), monitored, searchTermMinOccurrences, limit+searchTermOverfetch)
 	if err != nil {
 		LogQueryError(ctx, "recentSearchTerms", "search_queries", err)
 		return nil, 0, fmt.Errorf("recent search terms: %w", err)

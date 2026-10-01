@@ -698,15 +698,10 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		}
 		if statsRepo != nil {
 			statsHandler := handlers.NewStatsHandler(statsRepo)
-			// Task idx 72: type-specific counts come from the overview knowledge aggregate.
-			if k, ok := statsRepo.(handlers.KnowledgeTotalsReader); ok {
-				statsHandler.SetKnowledgeTotals(k)
-			}
 			r.Get("/stats", statsHandler.GetStats)
 			r.Get("/stats/trending", statsHandler.GetTrending)
-			r.Get("/stats/ideas", statsHandler.GetIdeasStats)
-			r.Get("/stats/problems", statsHandler.GetProblemsStats)
-			r.Get("/stats/questions", statsHandler.GetQuestionsStats)
+			// GET /v1/stats/problems|questions|ideas are retired (task idx 73 step 3,
+			// legacy_read_retirement.go): their counts live in GET /v1/overview.
 		}
 		if pool != nil {
 			saRepo := db.NewSearchAnalyticsRepository(pool)
@@ -819,6 +814,9 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		// notes, comments and the status commands) are retired: 410 ENDPOINT_RETIRED naming
 		// the canonical replacement, for every caller (task idx 52, legacy_write_retirement.go).
 		mountRetiredLegacyWrites(r)
+		// The retired legacy READ routes answer the same error (task idx 73 step 3,
+		// legacy_read_retirement.go).
+		mountRetiredLegacyReads(r)
 
 		// Protected posts routes (require authentication)
 		// Per FIX-003: Use UnifiedAuthMiddleware so JWT (humans), agent API keys, and user API keys all work

@@ -10,13 +10,14 @@ import (
 	"github.com/fcavalcantirj/solvr/internal/api/response"
 )
 
-// ErrCodeEndpointRetired is the error code of a retired legacy write route.
+// ErrCodeEndpointRetired is the error code of a retired legacy route.
 const ErrCodeEndpointRetired = "ENDPOINT_RETIRED"
 
-// LegacyWriteRetirement is the migration answer of one retired legacy write route (task idx
-// 52 step 3). Owner decision 2026-09-30: the legacy writes are deleted at cutover with no
-// transition adapters, so every call answers 410 ENDPOINT_RETIRED naming what to use instead.
-type LegacyWriteRetirement struct {
+// LegacyRouteRetirement is the migration answer of one retired legacy route: a write (task
+// idx 52 step 3) or a read (legacy_read_retirement.go, task idx 73 step 3). Owner decision
+// 2026-09-30: the legacy writes are deleted at cutover with no transition adapters, so every
+// call answers 410 ENDPOINT_RETIRED naming what to use instead.
+type LegacyRouteRetirement struct {
 	// Route is the "METHOD /path" template exactly as RouteFamilies lists it.
 	Route string
 	// Replacement is the canonical "METHOD /path" to call instead; "" when the legacy
@@ -41,7 +42,7 @@ const (
 // LegacyWriteRetirements lists every retired legacy write route. The test
 // TestLegacyWriteRetirements_CoverEveryLegacyWriteRouteAndNameAServedReplacement pins it to the
 // non-GET routes of the legacy-typed-writes, legacy-comments and legacy-status-commands families.
-var LegacyWriteRetirements = []LegacyWriteRetirement{
+var LegacyWriteRetirements = []LegacyRouteRetirement{
 	{"POST /v1/problems", "POST /v1/posts", createPostInstead},
 	{"POST /v1/questions", "POST /v1/posts", createPostInstead},
 	{"POST /v1/ideas", "POST /v1/posts", createPostInstead},
@@ -80,7 +81,7 @@ type retiredRouteDetails struct {
 
 // retirementAnswer is the error message and details every call to ret's route receives; the
 // served API document (openapi_retired_writes.go) publishes the same message.
-func retirementAnswer(ret LegacyWriteRetirement) (string, retiredRouteDetails) {
+func retirementAnswer(ret LegacyRouteRetirement) (string, retiredRouteDetails) {
 	details := retiredRouteDetails{RetiredRoute: ret.Route, Instructions: ret.Instructions}
 	message := ret.Route + " was retired with the canonical knowledge model"
 	if ret.Replacement != "" {
@@ -93,9 +94,9 @@ func retirementAnswer(ret LegacyWriteRetirement) (string, retiredRouteDetails) {
 	return message, details
 }
 
-// retiredLegacyWrite answers every call to ret's route with 410 ENDPOINT_RETIRED. It reads
+// retiredLegacyRoute answers every call to ret's route with 410 ENDPOINT_RETIRED. It reads
 // no body, checks no credential and touches no storage: the answer is the same for everyone.
-func retiredLegacyWrite(ret LegacyWriteRetirement) http.HandlerFunc {
+func retiredLegacyRoute(ret LegacyRouteRetirement) http.HandlerFunc {
 	message, details := retirementAnswer(ret)
 	return func(w http.ResponseWriter, _ *http.Request) {
 		response.WriteErrorWithDetails(w, http.StatusGone, ErrCodeEndpointRetired, message, details)
@@ -107,6 +108,6 @@ func retiredLegacyWrite(ret LegacyWriteRetirement) http.HandlerFunc {
 func mountRetiredLegacyWrites(r chi.Router) {
 	for _, ret := range LegacyWriteRetirements {
 		method, path, _ := strings.Cut(ret.Route, " ")
-		r.Method(method, strings.TrimPrefix(path, "/v1"), retiredLegacyWrite(ret))
+		r.Method(method, strings.TrimPrefix(path, "/v1"), retiredLegacyRoute(ret))
 	}
 }

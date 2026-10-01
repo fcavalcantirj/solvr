@@ -5,29 +5,32 @@ import (
 	"strings"
 )
 
-// documentRetiredWrites publishes every retired legacy write route (LegacyWriteRetirements,
-// task idx 52 step 4) as a deprecated operation whose only answer is 410 ENDPOINT_RETIRED,
-// naming the canonical replacement and how to move the call. It replaces whatever the
-// legacy path functions documented for that method, so the document never promises a 2xx
-// the server no longer gives.
-func documentRetiredWrites(spec map[string]interface{}) {
+// documentRetiredRoutes publishes every retired legacy route — the writes
+// (LegacyWriteRetirements, task idx 52 step 4) and the reads (LegacyReadRetirements, task idx
+// 73 step 5) — as a deprecated operation whose only answer is 410 ENDPOINT_RETIRED, naming the
+// canonical replacement and how to move the call. It replaces whatever the legacy path
+// functions documented for that method, so the document never promises a 2xx the server no
+// longer gives.
+func documentRetiredRoutes(spec map[string]interface{}) {
 	paths := spec["paths"].(map[string]interface{})
-	for _, ret := range LegacyWriteRetirements {
-		method, route, _ := strings.Cut(ret.Route, " ")
-		path := strings.TrimPrefix(route, "/v1")
-		item, _ := paths[path].(map[string]interface{})
-		if item == nil {
-			item = map[string]interface{}{}
-			paths[path] = item
+	for _, table := range [][]LegacyRouteRetirement{LegacyWriteRetirements, LegacyReadRetirements} {
+		for _, ret := range table {
+			method, route, _ := strings.Cut(ret.Route, " ")
+			path := strings.TrimPrefix(route, "/v1")
+			item, _ := paths[path].(map[string]interface{})
+			if item == nil {
+				item = map[string]interface{}{}
+				paths[path] = item
+			}
+			key := strings.ToLower(method)
+			previous, _ := item[key].(map[string]interface{})
+			item[key] = retiredRouteOperation(ret, previous)
 		}
-		key := strings.ToLower(method)
-		previous, _ := item[key].(map[string]interface{})
-		item[key] = retiredWriteOperation(ret, previous)
 	}
 
 	components := spec["components"].(map[string]interface{})
 	components["responses"].(map[string]interface{})["EndpointRetired"] = obj(
-		"description", "410 ENDPOINT_RETIRED. This legacy write route was retired with the canonical knowledge model; "+
+		"description", "410 ENDPOINT_RETIRED. This legacy route was retired with the canonical knowledge model; "+
 			"there is no sunset period. Nothing is read, checked or written, so every caller gets the same answer. "+
 			"error.details.replacement names the canonical route to call instead (null when the command has no "+
 			"canonical equivalent) and error.details.instructions says how to move the call.",
@@ -39,7 +42,7 @@ func documentRetiredWrites(spec map[string]interface{}) {
 
 var pathVariable = regexp.MustCompile(`\{([^}]+)\}`)
 
-func retiredWriteOperation(ret LegacyWriteRetirement, previous map[string]interface{}) map[string]interface{} {
+func retiredRouteOperation(ret LegacyRouteRetirement, previous map[string]interface{}) map[string]interface{} {
 	message, details := retirementAnswer(ret)
 	summary := ret.Route
 	if s, ok := previous["summary"].(string); ok {

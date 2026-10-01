@@ -5102,10 +5102,10 @@ the router does not serve, or if this Part disagrees with the registry.
 **Dispositions.** `keep` — canonical or separately useful (account, status, storage, blog,
 administration). `merge` — the purpose is served by another canonical family. `adapt` — stays
 served, but only as an adapter over the canonical implementation. `retire` — no canonical
-future; clients move to the named destination. Retired READ routes stay served (with
-`Deprecation`/`Link` signals where 26.5 says so) until each family's own removal; retired
-WRITE routes are not served at all: each answers `410 ENDPOINT_RETIRED` naming its
-replacement (26.6), with no sunset period.
+future; clients move to the named destination. A retired READ route stays served (with
+`Deprecation`/`Link` signals where 26.5 says so) until its family is removed; the routes of a
+removed read family (26.7) and every retired WRITE route (26.6) are not served at all: each
+answers `410 ENDPOINT_RETIRED` naming its replacement, with no sunset period.
 
 ## 26.2 Route Families
 
@@ -5318,27 +5318,8 @@ posts are absent). `with_replies` = posts with at least one non-deleted canonica
 posts with `accepted_answer_id` set. A failed read serves `types: []`, marks
 `meta.source_availability.knowledge = false` and adds a `partial_errors` entry.
 
-**Type-specific statistics** — `GET /v1/stats/problems`, `/v1/stats/questions`,
-`/v1/stats/ideas` take their count fields from the knowledge section for their type:
-
-| Legacy field | Knowledge source |
-|---|---|
-| problems `total_problems` / `solved_count` | `problem.total` / `problem.by_status.solved` |
-| questions `total_questions` / `answered_count` | `question.total` / `question.with_accepted_reply` |
-| questions `response_rate` | `with_accepted_reply * 100 / total` (0 when total is 0) |
-| ideas `counts_by_status` | `idea.by_status` plus `total` = `idea.total` |
-
-Every response carries `Deprecation: true` and
-`Link: </v1/overview>; rel="successor-version"` (and keeps `Cache-Control: public, max-age=30`).
-
-Unsupported legacy operations (legacy-only fields, no canonical equivalent; still served
-from the legacy tables until the typed sidebars leave the UI, then removed): problems
-`active_approaches`, `avg_solve_time_days`, `recently_solved`, `top_solvers`; questions
-`avg_response_time_hours`, `recently_answered`, `top_answerers`; ideas `fresh_sparks`,
-`ready_to_develop`, `top_sparklers`, `trending_tags`, `pipeline_stats`, `recently_realized`.
-
-Behavior change: the three count sets no longer include `pending_review`, `rejected` or
-`draft` posts (the old queries counted every public, non-deleted post).
+The type-specific statistics adapters that read this section are retired (26.7): its
+`types` entries are where their counts went.
 
 ## 26.6 Retired Legacy Writes (migration notes)
 
@@ -5390,6 +5371,27 @@ Migrated contributions keep their original id as `legacy_id` beside a `legacy_ty
 so a client holding an old id finds the reply id to use with one `GET /v1/posts/{post_id}/replies`.
 Legacy READ routes are unchanged by this section; their fate is their family's disposition
 above. Public legacy page URLs keep their permanent redirects to `/posts/{id}`.
+
+## 26.7 Retired Legacy Reads
+
+Task idx 73 step 3 ("adapt, then retire"): once a read family's adapter served its canonical
+destination, the family is retired the way the writes are (26.6), at the knowledge-model
+cutover and with **no sunset period**. Every call answers every caller the same `410`
+`ENDPOINT_RETIRED` with `details.retired_route`, `details.replacement` and
+`details.instructions`; nothing is read, checked or written. The table the router mounts is
+`LegacyReadRetirements` (`backend/internal/api/legacy_read_retirement.go`); the served OpenAPI
+document (`GET /v1/openapi.json`) publishes each as `deprecated` with only the `410` response
+and the same `x-solvr-retired` object.
+
+| Retired route | Canonical replacement | Instructions (`details.instructions`) |
+|---------------|-----------------------|---------------------------------------|
+| `GET /v1/stats/problems` | `GET /v1/overview` | Per-type counts are in data.knowledge.types of GET /v1/overview. In the entry whose type is "problem", total was total_problems and by_status.solved was solved_count. active_approaches, avg_solve_time_days, recently_solved and top_solvers have no canonical equivalent. |
+| `GET /v1/stats/questions` | `GET /v1/overview` | Per-type counts are in data.knowledge.types of GET /v1/overview. In the entry whose type is "question", total was total_questions and with_accepted_reply was answered_count; response_rate was with_accepted_reply * 100 / total. avg_response_time_hours, recently_answered and top_answerers have no canonical equivalent. |
+| `GET /v1/stats/ideas` | `GET /v1/overview` | Per-type counts are in data.knowledge.types of GET /v1/overview. In the entry whose type is "idea", by_status and total were counts_by_status. fresh_sparks, ready_to_develop, top_sparklers, trending_tags, pipeline_stats and recently_realized have no canonical equivalent. |
+
+The counts these routes served exclude `pending_review`, `rejected` and `draft` posts, as the
+overview knowledge section (26.5) does. Families not in this table keep the disposition and
+runtime behavior recorded above.
 
 
 ---

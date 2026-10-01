@@ -3344,3 +3344,154 @@ UAT (for when idx 68 closes, not now): apply 000115, 000116, 000117 and 000118 o
 
 git status at journal time [REAL]: the 6 M + 3 ?? listed above, plus this entry. spec.json
   unchanged; idx 68 passes stays false.
+
+================================================================================
+2026-09-30 22:12 — Task idx 73 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Define concrete canonical knowledge endpoints and retire overlapping discovery and statistics APIs"
+SLICE 1 (under this index; the pre-09-25 "idx 72" slices were this task): step 3's RETIRE half,
+first family. GET /v1/stats/problems|questions|ideas (family type-specific-statistics, adapted
+by idx 72) now answer every caller 410 ENDPOINT_RETIRED naming GET /v1/overview, published in
+the served OpenAPI document and SPEC.md 26.7 (step 5).
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 73, 74, 77-95, 97,
+  98; no open URGENT (96 is true). idx 24 and 67 stay skipped (acceptance tasks, as recorded).
+  idx 68: slice 4 left step 1 OPEN pending an owner call (where the ER diagram lives) and steps
+  5-6 gated by owner decision 4; nothing buildable remains without the owner. idx 73 is next.
+  Its old gate ("retire endpoints" waits for the cutover) no longer holds: idx 52 built the
+  write retirements in main to ship at the cutover, and owner decision 4 says finish development
+  first. Tree clean at start; HEAD 8afa9626.
+
+WHERE idx 73 STOOD [REAL, code + SPEC.md read this session]:
+  - Steps 1, 2, 4 were pinned by earlier slices (RouteFamilies + route_families_test, SPEC 26.1-
+    26.4; search/rooms/overview contracts).
+  - Step 3 ADAPT done: feed, typed discovery (idx 71), type-specific statistics (idx 72),
+    contribution listings (idx 76, read replies). No family had been RETIRED yet.
+  - Step 5: legacy status commands answer the migration error (idx 52); SPEC 26.3/26.5/26.6
+    publish the mapping.
+  - Consumers of the type-statistics routes [REAL, grep]: frontend hooks use-problems-stats,
+    use-questions-stats, use-ideas-stats -> problems/questions/ideas sidebars, on pages that
+    frontend/middleware.ts 308-redirects to /posts, plus collaboration-showcase.tsx, which nothing
+    imports. No mention in frontend/components/api (the /api-docs page), skill/, mcp-server/src,
+    packages/*/src or cli/. Nothing reachable calls them.
+
+WHAT CHANGED [REAL, git status --porcelain: 10 M + 2 ??; git diff --stat 78+/185- on tracked files]:
+  PRODUCTION:
+  A backend/internal/api/legacy_read_retirement.go (38): LegacyReadRetirements (3 entries,
+    replacement GET /v1/overview, instructions mapping each legacy field: total_problems->total,
+    solved_count->by_status.solved, total_questions->total, answered_count->with_accepted_reply,
+    response_rate = with_accepted_reply*100/total, counts_by_status->by_status+total; every
+    legacy-only sidebar field named as having no canonical equivalent) and
+    mountRetiredLegacyReads.
+  M backend/internal/api/legacy_write_retirement.go: type LegacyWriteRetirement renamed
+    LegacyRouteRetirement and retiredLegacyWrite renamed retiredLegacyRoute (now shared by reads
+    and writes); doc comments say so. Behavior unchanged.
+  M backend/internal/api/openapi_retired_writes.go: documentRetiredWrites -> documentRetiredRoutes,
+    looping over both tables; retiredWriteOperation -> retiredRouteOperation; EndpointRetired
+    description says "legacy route" instead of "legacy write route".
+  M backend/internal/api/discovery.go: calls documentRetiredRoutes (1 line).
+  M backend/internal/api/router.go (1195 -> 1193): the 3 r.Get mounts and the SetKnowledgeTotals
+    wiring removed; mountRetiredLegacyReads(r) after mountRetiredLegacyWrites(r).
+  M backend/internal/db/legacy_dependency_registry.go: the text of 2 pending entries
+    (typeref handlers/stats.go, handlers/legacy_type_stats.go) now says the routes answer 410 and
+    the unmounted handlers go with the tables. Dispositions unchanged.
+  M SPEC.md Part 26: 26.1 says a removed read family (26.7) answers 410 like the writes; 26.5's
+    "Type-specific statistics" adapter text is replaced by a pointer to 26.7; new 26.7 Retired
+    Legacy Reads (rule, no sunset period, the table with the exact instructions).
+  KEPT ON PURPOSE (idx 52 precedent, owner decision 4): handlers GetProblemsStats/
+    GetQuestionsStats/GetIdeasStats, legacy_type_stats.go and the repositories behind them are
+    unmounted, not deleted; their handler/repository tests still run and pass.
+  NEW TESTS: A backend/internal/api/router_legacy_read_retirement_test.go (191):
+    TestLegacyReadRetirements_CoverEveryRetiredReadFamilyAndNameAServedReplacement (no DB),
+    TestLegacyReadRoutes_AnswerTheMigrationErrorToEveryCaller (anonymous, agent key, human JWT:
+      410, code, the served message, request_id = X-Request-ID, details; GET /v1/overview has
+      the problem/question/idea entries the instructions name),
+    TestOpenAPIRetiredReads_DocumentedAsGoneWithTheServedAnswer (no DB),
+    TestLegacyReadRetirements_PublishedInSpecMigrationNotes (26.7 rows; 26.5 no longer names
+      the routes).
+  CHANGED EXISTING TESTS:
+  - Mechanical rename only, no assertion touched: openapi_retired_writes_test.go (retiredOperation's
+    parameter type; the retiredLegacyRoute call) and published_docs_canonical_references_test.go
+    (retirementOf's return type).
+  - REMOVED, behavior replaced by this task: router_legacy_type_stats_test.go
+    TestLegacyTypeStats_CountsComeFromOverviewKnowledge (asserted through the router that
+    /v1/stats/problems total_problems == overview problem.total, solved_count == by_status.solved,
+    questions answered_count == with_accepted_reply, response_rate, ideas counts_by_status ==
+    idea.by_status/total, and that the legacy-only sidebar fields stay served) and
+    TestLegacyTypeStats_AnnouncesCanonicalSuccessor (asserted Deprecation: true, Link
+    </v1/overview>; rel="successor-version", Cache-Control and the registry listing). Covered now
+    by: TestOverviewKnowledge_DefinedOnceByTheCanonicalList (unchanged; the counts are defined at
+    GET /v1/overview) + TestLegacyReadRoutes_AnswerTheMigrationErrorToEveryCaller and
+    TestLegacyReadRetirements_CoverEvery... (the routes name GET /v1/overview, = family.Canonical,
+    with that field mapping). All PASS. The file's header comment says so.
+  - router_stats_canonical_test.go TestStatsRoutes_ServeCanonicalReplies: its last two blocks
+    asserted through GET /v1/stats/problems that recently_solved[0] is the seeded problem with
+    solver_name "<agent> solver" (named by the migrated succeeded-approach reply), and through GET
+    /v1/stats/questions that recently_answered[0] names the accepted reply's author (agent). The
+    routes are retired; the repository still computes both, pinned by internal/db
+    TestCanonicalStats_KeepsLegacyFiguresAcrossTheCutover (after.RecentlySolved "the solver is kept
+    across the cutover", after.RecentlyAnswered "the accepted reply keeps its author") — PASS.
+    The /v1/stats, /v1/homepage/overview and /v1/overview assertions are unchanged and PASS.
+
+VERIFICATION (DATABASE_URL = local DBs only; never production):
+  RED [TEST, /tmp/solvr_idx73_s1/red_compile.log then red.log, solvr_test at 118]: first
+    "undefined: LegacyReadRetirements"; then, with the table present but not mounted: router
+    "expected: 410 actual: 200", OpenAPI "spec has no paths./stats/problems.get", SPEC "Part 26 has
+    no ## 26.7 Retired Legacy Reads".
+  GREEN targeted [TEST, green1.log, solvr_test]: 73 PASS, 0 FAIL, 0 SKIP (new tests, write
+    retirement, OpenAPI, route families, published docs, overview, stats, feed, discovery).
+  FULL BACKEND [TEST, /tmp/solvr_idx73_s1/full1.log, go test ./... -count=1 -p 1 -v, on a FRESH
+    local DB solvr_idx73_s1_fresh from all 118 up migrations via psql; dropped after]: 18
+    packages ok; internal/api and internal/db FAIL with 47 failing tests. Against the slice-4
+    baseline (slice 3's 46 + GetTrending): 1 new, TestAgentClaim_RetriesAndRacesLinkTheAgentOnce,
+    "duplicate key value violates unique constraint users_referral_code_key" from
+    createRoomTestUser's RT%06d code (UnixNano mod 1e6) — the recorded referral_code fixture
+    class; this slice touches no user or claim code. One targeted run on the same DB:
+    PASS (/tmp/solvr_idx73_s1/claim_rerun.log). Not failing this run: GetTrending (idx 98's
+    time-window test). 13 SKIPs, all pre-existing (GROQ moderation E2E, VOYAGE, OAuth, Kubo,
+    legacy answers list); none mine. PASS in the full run: the 4 new tests, both changed tests,
+    TestLegacyDroppedDatabase_{GetRoutes,WriteRoutes,StaticQueries,ScheduledJobs}*,
+    TestDiscoverLegacySchemaDependencies_EveryCatalogObjectHasADisposition.
+  FRONTEND [TEST]: the two vitest files that read SPEC.md (api-endpoint-retired.test.ts 5/5,
+    api-endpoints.test.tsx 3/3) PASS with the new 26.7 after 26.6. No frontend file changed.
+  gofmt -l clean on every touched Go file; go vet ./internal/api ./internal/db clean.
+    check-file-size.sh: 34 violations, unchanged (router.go was already over, now 1193).
+  LIVE PROBE [REAL, /tmp/solvr_idx73_s1/probe/]: go build ./cmd/api, run on :8097 under env -i on
+    a fresh local DB at 118 (IPFS_API_URL=http://127.0.0.1:9, fake JWT_SECRET, probe
+    ADMIN_API_KEY). Each of the 3 routes: anonymous 410 ENDPOINT_RETIRED "... use GET /v1/overview
+    instead.", replacement GET /v1/overview, request_id set; with an agent key 410. GET
+    /v1/overview 200 with problem/question/idea/post knowledge entries; /v1/stats and
+    /v1/stats/trending 200; /v1/feed and /v1/problems 200 (not retired); POST /v1/problems 410.
+    GET /v1/openapi.json: the 3 operations deprecated, only "410", x-solvr-retired.replacement
+    GET /v1/overview. api.log: 8x200, 1x201, 7x410, 0 5xx. Server stopped; :8097 free; probe DB
+    dropped.
+
+INFERRED, FOR THE OWNER: owner decision 2 (410, no sunset) names the WRITE routes. This slice
+  applies the same answer to a READ family because step 3 says "adapt then retire", RouteFamilies
+  records "retire" for it, and the registry assigned it to idx 73 step 3. If retired reads should
+  instead keep serving until the legacy drop, revert router.go's mount line and SPEC 26.7.
+
+STEP MAP (idx 73):
+  1, 2, 4 DONE (earlier slices). 5 DONE for the status commands (idx 52) and for every mapping
+    published so far (SPEC 26.3, 26.5, 26.6, 26.7; OpenAPI x-solvr-retired for writes and reads).
+  3 RETIRE half OPEN, family by family, through LegacyReadRetirements + retiredReadFamilies:
+    - legacy-feed (3 routes): the /api-docs page documents them as live
+      (frontend/components/api/api-endpoint-data-core.ts "Feed" group) — retire with
+      retiredEndpoint entries and a frontend test reading 26.7; router_legacy_feed_test.go's 3
+      tests are the adapter tests to replace.
+    - legacy-typed-discovery (3): other router tests use GET /v1/problems|questions|ideas as a
+      read probe (router_content_test, router_comments_test, router_content_gate_test,
+      router_moderation_test, router_optional_auth_contract_test); move them to GET
+      /v1/posts?type= first.
+    - contribution-listings (2): the reachable user profile (contributions-list.tsx) calls GET
+      /v1/users/{id}/contributions; the recorded replacement GET /v1/posts?author_type=&author_id=
+      lists posts, not replies. Needs a canonical way to list a user's replies before it retires.
+    - legacy-typed-reads + the legacy-comments GETs still read the legacy tables (never adapted).
+      Whether step 3's "contribution-specific endpoints" covers them is [UNVERIFIED]; they are
+      family "retire" in RouteFamilies.
+  Dead frontend callers of the retired statistics (hooks, sidebars, collaboration-showcase) are
+    unreachable [REAL, grep] and untouched; cleaning them belongs with the legacy pages (idx 83).
+UAT (for when idx 73 closes, not now): the retirements ship with the cutover deploy (idx 93).
+
+git status at journal time [REAL]: the 10 M + 2 ?? listed above, plus this entry. spec.json
+  unchanged; idx 73 passes stays false.

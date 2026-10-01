@@ -111,13 +111,13 @@ func familyRouteOf(method, path string) (RouteFamily, string, bool) {
 	return found, foundRoute, best >= 0
 }
 
-func retirementOf(route string) (LegacyWriteRetirement, bool) {
+func retirementOf(route string) (LegacyRouteRetirement, bool) {
 	for _, ret := range LegacyWriteRetirements {
 		if ret.Route == route {
 			return ret, true
 		}
 	}
-	return LegacyWriteRetirement{}, false
+	return LegacyRouteRetirement{}, false
 }
 
 // Every knowledge call a reference teaches is a route of a family the API keeps: never a

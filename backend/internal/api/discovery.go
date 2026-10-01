@@ -85,7 +85,7 @@ func getOpenAPISpec() map[string]interface{} {
 	spec := baseOpenAPISpec()
 	addConventions(spec)
 	addOperations(spec)
-	documentRetiredWrites(spec)
+	documentRetiredRoutes(spec)
 	return spec
 }
 

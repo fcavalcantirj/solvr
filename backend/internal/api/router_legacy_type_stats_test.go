@@ -14,10 +14,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Task idx 72 step 3: type-specific statistics (GET /v1/stats/problems|questions|ideas —
-// family "type-specific-statistics") are ADAPTERS whose counts come from the one knowledge
-// aggregate GET /v1/overview publishes, and that aggregate counts exactly what an anonymous
-// GET /v1/posts lists. The typed sidebar lists they still carry are legacy-only fields.
+// Task idx 72 step 3: the per-type knowledge counts are defined once, by the aggregate GET
+// /v1/overview publishes, and that aggregate counts exactly what an anonymous GET /v1/posts
+// lists. The type-specific statistics routes that adapted it are retired (task idx 73 step 3;
+// router_legacy_read_retirement_test.go pins their 410 naming GET /v1/overview).
 
 type overviewKnowledgeType struct {
 	Type              string         `json:"type"`
@@ -143,95 +143,4 @@ func TestOverviewKnowledge_DefinedOnceByTheCanonicalList(t *testing.T) {
 	assert.GreaterOrEqual(t, k["question"].WithReplies, 2)
 	assert.GreaterOrEqual(t, k["question"].Replies, 2)
 	assert.GreaterOrEqual(t, k["question"].WithAcceptedReply, 1)
-}
-
-// TestLegacyTypeStats_CountsComeFromOverviewKnowledge: each legacy route's counts are the
-// overview knowledge figures for its type, read at the same database state, and move by
-// exactly what was seeded (hidden and family posts never count).
-func TestLegacyTypeStats_CountsComeFromOverviewKnowledge(t *testing.T) {
-	ts, pool, cleanup := setupRoomTestServer(t)
-	t.Cleanup(cleanup) // LIFO: seed cleanup runs before the pool closes
-
-	var beforeP, beforeQ, beforeI struct {
-		Data map[string]any `json:"data"`
-	}
-	getJSON(t, ts.URL+"/v1/stats/problems", &beforeP)
-	getJSON(t, ts.URL+"/v1/stats/questions", &beforeQ)
-	getJSON(t, ts.URL+"/v1/stats/ideas", &beforeI)
-
-	seedTypeStats(t, pool)
-
-	var ov overviewKnowledgeResp
-	getJSON(t, ts.URL+"/v1/overview", &ov) // fresh server: first read is not cached
-	k := knowledgeByType(ov)
-
-	var p, q, i struct {
-		Data map[string]any `json:"data"`
-	}
-	getJSON(t, ts.URL+"/v1/stats/problems", &p)
-	getJSON(t, ts.URL+"/v1/stats/questions", &q)
-	getJSON(t, ts.URL+"/v1/stats/ideas", &i)
-
-	num := func(m map[string]any, key string) float64 {
-		v, ok := m[key].(float64)
-		require.True(t, ok, "field %s missing or not a number: %v", key, m[key])
-		return v
-	}
-
-	assert.Equal(t, float64(k["problem"].Total), num(p.Data, "total_problems"))
-	assert.Equal(t, float64(k["problem"].ByStatus["solved"]), num(p.Data, "solved_count"))
-	assert.Equal(t, num(beforeP.Data, "total_problems")+2, num(p.Data, "total_problems"), "open+solved public only")
-	assert.Equal(t, num(beforeP.Data, "solved_count")+1, num(p.Data, "solved_count"))
-
-	assert.Equal(t, float64(k["question"].Total), num(q.Data, "total_questions"))
-	assert.Equal(t, float64(k["question"].WithAcceptedReply), num(q.Data, "answered_count"))
-	assert.InDelta(t, float64(k["question"].WithAcceptedReply)*100/float64(k["question"].Total),
-		num(q.Data, "response_rate"), 1e-9)
-	assert.Equal(t, num(beforeQ.Data, "total_questions")+2, num(q.Data, "total_questions"))
-	assert.Equal(t, num(beforeQ.Data, "answered_count")+1, num(q.Data, "answered_count"))
-
-	counts, ok := i.Data["counts_by_status"].(map[string]any)
-	require.True(t, ok, "counts_by_status must be an object: %v", i.Data["counts_by_status"])
-	assert.Equal(t, float64(k["idea"].Total), num(counts, "total"))
-	for status, n := range k["idea"].ByStatus {
-		assert.Equal(t, float64(n), num(counts, status), "idea status %s", status)
-	}
-	beforeCounts := beforeI.Data["counts_by_status"].(map[string]any)
-	assert.Equal(t, num(beforeCounts, "total")+2, num(counts, "total"))
-
-	// The typed sidebar lists stay served as legacy-only fields during the transition.
-	for _, f := range []string{"active_approaches", "avg_solve_time_days", "recently_solved", "top_solvers"} {
-		assert.Contains(t, p.Data, f)
-	}
-	for _, f := range []string{"avg_response_time_hours", "recently_answered", "top_answerers"} {
-		assert.Contains(t, q.Data, f)
-	}
-	for _, f := range []string{"fresh_sparks", "ready_to_develop", "top_sparklers", "trending_tags", "pipeline_stats", "recently_realized"} {
-		assert.Contains(t, i.Data, f)
-	}
-}
-
-// TestLegacyTypeStats_AnnouncesCanonicalSuccessor: every type-specific statistics response
-// is marked deprecated and links GET /v1/overview; the registry lists each route.
-func TestLegacyTypeStats_AnnouncesCanonicalSuccessor(t *testing.T) {
-	ts, _, cleanup := setupRoomTestServer(t)
-	t.Cleanup(cleanup)
-
-	var family *RouteFamily
-	for i := range RouteFamilies {
-		if RouteFamilies[i].Name == "type-specific-statistics" {
-			family = &RouteFamilies[i]
-		}
-	}
-	require.NotNil(t, family)
-	require.Equal(t, "GET /v1/overview", family.Canonical)
-
-	for _, path := range []string{"/v1/stats/problems", "/v1/stats/questions", "/v1/stats/ideas"} {
-		var body map[string]any
-		resp := getJSON(t, ts.URL+path, &body)
-		assert.Equal(t, "true", resp.Header.Get("Deprecation"), "%s must be marked deprecated", path)
-		assert.Equal(t, `</v1/overview>; rel="successor-version"`, resp.Header.Get("Link"), path)
-		assert.Equal(t, "public, max-age=30", resp.Header.Get("Cache-Control"), path)
-		assert.Contains(t, family.Routes, "GET "+path)
-	}
 }

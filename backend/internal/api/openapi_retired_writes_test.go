@@ -19,7 +19,7 @@ import (
 // derived from (or pinned to) LegacyWriteRetirements, the table the router mounts, so the
 // docs cannot promise a 201 the server no longer gives.
 
-func retiredOperation(t *testing.T, spec map[string]interface{}, ret LegacyWriteRetirement) (string, map[string]interface{}) {
+func retiredOperation(t *testing.T, spec map[string]interface{}, ret LegacyRouteRetirement) (string, map[string]interface{}) {
 	t.Helper()
 	method, path, _ := strings.Cut(ret.Route, " ")
 	return strings.ToLower(method) + " " + path, operation(t, spec, strings.ToLower(method), strings.TrimPrefix(path, "/v1"))
@@ -93,7 +93,7 @@ func TestOpenAPIRetiredWrites_TheDocumentedAnswerIsTheServedAnswer(t *testing.T)
 		method, path, _ := strings.Cut(ret.Route, " ")
 		path = regexp.MustCompile(`\{[^}]+\}`).ReplaceAllString(path, "00000000-0000-0000-0000-000000000001")
 		w := httptest.NewRecorder()
-		retiredLegacyWrite(ret).ServeHTTP(w, httptest.NewRequest(method, path, strings.NewReader(`{}`)))
+		retiredLegacyRoute(ret).ServeHTTP(w, httptest.NewRequest(method, path, strings.NewReader(`{}`)))
 		requireRetiredRecorder(t, w, ret.Route)
 
 		var envelope struct {

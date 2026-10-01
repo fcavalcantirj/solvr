@@ -17,8 +17,9 @@ import (
 
 // Task idx 76 step 3: the stats routes and the overview read contributions from the canonical
 // replies. Native replies, which the legacy statistics cannot see, move the contribution total;
-// a reply migrated from a succeeded approach names a problem's solver; a question's accepted
-// reply names its answerer. A system verdict is not a contribution.
+// a system verdict is not a contribution. (The type-specific routes that named a problem's
+// solver and a question's answerer are retired, task idx 73 step 3; the repository still
+// names them, pinned by internal/db TestCanonicalStats_KeepsLegacyFiguresAcrossTheCutover.)
 func TestStatsRoutes_ServeCanonicalReplies(t *testing.T) {
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
@@ -112,25 +113,4 @@ func TestStatsRoutes_ServeCanonicalReplies(t *testing.T) {
 	var consolidated overview
 	get("/v1/overview", &consolidated)
 	assert.Equal(t, contributionsIn(overviewAfter), contributionsIn(consolidated), "GET /v1/overview")
-
-	var problems struct {
-		Data struct {
-			RecentlySolved []map[string]any `json:"recently_solved"`
-		} `json:"data"`
-	}
-	get("/v1/stats/problems", &problems)
-	require.NotEmpty(t, problems.Data.RecentlySolved)
-	assert.Equal(t, problem, problems.Data.RecentlySolved[0]["id"], "the newest solved problem")
-	assert.Equal(t, agent+" solver", problems.Data.RecentlySolved[0]["solver_name"], "named by the succeeded approach's reply")
-
-	var questions struct {
-		Data struct {
-			RecentlyAnswered []map[string]any `json:"recently_answered"`
-		} `json:"data"`
-	}
-	get("/v1/stats/questions", &questions)
-	require.NotEmpty(t, questions.Data.RecentlyAnswered)
-	assert.Equal(t, question, questions.Data.RecentlyAnswered[0]["id"], "the newest answered question")
-	assert.Equal(t, agent+" solver", questions.Data.RecentlyAnswered[0]["answerer_name"], "named by the accepted reply")
-	assert.Equal(t, "agent", questions.Data.RecentlyAnswered[0]["answerer_type"])
 }

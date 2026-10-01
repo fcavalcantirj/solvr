@@ -19,6 +19,10 @@ const sitemapPostEligible = `deleted_at IS NULL
 		AND moderation_state = 'approved'
 		AND status NOT IN ('draft', 'pending_review', 'rejected')`
 
+// sitemapAgentEligible is the one rule for an agent profile in the sitemap: an active agent
+// with contributions that has not been deleted or banned (both set deleted_at).
+const sitemapAgentEligible = `status = 'active' AND reputation > 0 AND deleted_at IS NULL`
+
 // SitemapRepository provides sitemap URL data from the database.
 type SitemapRepository struct {
 	pool *Pool
@@ -68,7 +72,7 @@ func (r *SitemapRepository) GetSitemapURLs(ctx context.Context) (*models.Sitemap
 	agentRows, err := r.pool.Query(ctx, `
 		SELECT id, COALESCE(updated_at, created_at) as updated_at
 		FROM agents
-		WHERE status = 'active' AND reputation > 0
+		WHERE `+sitemapAgentEligible+`
 		ORDER BY COALESCE(updated_at, created_at) DESC
 	`)
 	if err != nil {
@@ -162,7 +166,7 @@ func (r *SitemapRepository) GetSitemapCounts(ctx context.Context) (*models.Sitem
 	err = r.pool.QueryRow(ctx, `
 		SELECT COUNT(*)
 		FROM agents
-		WHERE status = 'active' AND reputation > 0
+		WHERE `+sitemapAgentEligible+`
 	`).Scan(&counts.Agents)
 	if err != nil {
 		return nil, err
@@ -238,7 +242,7 @@ func (r *SitemapRepository) GetPaginatedSitemapURLs(ctx context.Context, opts mo
 		rows, err := r.pool.Query(ctx, `
 			SELECT id, COALESCE(updated_at, created_at) as updated_at
 			FROM agents
-			WHERE status = 'active' AND reputation > 0
+			WHERE `+sitemapAgentEligible+`
 			ORDER BY COALESCE(updated_at, created_at) DESC
 			LIMIT $1 OFFSET $2
 		`, opts.PerPage, offset)
@@ -263,6 +267,7 @@ func (r *SitemapRepository) GetPaginatedSitemapURLs(ctx context.Context, opts mo
 		rows, err := r.pool.Query(ctx, `
 			SELECT id::text, COALESCE(updated_at, created_at) as updated_at
 			FROM users
+			WHERE deleted_at IS NULL
 			ORDER BY COALESCE(updated_at, created_at) DESC
 			LIMIT $1 OFFSET $2
 		`, opts.PerPage, offset)

@@ -5,14 +5,16 @@ import { Header } from "@/components/header";
 import { AgentProfileClient } from "@/components/agents/agent-profile-client";
 import { JsonLd, agentJsonLd } from "@/components/seo/json-ld";
 
-export const revalidate = 3600; // ISR: cache page for 1 hour
+// An agent that deletes itself or is banned is refused by the API at once; no stored
+// copy of this page may keep publishing its profile.
+export const dynamic = 'force-dynamic';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 
 const getAgent = cache(async (id: string) => {
   try {
     const res = await fetch(`${API_BASE_URL}/v1/agents/${id}`, {
-      next: { revalidate: 3600 },
+      cache: 'no-store',
     });
     if (!res.ok) return null;
     return res.json();

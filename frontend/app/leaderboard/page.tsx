@@ -5,7 +5,9 @@ import { LeaderboardPageClient } from "@/components/leaderboard/leaderboard-page
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 
-export const revalidate = 3600;
+// A deleted or banned account leaves the API's leaderboard at once; no stored copy of
+// this page may keep ranking it.
+export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Leaderboard',
@@ -16,7 +18,7 @@ export const metadata: Metadata = {
 const getInitialLeaderboard = cache(async () => {
   try {
     const res = await fetch(`${API_BASE_URL}/v1/leaderboard?timeframe=all_time&per_page=50`, {
-      next: { revalidate: 3600 },
+      cache: 'no-store',
     });
     if (!res.ok) return [];
     const json = await res.json();

@@ -5,14 +5,16 @@ import { Header } from "@/components/header";
 import { UserProfileClient } from "@/components/users/user-profile-client";
 import { JsonLd, userJsonLd } from "@/components/seo/json-ld";
 
-export const revalidate = 3600; // ISR: cache page for 1 hour
+// A user who deletes their account or is banned is refused by the API at once; no
+// stored copy of this page may keep publishing their profile.
+export const dynamic = 'force-dynamic';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 
 const getUser = cache(async (id: string) => {
   try {
     const res = await fetch(`${API_BASE_URL}/v1/users/${id}`, {
-      next: { revalidate: 3600 },
+      cache: 'no-store',
     });
     if (!res.ok) return null;
     return res.json();

@@ -5779,3 +5779,171 @@ UAT (for when idx 77 closes, not now): as slice 8's list, plus after the fronten
   /sitemap-blog.xml return Cache-Control private, no-store and that any CDN in front of solvr.dev
   does not override it; delete one test post and confirm it is gone from /posts and its page title
   on the next load.
+
+================================================================================
+2026-10-01 06:24 — Task idx 77 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Make indexes, counters, search projections, and analytics rebuildable from authoritative records"
+SLICE 10 of N: step 5 "visibility/deletion changes remove public projections promptly" for
+ACCOUNTS. An agent or user that deletes itself or is banned leaves the API's leaderboard (all,
+agents, users, per tag) and sitemap URLs/counts, and the frontend /agents, /agents/{id}, /users,
+/users/{id}, /leaderboard, /sitemap-agents.xml, /sitemap-users.xml stop serving stored copies, so
+the account is gone from all of them on the very next request.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 77-95, 97, 98; no open
+  URGENT. idx 24 and 67 are acceptance tasks (skipped as in every earlier entry); idx 68 still waits
+  for the owner call on step 1 and owner decision 4. idx 77 is the first buildable task; slice 9's
+  REMAINING list put "step 5: account removal vs /agents/{id}, /users/{id}, /agents, /users,
+  /leaderboard — spike first" first. Tree clean at start; HEAD 63f3b7b1.
+
+REMOVAL PATHS [REAL, code read]: every way an account leaves sets deleted_at and nothing else that
+  the public reads look at — DELETE /v1/me (UserRepository.Delete, plus unclaims the user's agents),
+  DELETE /v1/agents/me (AgentRepository.Delete), POST /admin/bans (AccountBanRepository: deleted_at =
+  COALESCE(deleted_at, NOW()) + credentials removed + ban list). DELETE /admin/{users,agents}/{id}
+  hard-deletes the row. No Go code writes agents.status='suspended' (grep: only constants/readers).
+
+SPIKE FIRST [REAL, /tmp/solvr_idx77_s10/spike/spike_api.sh + spike_api.out, spike_front.sh +
+  spike_front.out; HEAD code; fresh DBs at 123; API on :8099 under env -i; production `next build`
+  (fetch-cache cleared first) + `next start` :3099; DBs dropped, ports free after]:
+  API (3 agents + 3 users registered through the API, agent reputation 10 each from model_declared,
+    one tagged post each for 4 of them with a confirmed upvote; then agent self-delete, user
+    self-delete, admin ban of one agent and one user — all 200):
+    /v1/agents/{id}, /v1/users/{id}, /v1/users/{id}/agents: 404 for removed (correct already).
+    /v1/agents and /v1/users lists: drop removed (correct already, both filter deleted_at).
+    /v1/leaderboard (all / type=agents / type=users) and /v1/leaderboard/tags/{tag}: STILL named all 4
+      removed accounts — canonicalLeaderboardRanking filtered agents only by status='active' and
+      users not at all (leaderboard_canonical.go).
+    /v1/sitemap/urls?type=agents, ?type=users and the all-types call: STILL named them; /v1/sitemap/
+      counts agents stayed 3 (sitemap.go: agents filtered status/reputation only, users not at all).
+    /v1/stats: agents count stayed 3 (see FINDINGS).
+  Frontend (build table on HEAD: /agents ○ ISR 5m, /users ○ 1h, /leaderboard ○ 1h, /agents/[id] ƒ,
+    /users/[id] ƒ, both sitemaps ƒ — the ƒ routes read the API through next: { revalidate } = data
+    cache): after DELETE /v1/agents/me and DELETE /v1/me (API 404 for both), immediately and 2 s
+    later: /agents/{deleted} 200 with 19 markers, /users/{deleted} 200 with 20, /agents, /users,
+    /leaderboard still listing them (x-nextjs-cache HIT), both sitemaps still naming them; headers
+    public, s-maxage=3600|300|21600 + stale-while-revalidate.
+
+DESIGN: same as slices 7/9 and idx 59 slice 4. API: the public account projections read the
+  authoritative deleted_at (one predicate per query, no new state). Frontend: no stored copy of a
+  page/index that names an account the API can withdraw; every request asks the API (step 6: no
+  cache without a measured bottleneck; none measured — cost below).
+
+WHAT THIS SLICE CHANGED [REAL, git status --porcelain / git diff --numstat before this append;
+  11 M +72/-28, 8 new test files]:
+  M backend/internal/db/leaderboard_canonical.go (+3/-2): canonicalLeaderboardRanking adds
+    `a.deleted_at IS NULL` to the agents arm and `u.deleted_at IS NULL` to the users arm (shared by
+    GetLeaderboard and GetLeaderboardByTag); comment line.
+  M backend/internal/db/sitemap.go (+8/-3): new const sitemapAgentEligible = status 'active' AND
+    reputation > 0 AND deleted_at IS NULL, used by the 3 agent queries (all-types, counts, typed);
+    the typed users query adds WHERE deleted_at IS NULL.
+  M frontend/app/agents/[id]/page.tsx, users/[id]/page.tsx, agents/page.tsx, users/page.tsx,
+    leaderboard/page.tsx: `export const revalidate = ...` -> `export const dynamic = 'force-dynamic'`,
+    API fetch `next: { revalidate }` -> `cache: 'no-store'`, comment why.
+  M frontend/app/sitemap-agents.xml/route.ts, sitemap-users.xml/route.ts: force-dynamic, fetch
+    no-store, buildUncachedSitemapXml (slice 9's helper) instead of buildSitemapXml.
+  M frontend/next.config.mjs (+8/-5): /agents/:id, /users/:id cache1h -> noStore (moved beside the
+    other noStore detail rules with a comment); /agents, /users, /leaderboard cache5m -> noStore.
+  M frontend/next.config.test.ts (+17): new describe "next.config account page cache headers",
+    it.each over /agents, /agents/:id, /users, /users/:id, /leaderboard: no-store, no public/s-maxage/
+    stale-while-revalidate.
+  A backend/internal/db/account_removal_projections_test.go (168, 1 test):
+    TestPublicAccountProjections_DropARemovedAccountOnTheNextRead — scratch migrated DB; 3 agents + 3
+    users with reputation, a tagged post and a confirmed upvote each; asserts all 6 on leaderboard
+    all/agents/users/tag and sitemap all/agents/users + agent count 3; then AgentRepository.Delete,
+    UserRepository.Delete, BanAccount(agent), BanAccount(human); asserts only the 2 kept accounts
+    remain everywhere and the agent count is 1.
+  A frontend/app/agents/[id]/page.caching.test.tsx (3), users/[id]/page.caching.test.tsx (3) — incl.
+    "publishes nothing and answers 404 once the API refuses ..."; agents/page.test.tsx (2),
+    users/page.test.tsx (2), leaderboard/page.caching.test.tsx (2); sitemap-agents.xml/route.test.ts
+    (4), sitemap-users.xml/route.test.ts (4) — these 4 routes/pages had no test.
+  No test deleted, skipped or loosened; the existing agents/[id]/page.test.tsx and leaderboard/
+    page.test.tsx (client components) are untouched and pass.
+
+VERIFICATION [this session; logs /tmp/solvr_idx77_s10/tdd/; DATABASE_URL=postgres://solvr:solvr_dev@
+  localhost:5435/solvr_test (local test DB at 123); the new DB test makes its own scratch DB]:
+  [TEST] RED red_db.log: the before-removal assertions passed, the after ones failed (all 7 views
+    still named the 4 removed accounts; agent count 3 not 1). red_fe.log: 21 FAIL / 13 pass (dynamic
+    undefined; fetch init {next:{revalidate:300|3600}}; headers "public, s-maxage=..."); the 13 pass
+    pin existing behavior (existing config rules, 404 path, "lists exactly").
+  [TEST] GREEN green_db.log (-v): 26 PASS, 0 SKIP/FAIL — the new test + every Leaderboard*/Sitemap*
+    test in internal/db (incl. TestCanonicalLeaderboard_KeepsEarnedReputationAcrossTheCutover,
+    TestCanonicalSitemap_ListsEveryPublicEligiblePostAcrossTheCutover). go vet ./internal/db exit 0;
+    gofmt -l lists none of the 3 backend files.
+  [TEST] GREEN green_fe.log: 12 files (the 8 above + agents/[id]/page.test.tsx, leaderboard/
+    page.test.tsx, both slice 9 sitemap tests) 70/70 PASS.
+  [TEST] FULL FRONTEND (once) `npm test` -> full_fe.log: 200 files, 1750 tests passed (slice 9: 193 /
+    1725; +7 files / +25 tests = this slice's), 0 failed, 0 skipped. `npm run typecheck` exit 0.
+    eslint on the 16 touched/new frontend files exit 0.
+  [TEST] FULL BACKEND (once) `go test ./... -count=1` (DEFAULT parallel packages — not slices 1-8's
+    `-p 1 -v`) -> full_be.log, exit 1: FAIL internal/api, internal/api/handlers, internal/db; 76
+    FAIL names. Compared with slice 7's serial baseline (/tmp/solvr_idx77_s7/full.log, 68 FAIL):
+    67 identical, 1 baseline name passed this run (TestAgentClaim_RetriesAndRacesLinkTheAgentOnce), + 9 extra (TestE2E_AgentRegistrationAndPosting, TestE2E_PostAppearsInList,
+    TestHomepageAPIUsage_CountsRequestsThatActuallyArrived, TestPinsCreateWithAgentAPIKey,
+    TestPostMessageHandler_{RejectsForeignReferences,StaleSupersedeIsConflict} ("failed to connect to
+    database"), TestSearchIntegration_{ExactTitleMatch,MultiWordQuery,PartialWordMatch}). The 9 run
+    alone, serially (-p 1 -v, extra_api.log + extra_handlers.log): 9/9 PASS. None of the 24 files
+    holding the 76 failing tests mentions sitemap/leaderboard [REAL, grep]; the changed SQL is only
+    reachable through SitemapRepository / CanonicalLeaderboardRepository (router.go:713/736).
+    [INFERRED] the 9 are parallel-package interference on the shared solvr_test, as recorded before.
+    NOTE: the next iteration should keep the established `-p 1 -v -timeout 45m` mode so the FAIL set
+    compares 1:1 with the baseline.
+  [REAL] LIVE PROBE on the fix (/tmp/solvr_idx77_s10/probe/probe_api.sh + .out, probe_front.sh + .out;
+    same setup as the spike, working tree): API after removal: leaderboard all/agents/users name only
+    the kept accounts, tag board names none of the removed 4 (it named all 4 before), sitemap
+    agents/users/all name only the kept ones, counts agents 3 -> 1. Frontend build table now /agents ƒ,
+    /users ƒ, /leaderboard ƒ; every page/sitemap above answers Cache-Control private, no-cache,
+    no-store, max-age=0, must-revalidate. After DELETE /v1/agents/me + DELETE /v1/me, immediately and
+    2 s later: /agents/{deleted} 404, /users/{deleted} 404 (0 markers), /agents 0, /users 0,
+    /leaderboard 0, /sitemap-agents.xml 0, /sitemap-users.xml 0 markers. The deleted agent's 404 page
+    still had 3 hits of its marker: the marker is part of the agent id in the URL; cost.sh checked a
+    never-existing /agents/agent_zzprobe404marker -> 404 with 3 hits too, so the 3 hits are the URL
+    echoed by the 404 payload, not profile data [REAL]. next.log 0 errors.
+  [REAL] COST (cost.sh + cost.out; API working tree on :8099 against solvr_test — 61 agents, 10 users,
+    10597 posts, 0 votes, 11777 reputation_history rows; GETs only, then killed; 20 sequential GETs,
+    median): front /agents 24.0 ms, /users 21.1, /leaderboard 34.4, /agents/{id} 25.2, /users/{id}
+    20.7, /sitemap-agents.xml 13.9, /sitemap-users.xml 11.2; each view = one API read: /v1/agents list
+    14.3, /v1/users list 14.6, /v1/leaderboard all_time per_page=50 22.0, /v1/agents/{id} 16.5,
+    /v1/users/{id} 11.5, sitemap type=agents 10.4, type=users 8.9 ms. Account counts in solvr_test
+    are small, so the leaderboard cost on production-size account tables is [UNVERIFIED] (step 1's
+    query plans).
+  check-file-size.sh -> filesize.log "Found 34 file(s) exceeding 800 lines", same count as slices
+    1-9; none of this slice's files on it (new files 45-168 lines).
+  NOT RUN: golangci-lint (config/version mismatch, slice 31).
+  Leftovers [REAL]: :8099/:3099/:8097 free; 0 solvr_idx77*/solvr_scratch* databases.
+    solvr_search_docs_1790841569608279000 was already there at session start (not this slice's; left
+    alone). frontend/.next holds a build baked with NEXT_PUBLIC_API_URL=http://127.0.0.1:8099
+    (gitignored): rebuild before any local `next start`.
+
+FINDINGS, NOT FIXED [REAL, spike + code read]:
+  - GET /v1/stats counts deleted accounts: stats_canonical.go GetAllStats `(SELECT COUNT(*) FROM
+    agents WHERE status = 'active')` and `(SELECT COUNT(*) FROM users)` — agents stayed 3 after the
+    spike removed 2. The homepage overview (homepage_totals.go) already excludes deleted (and
+    suspended) accounts, so the two public counts disagree. Left unchanged on purpose: humans_count
+    feeds the /join milestone counter (app/join/page.tsx), so the fix changes a public number —
+    owner call / idx 86 (participant metric definition). It names no account.
+  - The legacy (unwired) leaderboard.go / leaderboard_tags.go keep their old filters; they go with
+    the legacy tables (registry entries, idx 76).
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW (runtime, after the API + frontend deploys):
+  - A deleted or banned agent/user leaves /v1/leaderboard (+ tag boards), /v1/sitemap/urls and the
+    sitemap agent count at once (was: listed forever, linking to a profile that 404s).
+  - /agents, /agents/{id}, /users, /users/{id}, /leaderboard, /sitemap-agents.xml, /sitemap-users.xml
+    are rendered per request (were: ISR 5 min / 1 h, data cache 1 h / 6 h, shared-cache headers up to
+    a day); a removed account is gone on the next request; every view is one API read (cost above).
+
+REMAINING for idx 77 (next slices, in order) [UNVERIFIED plan]:
+  step 5: rooms changed outside RoomHandler (SQL/admin) still wait 30 s in the overview; other
+    public surfaces naming accounts (room member lists / presence for a deleted agent) — spike first.
+  step 1: measured query plans on representative data for the listed lookups (incl. the leaderboard).
+  step 4: raw eligible search events vs time buckets + retention windows; no summed distincts.
+  step 5: reconcile counters/sampled search after migration and rebuilds.
+  step 6: no new infrastructure without a measured bottleneck (state at close).
+
+git status at journal time [REAL, git status --porcelain]: the 11 M + 8 ?? files listed above, plus
+  M progress.txt (this entry). spec.json unchanged, idx 77 passes stays false.
+
+UAT (for when idx 77 closes, not now): as slice 9's list, plus after the API + frontend deploys
+  carrying this commit confirm https://solvr.dev/agents, an /agents/{id} page, /users, /leaderboard,
+  /sitemap-agents.xml and /sitemap-users.xml return Cache-Control private, no-store (and that any CDN
+  in front does not override it); delete or ban one test account and confirm it is gone from
+  /leaderboard and /sitemap-agents.xml (or -users) on the next load.

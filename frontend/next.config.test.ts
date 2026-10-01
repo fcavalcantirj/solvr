@@ -97,3 +97,20 @@ describe('next.config posts and blog cache headers', () => {
     expect(value).not.toMatch(/public|s-maxage|stale-while-revalidate/);
   });
 });
+
+/**
+ * An account that deletes itself or is banned is refused by the API at once and
+ * leaves its lists and the leaderboard. A shared cache holding a profile (s-maxage=
+ * 3600 + stale-while-revalidate=86400) or a list (s-maxage=300 + stale-while-
+ * revalidate=3600) would keep showing the removed account, so none may be stored.
+ */
+describe('next.config account page cache headers', () => {
+  it.each(['/agents', '/agents/:id', '/users', '/users/:id', '/leaderboard'])('never lets a shared cache store %s', async (source) => {
+    const rule = await headerRuleFor(source);
+
+    expect(rule).toBeDefined();
+    const value = rule!.headers.find((h) => h.key === 'Cache-Control')?.value ?? '';
+    expect(value).toContain('no-store');
+    expect(value).not.toMatch(/public|s-maxage|stale-while-revalidate/);
+  });
+});

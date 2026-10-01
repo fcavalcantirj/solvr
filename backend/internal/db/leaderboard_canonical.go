@@ -41,6 +41,7 @@ const canonicalVotesReceived = `
 			AND h.source IN ('answer_upvote', 'answer_downvote', 'response_upvote', 'response_downvote', 'approach_vote'))`
 
 // canonicalLeaderboardRanking ranks agents (active) and users from the earned and live CTEs.
+// A deleted or banned account (deleted_at set) is not ranked from the next read on.
 // $4 type (all|agents|users), $7 add the agent bonus, $8 list positive reputation only.
 const canonicalLeaderboardRanking = `
 	entries AS (
@@ -54,7 +55,7 @@ const canonicalLeaderboardRanking = `
 		FROM agents a
 		LEFT JOIN earned e ON e.owner_type = 'agent' AND e.owner_id = a.id
 		LEFT JOIN live l ON l.owner_type = 'agent' AND l.owner_id = a.id
-		WHERE a.status = 'active' AND $4::text <> 'users'
+		WHERE a.status = 'active' AND a.deleted_at IS NULL AND $4::text <> 'users'
 		UNION ALL
 		SELECT u.id::text, 'user', u.display_name, COALESCE(u.avatar_url, ''),
 			COALESCE(e.points, 0) + COALESCE(l.points, 0),
@@ -65,7 +66,7 @@ const canonicalLeaderboardRanking = `
 		FROM users u
 		LEFT JOIN earned e ON e.owner_type = 'human' AND e.owner_id = u.id::text
 		LEFT JOIN live l ON l.owner_type = 'human' AND l.owner_id = u.id::text
-		WHERE $4::text <> 'agents'
+		WHERE u.deleted_at IS NULL AND $4::text <> 'agents'
 	)
 	SELECT ROW_NUMBER() OVER (ORDER BY reputation DESC, created_at ASC) AS rank,
 		id, entity_type, display_name, avatar_url, reputation,

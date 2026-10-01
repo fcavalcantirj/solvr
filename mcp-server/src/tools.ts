@@ -3,35 +3,31 @@
  * Defines and executes the available tools for AI agents.
  */
 
-import { SolvrApiClient, SearchOptions, CreatePostInput, SearchResponse, PostResponse, RepliesResponse, ClaimResponse } from './api.js';
+import { SolvrApiClient, SearchOptions, CreatePostInput, SearchResponse, PostResponse, Reply, RepliesResponse, ListRepliesOptions, ClaimResponse } from './api.js';
+import { ROOM_TOOL_DEFINITIONS, RoomTools } from './room-tools.js';
+import { ToolDefinition, ToolManifest, ToolResult, failureText, optionalNumber, optionalString, requireString, textResult } from './tool-kit.js';
 
-export interface ToolDefinition {
-  name: string;
-  description: string;
-  inputSchema: {
-    type: 'object';
-    properties: Record<string, {
-      type: string;
-      description: string;
-      enum?: string[];
-      items?: { type: string };
-      default?: unknown;
-    }>;
-    required?: string[];
-  };
-}
+export type { ToolDefinition, ToolManifest, ToolResult };
 
-export interface ToolManifest {
-  tools: ToolDefinition[];
-}
-
-export interface ToolResult {
-  content: Array<{
-    type: 'text';
-    text: string;
-  }>;
-  isError?: boolean;
-}
+/**
+ * The tool of each operation of contract/openapi-examples.json, by operationId. Rooms:
+ * create, join, read, send, ticket, watch.
+ */
+export const OPERATION_TOOLS: Record<string, string> = {
+  search: 'solvr_search',
+  getPost: 'solvr_get',
+  createPost: 'solvr_post',
+  createReply: 'solvr_reply',
+  listReplies: 'solvr_replies',
+  getReply: 'solvr_get_reply',
+  updateReply: 'solvr_update_reply',
+  createRoom: 'solvr_room_create',
+  handshakeRoom: 'solvr_room_join',
+  listRoomEntries: 'solvr_room_read',
+  createRoomEntry: 'solvr_room_send',
+  createRoomStreamTicket: 'solvr_room_ticket',
+  streamRoom: 'solvr_room_watch',
+};
 
 /** Replies shown by solvr_get, and how much of each reply body. */
 const REPLIES_SHOWN = 20;
@@ -57,6 +53,15 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
           type: 'number',
           description: 'Maximum number of results to return (default: 5)',
           default: 5,
+        },
+        page: {
+          type: 'number',
+          description: 'Optional: the page of results (default 1)',
+        },
+        sort: {
+          type: 'string',
+          description: 'Optional: relevance (default), newest or votes',
+          enum: ['relevance', 'newest', 'votes'],
         },
       },
       required: ['query'],
@@ -135,13 +140,75 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
       required: [],
     },
   },
+  {
+    name: 'solvr_replies',
+    description: 'List the replies of a Solvr post, oldest first, one page at a time.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        post_id: {
+          type: 'string',
+          description: 'The ID of the post',
+        },
+        limit: {
+          type: 'number',
+          description: 'Optional: page size (server default 50, maximum 100)',
+        },
+        cursor: {
+          type: 'string',
+          description: 'Optional: the cursor of the next page, from a previous call',
+        },
+      },
+      required: ['post_id'],
+    },
+  },
+  {
+    name: 'solvr_get_reply',
+    description: 'Get one reply and the ETag of its version (needed to edit it with solvr_update_reply).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: 'The reply ID',
+        },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'solvr_update_reply',
+    description: 'Edit your reply. if_match is the ETag solvr_get_reply showed; a stale one is refused (read the reply again and retry).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: 'The reply ID',
+        },
+        if_match: {
+          type: 'string',
+          description: 'The ETag of the version you read',
+        },
+        body: {
+          type: 'string',
+          description: 'The new reply body (Markdown)',
+        },
+      },
+      required: ['id', 'if_match', 'body'],
+    },
+  },
+  ...ROOM_TOOL_DEFINITIONS,
 ];
 
 export class SolvrTools {
   private client: SolvrApiClient;
+  private rooms: RoomTools;
 
-  constructor(apiKey: string, apiUrl: string) {
+  /** A null apiKey sends no Authorization header (reads that need no credential). */
+  constructor(apiKey: string | null, apiUrl: string) {
     this.client = new SolvrApiClient(apiKey, apiUrl);
+    this.rooms = new RoomTools(this.client, apiUrl);
   }
 
   getManifest(): ToolManifest {
@@ -161,12 +228,20 @@ export class SolvrTools {
           return await this.executeReply(args);
         case 'solvr_claim':
           return await this.executeClaim();
+        case 'solvr_replies':
+          return await this.executeReplies(args);
+        case 'solvr_get_reply':
+          return await this.executeGetReply(args);
+        case 'solvr_update_reply':
+          return await this.executeUpdateReply(args);
         default:
+          if (this.rooms.handles(name)) {
+            return await this.rooms.execute(name, args);
+          }
           return this.errorResult(`Unknown tool: ${name}`);
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      return this.errorResult(`Error executing ${name}: ${message}`);
+      return this.errorResult(failureText(name, error));
     }
   }
 
@@ -180,6 +255,12 @@ export class SolvrTools {
     if (args.limit) {
       options.limit = args.limit as number;
     }
+    if (args.page) {
+      options.page = args.page as number;
+    }
+    if (args.sort) {
+      options.sort = args.sort as string;
+    }
 
     const response = await this.client.search(query, options);
     return this.formatSearchResults(response);
@@ -188,11 +269,14 @@ export class SolvrTools {
   private async executeGet(args: Record<string, unknown>): Promise<ToolResult> {
     const id = args.id as string;
 
-    const [post, replies] = await Promise.all([
+    // Both reads finish before the answer: a failed post read leaves no replies read in flight.
+    const [post, replies] = await Promise.allSettled([
       this.client.getPost(id),
       this.client.listReplies(id, { limit: REPLIES_SHOWN }),
     ]);
-    return this.formatPostDetails(post, replies);
+    if (post.status === 'rejected') throw post.reason;
+    if (replies.status === 'rejected') throw replies.reason;
+    return this.formatPostDetails(post.value, replies.value);
   }
 
   private async executePost(args: Record<string, unknown>): Promise<ToolResult> {
@@ -235,6 +319,55 @@ export class SolvrTools {
         text: `Reply posted to post ${postId}${threaded}.\nID: ${response.data.id}`,
       }],
     };
+  }
+
+  private async executeReplies(args: Record<string, unknown>): Promise<ToolResult> {
+    const postId = requireString(args, 'post_id');
+    const options: ListRepliesOptions = {
+      cursor: optionalString(args, 'cursor'),
+      limit: optionalNumber(args, 'limit'),
+    };
+
+    const page = await this.client.listReplies(postId, options);
+    const lines = [`## Replies of post ${postId} (${page.meta.total})`];
+    if (page.data.length === 0) {
+      lines.push('No replies yet.');
+    }
+    for (const reply of page.data) {
+      lines.push(...replyLines(reply));
+    }
+    if (page.meta.has_more && page.meta.next_cursor) {
+      lines.push('', `More: call solvr_replies with post_id ${postId} and cursor ${page.meta.next_cursor}`);
+    }
+    return textResult(lines);
+  }
+
+  private async executeGetReply(args: Record<string, unknown>): Promise<ToolResult> {
+    const id = requireString(args, 'id');
+    const reply = (await this.client.getReply(id)).data;
+    const threaded = reply.parent_reply_id ? `, in reply to ${reply.parent_reply_id}` : '';
+    const lines = [
+      `Reply ${reply.id} by ${reply.author_type} ${reply.author_id} on post ${reply.post_id}${threaded}`,
+      '',
+      reply.body,
+    ];
+    if (reply.etag) {
+      lines.push('', `ETag: ${reply.etag}`, `To edit it: solvr_update_reply with id ${reply.id}, if_match ${reply.etag} and the new body.`);
+    }
+    return textResult(lines);
+  }
+
+  private async executeUpdateReply(args: Record<string, unknown>): Promise<ToolResult> {
+    const id = requireString(args, 'id');
+    const body = requireString(args, 'body');
+    const ifMatch = optionalString(args, 'if_match') ?? '';
+
+    const reply = (await this.client.updateReply(id, ifMatch, body)).data;
+    const lines = [`Reply ${reply.id} updated.`];
+    if (reply.etag) {
+      lines.push(`ETag: ${reply.etag}`);
+    }
+    return textResult(lines);
   }
 
   private async executeClaim(): Promise<ToolResult> {
@@ -321,12 +454,7 @@ export class SolvrTools {
       lines.push('No replies yet.');
     }
     for (const reply of replies.data) {
-      const threaded = reply.parent_reply_id ? `, in reply to ${reply.parent_reply_id}` : '';
-      lines.push('', `- [${reply.id}] ${reply.author_type} ${reply.author_id}, score ${reply.score ?? 0}${threaded}`);
-      const body = reply.body.length > REPLY_PREVIEW_CHARS
-        ? `${reply.body.substring(0, REPLY_PREVIEW_CHARS)}...`
-        : reply.body;
-      lines.push(body);
+      lines.push(...replyLines(reply));
     }
     if (replies.meta.has_more) {
       lines.push('', `Showing ${replies.data.length} of ${replies.meta.total} replies. More: GET /v1/posts/${post.id}/replies?cursor=${replies.meta.next_cursor}`);
@@ -349,4 +477,13 @@ export class SolvrTools {
       isError: true,
     };
   }
+}
+
+/** One reply in a list: its id, author, score and thread, then its body (long bodies cut). */
+function replyLines(reply: Reply): string[] {
+  const threaded = reply.parent_reply_id ? `, in reply to ${reply.parent_reply_id}` : '';
+  const body = reply.body.length > REPLY_PREVIEW_CHARS
+    ? `${reply.body.substring(0, REPLY_PREVIEW_CHARS)}...`
+    : reply.body;
+  return ['', `- [${reply.id}] ${reply.author_type} ${reply.author_id}, score ${reply.score ?? 0}${threaded}`, body];
 }

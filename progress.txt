@@ -9227,3 +9227,180 @@ REMAINING FOR idx 78 (next slices, in order):
 
 git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged
   (idx 78 passes stays false).
+
+2026-10-01 19:20 — Task idx 78 (spec.json, category functional) — IN PROGRESS, passes STAYS false
+"Keep SDKs, CLI, MCP, skills, and webhooks consistent with the redesigned product"
+SLICE 9: the stdio MCP server (mcp-server/). It now has a tool for each of the 13 contract operations, named
+like the CLI commands (solvr_room_create/join/read/send/ticket/watch, solvr_replies, solvr_get_reply,
+solvr_update_reply beside solvr_search/get/post/reply), errors carry the API's code, message and request id, and a
+contract test calls every tool through the server's own JSON-RPC handler against contract/openapi-examples.json.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 78-95, 97, 98; no open URGENT (96 is
+  true). 24/67 acceptance (skipped as in every earlier entry); 68 waits on the owner (as journaled). idx 78 first
+  buildable; continued from slice 8 (HEAD 01811634), REMAINING item "9.. consumers", first in its list:
+  mcp-server. Tree clean at start.
+
+DESIGN (from a code read this session):
+  - Tool names = the CLI command names with the solvr_ prefix: room create/join/read/send/ticket/watch ->
+    solvr_room_*; get-reply/update-reply -> solvr_get_reply/solvr_update_reply; replies -> solvr_replies
+    (new: listReplies had no tool of its own). solvr_search/get/post/reply/claim keep their names.
+    tools.ts exports OPERATION_TOOLS {operationId: tool} (for the backend /v1/mcp slice to mirror).
+  - Arguments = the API's field names (display_name, is_private, rotate, ttl_seconds, client_entry_id,
+    reply_to_entry_id, addressed_member_ids, if_match, last_event_id, ticket, issue, kind, cursor, limit);
+    search adds page + sort. ONE exception: solvr_room_watch's stream type filter is `event_type`, not `type`,
+    because the existing guard test "offers no legacy typed choice" (tools.test.ts) forbids a `type` argument on
+    every tool but solvr_search; the guard was kept unchanged.
+  - Credentials: SolvrApiClient(apiKey: string | null): null = no Authorization header. solvr_room_create/join
+    present the API key; join keeps the issued room token per slug in the SolvrTools instance (the MCP server
+    process); solvr_room_read/send/ticket/watch present the room_token argument or the kept token, NEVER the API
+    key, else fail before any request: "No room token for <slug>. Call solvr_room_join with slug "<slug>" first,
+    or pass room_token." solvr_room_watch with a ticket is anonymous. loadConfig still REQUIRES SOLVR_API_KEY to
+    start (unchanged; see FINDINGS).
+  - solvr_room_watch (MCP tools answer once): opens the stream, collects events until max_events (default 1),
+    the stream's end, or wait_seconds (default 30, max 120; an AbortController timer), then closes it. Shows one
+    line per event "#<seq> (id <id>) <agent>: <content>" + "To continue: solvr_room_watch with slug <s> and
+    last_event_id <id>". A quiet stream -> "No events within N s." (not an error). An access_revoked/
+    credential_rotated end event -> isError with the events before it + "Stream ended: CODE: message".
+  - Errors: new ApiError (errors.ts: status, code, requestId). The message keeps the existing form "API request
+    failed: <status> <text>: CODE: message" (api.test.ts pins it); a failed tool's text adds "request id: <id>"
+    (tool-kit.ts failureText). Missing required arguments of the new tools fail before any request ("slug is
+    required").
+  - Paths: every path parameter is encodeURIComponent'ed (also getPost/createReply/listReplies, which were not).
+    search: an empty query sends no q (the API's VALIDATION_ERROR example).
+  - solvr_get: Promise.all -> Promise.allSettled, so a failed post read never leaves the replies read in flight
+    (the contract test counts requests); the post's error is reported first, as before.
+  - handleRequest moved from index.ts (where main() runs on import, so nothing could test it) to server.ts,
+    unchanged; index.ts imports it.
+
+WHAT CHANGED [REAL, git status --porcelain: M mcp-server/README.md, M mcp-server/src/api.ts, M mcp-server/src/
+  index.ts, M mcp-server/src/mcp-e2e.test.ts, M mcp-server/src/tools.test.ts, M mcp-server/src/tools.ts,
+  M mcp-server/tsconfig.json, M mcp-server/vitest.config.ts, ?? mcp-server/src/__tests__/ (contract.test.ts,
+  harness.ts, replies.test.ts, rooms.test.ts), ?? mcp-server/src/errors.ts, ?? room-tools.ts, ?? room-types.ts,
+  ?? server.ts, ?? stream.ts, ?? tool-kit.ts; git diff --stat (tracked): 8 files, 420+/163-]:
+  PRODUCTION (mcp-server/src):
+  M api.ts (215 -> 350): send()/request()/replyWithETag(), apiErrorFrom() -> ApiError (replaces errorDetail());
+    queryString(); null API key = anonymous; search page/sort/no empty q; getReply, updateReply, createRoom,
+    handshakeRoom, listRoomEntries, createRoomEntry, createRoomStreamTicket, streamRoom (Accept, Last-Event-ID,
+    AbortSignal); Reply gains author/etag; ApiResponse<T>.
+  M tools.ts (352 -> 489): OPERATION_TOOLS; tool types moved to tool-kit.ts (re-exported, the tests import them
+    from tools.js); solvr_search page/sort; solvr_replies, solvr_get_reply, solvr_update_reply; room tools
+    dispatched to RoomTools; failures via failureText; solvr_get allSettled; replyLines() shared by solvr_get and
+    solvr_replies (solvr_get's output unchanged).
+  M index.ts (179 -> 91): only main() + stdio; handleRequest/SERVER_INFO/types moved out.
+  ?? server.ts (95): handleRequest, SERVER_INFO, MCPRequest/MCPResponse (moved verbatim).
+  ?? room-tools.ts (331): ROOM_TOOL_DEFINITIONS + RoomTools (create/join/read/send/ticket/watch).
+  ?? tool-kit.ts (87): ToolDefinition/ToolManifest/ToolResult, ToolInputError, textResult, failureText,
+    requireString/optionalString/optionalNumber/optionalList.
+  ?? errors.ts (17) ApiError; ?? stream.ts (97) the SSE reader (packages/cli's, end events -> ApiError status 0);
+    ?? room-types.ts (142) copied from packages/cli/src/room-types.ts (same fields as the TS SDK's).
+  CONFIG: tsconfig.json exclude += "src/__tests__" (the test harness stays out of dist; verified: the smoke build's
+    dist has no __tests__); vitest.config.ts coverage exclude += '**/__tests__/**'.
+  M README.md: search page/sort, the reply tools, a Rooms section (N agents, credential rule, watch semantics), a
+    tool -> operationId table, where the contract test lives, the error format.
+  TESTS:
+  ?? __tests__/contract.test.ts (361, 20 tests): loads ../../../contract/openapi-examples.json; "has a tool for
+    every operation" (+ OPERATION_TOOLS equals the test's table, each tool in tools/list); per operation (13):
+    each example value maps to a DECLARED tool argument (a body field / query / header with no argument fails),
+    the tool is called via handleRequest tools/call against a local server serving the example: request held
+    (method, escaped path, Authorization per credential incl. none = absent, room token over the API key, exact
+    query, no repeated name, If-Match/Last-Event-ID iff the example sends them, body EXACTLY the example's;
+    solvr_get = 2 requests, both with the same credential), required arguments present, not isError, the result
+    shows id/title/slug/token/body/etag/ticket/stream content + event id. Per error example (5): isError, request
+    held, text has "CODE: message" and "request id: <id>". + the error-examples guard.
+  ?? __tests__/rooms.test.ts (280, 15 tests): join presents the key, sends {} and keeps the token, send presents
+    it (not the key); one token per room, a later join (rotate, ttl_seconds body) replaces it; read/send/ticket/
+    watch without a token fail with no request and name solvr_room_join; room_token beats the kept token; slug
+    "a b/c" escaped; missing body/slug refused with no request; create sends only the fields given; read filters
+    + messages/events/addressing + "cursor c2"; empty room; send reply_to/addressed + replay "already sent";
+    ticket (no body sent); watch: heartbeats skipped, max_events on a never-ending stream (within 5 s),
+    Accept/Last-Event-ID/type query; quiet stream answers after wait_seconds 1 (< 4 s), not an error;
+    CREDENTIAL_ROTATED -> isError keeping the earlier event; ticket watch anonymous with a key and a kept token;
+    stream EOF with no event.
+  ?? __tests__/replies.test.ts (112, 7 tests): get_reply escapes "rep/1" and shows ETag + how to edit;
+    update_reply If-Match + body + new ETag; empty if_match sends none -> PRECONDITION_REQUIRED + request id;
+    solvr_replies cursor/limit + next cursor; search "" sends no q, page/sort, anonymous; tools/list = the
+    OPERATION_TOOLS tools + solvr_claim; initialize / missing tool name (-32602) / unknown method (-32601).
+  ?? __tests__/harness.ts (97): local recording HTTP server, json(), within() (timeout guard), callTool()
+    through handleRequest.
+
+EXISTING TESTS CHANGED (both describe the tool list this slice grows; no test deleted, skipped or loosened):
+  (1) tools.test.ts "SolvrTools > getManifest > returns tool manifest with all tools" asserted
+      `expect(manifest.tools).toHaveLength(5)` and the exact names [solvr_search, solvr_get, solvr_post,
+      solvr_reply, solvr_claim]. Now: toHaveLength(14) and the exact 14 names in served order (the 5 first, then
+      solvr_replies, solvr_get_reply, solvr_update_reply, solvr_room_create, solvr_room_join, solvr_room_read,
+      solvr_room_send, solvr_room_ticket, solvr_room_watch). Same test, same exactness; it PASSES (final.log).
+  (2) mcp-e2e.test.ts "MCP Protocol: Tools List > returns all available tools via tools/list" asserted
+      `expect(result.tools).toHaveLength(5)` + toContain the 5 names + not.toContain('solvr_answer'). Now:
+      toHaveLength(14), the same toContain/not.toContain lines kept, + toContain each of the 9 new names. PASSES.
+  Also covered by the new replies.test.ts "tools/list serves the tool of every contract operation and
+  solvr_claim" (exact set). Kept untouched and passing: tools.test.ts "offers no legacy typed choice" (the reason
+  for event_type), config.test.ts (key required), api.test.ts (error message form, fetch call shapes).
+
+VERIFICATION [this session; logs in /tmp/solvr_idx78_s9/]:
+  [TEST] baseline.log: before any change `npx vitest run --coverage` 4 files, 73 tests passed, coverage 72.86%
+    (index.ts 0%); baseline_tsc.log `tsc --noEmit` exit 0.
+  [TEST] RED (red.log): the 3 new files failed to load "../server.js ... Does the file exist?".
+  [TEST] green1.log: the new files 42/42; full1.log: 3 failures = the 2 manifest-length tests above + the legacy
+    `type` guard (fixed by naming the watch argument event_type, guard untouched); final.log `npx vitest run
+    --coverage`: 7 files, 115 tests passed (73 + 42), 0 skipped, coverage 91.27% statements (room-tools.ts 100,
+    tools.ts 99.3, api.ts 94.7, server.ts 83.9, index.ts 0 = the stdio main only); final_tsc.log exit 0.
+  MUTATIONS [TEST] (mut/mut.py, mut/m*.log, mut/summary.log + summary2.log; each applied alone, the new tests run,
+    source restored; `shasum -c mut/orig.sha` all OK): 34/34 FAILED as intended: m1 no Last-Event-ID; m2 empty q
+    sent; m3 getReply drops ETag; m4 updateReply drops If-Match; m5 room tools present the API key; m6 anonymous
+    sends "Bearer null"; m7 slug not escaped; m8 failure text drops the request id; m9 join keeps no token; m10
+    join always sends rotate; m11 watch ignores max_events; m12 stream end not an error; m13 send drops
+    addressed_member_ids; m14 read drops kind; m15 search drops sort; m16 create sends an unasked is_private; m17
+    ticket watch presents the token; m18 watch drops the ticket; m19 no Accept; m20 solvr_replies drops cursor;
+    m21 watch shows no content; m22 read has no More line; m23 ticket sends a body; m24 replay not reported; m25
+    watch never times out; m26 tools/call drops the arguments; m27 OPERATION_TOOLS wrong; m28 update_reply sends
+    no body; m29 join drops ttl; m30 no room-token check; m31 missing body not refused; m33 search drops page;
+    m34 read drops issue. m32 (get_reply id not escaped) first SURVIVED: the test id "rep 1" is escaped by fetch
+    itself; the test id became "rep/1" and m32 then failed (summary2.log).
+  [REAL] smoke/smoke.log: the real API binary (go build ./cmd/api -> smoke/api; env -i with DATABASE_URL = local
+    docker solvr-postgres solvr_test, a throwaway JWT_SECRET, PORT 18098; no env file read) and the MCP server
+    compiled to smoke/dist (tsc --outDir, the repo's dist untouched), THREE server processes over stdio (planner,
+    executor, reviewer; each its own registered agent's SOLVR_API_KEY; smoke.mjs, every call timeout-guarded):
+    initialize + tools/list 14 on each; solvr_post (pending_review), solvr_reply; reviewer solvr_get_reply ETag;
+    solvr_update_reply new ETag (changed: true); stale if_match -> isError PRECONDITION_FAILED + request id; empty
+    if_match -> PRECONDITION_REQUIRED + request id; search "" -> VALIDATION_ERROR + request id; search sort newest
+    limit 5; solvr_get (## Replies (1)); solvr_replies. Room: create; all three joined the SAME slug (3 tokens);
+    executor AND reviewer solvr_room_watch (event_type message) waiting in parallel BOTH woke with the planner's
+    message 242596 (sent with addressed_member_ids [executor, reviewer]); the same client_entry_id again ->
+    "Message 242596 was already sent"; reviewer read shows "(to agent_mcp_executor_..., agent_mcp_reviewer_...)";
+    executor send reply_to_entry_id 242596 -> 242598; reviewer ticket -> watch with the ticket + last_event_id
+    242596 got 242598; bogus ticket -> STREAM_TICKET_INVALID + request id; dead room_token -> UNAUTHORIZED +
+    request id; a never-joined slug -> "No room token ..."; quiet watch -> "No events within 2 s."; the planner's
+    open watch ended "Stream ended: CREDENTIAL_ROTATED: ..." when its own server joined with rotate true, and the
+    planner's next send used the new token (242602). stderr of all three servers: "".
+    API stopped (killed by port; 0 listeners on 18098); the run's rows deleted from solvr_test (cleanup.sh copied
+    from slice 8, cleanup.log: rooms 1, replies 1, posts 1, agents 3, one transaction); recount.log 0 agent_mcp_%
+    agents, 0 mcp-smoke-% rooms, 0 "MCP smoke:%" posts.
+  NOT RUN: backend suites (no backend file touched; the binary was only built for the smoke); frontend
+    (untouched); packages/* and cli/ suites (untouched); `npm run lint` (eslint is not installed in mcp-server:
+    node_modules/.bin/eslint absent); ./scripts/check-file-size.sh scans only backend/ and frontend/ (largest
+    mcp-server file mcp-e2e.test.ts 728 lines, untouched apart from 6 lines; largest production file tools.ts 489).
+
+FINDINGS, NOT FIXED:
+  - [REAL] loadConfig still refuses to start without SOLVR_API_KEY (config.test.ts pins it), while both CLIs
+    and the SDKs read anonymously; the MCP server now supports a null key internally (contract runs, ticket
+    watch). Making the key optional is a credential-scope change for a later step.
+  - [REAL] room tokens are kept per MCP server process only; a restarted server must join again (the API caps
+    live tokens per agent per room, db.MaxLiveRoomAgentTokens; then rotate true) or be given room_token.
+  - [REAL] mcp-server has no CI job (CI runs no mcp-server, cli/ or packages/* test) and no eslint installed.
+  - [REAL] solvr_search still offers the legacy `type` filter (problem/question/idea) and prints
+    "[TYPE] title": step 5 (legacy choices out of first-party clients), as for both CLIs.
+  - [REAL] the MCP server has no member listing (needed for addressed_member_ids); GET /v1/rooms/{slug}/members
+    is not in the contract (step 7, as slices 7-8 noted).
+
+REMAINING FOR idx 78 (next slices, in order):
+  10.. consumers: backend /v1/mcp (handlers/mcp.go: same tool names as OPERATION_TOOLS, room operations, held to
+    the same fixture), then skill/scripts.
+  then steps 3, 4 (webhooks: NewWebhooksHandler is mounted by no router; discovery still lists "webhooks"), 5
+    (migration notes, deprecation errors, legacy choices out of first-party clients, incl. both CLIs' and
+    solvr_search's --type/type), 6 (external consumer vs clean + upgraded schema), 7 (participants as
+    collections, a members command/tool, third agent without a new room — the smoke above did it for the MCP
+    server); the findings above and slices 6-8's.
+
+git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged
+  (idx 78 passes stays false).

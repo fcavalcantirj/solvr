@@ -21,29 +21,8 @@
 
 import { loadConfig } from './config.js';
 import { SolvrTools } from './tools.js';
-
-interface MCPRequest {
-  jsonrpc: '2.0';
-  id: number | string;
-  method: string;
-  params?: Record<string, unknown>;
-}
-
-interface MCPResponse {
-  jsonrpc: '2.0';
-  id: number | string;
-  result?: unknown;
-  error?: {
-    code: number;
-    message: string;
-  };
-}
-
-const SERVER_INFO = {
-  name: 'solvr',
-  version: '1.0.0',
-  protocolVersion: '2024-11-05',
-};
+import { handleRequest } from './server.js';
+import type { MCPRequest, MCPResponse } from './server.js';
 
 async function main() {
   let config: ReturnType<typeof loadConfig>;
@@ -100,73 +79,6 @@ async function main() {
   process.on('unhandledRejection', (error) => {
     console.error('Unhandled rejection:', error);
   });
-}
-
-async function handleRequest(request: MCPRequest, tools: SolvrTools): Promise<MCPResponse> {
-  const { id, method, params } = request;
-
-  switch (method) {
-    case 'initialize':
-      return {
-        jsonrpc: '2.0',
-        id,
-        result: {
-          ...SERVER_INFO,
-          capabilities: {
-            tools: {},
-          },
-        },
-      };
-
-    case 'initialized':
-      // Client notification, no response needed but we return empty result
-      return {
-        jsonrpc: '2.0',
-        id,
-        result: {},
-      };
-
-    case 'tools/list':
-      return {
-        jsonrpc: '2.0',
-        id,
-        result: tools.getManifest(),
-      };
-
-    case 'tools/call': {
-      const toolName = params?.name as string;
-      const toolArgs = (params?.arguments || {}) as Record<string, unknown>;
-
-      if (!toolName) {
-        return {
-          jsonrpc: '2.0',
-          id,
-          error: { code: -32602, message: 'Missing tool name' },
-        };
-      }
-
-      const result = await tools.executeTool(toolName, toolArgs);
-      return {
-        jsonrpc: '2.0',
-        id,
-        result,
-      };
-    }
-
-    case 'shutdown':
-      return {
-        jsonrpc: '2.0',
-        id,
-        result: null,
-      };
-
-    default:
-      return {
-        jsonrpc: '2.0',
-        id,
-        error: { code: -32601, message: `Method not found: ${method}` },
-      };
-  }
 }
 
 function sendResponse(response: MCPResponse): void {

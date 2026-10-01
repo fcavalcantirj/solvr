@@ -16,6 +16,9 @@ type KnowledgeCutoverOptions struct {
 	// DryRun only reads: it reports what the cutover would do and writes nothing, not even
 	// the ledger.
 	DryRun bool
+	// SearchSample is how many of the most frequent recorded search queries are compared
+	// before and after the conversion (searchSampler); 0 compares none.
+	SearchSample int
 }
 
 // KnowledgeCutoverStep is one timed step of a run, as recorded in the ledger.
@@ -61,6 +64,9 @@ type KnowledgeCutoverReport struct {
 	// SearchDocumentsPending counts the live rows search_document_drift() lists: a vector needs
 	// the embedding service, so the cutover reports them and SearchDocumentJob embeds them.
 	SearchDocumentsPending int64 `json:"search_documents_pending"`
+
+	// SearchSample is the sampled search comparison, when the run was asked for one.
+	SearchSample *SearchSampleReport `json:"search_sample,omitempty"`
 
 	Steps []KnowledgeCutoverStep `json:"steps"`
 
@@ -158,10 +164,12 @@ type cutoverStep struct {
 // the rehearsal on the restored production dump proved (task idx 93): post states, then
 // contributions, then the relations that name them, then every stored counter rebuilt from its
 // authoritative records (cutoverCounters) and the search documents still without a vector
-// counted. Every step is idempotent, so a run
+// counted. With SearchSample, the most frequent recorded queries are searched before anything
+// is converted and again at the end (a dry run only before). Every step is idempotent, so a run
 // interrupted anywhere is finished by running again, and each step is recorded in
 // cutover_ledger under the run's id. It stops before converting anything when a post fails
-// verification, and fails when a rebuilt projection still drifts. The schema must already be
+// verification, and fails when a rebuilt projection still drifts or the sampled search lost a
+// result public search still reads. The schema must already be
 // at the version that has replies (the caller checks it with SchemaVersion).
 func RunKnowledgeCutover(ctx context.Context, pool *Pool, opts KnowledgeCutoverOptions) (*KnowledgeCutoverReport, error) {
 	run := &knowledgeCutoverRun{pool: pool, dryRun: opts.DryRun, rep: &KnowledgeCutoverReport{
@@ -173,12 +181,21 @@ func RunKnowledgeCutover(ctx context.Context, pool *Pool, opts KnowledgeCutoverO
 		}
 	}
 
-	steps := []cutoverStep{
+	var steps []cutoverStep
+	var sampler *searchSampler
+	if opts.SearchSample > 0 {
+		sampler = newSearchSampler(pool)
+		run.rep.SearchSample = sampler.rep
+		steps = append(steps, cutoverStep{"search_sample_before", false, func(ctx context.Context) (any, error) {
+			return sampler.before(ctx, opts.SearchSample)
+		}})
+	}
+	steps = append(steps, []cutoverStep{
 		{"post_states", false, run.postStates},
 		{"verify_contributions", false, run.verifyContributions},
 		{"migrate_contributions", true, run.migrateContributions},
 		{"remap_legacy_relations", true, run.remapLegacyRelations},
-	}
+	}...)
 	for _, c := range cutoverCounters {
 		steps = append(steps, cutoverStep{c.step, false, func(ctx context.Context) (any, error) {
 			return run.rebuild(ctx, c)
@@ -188,6 +205,9 @@ func RunKnowledgeCutover(ctx context.Context, pool *Pool, opts KnowledgeCutoverO
 		cutoverStep{"search_documents", false, run.searchDocuments},
 		cutoverStep{"verify_contributions_after", true, run.verifyContributionsAfter},
 	)
+	if sampler != nil {
+		steps = append(steps, cutoverStep{"search_sample_after", true, sampler.after})
+	}
 	for _, s := range steps {
 		if s.apply && opts.DryRun {
 			continue

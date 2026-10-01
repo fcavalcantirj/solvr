@@ -988,7 +988,7 @@
       "Reconcile counters and sampled search results after migration and periodic rebuilds; verify visibility/deletion changes remove public projections promptly.",
       "Keep PostgreSQL as the initial authoritative store and add caches or additional infrastructure only for measured bottlenecks."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

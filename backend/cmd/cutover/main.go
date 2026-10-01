@@ -1,7 +1,9 @@
 // Command cutover runs the knowledge-model cutover (task idx 93) against one database:
 // post states, legacy contributions to replies, the relations that name them, the rebuild of
 // every stored counter (vote scores, room activity, view counts, agent reputation) and a count
-// of the search documents still without a vector, recorded in cutover_ledger. Run it only after
+// of the search documents still without a vector, recorded in cutover_ledger. The most frequent
+// recorded search queries are searched before and after the conversion, and the run fails when
+// one lost a result public search still reads (--search-sample). Run it only after
 // `migrate up` has brought the schema to --expect-version and with the API stopped.
 //
 //	cutover --database-url <url> --dry-run            # read-only: what would change
@@ -30,6 +32,7 @@ type options struct {
 	confirmProd   bool
 	expectVersion int64
 	reportPath    string
+	searchSample  int
 }
 
 func parseOptions(args []string) (options, error) {
@@ -41,6 +44,7 @@ func parseOptions(args []string) (options, error) {
 	fs.BoolVar(&o.confirmProd, "confirm-prod", false, "required to apply (not needed with --dry-run)")
 	fs.Int64Var(&o.expectVersion, "expect-version", 132, "schema_migrations version the database must be at, clean")
 	fs.StringVar(&o.reportPath, "report", "", "write the JSON report to this file (default: stdout)")
+	fs.IntVar(&o.searchSample, "search-sample", 200, "most frequent recorded search queries to compare before and after (0: none)")
 	if err := fs.Parse(args); err != nil {
 		return o, err
 	}
@@ -51,6 +55,8 @@ func parseOptions(args []string) (options, error) {
 		return o, errors.New("applying the cutover requires --confirm-prod (or use --dry-run)")
 	case o.expectVersion <= 0:
 		return o, errors.New("--expect-version must be a positive migration version")
+	case o.searchSample < 0:
+		return o, errors.New("--search-sample must be 0 or more")
 	}
 	return o, nil
 }
@@ -95,7 +101,7 @@ func run(opts options) int {
 		return 2
 	}
 
-	rep, runErr := db.RunKnowledgeCutover(ctx, pool, db.KnowledgeCutoverOptions{DryRun: opts.dryRun})
+	rep, runErr := db.RunKnowledgeCutover(ctx, pool, db.KnowledgeCutoverOptions{DryRun: opts.dryRun, SearchSample: opts.searchSample})
 	if err := writeReport(opts.reportPath, rep); err != nil {
 		fmt.Fprintln(os.Stderr, "cutover: report:", err)
 		return 1

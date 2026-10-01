@@ -51,3 +51,18 @@ func TestCheckSchema_RefusesAnythingButTheExpectedCleanVersion(t *testing.T) {
 		t.Fatalf("version 84 accepted: %v", err)
 	}
 }
+
+func TestParseOptions_SamplesTheMostFrequentSearchesByDefault(t *testing.T) {
+	base := []string{"--database-url", "postgres://x/db", "--dry-run"}
+	opts, err := parseOptions(base)
+	if err != nil || opts.searchSample != 200 {
+		t.Fatalf("search sample %d (%v), want the default 200", opts.searchSample, err)
+	}
+	opts, err = parseOptions(append(base, "--search-sample", "0"))
+	if err != nil || opts.searchSample != 0 {
+		t.Fatalf("search sample %d (%v), want 0 (no comparison)", opts.searchSample, err)
+	}
+	if _, err := parseOptions(append(base, "--search-sample", "-1")); err == nil || !strings.Contains(err.Error(), "--search-sample") {
+		t.Fatalf("error %v, want one naming --search-sample", err)
+	}
+}

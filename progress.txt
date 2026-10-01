@@ -8009,3 +8009,153 @@ UAT (for when idx 77 closes, not now): as slice 24's list. After the API deploy 
   log shows "Counter reconcile job started (runs every hour)" once per instance; a "Counter reconcile:
   <counter> N drifted" line means something wrote a counter outside its trigger (deploy window or direct
   SQL) and was repaired. Expect such lines right after the deploy that crosses the old API, then none.
+
+================================================================================
+2026-10-01 15:26 — Task idx 77 (spec.json, category data) — DONE, passes -> true
+"Make indexes, counters, search projections, and analytics rebuildable from authoritative records"
+SLICE 26 (last): step 5 "reconcile ... sampled search results after migration". The cutover now does
+for search what it does for counters: with --search-sample N (default 200) it runs the N most frequent
+recorded queries through the default search before converting anything and again at the end, and fails
+when a post found before is not found after while public search still reads it, or when a legacy answer
+or approach the legacy contribution search matched is not found as a reply while public search reads it.
+On the post-purge production copy: all 1349 recorded queries, 0 posts lost, all 56,408 readable matched
+contributions found, numbers identical to an independent spike harness.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 77-95, 97, 98; no open
+  URGENT. 24/67 acceptance (skipped as before); 68 waits on the owner. idx 77 first buildable. Tree clean
+  at start, HEAD bb0642be. Followed slice 25's REMAINING order (step 5: sampled search on real data).
+
+SPIKE [REAL, /tmp/solvr_idx77_s26/spike/]: solvr_rehearsal_schema113/purge113 are not usable (purge113 is
+  already cut over: cutover_ledger rows, 1018 replies). Used solvr_rehearsal_purge (production after the
+  purge, 632 posts, prod schema 84, no schema_migrations): CREATE DATABASE ... TEMPLATE, `migrate force 84`,
+  `migrate up` 84 -> 132 in 2.6 s. A throwaway harness (zz_idx77_s26_spike_test.go, deleted; copies
+  harness_v1/v2.go.txt) called the real SearchRepository before and after the real cmd/cutover binary
+  (883 replies, 135 progress notes, 285 embeddings copied, vote drift 1 -> 0, room drift 57 -> 0,
+  search_documents_pending 251):
+  - first pass compared page 1 only (PerPage 50): 908 of 1349 queries "lost" posts. Not a loss: reply
+    matches push old posts past page 1, and anchors are capped at 3 per post (maxReplyMatchesPerPost), so
+    page 1 cannot prove anything. Second pass read EVERY page of the default search and of
+    content_types=answers / approaches (compare2.py):
+  - 1349 distinct recorded queries (3545 searches): 0 posts lost over the full result sets; 1169 queries
+    gain posts (13,780 query-post pairs found through replies); 161 with no reply match return the same
+    posts, order and total; totals equal the paged counts.
+  - legacy contribution search (live answers by content, approaches by angle/method/outcome/solution, the
+    idx 53 definition): 63,155 query-contribution pairs; 56,408 on a reply/post public search reads, ALL
+    found after as a reply; 6,747 hidden (post deleted, draft, rejected, pending, not published/approved).
+  - vectors (stored embeddings as query vectors, hybrid path): 254/254 copied approach+answer embeddings
+    on readable posts surface their reply as an anchor at similarity 1.0; 31 on hidden posts never
+    surface; 393/393 readable posts find themselves before and after with their own embedding.
+  - 8 of 501 post TITLES used as query text fail before AND after: see FINDINGS (buildTsQuery).
+  Spike DBs (solvr_idx77_s26_spike/_pre) dropped.
+
+WHAT CHANGED [REAL, git status --porcelain: M backend/cmd/cutover/main.go, M backend/cmd/cutover/
+  main_test.go, M backend/internal/db/knowledge_cutover.go, M backend/internal/db/legacy_dependency_
+  registry.go, ?? backend/internal/db/knowledge_cutover_search.go, ?? backend/internal/db/knowledge_
+  cutover_search_test.go; git diff --stat: 4 files, 48+/6-]:
+  ?? internal/db/knowledge_cutover_search.go (325 lines): SearchSampleReport (queries, errored,
+    errored_after, posts_before/after, lost_posts, unsearchable_posts, contributions, contributions_found,
+    contributions_hidden, missing_contributions) + searchSampler. before(): the N most frequent
+    query_normalized (count desc, text asc, blank skipped), every page of the default full-text search
+    per query (a query the search rejects goes to errored and is left out), and the legacy contribution
+    search's matches. after(): same queries, every page; lost posts split by searchablePostRule + public
+    (lost = still searchable = failure; unsearchable = state changed = reported); each matched
+    contribution mapped to its reply (legacy_type, legacy_id) and classified by the anchor rule (live,
+    not system, replyMatchPostRule, public): not read -> hidden, read and found by content_types answers
+    or approaches -> found, else missing (failure). failure() names lost posts, missing contributions and
+    queries failing only after. The sampler only reads (search_queries 3545 rows / max id 3571 before and
+    after both real runs [REAL]).
+  M internal/db/knowledge_cutover.go (355 -> 375): KnowledgeCutoverOptions.SearchSample,
+    KnowledgeCutoverReport.SearchSample (json search_sample, omitted when 0); step search_sample_before
+    FIRST (before post_states, which can change a post's state; runs in a dry run too) and
+    search_sample_after LAST (not in a dry run). Comment updated. No other step changed.
+  M cmd/cutover/main.go (121 -> 127): --search-sample (default 200, 0 = none, negative refused), passed
+    through; header comment says what it does.
+  M internal/db/legacy_dependency_registry.go (+1): "code:internal/db/knowledge_cutover_search.go"
+    pending(retire) -- it reads answers/approaches by design (TestLegacyDependencyRegistry_CoversThe
+    SourceTree failed without it: "discovered legacy dependency without a disposition").
+  ?? internal/db/knowledge_cutover_search_test.go (185 lines, scratch DBs, 7 tests):
+    - SearchSampleFindsBeforeAndAfterTheMostFrequentQueries: 5 recorded queries, sample 4 -> queries
+      [ksbeta ksalpha 'ksquote kszeta], errored ['ksquote], posts 1 -> 3, contributions 4 = 2 found + 2
+      hidden (answers on a closed and a draft question), nothing lost/missing; steps bracket the run and
+      both are ledgered without error; a second run compares 3 -> 3.
+    - WithoutASearchSampleNothingIsSampled; ADryRunSamplesOnlyBefore.
+    - SearchSampleFailsWhenAMatchedContributionIsNotFoundAfter: a pre-existing reply for the answer without
+      its text (the cutover never re-converts) -> run errors in search_sample_after, missing names it.
+    - SearchSampleReadsEveryPage: 60 matching posts -> 60 before and after (not 50).
+    - CompareSearchSamples_ALostPostFailsOnlyWhileItIsStillSearchable; SearchSampleReport_FailureNames...
+  M cmd/cutover/main_test.go (+15): TestParseOptions_SamplesTheMostFrequentSearchesByDefault (200, 0, -1).
+  No migration, index, cache or service. No existing test deleted, skipped or loosened.
+
+VERIFICATION [this session; DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test (local docker
+  solvr-postgres, schema 132); new DB tests use scratch DBs; logs in /tmp/solvr_idx77_s26/]:
+  [TEST] RED (tdd/red.log): go vet -> unknown field SearchSample / rep.SearchSample undefined; cmd:
+    opts.searchSample undefined.
+  [TEST] GREEN (tdd/green.log + page.log + cmd.log): first GREEN run failed 2 tests (found 3, want 2):
+    content_types=answers reads replies on CLOSED posts, the default search's anchors do not; fixed by
+    classifying with the anchor rule first. Then TestKnowledgeCutover*|TestCompareSearchSamples|
+    TestSearchSampleReport|TestCanonicalSearch_RepresentativeQueries...|TestCutoverCounters|
+    TestSchemaVersion -> 14 PASS 0 FAIL 0 SKIP; ReadsEveryPage PASS; cmd/cutover 3 PASS.
+  MUTATIONS [TEST] (mut/m1..m6.log), all FAIL as intended; sources restored, `shasum -c mut/orig.sha` OK:
+    m1 found-before-hidden order -> :79 and :143; m2 every lost post counted lost -> :154; m3 contributions
+    never compared -> :79, :140; m4 first page only -> :183 expected 60 actual 50 (first attempt did not
+    build, redone); m5 before-sample after post_states -> step order :84; m6 after() never fails -> :140.
+  [REAL] the built cmd/cutover on fresh copies of the migrated post-purge copy (real/):
+    --dry-run: 9.9 s, search_sample_before 9.4 s, 200 queries, 20,955 pairs, 7,545 contributions.
+    --confirm-prod (default 200): exit 0, 29.7 s total, before 8.6 s + after 19.1 s; posts 20,955 ->
+      22,632, contributions 7,545 = 6,834 found + 711 hidden, lost/missing/errored none; ledger rows
+      search_sample_before/after finished, error NULL, counts as above.
+    --search-sample 5000 (all 1349): exit 0, before 68.1 s, after 140.0 s; posts 169,937 -> 183,717
+      (+13,780), contributions 63,155 = 56,408 found + 6,747 hidden: EXACTLY the spike harness's numbers.
+    Top 200 queries are 2,325 of the 3,545 recorded searches (65.6%). DBs dropped.
+    stderr carries one "search completed" INFO line per search (apply200.log 1513 lines); the report
+    goes to --report.
+  [TEST] PACKAGES (pkg.log, once): go test ./internal/db ./cmd/... -count=1 -p 1 -v -> internal/db FAIL,
+    cmd/* ok. 3 names outside /tmp/solvr_idx77_s24/fail.now: TestLegacyDependencyRegistry_CoversTheSource
+    Tree (mine, fixed above, recheck.log PASS); TestRoomFeed_AtGrowthVolume... (query capture caught
+    pgvector's to_regtype type-registration query from a new pool connection; PASS alone in recheck.log);
+    TestSearch_KeywordPageEqualsTheFullSearch (also FAILS at HEAD bb0642be in a clean worktree,
+    head_kp.log, so not this slice; see FINDINGS; it PASSED in the full run below).
+  [TEST] FULL BACKEND (once, full.log): go test ./... -count=1 -p 1 -v -timeout 45m -> exit 1; only
+    internal/api and internal/db FAIL. 3328 top-level PASS, 69 FAIL, 13 SKIP. Against slice 24's
+    fail.now (70): 3 pass now, 2 new names, both "failed to create test user": duplicate key
+    users_username_key (roomtest_<ns%1e6> in the shared DB): TestAgentClaim_RetriesAndRacesLinkTheAgent
+    Once, TestPostVisibility_FamilyPrivate_LeakSweep -> new2_fresh.log on a fresh DB migrated to 132:
+    2 PASS 0 FAIL 0 SKIP (DB dropped). One new SKIP: TestCommentsCount_FeedShowsCommentCount (waits for
+    Groq moderation: "post did not become open within 35s"). All 8 new tests PASS in full.log; none skips.
+    This is the serial run slice 25 left owed (it touched search_document_queue.go and cmd/api).
+  [REAL] go build ./... ok; go vet ./internal/db ./cmd/cutover ok; gofmt -l clean on every file this slice
+    wrote or edited; ./scripts/check-file-size.sh -> the same 33 oversize files, none of this slice's.
+  NOT RUN: frontend (no frontend file touched).
+
+STEP MAP (idx 77), all closed:
+  1 indexes from measured plans: slices 12-21. 2 derived projections with a rebuild path: slices 1-6
+  (each migration header names it). 3 counters in the write's transaction, replay-safe: slices 1-5,
+  25. 4 raw events vs aggregates, retention per metric: slice 22. 5 reconcile counters after migration
+  (23) and periodically (24-25), sampled search after migration (26), search document sweep (6, 8),
+  prompt removal of public projections (7, 9, 10, 11). 6 PostgreSQL authoritative; no cache or service
+  added (slices 12-26 measured first; the jobs run inside the API process).
+
+FINDINGS, NOT FIXED (outside this task; owner call):
+  - [REAL psql probe + code read] buildTsQuery doubles a leading apostrophe, so a query word like
+    'Agent becomes ''Agent:* and to_tsquery raises "syntax error in tsquery" (run'':* alone parses);
+    SearchHandler passes q through and answers 500 "search failed". 0 of the 1349 recorded queries hit
+    it; 8 of 501 post titles do when pasted as a query. The sample counts such queries as errored.
+  - [TEST] content_types=answers|approaches (searchReplies) reads replies whose post is closed/archived;
+    the default search's anchors (replyMatchPostRule) do not. Two read rules for the same reply.
+  - [TEST] TestSearch_KeywordPageEqualsTheFullSearch fails at HEAD on a scratch DB some times of day
+    (page 2, sort=activity, FromDate now-20h; pkg.log and head_kp.log) and passes at others (full.log).
+  - Carried: PresenceReaperJob hard-deletes expired rooms; raw event tables grow without bound (slice 22).
+
+git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry); spec.json idx 77
+  passes -> true next (the only change to it).
+
+UAT: everything automatable ran green locally; what remains is the owner's production window:
+  - slice 25's list (and the chain it refers to: migrations 000112-000132 before the API deploy, each
+    *_drift()/rebuild_*() check, backfill-embeddings for search_document_drift, overview trigger check,
+    Cache-Control checks, CounterReconcileJob start lines).
+  - run cmd/cutover against production with the default --search-sample 200 (add ~30 s to the stopped-API
+    window on today's data; --search-sample 0 skips it): read search_sample in the report. lost_posts and
+    missing_contributions must be empty (the run fails otherwise); errored lists recorded queries the
+    search already rejects (the apostrophe finding); unsearchable_posts and contributions_hidden are the
+    expected effect of post states.

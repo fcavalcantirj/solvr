@@ -5503,3 +5503,136 @@ UAT (for when idx 77 closes, not now): apply 000112, 000113, 000119, 000120, 000
   '%overview_changed%'` = 4, then delete or reject one test post that is on https://solvr.dev's
   overview and confirm it is gone on the next load (not 30 s later); plus the drift/rebuild checks of
   slices 1-6. Run the cutover with the new default --expect-version 123.
+
+================================================================================
+2026-10-01 05:33 — Task idx 77 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Make indexes, counters, search projections, and analytics rebuildable from authoritative records"
+SLICE 8 of N: search document sweep (steps 2/3/5). Posts and replies left without a vector
+(translated, embedder failed or absent at create/edit, cleared by 000122) are embedded again by a
+scheduled job in every API instance with an embedder, one instance at a time, no operator run.
+The CODE was committed in b2ea3238 by the harness host auto-commit; this entry verifies and journals it.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 77-95, 97, 98; no open
+  URGENT. idx 24 and 67 are acceptance tasks (skipped as in every earlier entry); idx 68 still waits
+  for the owner call on step 1 and owner decision 4. idx 77 is the first buildable task.
+
+STATE AT START [REAL, git log / git show / ralph.sh read, not executed]: tree clean, HEAD b2ea3238,
+  message "2026-10-01 04:58 — Task idx 77 (spec.json, category data) — IN PROGR" = the last
+  progress.txt header cut at 72 chars: ralph.sh's host commit backstop (ralph.sh:466-471), used
+  when the engine exits with uncommitted changes. The previous iteration wrote slice 8, then ended
+  without a journal entry and without committing; progress.txt has no RALPH ITERATION TIMEOUT line,
+  so it was not the per-iteration timeout. Why the engine ended: [UNVERIFIED], not known. Its
+  /tmp/solvr_idx77_s8/full.log stops at 05:10:05 (the commit's second) in the middle of
+  internal/api: that full backend run never finished. It also left one scratch database
+  (solvr_scratch_1790841570402996000, 0 connections), dropped this session.
+
+WHAT b2ea3238 CHANGED [REAL, git show --numstat HEAD; code read this session]:
+  A backend/internal/models/search_document.go (52): SearchDocument {Kind post|reply, ID, Title,
+    Description, Body}; Text() = title+" "+description for posts (same text as PostsHandler.Create/
+    Update and cmd/backfill-embeddings), body for replies; SearchDocumentKey (kind, id) order.
+  A backend/internal/db/search_document_queue.go (136): SearchDocumentQueue = the persisted outbox
+    (pending = a row search_document_drift() lists, 000122). ListPending(after, limit): keyset page
+    over the drift list with the row's current text. StoreVector: UPDATE ... SET embedding only
+    WHERE live AND embedding IS NULL AND the text still equals the text embedded (no updated_at,
+    so the post ETag does not move); false when edited/embedded/deleted since. TryLockSweep:
+    pg_try_advisory_lock on a dedicated connection (session lock: a dead instance does not keep it;
+    a connection that cannot unlock is closed, not returned to the pool).
+  A backend/internal/jobs/search_documents.go (147): SearchDocumentJob, 50 documents per run, every
+    5 min; Busy when another instance holds the lock; a cursor continues after the last document
+    the previous run reached and wraps, so a document that keeps failing is retried once per pass
+    without starving the ones behind it; an embedder/store failure ends the run (one call per run
+    during an outage); RunScheduled runs at once, then on the ticker.
+  M backend/cmd/api/main.go (+15): starts the sweep when pool != nil && embeddingService != nil
+    (VOYAGE_API_KEY set), cancels it on shutdown.
+  M backend/internal/db/legacy_dependency_registry.go (+1): "job:SearchDocumentJob" keep(...).
+  M backend/internal/jobs/legacy_dropped_workers_test.go (+7): the new job added to the scheduled
+    workers probed against the legacy-dropped database (it must embed the seeded rows).
+  A tests: internal/db/search_document_queue_test.go (229, 3 tests), internal/jobs/
+    search_documents_test.go (364, 8 tests, fake queue), internal/jobs/search_documents_db_test.go
+    (237: TestSearchDocumentJob_ClearedVectorsComeBackOnceAcrossInstances, two pools on one DB:
+    B is Busy while A sweeps, 3 pending -> 3 embedded with 3 embedder calls, every vector = its
+    current text, replay on either instance = nothing and no call, an edit landing during the
+    embed -> Skipped 1 and nothing stored, the next run embeds the new text, drift 0).
+  No test deleted, skipped or loosened (the diff only adds lines).
+  The previous iteration's own RED/mutation/rehearsal output is in /tmp/solvr_idx77_s8 (red.log =
+  build failures before the code; mut.out = 9 mutations each caught; rehearsal.out below). Those are
+  [UNVERIFIED this session] except where re-run below.
+
+VERIFICATION THIS SESSION [DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test (local
+  docker solvr-postgres, schema 123 dirty=f); logs in /tmp/solvr_idx77_s8v/]:
+  [REAL] go build ./... exit 0; go vet ./internal/db/ ./internal/jobs/ ./internal/models/ ./cmd/api/
+    exit 0; gofmt -l clean on every slice 8 file except cmd/api/main.go, whose only gofmt diff is
+    one extra blank line before func main() that HEAD~1 already had (not slice 8's, not changed).
+  [TEST] targeted.log: go test ./internal/db/ ./internal/jobs/ ./internal/models/ -run
+    'SearchDocument|LegacyDropped|LegacyDependency' -count=1 -v -> ok, ok, 25 top-level PASS, 0
+    SKIP, 0 FAIL: the 12 TestSearchDocument{Queue,Job}_* tests, the 3 slice 6 TestSearchDocuments_*,
+    6 TestLegacyDependencyRegistry_*, 4 TestLegacyDroppedDatabase_* (incl. ScheduledJobs with the
+    new job). internal/models has no tests ([no tests to run]; the type is covered through these).
+  [TEST] mutations re-run (mut/mut.out), files restored, shasum -c OK, tree clean after:
+    M1 StoreVector ignores the post text -> FAIL search_document_queue_test.go:121;
+    M8 an embedder failure continues the run -> FAIL search_documents_test.go:215.
+  [REAL] LIVE PROBE (probe/probe.sh + probe.out; the previous iteration's script re-run with fresh
+    binaries built from HEAD this session: the API (cmd/api) and a throwaway sweeper wired like
+    main.go with services.NewOllamaEmbeddingService -> a local fake embedder on :8098 whose vector
+    names its text; the throwaway main lived in backend/cmd/zz_sweepprobe_tmp only for go build and
+    was removed; fresh DB solvr_idx77_s8v_probe at 123, API on :8099 under env -i, no VOYAGE key):
+    0. API without an embedder: "Embedding service: disabled", sweep not started.
+    1. 3 rows without a vector (A post, T translated post whose original vector 000122 cleared, R
+       reply), 2 sweepers at once: second = Busy; first = Embedded 3; every vector = current text;
+       drift 0; 3 embedder calls; A's ETag unchanged; replay = nothing, still 3 calls.
+    2. PATCH with the pre-sweep If-Match -> 200 (ETag not moved by the sweep), vector cleared,
+       next sweep restores it.
+    3. edit during the embed -> Skipped 1, nothing stored, next sweep embeds the new text.
+    4. sweeper kill -9 mid-embed: advisory locks 1 -> 0; next sweeper embeds.
+    5. scheduled sweep (2 s here) embeds a translation (SQL, ApplyTranslation's shape) 1.2 s after.
+    10 embedder calls total; api.log 6 x 200, 9 x 201; :8098/:8099 free; probe DB dropped.
+  [TEST] FULL BACKEND (once) `go test ./... -count=1 -p 1 -v -timeout 45m` -> full.log, exit 1:
+    FAIL internal/api and internal/db only (as slices 6-7); 3282 top-level PASS, 69 FAIL, 13 SKIP.
+    SKIP set identical to slice 7's (diff empty). FAIL set vs slice 7's 68: minus
+    TestAgentClaim_RetriesAndRacesLinkTheAgentOnce (passed this run), plus TestCommentsEndpoints
+    (router_content_test.go:279) and TestE2E_AgentCreatesPost (router_e2e_test.go:302), both
+    "409 DUPLICATE_CONTENT you already posted this". Cause measured [REAL, psql on solvr_test]: the
+    existing rows they hit are fixture posts from earlier runs (2026-09-28 16:54 agent_e2e_post_test_
+    567000, 2026-09-29 16:34 agent_cmt_test_608000); the author suffix is UnixNano()%1000000 (router_
+    e2e_test.go:506, router_comments_test.go:21), and every leftover id ends in 000 (macOS clock is
+    microseconds), so only 1000 suffixes exist; solvr_test holds 30 live "E2E Test: How to verify
+    agent posting?" posts (30 authors) and 71 "Comment list wiring target %" posts (69 authors,
+    titles compared with digits normalized) -> a run collides with ~3% / ~7% chance. Pre-existing
+    test isolation defect, untouched by slice 8 (no post-create code changed). Not fixed (not this
+    task; reported here). All 25 slice 8 / registry / legacy-probe tests PASS in full.log too.
+  check-file-size.sh [the previous iteration's filesize.log, same tree]: "Found 34 file(s) exceeding
+    800 lines", same count as slices 1-7; slice 8 files are 52-364 lines (wc -l this session).
+  NOT RUN: frontend (no frontend file touched); golangci-lint (config/version mismatch, slice 31).
+  Leftovers [REAL]: no probe/sweeper/embedder process, 0 solvr_scratch*/solvr_idx77* databases.
+
+PRIOR ITERATION'S REHEARSAL [UNVERIFIED this session, /tmp/solvr_idx77_s8/rehearsal/rehearsal.out
+  read, not re-run]: copies of solvr_cutover_rehearsal and solvr_rehearsal_purge113 migrated to 123:
+  pending 905 posts + 241 replies and 77 + 174; drained in 23 and 6 runs of <= 50 with a fake
+  embedder; every stored vector describes its row's current text; no post/reply text, updated_at or
+  status changed; ListPending plan seq scans, 6.2 / 2.1 ms.
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW (runtime, from b2ea3238):
+  - Every API instance with VOYAGE_API_KEY now runs the sweep at start and every 5 min; one instance
+    at a time embeds (advisory lock, needs session-level connections, as LISTEN already does).
+  - First deploy after 000122: on the rehearsal copy ~1146 rows were pending -> ~1146 Voyage
+    document embeddings at 50 per 5 min (~2 h) [UNVERIFIED for production's count]. Drafts and
+    rejected posts are embedded too (same rows the API embeds at create).
+  - A document Voyage keeps refusing costs one call per run (288/day) until it changes.
+  - [UNVERIFIED] main.go's wiring with a real Voyage key: not run (the Voyage base URL is not
+    configurable, and no external call was made); the identical wiring ran in the probe sweeper.
+
+REMAINING for idx 77 (next slices, in order) [UNVERIFIED plan]:
+  step 5: other public projections vs removal: /v1/data/* 60 s cache, the sitemap, feeds — spike each
+    through the API; rooms changed outside RoomHandler (SQL/admin) still wait 30 s.
+  step 1: measured query plans on representative data for the listed lookups.
+  step 4: raw eligible search events vs time buckets + retention windows; no summed distincts.
+  step 5: reconcile counters/sampled search after migration and rebuilds.
+  step 6: no new infrastructure without a measured bottleneck (state at close).
+
+git status at journal time [REAL]: clean before this append; this commit changes only progress.txt
+  (the slice 8 code is already in b2ea3238). spec.json unchanged, idx 77 passes stays false.
+
+UAT (for when idx 77 closes, not now): as slice 7's list, plus after the API deploy carrying
+  b2ea3238 confirm one instance logs "Search document sweep started" and `SELECT count(*) FROM
+  search_document_drift()` falls to 0 (or to the few rows Voyage refuses) within a few hours.

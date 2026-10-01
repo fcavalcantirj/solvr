@@ -61,11 +61,14 @@ func (w *backfillWorker) runReplies(ctx context.Context, result *backfillResult)
 			if err != nil {
 				slog.Error("Failed to generate embedding", "reply_id", reply.ID, "error", err)
 				result.repliesErrors++
-			} else if err := w.db.UpdateReplyEmbedding(ctx, reply.ID, embedding); err != nil {
+			} else if written, err := w.db.UpdateReplyEmbedding(ctx, reply, embedding); err != nil {
 				slog.Error("Failed to update embedding", "reply_id", reply.ID, "error", err)
 				result.repliesErrors++
-			} else {
+			} else if written {
 				result.repliesEmbedded++
+			} else {
+				slog.Info("Reply changed since it was read; vector not stored", "reply_id", reply.ID)
+				result.repliesSkipped++
 			}
 
 			if w.delayBetweenItems > 0 {
@@ -77,7 +80,7 @@ func (w *backfillWorker) runReplies(ctx context.Context, result *backfillResult)
 			break
 		}
 
-		processed := result.repliesEmbedded + result.repliesErrors
+		processed := result.repliesEmbedded + result.repliesErrors + result.repliesSkipped
 		slog.Info(fmt.Sprintf("Processed %d/%d replies (%d%%)", processed, total, processed*100/total))
 	}
 
@@ -115,12 +118,17 @@ func (d *pgBackfillDB) CountRepliesWithoutEmbedding(ctx context.Context) (int, e
 	return count, err
 }
 
-// UpdateReplyEmbedding stores the vector without touching updated_at: that column is the
-// reply's ETag validator, and a backfill is not an edit.
-func (d *pgBackfillDB) UpdateReplyEmbedding(ctx context.Context, id string, embedding []float32) error {
-	_, err := d.pool.Exec(ctx,
-		`UPDATE replies SET embedding = $1::vector WHERE id = $2 AND deleted_at IS NULL`,
-		float32SliceToVectorString(embedding), id,
+// UpdateReplyEmbedding stores the vector only onto the body it was computed from and only
+// where no vector exists yet, without touching updated_at: that column is the reply's ETag
+// validator, and a backfill is not an edit.
+func (d *pgBackfillDB) UpdateReplyEmbedding(ctx context.Context, reply replyRow, embedding []float32) (bool, error) {
+	tag, err := d.pool.Exec(ctx,
+		`UPDATE replies SET embedding = $1::vector
+		  WHERE id = $2 AND deleted_at IS NULL AND embedding IS NULL AND body = $3`,
+		float32SliceToVectorString(embedding), reply.ID, reply.Body,
 	)
-	return err
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() == 1, nil
 }

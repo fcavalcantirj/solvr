@@ -5134,3 +5134,208 @@ UAT (for when idx 77 closes, not now): apply 000112, 000113, 000119, 000120 AND 
   `SELECT rebuild_agent_reputation();`, and confirm a second `SELECT * FROM agent_reputation_drift();`
   returns 0 rows; plus the view_count / vote_score / room_activity drift and rebuild checks from slices
   1-4. Run the cutover with the new default --expect-version 121.
+
+2026-10-01 03:58 — Task idx 77 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Make indexes, counters, search projections, and analytics rebuildable from authoritative records"
+SLICE 6 of N: search documents. The stored vectors (posts.embedding, replies.embedding) become a
+projection of the text they describe: a text write without a fresh vector clears the old one in the
+same row write (DB triggers), translated posts' original-language vectors are cleared once, the
+backfill writes only onto the text it embedded and no longer moves the post ETag; drift check
+search_document_drift(), rebuild = cmd/backfill-embeddings (steps 2/3/5), migration 000122. Plus the
+stored-vs-derived decision for public activity previews and overview aggregates (inventory, no code).
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 77-95, 97, 98; no open
+  URGENT (96 is true). idx 24 and 67 are acceptance tasks (skipped as in every earlier entry). idx 68
+  still waits for the owner call on step 1 and owner decision 4 for steps 5-6. idx 77 is the first
+  buildable task; slice 5's REMAINING list puts public activity previews, search documents and
+  overview aggregates next. Tree clean at start; HEAD f68f6a15.
+
+INVENTORY — stored vs derived [REAL, code read + information_schema on solvr_test]:
+  - Overview aggregates (GET /v1/overview, /v1/homepage/*): DERIVED at read (HomepageRepository /
+    CanonicalStatsRepository queries); /v1/overview keeps a 30 s in-process snapshot (overview_cache.go,
+    max 6 entries) dropped on room visibility/archive/delete via OnOverviewChanged + pg_notify. Nothing
+    stored, nothing to rebuild. /v1/data/* (search analytics) has its own 60 s cache, same kind.
+  - Public activity previews (overview Activity = ListPublicRoomFeed, Previews = loadPreviewSources):
+    DERIVED at read from room_entries/rooms; covered by slice 1's room projection + the same cache.
+  - Keyword search documents: GIN expression indexes (idx_posts_search, idx_posts_title_tsvector,
+    idx_posts_description_tsvector, idx_replies_body_tsvector) over the current text; no tsvector
+    column exists. Maintained in the row's own write; cannot drift.
+  - Vector search documents: STORED (posts.embedding, replies.embedding, vector(1024)); written by the
+    API at create/edit (Voyage), by cmd/backfill-embeddings, and copied by RemapLegacyRelations. THIS
+    SLICE.
+  - Finding for step 5, NOT measured, not fixed [REAL code read only]: the /v1/overview snapshot is
+    dropped only on room changes; a post deleted, rejected by moderation or edited can stay in its
+    Posts section (ListReusablePosts) for up to the 30 s TTL. Next slice's spike.
+
+SPIKE FIRST [REAL, /tmp/solvr_idx77_s6/spike/spike.sh + spike.out, live API on HEAD, fresh DB at 121,
+  :8099 under env -i, no VOYAGE_API_KEY ("Embedding service: disabled"), vectors seeded by SQL,
+  DB dropped after; first run hit the post rate limit (429) for scenarios D/E, rerun with one agent
+  per scenario]:
+  A. post PATCH title+description (If-Match) -> 200, the seeded vector KEPT (stale text's vector).
+  B. ApplyTranslation's exact statement (posts_translation.go:94) -> original-language vector KEPT
+     under the English text.
+  C. reply PATCH body -> vector NULL (already correct, ReplyRepository.Update writes body+vector).
+  D. backfill's post write (`SET embedding = ..., updated_at = NOW()`) -> ETag moved
+     ("1790836933203941" -> "1790836934539796"); the owner's PATCH with the pre-backfill If-Match ->
+     412 PRECONDITION_FAILED.
+  E. backfill race: text A read, edit to text B lands, backfill writes -> text A's vector stored on
+     text B.
+  Code facts behind B [REAL, code read]: PostsHandler.Create embeds title+" "+description before
+  moderation; moderation -> language rejection -> translation_trigger.go / jobs/translation.go call
+  ApplyTranslation, which never touches embedding; nothing else re-embeds.
+
+DESIGN: enforce it in the database (every writer: API edit with a failed/absent embedder, the
+  translation job, SQL), the same place as slices 1-5. A missing vector is detectable (drift) and
+  rebuildable (the backfill); a wrong one is neither, so a text change without a vector clears it.
+  The backfill already is the persisted-outbox worker for this projection (NULL = pending); its
+  write is made idempotent and race-safe instead of adding a new worker (step 6).
+
+WHAT THIS SLICE CHANGED [REAL, git status --porcelain / git diff --numstat before this append]:
+  A backend/migrations/000122_search_document_projection.up.sql (77): search_document_stale() +
+    BEFORE UPDATE OF title, description ON posts / BEFORE UPDATE OF body ON replies triggers, WHEN the
+    text changed AND NEW.embedding IS NOT DISTINCT FROM OLD.embedding -> NEW.embedding := NULL (view
+    counts, votes, status moves do not fire them); search_document_drift() RETURNS (kind, id): live
+    posts without a vector + live non-system replies without a vector (the backfill's predicates);
+    one-time UPDATE posts SET embedding = NULL where original_title IS NOT NULL and the text differs
+    from the original (sets only the vector: updated_at and other triggers untouched). Header
+    documents what is stored vs derived and the rebuild path.
+  A backend/migrations/000122_search_document_projection.down.sql (6): drops the 2 triggers and 2
+    functions; cleared vectors stay NULL (the backfill rebuilds them).
+  M backend/cmd/backfill-embeddings/main.go (+36/-11): backfillDB.UpdatePostEmbedding /
+    UpdateReplyEmbedding take the row read (postRow / replyRow) and return (written bool, err);
+    pgBackfillDB.UpdatePostEmbedding writes `WHERE id AND deleted_at IS NULL AND embedding IS NULL
+    AND title = $3 AND description = $4` and NO LONGER sets updated_at; backfillResult gains
+    skipped / postsSkipped / repliesSkipped; a not-written row is logged and counted as skipped
+    (not embedded, not an error); main prints "Changed while embedding (run again)". Package doc
+    names it the rebuild path of migration 000122.
+  M backend/cmd/backfill-embeddings/replies.go (+18/-10): same for replies (`AND embedding IS NULL
+    AND body = $3`; updated_at was already untouched).
+  A backend/cmd/backfill-embeddings/backfill_guard_test.go (214): TestBackfillWorker_ARowChanged
+    SinceItWasReadIsSkippedNotCounted (mock) and TestPGBackfillDB_WritesAVectorOnlyOntoTheTextItWas
+    ComputedFrom (scratch DB: edited / taken / deleted / fresh post and reply rows; updated_at of every
+    post and reply unchanged; pending rows == search_document_drift(); a run embeds the current text;
+    a replayed run finds 0 and calls no embedder; drift empty).
+  A backend/internal/db/search_document_projection_test.go (212, scratch DBs, 3 tests):
+    _ATextChangeWithoutAFreshVectorClearsTheStaleOne (UpdateIfUnmodified tags-only keeps, title
+    without vector clears, with vector stores, description without vector clears; UpdateStatus keeps;
+    ApplyTranslation clears; reply body by SQL clears, ReplyRepository.Update with vector stores,
+    non-body write and same-body write keep), _DriftListsTheLiveRowsTheBackfillMustEmbed,
+    _TheMigrationClearsTheVectorsOfTranslatedText (000122 down, seed, up: only the translated-and-
+    changed post cleared, updated_at of every post unchanged; down/up again does not guess).
+  M backend/cmd/backfill-embeddings/backfill_test.go (+16/-8), backfill_replies_test.go (+16/-12):
+    the two mockDB methods take the new signature and gain changedPosts/changedReplies; in
+    TestPGBackfillDB_EmbedsLiveHumanAndAgentRepliesOnly the two UpdateReplyEmbedding calls pass
+    replyRow{ID, Body} and now also assert written=true (live) / written=false (deleted). Every
+    existing assertion kept; no test deleted, skipped or loosened.
+  M backend/cmd/cutover/main.go: --expect-version default 121 -> 122; main_test.go: the same version
+    in TestParseOptions_GuardsTheProductionRun / TestCheckSchema_... (same assertions).
+  M backend/internal/db/cutover_rollback_test.go: down-migration count 37 -> 38 ("000122..000085")
+    and the comment; the test still asserts every down step runs and archives what it cannot hold.
+  No API handler changed: PostsHandler.Update already passes nil on embedder failure; the trigger
+  turns COALESCE's kept vector into NULL.
+
+VERIFICATION [this session; DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test (local
+  docker solvr-postgres), migrated 121 -> 122 with `migrate up` this session (122 dirty=f); the new
+  DB and backfill tests use scratch DBs migrated from the files; logs under /tmp/solvr_idx77_s6/]:
+  [TEST] RED (red_db.log, red_backfill.log): _ATextChange FAIL :91 (title edit kept v1, HEAD
+    behavior); _Drift FAIL :135 (search_document_drift does not exist); _TheMigration FAIL :175 (no
+    000122 file); backfill package does not build (old signatures).
+  [TEST] go build ./... ok; go vet ./cmd/backfill-embeddings/ ./cmd/cutover/ ./internal/db/ exit 0;
+    gofmt -l on every touched file: clean.
+  [TEST] GREEN (green_db2.log, green_cmd.log): TestSearchDocuments_* (3), TestCutoverRollback_*,
+    TestReplyRepository_CreateStoresTheBodyEmbedding / _UpdateReplacesOrClearsTheEmbedding PASS;
+    cmd/backfill-embeddings 22 tests PASS (incl. all 3 integration tests), cmd/cutover 2 PASS; 0 SKIP.
+    (The first GREEN run failed at :121 on my fixture: provenance '{"note":"x"}' violates 000118's
+    replies_provenance_bounded; the fixture now writes updated_at instead.)
+  MUTATIONS [TEST], each restored from /tmp/solvr_idx77_s6/mut/*.bak, shasum -c OK after:
+    mutA2 no posts trigger -> _ATextChange :91 and _Drift :155 FAIL (mutA, a rename that left a
+      trigger alive, was a bad mutation and is discarded);
+    mutB trigger WHEN without the unchanged-vector clause -> _ATextChange :93 FAIL (a fresh vector
+      was cleared);
+    mutC no replies trigger -> _ATextChange :116 FAIL;
+    mutD migration clear turned into a no-op -> _TheMigration :200 FAIL;
+    mutE post write without the title/description guard -> guard test :120 / :139 / :181 FAIL;
+    mutF reply write without the embedding/body guard -> guard test :126 (x2) / :139 FAIL;
+    mutG post write with updated_at = NOW() again -> guard test :143 and :212 FAIL.
+  MIGRATION [REAL, migration.sh + migration.out] throwaway DB: up -> 122 dirty=false, 2 triggers,
+    2 functions; down 1 -> 121 dirty=false, none left, the other 37 triggers intact; up -> 122, drift
+    0. Dropped.
+  REHEARSAL [REAL, rehearsal.sh + rehearsal.out] copies (CREATE DATABASE ... TEMPLATE) migrated
+    goto 121, snapshot, then up (000122 alone):
+    solvr_rehearsal_purge113 (post-purge shape): 63 translated posts with a vector (53 live public
+    published) -> 0; drift after = 77 posts + 174 replies (14 + 174 were already pending at 121);
+    updated_at of every post and reply unchanged (md5); vectors of every other post and every reply
+    unchanged (md5).
+    solvr_cutover_rehearsal (pre-purge): 878 -> 0 (735 live public published); drift 905 + 241;
+    same three unchanged checks. Copies dropped; both sources still at 113.
+  LIVE PROBE [REAL, /tmp/solvr_idx77_s6/probe/probe.sh + probe.out, this code, fresh DB at 122, API on
+    :8099 without an embedder, the REAL backfill binary with EMBEDDING_PROVIDER=ollama pointed at a
+    local fake OpenAI-compatible embedder on :8098 (fake_embedder.py: one-hot vector at md5(text) %
+    1024, so the probe checks which text a stored vector describes)]:
+    A. create -> NULL, drift 1; backfill -> current-text vector, drift 0, ETag NOT moved; PATCH with
+       the pre-backfill If-Match -> 200 (HEAD 412), vector NULL, drift 1; backfill -> current text.
+    B. translation statement on an embedded post -> NULL, drift 1; backfill -> current (English) text.
+    C. reply PATCH -> NULL; backfill -> current text.
+    E. edit lands while the backfill embeds (4 s fake delay) -> PATCH 200; backfill "0 posts embedded,
+       Changed while embedding (run again): 1 posts", vector NULL, drift 1; next run -> current text
+       (text B); replay -> 0 embedded, drift 0.
+    embedder calls 8; api.log 8 x 200, 7 x 201; :8098 and :8099 free; probe DB dropped.
+  FULL BACKEND [TEST] (once) `go test ./... -count=1 -p 1 -v -timeout 45m` on solvr_test at 122 ->
+    full.log, exit 1: FAIL internal/api (8), internal/api/handlers (1), internal/db (60); 3266
+    top-level PASS, 69 FAIL, 13 SKIP. All 48 top-level TestSearchDocuments/TestPGBackfillDB/
+    TestBackfillWorker/TestBackfill_/TestLegacyBackfill/TestCutoverRollback/TestKnowledgeCutover/
+    TestParseOptions/TestCheckSchema/TestReply*Embedding/TestAgentReputation/TestViewCount/
+    TestVoteScore/TestRoomActivity tests PASS in it. SKIP set identical to slice 5's (diff empty).
+    FAIL names vs slice 5's /tmp/solvr_idx77_s5/full.log (73): 6 gone (the AgentRepository_* fixture
+    collisions slice 5 measured), 2 new — exactly the two slice 5 listed as "gone vs slice 4":
+    TestAgentClaim_RetriesAndRacesLinkTheAgentOnce ("duplicate key ... users_username_key" in
+    createRoomTestUser, username from UnixNano%1000000) and TestCrossAuth_RemoveProvider_OthersStill
+    Work (auth_cross_method_test.go:635 "Google provider should be removed": constant provider id
+    g_remove found from an earlier run). Measured [REAL, flip_fresh.sh + flip_fresh.out]: both PASS
+    on a fresh DB at 122. Shared-data collisions, not this slice's code. Not fixed (not asked).
+  check-file-size.sh -> filesize.log "Found 34 file(s) exceeding 800 lines", same count as slices
+    1-5; none of this slice's files is on it (largest: backfill main.go 369). 0 solvr_scratch*/
+    solvr_idx77* databases left [REAL, psql]. NOT RUN: frontend (no frontend file touched);
+    golangci-lint (config/version mismatch, slice 31).
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW (runtime, from this commit):
+  - A post edit that changes title/description while the embedder fails (or is not configured) now
+    leaves the post WITHOUT a vector (keyword search only) until the backfill runs; before, it kept
+    the old text's vector.
+  - A translated post loses its original-language vector at translation time (and the 53 public ones
+    on production at migration time, per the post-purge rehearsal); it is keyword-searchable on the
+    English text and regains semantic search when cmd/backfill-embeddings runs. Nothing re-embeds
+    automatically yet (see REMAINING).
+  - cmd/backfill-embeddings no longer moves posts.updated_at (a backfill never invalidates a client's
+    If-Match again) and reports rows changed mid-run as skipped; its exit output gains one line.
+  - Deploy ordering: 000122 can go before or after the API (no API code depends on it); run the
+    backfill AFTER 000122, otherwise its pre-122 build moves every embedded post's ETag.
+  - The cutover command now refuses a database not at 122 (--expect-version default).
+
+REMAINING for idx 77 (next slices, in order) [UNVERIFIED plan]:
+  step 3/5: re-embed in the translation path (or a periodic embedding sweep) so a cleared vector does
+    not wait for an operator run — spike first: measure how often the embedder fails/translates.
+  step 5: the /v1/overview snapshot vs post deletion / moderation / edit (finding above): spike the
+    30 s window through the API, then invalidate on post changes if it reproduces.
+  step 1: measured query plans on representative data for the listed lookups.
+  step 4: raw eligible search events vs time buckets + retention windows; no summed distincts.
+  step 5: reconcile counters/sampled search after migration and rebuilds.
+  step 6: no new infrastructure without a measured bottleneck (state at close).
+
+git status at journal time [REAL, git status --porcelain]: M backend/cmd/backfill-embeddings/
+  backfill_replies_test.go, M backend/cmd/backfill-embeddings/backfill_test.go, M backend/cmd/
+  backfill-embeddings/main.go, M backend/cmd/backfill-embeddings/replies.go, M backend/cmd/cutover/
+  main.go, M backend/cmd/cutover/main_test.go, M backend/internal/db/cutover_rollback_test.go,
+  ?? backend/cmd/backfill-embeddings/backfill_guard_test.go, ?? backend/internal/db/search_document_
+  projection_test.go, ?? backend/migrations/000122_search_document_projection.{up,down}.sql,
+  M progress.txt (this entry). spec.json unchanged, idx 77 passes stays false.
+
+UAT (for when idx 77 closes, not now): apply 000112, 000113, 000119, 000120, 000121 AND 000122 on
+  production before the API deploy carrying b9d7644c, 619b44b8, 1fce63ef, 7c6d5e7c, f68f6a15 and this
+  commit; after 000122 read `SELECT kind, count(*) FROM search_document_drift() GROUP BY kind;` (the
+  post-purge rehearsal predicts post 77, reply 174), run `go run ./cmd/backfill-embeddings` from THIS
+  commit with the production DATABASE_URL and VOYAGE_API_KEY (add -dry-run first to see the counts),
+  and confirm the drift query returns 0 rows (rerun the command if it printed "Changed while
+  embedding"); plus the reputation / view_count / vote_score / room_activity drift and rebuild checks
+  from slices 1-5. Run the cutover with the new default --expect-version 122.

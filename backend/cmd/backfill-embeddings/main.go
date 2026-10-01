@@ -1,6 +1,8 @@
 // Package main implements the backfill-embeddings CLI tool.
 // It generates embeddings for existing posts and replies that don't have one. Answers and
 // approaches are replies after the contribution cutover, which copies their vectors.
+// It is the rebuild path of the search documents (migration 000122): it embeds the rows
+// search_document_drift() lists, from their current text.
 package main
 
 import (
@@ -28,10 +30,12 @@ type postRow struct {
 type backfillDB interface {
 	GetPostsWithoutEmbedding(ctx context.Context, limit, offset int) ([]postRow, error)
 	CountPostsWithoutEmbedding(ctx context.Context) (int, error)
-	UpdatePostEmbedding(ctx context.Context, id string, embedding []float32) error
+	// UpdatePostEmbedding stores the vector computed from post's text; written is false when
+	// the row no longer holds that text, already has a vector, or was deleted since the read.
+	UpdatePostEmbedding(ctx context.Context, post postRow, embedding []float32) (written bool, err error)
 	GetRepliesWithoutEmbedding(ctx context.Context, limit, offset int) ([]replyRow, error)
 	CountRepliesWithoutEmbedding(ctx context.Context) (int, error)
-	UpdateReplyEmbedding(ctx context.Context, id string, embedding []float32) error
+	UpdateReplyEmbedding(ctx context.Context, reply replyRow, embedding []float32) (written bool, err error)
 }
 
 // backfillResult holds the summary of a backfill run.
@@ -39,12 +43,15 @@ type backfillResult struct {
 	totalFound      int
 	embedded        int
 	errors          int
+	skipped         int
 	postsFound      int
 	postsEmbedded   int
 	postsErrors     int
+	postsSkipped    int
 	repliesFound    int
 	repliesEmbedded int
 	repliesErrors   int
+	repliesSkipped  int
 }
 
 // backfillWorker orchestrates the backfill process.
@@ -112,6 +119,7 @@ func (w *backfillWorker) run(ctx context.Context) (*backfillResult, error) {
 	result.totalFound = result.postsFound + result.repliesFound
 	result.embedded = result.postsEmbedded + result.repliesEmbedded
 	result.errors = result.postsErrors + result.repliesErrors
+	result.skipped = result.postsSkipped + result.repliesSkipped
 
 	return result, nil
 }
@@ -179,7 +187,8 @@ func (w *backfillWorker) runPosts(ctx context.Context, result *backfillResult) e
 				continue
 			}
 
-			if err := w.db.UpdatePostEmbedding(ctx, post.ID, embedding); err != nil {
+			written, err := w.db.UpdatePostEmbedding(ctx, post, embedding)
+			if err != nil {
 				slog.Error("Failed to update embedding", "post_id", post.ID, "error", err)
 				result.postsErrors++
 				if w.delayBetweenItems > 0 {
@@ -188,7 +197,14 @@ func (w *backfillWorker) runPosts(ctx context.Context, result *backfillResult) e
 				continue
 			}
 
-			result.postsEmbedded++
+			if written {
+				result.postsEmbedded++
+			} else {
+				// Edited, embedded by another writer or deleted since the read: a row still
+				// without a vector is embedded from its new text by the next run.
+				slog.Info("Post changed since it was read; vector not stored", "post_id", post.ID)
+				result.postsSkipped++
+			}
 
 			if w.delayBetweenItems > 0 {
 				time.Sleep(w.delayBetweenItems)
@@ -199,7 +215,7 @@ func (w *backfillWorker) runPosts(ctx context.Context, result *backfillResult) e
 			break // All remaining items already attempted; exit cleanly.
 		}
 
-		processed := result.postsEmbedded + result.postsErrors
+		processed := result.postsEmbedded + result.postsErrors + result.postsSkipped
 		pct := 0
 		if total > 0 {
 			pct = processed * 100 / total
@@ -246,13 +262,19 @@ func (d *pgBackfillDB) CountPostsWithoutEmbedding(ctx context.Context) (int, err
 	return count, err
 }
 
-func (d *pgBackfillDB) UpdatePostEmbedding(ctx context.Context, id string, embedding []float32) error {
-	vecStr := float32SliceToVectorString(embedding)
-	_, err := d.pool.Exec(ctx,
-		`UPDATE posts SET embedding = $1::vector, updated_at = NOW() WHERE id = $2 AND deleted_at IS NULL`,
-		vecStr, id,
+// UpdatePostEmbedding stores the vector only onto the text it was computed from and only
+// where no vector exists yet, without touching updated_at: that column is the post's ETag
+// validator (If-Match), and a backfill is not an edit.
+func (d *pgBackfillDB) UpdatePostEmbedding(ctx context.Context, post postRow, embedding []float32) (bool, error) {
+	tag, err := d.pool.Exec(ctx,
+		`UPDATE posts SET embedding = $1::vector
+		  WHERE id = $2 AND deleted_at IS NULL AND embedding IS NULL AND title = $3 AND description = $4`,
+		float32SliceToVectorString(embedding), post.ID, post.Title, post.Description,
 	)
-	return err
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() == 1, nil
 }
 
 // float32SliceToVectorString converts a float32 slice to PostgreSQL vector literal format.
@@ -338,6 +360,9 @@ func main() {
 	}
 
 	fmt.Printf("Backfill complete: %d posts, %d replies embedded\n", result.postsEmbedded, result.repliesEmbedded)
+	if result.skipped > 0 {
+		fmt.Printf("Changed while embedding (run again): %d posts, %d replies\n", result.postsSkipped, result.repliesSkipped)
+	}
 	if result.errors > 0 {
 		fmt.Printf("Errors: %d posts, %d replies\n", result.postsErrors, result.repliesErrors)
 	}

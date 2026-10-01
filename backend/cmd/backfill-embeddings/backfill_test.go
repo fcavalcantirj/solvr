@@ -34,6 +34,10 @@ type mockDB struct {
 	replies          []replyRow
 	updateReplyCalls int
 	updateReplyErr   error
+	// changedPosts / changedReplies are rows whose text changed after the read: the write
+	// lands nowhere and the row stays pending.
+	changedPosts   map[string]bool
+	changedReplies map[string]bool
 }
 
 func (m *mockDB) GetPostsWithoutEmbedding(ctx context.Context, limit, offset int) ([]postRow, error) {
@@ -51,17 +55,21 @@ func (m *mockDB) CountPostsWithoutEmbedding(ctx context.Context) (int, error) {
 	return len(m.posts), nil
 }
 
-func (m *mockDB) UpdatePostEmbedding(ctx context.Context, id string, embedding []float32) error {
+func (m *mockDB) UpdatePostEmbedding(ctx context.Context, post postRow, embedding []float32) (bool, error) {
 	m.updateCalls++
-	if m.updateErr == nil {
-		for i, p := range m.posts {
-			if p.ID == id {
-				m.posts = append(m.posts[:i], m.posts[i+1:]...)
-				break
-			}
+	if m.updateErr != nil {
+		return false, m.updateErr
+	}
+	if m.changedPosts[post.ID] {
+		return false, nil
+	}
+	for i, p := range m.posts {
+		if p.ID == post.ID {
+			m.posts = append(m.posts[:i], m.posts[i+1:]...)
+			break
 		}
 	}
-	return m.updateErr
+	return true, nil
 }
 
 func TestBackfillWorker_DryRun(t *testing.T) {

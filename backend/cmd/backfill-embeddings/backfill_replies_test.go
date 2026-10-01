@@ -29,17 +29,21 @@ func (m *mockDB) CountRepliesWithoutEmbedding(ctx context.Context) (int, error) 
 	return len(m.replies), nil
 }
 
-func (m *mockDB) UpdateReplyEmbedding(ctx context.Context, id string, embedding []float32) error {
+func (m *mockDB) UpdateReplyEmbedding(ctx context.Context, reply replyRow, embedding []float32) (bool, error) {
 	m.updateReplyCalls++
-	if m.updateReplyErr == nil {
-		for i, r := range m.replies {
-			if r.ID == id {
-				m.replies = append(m.replies[:i], m.replies[i+1:]...)
-				break
-			}
+	if m.updateReplyErr != nil {
+		return false, m.updateReplyErr
+	}
+	if m.changedReplies[reply.ID] {
+		return false, nil
+	}
+	for i, r := range m.replies {
+		if r.ID == reply.ID {
+			m.replies = append(m.replies[:i], m.replies[i+1:]...)
+			break
 		}
 	}
-	return m.updateReplyErr
+	return true, nil
 }
 
 func TestBackfillWorker_RepliesOnly(t *testing.T) {
@@ -198,11 +202,11 @@ func TestPGBackfillDB_EmbedsLiveHumanAndAgentRepliesOnly(t *testing.T) {
 	}
 	vec := make([]float32, 1024)
 	vec[3] = 1
-	if err := pg.UpdateReplyEmbedding(ctx, live, vec); err != nil {
-		t.Fatalf("UpdateReplyEmbedding: %v", err)
+	if written, err := pg.UpdateReplyEmbedding(ctx, replyRow{ID: live, Body: before[live]}, vec); err != nil || !written {
+		t.Fatalf("UpdateReplyEmbedding = %v, %v; want written", written, err)
 	}
-	if err := pg.UpdateReplyEmbedding(ctx, gone, vec); err != nil {
-		t.Fatalf("UpdateReplyEmbedding(deleted): %v", err)
+	if written, err := pg.UpdateReplyEmbedding(ctx, replyRow{ID: gone, Body: "a deleted agent reply"}, vec); err != nil || written {
+		t.Fatalf("UpdateReplyEmbedding(deleted) = %v, %v; want not written", written, err)
 	}
 
 	var dims int

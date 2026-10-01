@@ -8765,3 +8765,150 @@ REMAINING FOR idx 78 (next slices, in order):
 
 git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged
   (idx 78 passes stays false).
+
+2026-10-01 17:53 — Task idx 78 (spec.json, category functional) — IN PROGRESS, passes STAYS false
+"Keep SDKs, CLI, MCP, skills, and webhooks consistent with the redesigned product"
+SLICE 6: the Python SDK (packages/sdk-python). It now exposes all 13 contract operations, each a Solvr method named
+after its operationId in snake_case (create_room, handshake_room, list_room_entries, create_room_entry,
+create_room_stream_ticket, stream_room, get_reply, update_reply, get_post, create_post, create_reply, list_replies,
+search), and a contract test serves contract/openapi-examples.json from a real local server and holds each request,
+result, error code and type to it.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 78-95, 97, 98; no open URGENT. 24/67
+  acceptance (skipped as in every earlier entry); 68 waits on the owner (as journaled). idx 78 first buildable;
+  continued from slice 5 (HEAD 24560fa6), REMAINING item "6.. consumers": Python SDK. Tree clean at start.
+
+DESIGN (from the TS/Go slices and a code read this session):
+  - Names: Python method = operationId in snake_case; a request body's fields are the method's KEYWORD ARGUMENTS with
+    the wire names (create_room(display_name=..., is_private=...)), so an example body is passed as **body. The
+    shorthands get/post/reply/replies stay (test_client.py pins them) and now call get_post/create_post/
+    create_reply/list_replies.
+  - Credential: Solvr(api_key=None) is an anonymous client (no Authorization header); api_key "" still raises
+    'API key is required' (test_client.py pins it). with_room_token(token) answers a NEW client presenting the room
+    token (base_url/timeout/retries/debug copied); the original is untouched; '' raises 'Room token is required'.
+  - Results: a method answers the response's data as a dataclass (Post, Reply, Room, RoomHandshake,
+    RoomStreamTicket); a response with meta answers data + meta like the wire (SearchResponse, ReplyPage,
+    RoomEntryPage, RoomEntryResult). Cursors are meta.next_cursor in all three SDKs now; ReplyPage keeps total/
+    has_more/next_cursor as read-only properties over meta (test_client.py reads them).
+  - Decoding: new solvr/_decode.py builds every dataclass from the JSON by its declared field types (nested
+    dataclasses, lists, Optional); an omitted field keeps its default, an undeclared one is ignored. It replaces
+    the hand-written _parse_* functions, so a field added to a dataclass is decoded without another parser line.
+  - Errors: SolvrError gains request_id (5th arg, also in repr); status 0 for a stream-ending code.
+  - ETag: Reply.etag (from the ETag answer header) on get_reply/update_reply; update_reply(id, if_match, body)
+    sends If-Match only when if_match is non-empty (empty -> the API's 428).
+  - Search: omits q when empty (the "q is missing" error example sends none); adds sort (SearchSort literal).
+    SearchMeta (query, took_ms, method, top_similarity, confident_match, warnings + the page fields) replaces
+    PaginationMeta, which is removed from the package (nothing else used it); SearchResponse.took_ms kept.
+  - Stream: stream_room(slug, last_event_id, ticket, type, issue) -> RoomStream (solvr/stream.py): requests
+    stream=True with timeout=(timeout, None) (no read timeout: the client timeout would kill a quiet stream), not
+    retried; next() skips ':' comments and retry blocks, joins multi-line data, strips CRLF, tracks last_event_id,
+    answers None on close, raises SolvrError(code, status 0) on access_revoked/credential_rotated; RoomStream is an
+    iterator and a context manager. It reads iter_content(chunk_size=None), i.e. chunk by chunk as the API's Go
+    server sends a chunked stream.
+  - Types: Post gains publication_state, moderation_state, visibility, posted_by_type/id, source_room_id,
+    vote_score, reply_count, the 3 legacy counts, user_vote (Optional Literal up/down); its non-identity fields now
+    have defaults (status "open", counts 0, ... exactly the old parser's defaults). Reply gains author and etag,
+    defaults likewise. SearchResult gains description, similarity, vote_score, the 4 counts, view_count, solved_at,
+    source, matched_replies (SearchReplyMatch) and loses votes (the API sends vote_score, never votes). Author.type
+    allows "system". PostStatus is now the backend's 12 statuses (models/post.go), "stuck" removed. New
+    solvr/room_types.py: Room, RoomHandshake, RoomEntry(Kind), RoomEntryMeta/Result, RoomEntriesMeta/Page,
+    RoomStreamTicket, RoomStreamFrame(Type), RoomStreamMessage, RoomStreamEvent (fields mirror the TS room-types.ts).
+
+WHAT CHANGED [REAL, git status --porcelain: M README.md, M solvr/__init__.py, M solvr/client.py, M solvr/types.py,
+  ?? solvr/_decode.py, ?? solvr/room_types.py, ?? solvr/stream.py, ?? tests/local_server.py, ?? tests/test_contract.py,
+  ?? tests/test_rooms.py (all packages/sdk-python/); git diff --stat (tracked): 4 files, 612+/225-]:
+  PRODUCTION (packages/sdk-python/solvr):
+  M client.py (433 -> 626): as DESIGN; the retry loop moved unchanged into _send() (answers the Response),
+    _request() = its JSON, _reply_with_etag(); _error_from() incl. request_id; _query() skips None/''; _segment()
+    escapes every path parameter of the contract methods (vote/vote_reply untouched). Also fixes the PRE-EXISTING
+    mypy error (baseline_mypy.log: client.py:354 "Returning Any from function declared to return dict[str, Any]").
+  M types.py (168 -> 257), ?? room_types.py (164), ?? stream.py (154), ?? _decode.py (40): as DESIGN.
+  M __init__.py: exports RoomStream, SearchSort, SearchReplyMatch, SearchMeta, RepliesMeta and the room types;
+    PaginationMeta no longer exported; module doc shows the room flow.
+  M README.md: api_key None, the naming rule + where the contract test lives, search sort/meta, get_post/
+    create_post/create_reply/list_replies (meta.next_cursor), get_reply/update_reply, a Rooms section, request_id.
+  TESTS (packages/sdk-python/tests):
+  ?? test_contract.py (412): loads ../../../contract/openapi-examples.json; serves each example from a real local
+    HTTP server. "every operation is a client method named after its operationId (snake_case)" + every operation has
+    a caller; "each example is what the SDK sends and surfaces" (13: method, escaped path, Authorization per
+    credential incl. none = header absent, exact query with no repeated name, If-Match/Last-Event-ID present iff the
+    example sends them, request body EXACTLY the example's, every request field is a parameter of the method and a
+    value of its type hint, every answered field surfaced with the same value (null = absent), every surfaced value
+    a value of its declared type (a runtime check over the dataclass type hints: int vs str, None in a non-Optional,
+    Literal members, lists, nested dataclasses); getReply surfaces the ETag the updateReply example sends back;
+    streamRoom: id/event, frame and decoded message); "each error example surfaces the API error code" (5: status,
+    code, message, request_id, details, one request) + a guard that error examples exist; self-tests of json_diff
+    (7 cases) and of the type check (6 cases).
+  ?? test_rooms.py (393): anonymous no-Authorization; with_room_token copy + original keeps the key; empty room
+    token; request_id on errors; create_room only given fields; handshake sends {} / ttl+rotate; slug escaping +
+    timeline cursor/limit/kind/issue + meta; entry replay meta; ticket POST without body; stream: heartbeat/retry/
+    CRLF/multi-line/`data:` without space/presence frame without message/last_event_id; iteration; both end frames
+    -> SolvrError status 0; refused stream -> status/code/request_id, one request; non-JSON frame -> ValueError;
+    resume header + filters + room-token bearer + Accept; ticket without credential; [real server] the stream
+    outlives a 0.2 s client timeout (frame after 0.6 s); [real server] close() of a stream the server keeps open
+    returns < 1 s; get_reply ETag + author; update_reply If-Match + new ETag; no If-Match -> 428; reply page
+    meta.next_cursor; empty q not sent; sort + search meta.
+  ?? local_server.py (79): the threaded local HTTP server both files use (chunked stream helpers).
+  test_client.py: UNCHANGED (not in git status). No test deleted, skipped or loosened.
+  Backend, frontend, contract fixture, SPEC.md, other packages: untouched. No migration.
+
+VERIFICATION [this session; logs in /tmp/solvr_idx78_s6/]:
+  [TEST] baseline.log: before any change 26 passed; baseline_mypy.log: mypy exit 1 (the 1 error above).
+  [TEST] RED (red.log): collection failed, "cannot import name 'RoomStream' from 'solvr'" (both new files).
+  [TEST] GREEN: green1.log 73 passed (11.6 s: the test server's 0.5 s shutdown poll -> poll_interval 0.01);
+    green2.log 73 passed, 0 skipped, 1.6 s; green3.log (`--cov=solvr`) 73 passed, coverage 95% (client 91, stream
+    92, types 97, _decode/room_types/__init__ 100). green_py314.log: the same suite under the venv's Python 3.14:
+    73 passed (durations314.log rerun 4.2 s; the first run's 36 s was first-import warm-up, slowest test 2.7 s).
+    mypy.log: `mypy solvr` "Success: no issues found in 6 source files"; mypy_tests.log: the 3 new test files
+    also pass mypy. (pyproject's mypy python_version 3.8 is rejected by mypy 2.3 with a warning: pre-existing.)
+  MUTATIONS [TEST] (mut/mut.py, mut/m*.log, summary.log; each applied alone, suite run, source restored;
+    `shasum -c mut/orig.sha` 6/6 OK): ALL 20 FAILED as intended: m1 SearchMeta drops confident_match (contract
+    search); m2 Reply drops author (contract createReply/getReply/listReplies/updateReply); m3 get_reply ignores the
+    ETag (contract getReply); m4 update_reply drops If-Match (contract updateReply + its 412); m5 with_room_token
+    keeps the API key (5 contract room ops); m6 anonymous sends "Bearer None" (7 contract cases); m7 no
+    Last-Event-ID (contract streamRoom); m8 error drops request_id (5 contract error cases); m9 handshake sends no
+    body for {} (contract handshakeRoom); m10 next_cursor not Optional (contract listRoomEntries, type check);
+    m11 empty q sent (contract search error); m12 stream does not decode the message (contract streamRoom); m13
+    RoomStreamMessage drops metadata (contract streamRoom); m14 user_vote not Optional (contract getPost, type
+    check); m15 slug not escaped; m16 create_room is_private renamed (the TS slice's surviving m16 is caught here by
+    the unit test, not the contract); m17 RoomEntry.id typed str (type check); m18 stream keeps the read timeout;
+    m19 end frame not an error; m20 CRLF not stripped.
+  [REAL] smoke/smoke.log: the real API binary (go build ./cmd/api -> /tmp/solvr_idx78_s6/smoke/, env -i with
+    DATABASE_URL = local docker solvr-postgres solvr_test, a throwaway JWT_SECRET, PORT 18095; no env file read)
+    driven by a throwaway script (smoke/smoke.py) importing this SDK: register 201; create_post (post, draft,
+    pending); create_reply author present; get_reply etag "1790887987026975"; update_reply new etag, changed; stale
+    etag -> 412 PRECONDITION_FAILED; no If-Match -> 428 PRECONDITION_REQUIRED; anonymous search('') -> 400
+    VALIDATION_ERROR; search meta method fulltext, confident_match False, per_page 5; get_post by its author
+    reply_count 1, user_vote None; list_replies 1, next_cursor None; create_room; handshake_room solvr_rt_;
+    create_room_entry + same client_entry_id -> same id, idempotent_replay True; list_room_entries 1, limit 50,
+    next_cursor None; stream_room resumed after entry 242566 -> 242568 with its content, last_event_id updated;
+    anonymous stream_room with a minted ticket -> same entry; bogus ticket -> 401 STREAM_TICKET_INVALID; dead room
+    token -> 401 UNAUTHORIZED (every error carried request_id); handshake rotate=True -> the old token's open
+    stream raised CREDENTIAL_ROTATED, status 0, after 32 ms. Stream reads were alarm-guarded (10/40 s), the whole
+    smoke `timeout 120`. API stopped (pkill; port 18095 free); the smoke agent/post/reply/room deleted from
+    solvr_test (smoke/cleanup.log: 4 DELETE 1).
+  NOT RUN: backend suites and the backend examples test (no backend file or the fixture touched; slice 4 ran the
+    latter green against the same fixture); frontend (untouched); ./scripts/check-file-size.sh scans only backend/
+    and frontend/ (largest new/changed sdk-python file is client.py, 626 lines).
+
+FINDINGS, NOT FIXED:
+  - [REAL] CI (.github/workflows) runs no packages/sdk-python test either (nor sdk-ts, sdk-go).
+  - [UNVERIFIED] a stream behind a proxy that turns the chunked answer into a close-delimited one would be read
+    only at close (requests' iter_content(None) reads chunk by chunk only for chunked bodies). The local Go server
+    answers chunked (smoke above); production's proxy path was not checked (no production access in this loop).
+  - [REAL] SearchOptions type/status still send the legacy filters (step 5 item, as in Go/TS).
+  - Carried from slices 4-5: optional request fields no example uses are held only by unit tests; Go SDK tags sent
+    repeated vs search.go comma-split; search ignores unknown params while stream rejects them; createRoom 409
+    DUPLICATE_ROOM not named; handshake note points at /r/{slug}/*; anonymous GET of a draft, pending post answers
+    200 (owner call).
+
+REMAINING FOR idx 78 (next slices, in order):
+  7.. consumers: packages/cli (TS), cli/ (Go), mcp-server, backend /v1/mcp, skill/scripts — same names, room
+    operations, contract held to the same fixture.
+  then steps 3, 4 (webhooks: NewWebhooksHandler is mounted by no router; discovery still lists "webhooks"), 5
+    (migration notes, deprecation errors, legacy choices out of first-party clients), 6 (external consumer vs clean
+    + upgraded schema), 7 (participants as collections, third agent without a new room); the findings above.
+
+git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged
+  (idx 78 passes stays false).

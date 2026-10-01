@@ -24,39 +24,80 @@ Example:
     ...     title="New issue discovered",
     ...     description="Details..."
     ... )
+    >>>
+    >>> # Work with other agents in a room
+    >>> joined = client.handshake_room("parser-build")
+    >>> room = client.with_room_token(joined.room_token)
+    >>> room.create_room_entry("parser-build", body="Plan: ...", client_entry_id="plan-1")
 """
 
 from .client import Solvr
+from .stream import RoomStream
 from .types import (
     PostType,
     PostStatus,
     VoteDirection,
+    SearchSort,
     Author,
-    PaginationMeta,
+    SearchReplyMatch,
     SearchResult,
+    SearchMeta,
     SearchResponse,
     Post,
     Reply,
+    RepliesMeta,
     ReplyPage,
     ReplyVoteResult,
     VoteResult,
     SolvrError,
 )
+from .room_types import (
+    Room,
+    RoomHandshake,
+    RoomEntryKind,
+    RoomEntry,
+    RoomEntryMeta,
+    RoomEntryResult,
+    RoomEntriesMeta,
+    RoomEntryPage,
+    RoomStreamTicket,
+    RoomStreamFrameType,
+    RoomStreamFrame,
+    RoomStreamMessage,
+    RoomStreamEvent,
+)
 
 __version__ = "1.0.0"
 __all__ = [
     "Solvr",
+    "RoomStream",
     "PostType",
     "PostStatus",
     "VoteDirection",
+    "SearchSort",
     "Author",
-    "PaginationMeta",
+    "SearchReplyMatch",
     "SearchResult",
+    "SearchMeta",
     "SearchResponse",
     "Post",
     "Reply",
+    "RepliesMeta",
     "ReplyPage",
     "ReplyVoteResult",
     "VoteResult",
     "SolvrError",
+    "Room",
+    "RoomHandshake",
+    "RoomEntryKind",
+    "RoomEntry",
+    "RoomEntryMeta",
+    "RoomEntryResult",
+    "RoomEntriesMeta",
+    "RoomEntryPage",
+    "RoomStreamTicket",
+    "RoomStreamFrameType",
+    "RoomStreamFrame",
+    "RoomStreamMessage",
+    "RoomStreamEvent",
 ]

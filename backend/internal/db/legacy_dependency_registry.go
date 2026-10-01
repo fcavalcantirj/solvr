@@ -66,6 +66,7 @@ var LegacyDependencyDispositions = map[string]LegacyDependencyDisposition{
 	"job:CleanupJob":               keep("prunes claim tokens and idempotency keys; touches no legacy table"),
 	"job:HealthCheckJob":           keep("checks API, database and IPFS health; touches no legacy table"),
 	"job:PresenceReaperJob":        keep("reaps room presence; the room model is not the knowledge model"),
+	"job:SearchDocumentJob":        keep("embeds the posts and replies search_document_drift() lists; touches no legacy table"),
 	"job:TranslationJob":           done(LegacyActionRefactor, "translation uses posts original_* columns; its moderation trigger now writes the verdict as a system reply (ModerationReplyWriter), not a legacy comment"),
 	"job:CrystallizationJob":       done(LegacyActionRefactor, "see feature:crystallization; main.go wires the canonical lister and crystallizer and the job skips ErrNothingToCrystallize"),
 	"consumer:RoomEntryChannel":    keep("room entry fan-out; independent of the knowledge model"),

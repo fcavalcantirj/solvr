@@ -334,6 +334,13 @@ func scheduledWorkers(pool *db.Pool, tracer *dbErrorTracer) []probeWorker {
 			mgr := hub.NewHubManager(ctx, registry, logger, 0)
 			jobs.NewPresenceReaperJob(db.NewAgentPresenceRepository(pool), db.NewRoomRepository(pool), registry, mgr).RunOnce(ctx)
 		}},
+		{"job:SearchDocumentJob", func(ctx context.Context, t *testing.T) {
+			// The seeded posts and reply carry no vector.
+			job := jobs.NewSearchDocumentJob(db.NewSearchDocumentQueue(pool), newTextEmbedder(), jobs.DefaultSearchDocumentBatchSize)
+			if result, err := job.RunOnce(ctx); err != nil || result.Embedded == 0 || result.Failed != 0 {
+				t.Errorf("search document job = %+v, %v; want the seeded rows embedded", result, err)
+			}
+		}},
 	}
 }
 

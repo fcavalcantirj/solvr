@@ -185,6 +185,18 @@ func main() {
 		log.Println("Translation sweep job started (runs every hour, primary translation is inline)")
 	}
 
+	// Start the search document sweep if database and embedding service are available: it
+	// embeds the posts and replies left without a vector (translated, embedder failed,
+	// migration 000122), one instance at a time.
+	var searchDocumentCancel context.CancelFunc
+	if pool != nil && embeddingService != nil {
+		searchDocumentJob := jobs.NewSearchDocumentJob(db.NewSearchDocumentQueue(pool), embeddingService, jobs.DefaultSearchDocumentBatchSize)
+		var searchDocumentCtx context.Context
+		searchDocumentCtx, searchDocumentCancel = context.WithCancel(context.Background())
+		go searchDocumentJob.RunScheduled(searchDocumentCtx, jobs.DefaultSearchDocumentInterval)
+		log.Println("Search document sweep started (runs every 5 minutes)")
+	}
+
 	// Start health check monitoring job if database is available
 	var healthCheckCancel context.CancelFunc
 	if pool != nil {
@@ -250,6 +262,9 @@ func main() {
 	}
 	if translationCancel != nil {
 		translationCancel()
+	}
+	if searchDocumentCancel != nil {
+		searchDocumentCancel()
 	}
 	if healthCheckCancel != nil {
 		healthCheckCancel()

@@ -3646,3 +3646,177 @@ UAT (for when idx 73 closes, not now): the retirements ship with the cutover dep
 
 git status at journal time [REAL]: the 13 M listed above, plus this entry. spec.json unchanged;
   idx 73 passes stays false.
+
+================================================================================
+2026-09-30 23:01 — Task idx 73 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Define concrete canonical knowledge endpoints and retire overlapping discovery and statistics APIs"
+SLICE 3: step 3's RETIRE half, third family. GET /v1/problems, /v1/questions, /v1/ideas (family
+legacy-typed-discovery, adapted by idx 71) now answer every caller 410 ENDPOINT_RETIRED naming
+GET /v1/posts and the typed query that served each, published in the served OpenAPI document,
+SPEC.md 26.7 and the /api-docs page (step 5).
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 73, 74, 77-95, 97,
+  98; no open URGENT. idx 24 and 67 stay skipped (acceptance tasks). idx 68: step 1 waits for an
+  owner call, steps 5-6 gated by owner decision 4 (slice 4 entry). idx 73 continues with the
+  family slice 2's STEP MAP listed next (legacy-typed-discovery). Tree clean at start; HEAD 9cd483ad.
+
+CONSUMERS OF THE TYPED LISTS [REAL, grep over the repo excluding node_modules/.next/journal]:
+  - frontend/lib/api.ts getQuestions and lib/api-base.ts getIdeas/getProblems are called only by
+    hooks use-questions/use-ideas/use-problems and questions-sidebar.tsx, imported only by the
+    problems/ideas/questions page clients on /problems, /ideas, /questions, which
+    frontend/middleware.ts 308-redirects to /posts. Dead; left untouched like the earlier slices'
+    dead callers (they go with the legacy pages, idx 83).
+  - /api-docs page (components/api/api-endpoint-data-content.ts) documented the 3 lists as live:
+    now retired entries (below).
+  - No reference in skill/, frontend/public/references (those list only the retired POSTs),
+    mcp-server/src, packages/, cli/.
+  - Backend tests that used the lists as a read probe: router_optional_auth_contract_test,
+    router_content_test (3 subtests + TestTypeSpecificListEndpoints), router_comments_test (2).
+    router_moderation_test and router_content_gate_test name the paths with POST only (retired
+    writes, idx 52): untouched.
+
+WHAT CHANGED [REAL, git status --porcelain: 12 M + 1 D; git diff --stat HEAD 246+/291-]:
+  PRODUCTION:
+  M backend/internal/api/legacy_read_retirement.go (72): 3 LegacyReadRetirements entries,
+    replacement GET /v1/posts, instructions "Call GET /v1/posts?type=<problem|question|idea> with
+    the same query parameters other than type (the route replaced a caller's type with <type>)",
+    questions add "has_answer=true or has_answer=false still lists questions with or without an
+    answer", plus the shared tail legacyTypedListAsPosts: data rows and meta unchanged (the
+    route was served by this list) and invalid or over-50 pagination answers 400 VALIDATION_ERROR
+    instead of being defaulted or clamped. Doc comment updated.
+  M backend/internal/api/router.go (1182 -> 1176): the 3 r.Get list mounts removed (their
+    comments now say the list is retired and name the typed query); mountRetiredLegacyReads
+    already mounts the table. The single-post typed GETs stay in the BART-151 OptionalAuth group.
+  D backend/internal/api/legacy_discovery_adapter.go (31): legacyTypedListAdapter, unexported
+    and with no caller left (it read no legacy table: it called postsHandler.List with the type
+    pinned, LenientLegacyPagination and Deprecation/Link). Deleted rather than kept unmounted:
+    an unused unexported func is dead code for golangci-lint, and owner decision 4 (keep the
+    legacy tables and their code until the drop) does not cover it. LenientLegacyPagination stays
+    (handlers/legacy_feed.go still uses it).
+  M backend/internal/db/legacy_dependency_registry.go: removed the
+    "typeref:internal/api/router.go" pending entry (it described the 3 adapter mounts). router.go
+    no longer names a legacy post type [REAL, grep], so the entry was stale, and
+    assertRegistryCovers fails on a stale entry. TestLegacyDependencyRegistry_CoversTheSourceTree
+    and _CoversThePostTypeReferences PASS.
+  M SPEC.md Part 26: 26.1 drops "(with Deprecation/Link signals where 26.5 says so)", since no
+    served route sets Deprecation any more [REAL, grep: only the unmounted legacy_feed.go and
+    legacy_type_stats.go]; 26.5 loses the "Legacy typed discovery" adapter block (kept: the
+    has_answer and needs_help canonical filter sentences) and points to 26.7; 26.7 gets the 3
+    rows with the exact instructions and a closing sentence on what a typed list's query lists.
+  M frontend/components/api/api-endpoint-data-content.ts (430 -> 407): the 3 live GET list
+    entries replaced by retiredEndpoint(...) with replacement GET /v1/posts and the 26.7
+    instructions (const typedListAsPosts).
+  NEW/CHANGED TESTS:
+  M backend/internal/api/router_legacy_read_retirement_test.go: retiredReadFamilies adds
+    legacy-typed-discovery; want-count 6 -> 9; retiredReadDestinations names each typed query
+    ("GET /v1/posts?type=problem " etc.); retiredReadFields gives the typed lists their envelope
+    fields (data, meta), with the comment saying why. Header comment updated.
+  M backend/internal/api/router_legacy_discovery_test.go: REWRITTEN (217 -> 237). Kept:
+    legacyListResp/getLegacyList/listIDs (router_legacy_type_stats_test.go uses getLegacyList)
+    and the seed, which now returns a struct with all 4 IDs. REMOVED adapter tests, behavior the
+    retirement replaces, each with its named replacement:
+    - TestLegacyTypedDiscovery_ServedByCanonicalPostsList asserted each route's ids and meta
+      == GET /v1/posts?type=<type> for the same tags, every row of the path's type. Now:
+      TestRetiredTypedDiscovery_NamedQueryListsWhatTheRouteListed (route answers 410; the
+      retirement names GET /v1/posts, the typed query, "same query parameters" and "data rows
+      and meta are unchanged"; that query lists exactly the seeded posts of the type: problem 1,
+      question 2, idea 1; meta total = that count, page 1, per_page 20, has_more false; every
+      row of the type). PASS.
+    - TestLegacyTypedDiscovery_AnnouncesCanonicalSuccessor asserted Deprecation: true, Link
+      </v1/posts?type=<type>>; rel="successor-version", the family listing each route with GET
+      /v1/posts in Canonical, and no Deprecation on GET /v1/posts. Now: the query is named in
+      details.instructions and GET /v1/posts carries no Deprecation
+      (TestRetiredTypedDiscovery_NamedQueryListsWhatTheRouteListed); family/canonical/route
+      listing by TestLegacyReadRetirements_CoverEveryRetiredReadFamilyAndNameAServedReplacement
+      (Contains(family.Canonical, ret.Replacement)). PASS.
+    - TestLegacyTypedDiscovery_AcceptsLenientLegacyQueryShape asserted per_page=200 clamped to
+      50, page=abc&per_page=0 defaulted to 1/20, the path's type over ?type=idea, and GET
+      /v1/posts?per_page=200 400. Now: TestRetiredTypedDiscovery_EveryLegacyQueryShapeGetsThe
+      MigrationError (those shapes plus ?has_answer=true all get the identical 410; instructions
+      warn of the 400 and say "other than type"; the typed queries with per_page=200, page=abc,
+      per_page=0 answer 400 VALIDATION_ERROR). PASS.
+    - TestPostsList_HasAnswerFilterDefinedOnce KEPT by name: the canonical half is unchanged
+      (has_answer=false lists the unanswered question only, true the answered one); the
+      "/v1/questions?" half, which asserted the same through the adapter, now asserts
+      /v1/questions?has_answer=false|true answers 410 ENDPOINT_RETIRED and the GET /v1/questions
+      instructions name has_answer. PASS.
+  M backend/internal/api/router_legacy_feed_test.go: mechanical rename feedRetirement ->
+    readRetirement (it looks up any retired read by path; now shared). No assertion touched.
+  M backend/internal/api/router_content_test.go:
+    - TestProblemsEndpoints/TestQuestionsEndpoints/TestIdeasEndpoints subtest "GET /v1/<type>s
+      returns list" asserted 200 with a data field. Now "GET /v1/<type>s is retired (410
+      ENDPOINT_RETIRED)" with requireRetiredRecorder (the idx 52 pattern for the POST subtests
+      beside them); the list's data is asserted on GET /v1/posts?type= by
+      TestTypeSpecificListEndpoints and the discovery tests above. PASS.
+    - TestTypeSpecificListEndpoints (FIX-020: a post created via POST /v1/posts appears in its
+      typed list with its type) reads GET /v1/posts?type=<type> instead of /v1/<type>s; same
+      assertions (found, type). PASS (all 3 subtests ran, none skipped).
+  M backend/internal/api/router_comments_test.go: TestCommentsCount_ProblemsShowCountAfterComment
+    and _IdeasShowCountAfterComment list GET /v1/posts?type=<type>&sort=newest&per_page=50
+    instead of /v1/<type>s?...; same comments_count assertion. PASS (both ran).
+  M backend/internal/api/router_optional_auth_contract_test.go: the representative of the
+    BART-151 OptionalAuth group was GET /v1/problems?per_page=1; a retired route is mounted
+    outside every auth middleware, so the group is now probed through
+    /v1/problems/00000000-0000-0000-0000-000000000000 (same group, same 401 INVALID_TOKEN
+    assertions). PASS.
+  M frontend/components/api/api-endpoint-retired.test.ts: 26.7 has 9 rows (was 6); the 3 typed
+    lists must stay on the page and be marked retired with the SPEC replacement and
+    instructions (same checks as the feed); the GET /posts check additionally requires the
+    status param.
+
+VERIFICATION (DATABASE_URL = local DBs only; never production):
+  RED [TEST, /tmp/solvr_idx73_s3/red.log, solvr_test at 118]: "GET /v1/<type>s has no
+    LegacyReadRetirements entry" (discovery tests), CoverEvery "has no retirement entry",
+    content subtests "expected: 410 actual: 200". Frontend RED [TEST, fe_red.log, page data at
+    HEAD]: "GET /v1/problems is not marked retired".
+  GREEN targeted [TEST, green1.log, solvr_test]: internal/api ok, internal/db ok; 97 PASS, 0
+    FAIL, 0 SKIP (new/changed tests, read and write retirements, OpenAPI, route families,
+    registry, scanner, feed, overview).
+  FULL BACKEND [TEST, /tmp/solvr_idx73_s3/full1.log, go test ./... -count=1 -p 1 -v, on a FRESH
+    local DB solvr_idx73_s3_fresh from all 118 up migrations via psql; dropped after]: 18
+    packages ok; internal/api and internal/db FAIL with 47 failing tests. Against slice 2's set
+    (/tmp/solvr_idx73_s2/fails.txt): 1 new, TestSearchAnalyticsRepository_GetTrending
+    ("expected 3 test trending results, got 2", search_analytics_test.go:161: idx 98's shared
+    time-window test, also failing in slice 1's run); 1 gone,
+    TestAgentClaim_RetriesAndRacesLinkTheAgentOnce (the referral_code fixture flake). Neither
+    touches typed lists. 12 SKIPs, the same pre-existing set (VOYAGE, OAuth, Kubo unpin, legacy
+    answers list); none mine. PASS in the full run: every test named above.
+  FRONTEND [TEST, fe_full.log]: npm test 188 files, 1696 tests PASS. typecheck exit 0. eslint on
+    the 2 touched files exit 0.
+  gofmt -l clean on every touched Go file (router_comments_test.go was already unformatted at
+    HEAD; my lines add nothing to its gofmt diff); go vet ./internal/api ./internal/db clean.
+    check-file-size.sh: 34 violations, the same set as slice 2 (router.go still over, 1176).
+  LIVE PROBE [REAL, /tmp/solvr_idx73_s3/probe/probe.sh + probe.out]: go build ./cmd/api, run on
+    :8097 under env -i on a fresh local DB at 118 (IPFS_API_URL=http://127.0.0.1:9, fake
+    JWT_SECRET, probe ADMIN_API_KEY). Agent registered 201; one public open problem, question
+    and idea tagged typedprobe inserted by SQL on that probe DB. GET /v1/problems|questions|ideas
+    bare, ?per_page=200, ?page=abc&per_page=0, ?type=idea&tags=..., ?has_answer=true: all 410
+    ENDPOINT_RETIRED, replacement GET /v1/posts, instructions naming the typed query,
+    request_id set; with an agent key 410. GET /v1/posts?type=<t>&tags=typedprobe 200 with 1 row
+    of type t each; ?type=question&has_answer=false 200 1 row; ?type=problem&per_page=200 400
+    VALIDATION_ERROR. Neighbors: GET /v1/problems/{id} 200, with a bad token 401 INVALID_TOKEN;
+    /v1/feed 410, /v1/stats/problems 410, POST /v1/problems 410, /v1/overview 200.
+    /v1/openapi.json: /problems, /questions, /ideas get deprecated, only "410",
+    x-solvr-retired.replacement GET /v1/posts. api.log: 8x200, 1x201, 1x400, 1x401, 21x410, 0
+    5xx. Server stopped (:8097 free); probe DB dropped.
+
+OBSERVED, NOT CHANGED: backend/internal/api/middleware/api_usage.go still files "GET
+  /v1/problems|questions|ideas" under operation knowledge.post.list (as it does for the retired
+  feed under its family prefix). Whether usage analytics should label 410 calls differently is
+  [UNVERIFIED] and belongs with the analytics tasks (idx 77/79), not this slice.
+
+STEP MAP (idx 73):
+  1, 2, 4 DONE (earlier slices). 5 DONE for every mapping published so far (SPEC 26.3, 26.5,
+    26.6, 26.7; OpenAPI x-solvr-retired; /api-docs page for writes, the feed and the typed lists).
+  3 RETIRE half OPEN, family by family:
+    - type-specific-statistics DONE (slice 1); legacy-feed DONE (slice 2);
+      legacy-typed-discovery DONE (this slice).
+    - contribution-listings (2): the reachable user profile (contributions-list.tsx) calls GET
+      /v1/users/{id}/contributions; needs a canonical way to list a user's replies first.
+    - legacy-typed-reads + the legacy-comments GETs still read the legacy tables (never adapted);
+      whether step 3 covers them is [UNVERIFIED].
+UAT (for when idx 73 closes, not now): the retirements ship with the cutover deploy (idx 93).
+
+git status at journal time [REAL]: the 12 M + 1 D listed above, plus this entry. spec.json
+  unchanged; idx 73 passes stays false.

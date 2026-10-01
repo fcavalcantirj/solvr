@@ -1,6 +1,12 @@
 import { EndpointGroup } from "./api-endpoint-types";
 import { retiredEndpoint } from "./api-endpoint-retired";
 
+// The tail of a retired typed list's instructions (SPEC.md 26.7).
+const typedListAsPosts =
+  " The data rows and meta are unchanged: the route was served by this list. A page or per_page that is not a " +
+  "positive integer, or per_page above 50 answers 400 VALIDATION_ERROR instead of falling back to the default or " +
+  "being clamped to 50.";
+
 export const contentEndpointGroups: EndpointGroup[] = [
   {
     name: "Posts",
@@ -215,20 +221,9 @@ export const contentEndpointGroups: EndpointGroup[] = [
     name: "Problems",
     description: "Problem-specific operations and approaches",
     endpoints: [
-      {
-        method: "GET",
-        path: "/problems",
-        description: "List problems",
-        auth: "none",
-        params: [
-          { name: "status", type: "string", required: false, description: "open, active, solved, stuck" },
-          { name: "page", type: "number", required: false, description: "Page number" },
-        ],
-        response: `{
-  "data": [...],
-  "meta": { "total": 50, "page": 1 }
-}`,
-      },
+      retiredEndpoint("GET", "/problems", "GET /v1/problems", "GET /v1/posts",
+        "Call GET /v1/posts?type=problem with the same query parameters other than type (the route replaced " +
+          "a caller's type with problem)." + typedListAsPosts),
       {
         method: "GET",
         path: "/problems/{id}",
@@ -321,20 +316,10 @@ export const contentEndpointGroups: EndpointGroup[] = [
     name: "Questions",
     description: "Question-specific operations and answers",
     endpoints: [
-      {
-        method: "GET",
-        path: "/questions",
-        description: "List questions",
-        auth: "none",
-        params: [
-          { name: "status", type: "string", required: false, description: "open, answered" },
-          { name: "page", type: "number", required: false, description: "Page number" },
-        ],
-        response: `{
-  "data": [...],
-  "meta": { "total": 100, "page": 1 }
-}`,
-      },
+      retiredEndpoint("GET", "/questions", "GET /v1/questions", "GET /v1/posts",
+        "Call GET /v1/posts?type=question with the same query parameters other than type (the route replaced " +
+          "a caller's type with question): has_answer=true or has_answer=false still lists questions with or " +
+          "without an answer." + typedListAsPosts),
       {
         method: "GET",
         path: "/questions/{id}",
@@ -380,17 +365,9 @@ export const contentEndpointGroups: EndpointGroup[] = [
     name: "Ideas",
     description: "Idea-specific operations and responses",
     endpoints: [
-      {
-        method: "GET",
-        path: "/ideas",
-        description: "List ideas",
-        auth: "none",
-        params: [{ name: "page", type: "number", required: false, description: "Page number" }],
-        response: `{
-  "data": [...],
-  "meta": { "total": 50, "page": 1 }
-}`,
-      },
+      retiredEndpoint("GET", "/ideas", "GET /v1/ideas", "GET /v1/posts",
+        "Call GET /v1/posts?type=idea with the same query parameters other than type (the route replaced " +
+          "a caller's type with idea)." + typedListAsPosts),
       {
         method: "GET",
         path: "/ideas/{id}",

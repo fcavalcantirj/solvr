@@ -106,20 +106,21 @@ describe("retired legacy writes on the API docs page", () => {
 
 describe("retired legacy reads on the API docs page", () => {
   const feed = ["GET /v1/feed", "GET /v1/feed/stuck", "GET /v1/feed/unanswered"];
+  const typedLists = ["GET /v1/problems", "GET /v1/questions", "GET /v1/ideas"];
 
-  it("reads all 6 retired reads from SPEC.md 26.7", () => {
-    expect(specRows(READS)).toHaveLength(6);
+  it("reads all 9 retired reads from SPEC.md 26.7", () => {
+    expect(specRows(READS)).toHaveLength(9);
   });
 
-  it("still documents the retired feed routes, so old callers find the migration", () => {
-    for (const route of feed) {
+  it("still documents the retired feed routes and typed lists, so old callers find the migration", () => {
+    for (const route of [...feed, ...typedLists]) {
       expect(pageEndpoint(route), `${route} is not on the page`).toBeDefined();
     }
   });
 
   it("marks every retired read on the page as retired with the SPEC replacement and instructions", () => {
     const onPage = specRows(READS).filter((row) => pageEndpoint(row.route));
-    expect(onPage.map((row) => row.route)).toEqual(expect.arrayContaining(feed));
+    expect(onPage.map((row) => row.route)).toEqual(expect.arrayContaining([...feed, ...typedLists]));
     for (const row of onPage) {
       const ep = pageEndpoint(row.route)!;
       expect(ep.retired, `${row.route} is not marked retired`).toEqual({
@@ -136,12 +137,12 @@ describe("retired legacy reads on the API docs page", () => {
     }
   });
 
-  it("documents GET /posts, the feed replacement, with the filters the instructions name", () => {
+  it("documents GET /posts, the feed and typed list replacement, with the filters the instructions name", () => {
     const list = pageEndpoint("GET /v1/posts");
     expect(list, "GET /posts is not documented").toBeDefined();
     expect(list!.retired).toBeUndefined();
     expect(list!.params!.map((p) => p.name)).toEqual(
-      expect.arrayContaining(["type", "needs_help", "has_answer", "sort", "tags", "page", "per_page"]),
+      expect.arrayContaining(["type", "status", "needs_help", "has_answer", "sort", "tags", "page", "per_page"]),
     );
   });
 });

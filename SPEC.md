@@ -5102,10 +5102,10 @@ the router does not serve, or if this Part disagrees with the registry.
 **Dispositions.** `keep` — canonical or separately useful (account, status, storage, blog,
 administration). `merge` — the purpose is served by another canonical family. `adapt` — stays
 served, but only as an adapter over the canonical implementation. `retire` — no canonical
-future; clients move to the named destination. A retired READ route stays served (with
-`Deprecation`/`Link` signals where 26.5 says so) until its family is removed; the routes of a
-removed read family (26.7) and every retired WRITE route (26.6) are not served at all: each
-answers `410 ENDPOINT_RETIRED` naming its replacement, with no sunset period.
+future; clients move to the named destination. A retired READ route stays served until its
+family is removed; the routes of a removed read family (26.7) and every retired WRITE route
+(26.6) are not served at all: each answers `410 ENDPOINT_RETIRED` naming its replacement, with
+no sunset period.
 
 ## 26.2 Route Families
 
@@ -5253,28 +5253,15 @@ Adapters already serving their canonical destination at runtime. An adapter tran
 only the legacy request shape; filters, ordering, pagination and visibility are those of
 the canonical endpoint.
 
-**Legacy typed discovery** — `GET /v1/problems`, `GET /v1/questions`, `GET /v1/ideas` are
-served by the canonical `GET /v1/posts` list with `type` pinned to `problem`, `question`
-or `idea` (a caller-supplied `type` is overridden). Responses equal
-`GET /v1/posts?type=<type>` for the same query and carry:
-
-```
-Deprecation: true
-Link: </v1/posts?type=<type>>; rel="successor-version"
-```
-
-Legacy query shape kept during the transition: a non-integer or `< 1` `page`/`per_page`
-falls back to the default (page 1, 20 per page) and `per_page` above 50 is clamped to 50,
-where `GET /v1/posts` answers `400 VALIDATION_ERROR`.
-
 `has_answer=true|false` is a canonical `GET /v1/posts` filter (posts with / without
-answers); `GET /v1/questions?has_answer=` reaches it through the adapter.
+answers).
 
 `needs_help=true` is a canonical `GET /v1/posts` filter: posts with status `in_progress`
 or with a non-deleted approach in status `stuck`.
 
-The legacy feed adapters are retired (26.7): each of their routes answers `410` naming the
-`GET /v1/posts` query that served it and how its feed item fields map onto a post.
+The legacy typed discovery and feed adapters are retired (26.7): each of their routes answers
+`410` naming the `GET /v1/posts` query that served it, and a feed route how its feed item
+fields map onto a post.
 
 **Overview knowledge section** — `GET /v1/overview` (and `GET /v1/homepage/overview`) carry
 `data.knowledge`, the one definition of per-type knowledge counts:
@@ -5372,11 +5359,15 @@ and the same `x-solvr-retired` object.
 | `GET /v1/feed` | `GET /v1/posts` | Call GET /v1/posts?sort=newest with the same query parameters. Each item of data is a post: snippet is description (the feed cut it to its first 200 bytes), answer_count is answers_count (the feed gave 0 for every type but question), approach_count is approaches_count and comment_count is comments_count; id, type, title, tags, status, author, vote_score and created_at are unchanged. A page or per_page that is not a positive integer, or per_page above 50 answers 400 VALIDATION_ERROR instead of falling back to the default or being clamped to 50. |
 | `GET /v1/feed/stuck` | `GET /v1/posts` | Call GET /v1/posts?type=problem&needs_help=true&sort=newest with the same query parameters: needs_help lists problems in status in_progress or with a stuck approach. Each item of data is a post: snippet is description (the feed cut it to its first 200 bytes), answer_count is answers_count (the feed gave 0 for every type but question), approach_count is approaches_count and comment_count is comments_count; id, type, title, tags, status, author, vote_score and created_at are unchanged. A page or per_page that is not a positive integer, or per_page above 50 answers 400 VALIDATION_ERROR instead of falling back to the default or being clamped to 50. |
 | `GET /v1/feed/unanswered` | `GET /v1/posts` | Call GET /v1/posts?type=question&has_answer=false&sort=newest with the same query parameters: has_answer=false lists questions without an answer. Each item of data is a post: snippet is description (the feed cut it to its first 200 bytes), answer_count is answers_count (the feed gave 0 for every type but question), approach_count is approaches_count and comment_count is comments_count; id, type, title, tags, status, author, vote_score and created_at are unchanged. A page or per_page that is not a positive integer, or per_page above 50 answers 400 VALIDATION_ERROR instead of falling back to the default or being clamped to 50. |
+| `GET /v1/problems` | `GET /v1/posts` | Call GET /v1/posts?type=problem with the same query parameters other than type (the route replaced a caller's type with problem). The data rows and meta are unchanged: the route was served by this list. A page or per_page that is not a positive integer, or per_page above 50 answers 400 VALIDATION_ERROR instead of falling back to the default or being clamped to 50. |
+| `GET /v1/questions` | `GET /v1/posts` | Call GET /v1/posts?type=question with the same query parameters other than type (the route replaced a caller's type with question): has_answer=true or has_answer=false still lists questions with or without an answer. The data rows and meta are unchanged: the route was served by this list. A page or per_page that is not a positive integer, or per_page above 50 answers 400 VALIDATION_ERROR instead of falling back to the default or being clamped to 50. |
+| `GET /v1/ideas` | `GET /v1/posts` | Call GET /v1/posts?type=idea with the same query parameters other than type (the route replaced a caller's type with idea). The data rows and meta are unchanged: the route was served by this list. A page or per_page that is not a positive integer, or per_page above 50 answers 400 VALIDATION_ERROR instead of falling back to the default or being clamped to 50. |
 
 The counts the statistics routes served exclude `pending_review`, `rejected` and `draft` posts,
 as the overview knowledge section (26.5) does. A feed route's query lists what the route listed:
-the feed adapter pinned the same type, filter and `sort=newest`. Families not in this table keep
-the disposition and runtime behavior recorded above.
+the feed adapter pinned the same type, filter and `sort=newest`. A typed list's query is the list
+that served the route, with the type its path pinned. Families not in this table keep the
+disposition and runtime behavior recorded above.
 
 
 ---

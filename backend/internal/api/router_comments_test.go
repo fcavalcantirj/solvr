@@ -111,8 +111,8 @@ func TestCommentsCount_ProblemsShowCountAfterComment(t *testing.T) {
 	// A comment on the post, as the cutover migrated it
 	want := cutoverComments(t, postID, "test comment on problem")
 
-	// GET /v1/problems and find our post
-	listReq := httptest.NewRequest(http.MethodGet, "/v1/problems?sort=newest&per_page=50", nil)
+	// GET /v1/posts?type=problem (the list the retired GET /v1/problems served) and find our post
+	listReq := httptest.NewRequest(http.MethodGet, "/v1/posts?type=problem&sort=newest&per_page=50", nil)
 	listW := httptest.NewRecorder()
 	router.ServeHTTP(listW, listReq)
 	if listW.Code != http.StatusOK {
@@ -136,7 +136,7 @@ func TestCommentsCount_ProblemsShowCountAfterComment(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Errorf("problem %s not found in /v1/problems listing", postID)
+		t.Errorf("problem %s not found in /v1/posts?type=problem listing", postID)
 	}
 }
 
@@ -173,8 +173,8 @@ func TestCommentsCount_IdeasShowCountAfterComment(t *testing.T) {
 	// A comment on the post, as the cutover migrated it
 	want := cutoverComments(t, postID, "test comment on idea")
 
-	// GET /v1/ideas and find our post
-	listReq := httptest.NewRequest(http.MethodGet, "/v1/ideas?sort=newest&per_page=50", nil)
+	// GET /v1/posts?type=idea (the list the retired GET /v1/ideas served) and find our post
+	listReq := httptest.NewRequest(http.MethodGet, "/v1/posts?type=idea&sort=newest&per_page=50", nil)
 	listW := httptest.NewRecorder()
 	router.ServeHTTP(listW, listReq)
 	if listW.Code != http.StatusOK {
@@ -198,7 +198,7 @@ func TestCommentsCount_IdeasShowCountAfterComment(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Errorf("idea %s not found in /v1/ideas listing", postID)
+		t.Errorf("idea %s not found in /v1/posts?type=idea listing", postID)
 	}
 }
 

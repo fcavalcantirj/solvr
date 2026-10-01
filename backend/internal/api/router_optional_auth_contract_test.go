@@ -18,7 +18,10 @@ func TestStatusContract_OptionalAuthRejectsInvalidCredentials(t *testing.T) {
 		"/v1/search?q=optional-auth-contract",
 		"/v1/posts?per_page=1",
 		"/v1/blog?per_page=1",
-		"/v1/problems?per_page=1",
+		// The legacy typed GETs' OptionalAuth group (BART-151); its list, GET /v1/problems, is
+		// retired and answers 410 outside every auth middleware (idx 73), so the group is probed
+		// through a single-post read.
+		"/v1/problems/00000000-0000-0000-0000-000000000000",
 		"/v1/rooms/optional-auth-contract-absent-room",
 	}
 	for _, path := range paths {

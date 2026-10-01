@@ -757,10 +757,8 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		r.Group(func(r chi.Router) {
 			r.Use(auth.OptionalAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator, accounts))
 
-			// Problems endpoints (API-CRITICAL per PRD-v2)
-			// GET /v1/problems - list problems (no auth required)
-			// idx 71: legacy typed list = adapter over the canonical GET /v1/posts list.
-			r.Get("/problems", legacyTypedListAdapter(postsHandler.List, "problem"))
+			// Problems endpoints (API-CRITICAL per PRD-v2). The list, GET /v1/problems, is
+			// retired (idx 73 step 3, legacy_read_retirement.go): GET /v1/posts?type=problem.
 			// GET /v1/problems/:id - single problem (no auth required)
 			r.Get("/problems/{id}", problemsHandler.Get)
 			// GET /v1/problems/:id/approaches - list approaches (no auth required)
@@ -770,20 +768,16 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			// GET /v1/problems/:id/export - export problem as markdown (no auth required)
 			r.Get("/problems/{id}/export", problemsHandler.Export)
 
-			// Questions endpoints (API-CRITICAL per PRD-v2)
-			// GET /v1/questions - list questions (no auth required)
-			// idx 71: legacy typed list = adapter over the canonical GET /v1/posts list.
-			r.Get("/questions", legacyTypedListAdapter(postsHandler.List, "question"))
+			// Questions endpoints (API-CRITICAL per PRD-v2). The list, GET /v1/questions, is
+			// retired (idx 73 step 3): GET /v1/posts?type=question.
 			// GET /v1/questions/:id - single question (no auth required)
 			r.Get("/questions/{id}", questionsHandler.Get)
 			// GET /v1/questions/:id/answers - list answers (no auth required)
 			// Per FIX-022: Allow viewing answers before answering
 			r.Get("/questions/{id}/answers", questionsHandler.ListAnswers)
 
-			// Ideas endpoints (API-CRITICAL per PRD-v2)
-			// GET /v1/ideas - list ideas (no auth required)
-			// idx 71: legacy typed list = adapter over the canonical GET /v1/posts list.
-			r.Get("/ideas", legacyTypedListAdapter(postsHandler.List, "idea"))
+			// Ideas endpoints (API-CRITICAL per PRD-v2). The list, GET /v1/ideas, is retired
+			// (idx 73 step 3): GET /v1/posts?type=idea.
 			// GET /v1/ideas/:id - single idea (no auth required)
 			r.Get("/ideas/{id}", ideasHandler.Get)
 			// GET /v1/ideas/:id/responses - list responses (no auth required)

@@ -15,11 +15,28 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Task idx 71 step 3: the legacy typed discovery lists (GET /v1/problems, /v1/questions,
-// /v1/ideas) are ADAPTERS over the canonical GET /v1/posts list. They share its filters,
-// ordering, pagination and visibility instead of running an independent query stack, keep
-// accepting the lenient legacy query shape during the transition, and announce their
-// canonical successor with Deprecation and Link headers.
+// Task idx 73 step 3, "adapt then retire": the legacy typed discovery lists (GET /v1/problems,
+// /v1/questions, /v1/ideas — family "legacy-typed-discovery") were adapters over the canonical
+// GET /v1/posts list (idx 71). They are retired: every caller gets 410 ENDPOINT_RETIRED naming
+// GET /v1/posts and the typed query that served the route (router_legacy_read_retirement_test.go
+// pins the answer for every caller, the OpenAPI document and SPEC.md 26.7). The tests here pin
+// that the query each route names lists what the route listed, so a caller that follows the
+// instructions loses nothing.
+//
+// The adapter tests this file held (idx 71) and where their behavior is guarded now:
+//   - TestLegacyTypedDiscovery_ServedByCanonicalPostsList (route == GET /v1/posts?type=<type>,
+//     same ids and meta, every row of the path's type)
+//     -> TestRetiredTypedDiscovery_NamedQueryListsWhatTheRouteListed.
+//   - TestLegacyTypedDiscovery_AnnouncesCanonicalSuccessor (Deprecation, Link to the typed query,
+//     registry, the canonical list not deprecated)
+//     -> TestRetiredTypedDiscovery_NamedQueryListsWhatTheRouteListed (the instructions name the
+//     query; the canonical list carries no Deprecation) and
+//     TestLegacyReadRetirements_CoverEveryRetiredReadFamilyAndNameAServedReplacement.
+//   - TestLegacyTypedDiscovery_AcceptsLenientLegacyQueryShape (clamped and defaulted pagination,
+//     the path's type over a caller's type)
+//     -> TestRetiredTypedDiscovery_EveryLegacyQueryShapeGetsTheMigrationError.
+//   - TestPostsList_HasAnswerFilterDefinedOnce keeps its name: the canonical filter is unchanged,
+//     and GET /v1/questions?has_answer= now answers the migration error naming it.
 
 type legacyListResp struct {
 	Data []struct {
@@ -55,19 +72,25 @@ func listIDs(l legacyListResp) []string {
 	return ids
 }
 
+// legacyDiscoverySeed holds the posts seeded for the typed discovery tests.
+type legacyDiscoverySeed struct {
+	tag                                 string
+	problem, unanswered, answered, idea string
+}
+
 // seedLegacyDiscovery seeds one open public post per legacy type under a unique tag, plus a
-// second question that has an answer. Returns the tag and the answered question's ID.
-func seedLegacyDiscovery(t *testing.T, pool *db.Pool, authorID string) (string, string) {
+// second question that has an answer.
+func seedLegacyDiscovery(t *testing.T, pool *db.Pool, authorID string) legacyDiscoverySeed {
 	t.Helper()
 	ctx := context.Background()
-	tag := fmt.Sprintf("legacydisc%d", time.Now().UnixNano()%1000000000)
+	s := legacyDiscoverySeed{tag: fmt.Sprintf("legacydisc%d", time.Now().UnixNano()%1000000000)}
 	repo := db.NewPostRepository(pool)
 	create := func(pt models.PostType, title string) string {
 		p, err := repo.Create(ctx, &models.Post{
 			Type:            pt,
 			Title:           title,
 			Description:     "Legacy discovery adapter body for " + title,
-			Tags:            []string{tag},
+			Tags:            []string{s.tag},
 			PostedByType:    models.AuthorTypeAgent,
 			PostedByID:      authorID,
 			Status:          models.PostStatusOpen,
@@ -77,13 +100,13 @@ func seedLegacyDiscovery(t *testing.T, pool *db.Pool, authorID string) (string, 
 		require.NoError(t, err)
 		return p.ID
 	}
-	create(models.PostTypeProblem, "Legacy discovery problem")
-	create(models.PostTypeQuestion, "Legacy discovery unanswered question")
-	answered := create(models.PostTypeQuestion, "Legacy discovery answered question")
-	create(models.PostTypeIdea, "Legacy discovery idea")
+	s.problem = create(models.PostTypeProblem, "Legacy discovery problem")
+	s.unanswered = create(models.PostTypeQuestion, "Legacy discovery unanswered question")
+	s.answered = create(models.PostTypeQuestion, "Legacy discovery answered question")
+	s.idea = create(models.PostTypeIdea, "Legacy discovery idea")
 
 	answer, err := db.NewAnswersRepository(pool).CreateAnswer(ctx, &models.Answer{
-		QuestionID: answered,
+		QuestionID: s.answered,
 		AuthorType: models.AuthorTypeAgent,
 		AuthorID:   authorID,
 		Content:    "An answer so the question counts as answered",
@@ -92,126 +115,123 @@ func seedLegacyDiscovery(t *testing.T, pool *db.Pool, authorID string) (string, 
 	// The reply the contribution cutover makes from the answer: has_answer and the answer count
 	// read replies (task idx 76).
 	_, err = pool.Exec(ctx, `INSERT INTO replies (post_id, author_type, author_id, body, legacy_type, legacy_id)
-		VALUES ($1, 'agent', $2, $3, 'answer', $4)`, answered, authorID, answer.Content, answer.ID)
+		VALUES ($1, 'agent', $2, $3, 'answer', $4)`, s.answered, authorID, answer.Content, answer.ID)
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
-		pool.Exec(ctx, "DELETE FROM answers WHERE question_id IN (SELECT id FROM posts WHERE $1 = ANY(tags))", tag)
-		pool.Exec(ctx, "DELETE FROM posts WHERE $1 = ANY(tags)", tag)
+		pool.Exec(ctx, "DELETE FROM answers WHERE question_id IN (SELECT id FROM posts WHERE $1 = ANY(tags))", s.tag)
+		pool.Exec(ctx, "DELETE FROM posts WHERE $1 = ANY(tags)", s.tag)
 	})
-	return tag, answered
+	return s
 }
 
 var legacyTypedLists = []struct {
-	path     string
-	postType string
+	path      string
+	postType  string
+	canonical string
 }{
-	{"/v1/problems", "problem"},
-	{"/v1/questions", "question"},
-	{"/v1/ideas", "idea"},
+	{"/v1/problems", "problem", "/v1/posts?type=problem"},
+	{"/v1/questions", "question", "/v1/posts?type=question"},
+	{"/v1/ideas", "idea", "/v1/posts?type=idea"},
 }
 
-// TestLegacyTypedDiscovery_ServedByCanonicalPostsList: every legacy typed list returns
-// exactly what GET /v1/posts?type=<type> returns for the same filters.
-func TestLegacyTypedDiscovery_ServedByCanonicalPostsList(t *testing.T) {
+// TestRetiredTypedDiscovery_NamedQueryListsWhatTheRouteListed: each retired route names GET
+// /v1/posts and the typed query its adapter served, and that query lists exactly the posts of
+// the route's type, with the same meta; the canonical list itself is not deprecated.
+func TestRetiredTypedDiscovery_NamedQueryListsWhatTheRouteListed(t *testing.T) {
 	ts, pool, cleanup := setupRoomTestServer(t)
-	defer cleanup()
+	t.Cleanup(cleanup) // LIFO: seed cleanup runs before the pool closes
 	agentID, _ := registerRoomTestAgent(t, ts)
-	tag, _ := seedLegacyDiscovery(t, pool, agentID)
+	s := seedLegacyDiscovery(t, pool, agentID)
 
+	want := map[string][]string{
+		"problem":  {s.problem},
+		"question": {s.unanswered, s.answered},
+		"idea":     {s.idea},
+	}
 	for _, lt := range legacyTypedLists {
 		t.Run(lt.path, func(t *testing.T) {
-			legacyResp, legacy := getLegacyList(t, ts.URL+lt.path+"?tags="+tag)
-			require.Equal(t, http.StatusOK, legacyResp.StatusCode)
-			canonResp, canon := getLegacyList(t, ts.URL+"/v1/posts?type="+lt.postType+"&tags="+tag)
-			require.Equal(t, http.StatusOK, canonResp.StatusCode)
+			ret := readRetirement(t, lt.path)
+			assert.Equal(t, "GET /v1/posts", ret.Replacement, lt.path)
+			assert.Contains(t, ret.Instructions, "GET "+lt.canonical+" ", "%s must name the query that served it", lt.path)
+			assert.Contains(t, ret.Instructions, "same query parameters", "%s: tags, status, sort and pagination carry over", lt.path)
+			assert.Contains(t, ret.Instructions, "data rows and meta are unchanged", "%s: the rows keep their shape", lt.path)
 
-			require.NotEmpty(t, legacy.Data, "the seeded %s must be listed", lt.postType)
-			assert.Equal(t, listIDs(canon), listIDs(legacy), "legacy list must equal the canonical list")
-			assert.Equal(t, canon.Meta, legacy.Meta, "legacy meta must equal the canonical meta")
-			for _, d := range legacy.Data {
+			got, err := callStatusContract(http.DefaultClient, http.MethodGet, ts.URL+lt.path+"?tags="+s.tag, "", "")
+			require.NoError(t, err)
+			require.Equal(t, http.StatusGone, got.status, "%s: %s", lt.path, got.body)
+
+			resp, listed := getLegacyList(t, ts.URL+lt.canonical+"&tags="+s.tag)
+			require.Equal(t, http.StatusOK, resp.StatusCode)
+			assert.ElementsMatch(t, want[lt.postType], listIDs(listed), "%s lists the route's posts", lt.canonical)
+			assert.Equal(t, len(want[lt.postType]), listed.Meta.Total)
+			assert.Equal(t, 1, listed.Meta.Page)
+			assert.Equal(t, 20, listed.Meta.PerPage)
+			assert.False(t, listed.Meta.HasMore)
+			for _, d := range listed.Data {
 				assert.Equal(t, lt.postType, d.Type)
 			}
+			assert.Empty(t, resp.Header.Get("Deprecation"), "the canonical list is not deprecated")
 		})
 	}
 }
 
-// TestLegacyTypedDiscovery_AnnouncesCanonicalSuccessor: legacy responses carry Deprecation
-// and a successor Link to the canonical destination the route registry publishes; the
-// canonical list itself is not deprecated.
-func TestLegacyTypedDiscovery_AnnouncesCanonicalSuccessor(t *testing.T) {
+// TestRetiredTypedDiscovery_EveryLegacyQueryShapeGetsTheMigrationError: nothing is read, so the
+// lenient legacy query shape (over-cap or invalid pagination, a caller's type the path used to
+// override) gets the same 410 as a bare call. The instructions warn that the canonical list
+// answers 400 for that pagination instead of clamping it, and it does.
+func TestRetiredTypedDiscovery_EveryLegacyQueryShapeGetsTheMigrationError(t *testing.T) {
 	ts, _, cleanup := setupRoomTestServer(t)
-	defer cleanup()
-
-	var family *RouteFamily
-	for i := range RouteFamilies {
-		if RouteFamilies[i].Name == "legacy-typed-discovery" {
-			family = &RouteFamilies[i]
-		}
-	}
-	require.NotNil(t, family, "the registry must hold the legacy-typed-discovery family")
-	require.Contains(t, family.Canonical, "GET /v1/posts")
+	t.Cleanup(cleanup)
 
 	for _, lt := range legacyTypedLists {
-		resp, _ := getLegacyList(t, ts.URL+lt.path)
-		require.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.Equal(t, "true", resp.Header.Get("Deprecation"), "%s must be marked deprecated", lt.path)
-		assert.Equal(t, fmt.Sprintf(`</v1/posts?type=%s>; rel="successor-version"`, lt.postType),
-			resp.Header.Get("Link"), "%s must link its canonical successor", lt.path)
-		assert.Contains(t, family.Routes, "GET "+lt.path)
-	}
+		ret := readRetirement(t, lt.path)
+		message, _ := retirementAnswer(ret)
+		for _, query := range []string{"", "?per_page=200", "?page=abc&per_page=0", "?type=idea&tags=x", "?has_answer=true"} {
+			got, err := callStatusContract(http.DefaultClient, http.MethodGet, ts.URL+lt.path+query, "", "")
+			require.NoError(t, err)
+			require.Equal(t, http.StatusGone, got.status, "%s%s: %s", lt.path, query, got.body)
+			assert.Equal(t, ErrCodeEndpointRetired, got.code, "%s%s", lt.path, query)
+			assert.Equal(t, message, got.message, "%s%s", lt.path, query)
+		}
+		assert.Contains(t, ret.Instructions, "per_page above 50 answers 400", lt.path)
+		assert.Contains(t, ret.Instructions, "other than type", "%s: the path's type replaces a caller's type", lt.path)
 
-	resp, _ := getLegacyList(t, ts.URL+"/v1/posts")
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Empty(t, resp.Header.Get("Deprecation"), "the canonical list is not deprecated")
+		for _, pagination := range []string{"&per_page=200", "&page=abc", "&per_page=0"} {
+			got, err := callStatusContract(http.DefaultClient, http.MethodGet, ts.URL+lt.canonical+pagination, "", "")
+			require.NoError(t, err)
+			assert.Equal(t, http.StatusBadRequest, got.status, "%s%s: %s", lt.canonical, pagination, got.body)
+			assert.Equal(t, "VALIDATION_ERROR", got.code, "%s%s", lt.canonical, pagination)
+		}
+	}
 }
 
-// TestLegacyTypedDiscovery_AcceptsLenientLegacyQueryShape: during the transition the
-// adapter keeps the old lenient pagination (clamp, default) and pins the type, while the
-// canonical endpoint keeps its strict validation.
-func TestLegacyTypedDiscovery_AcceptsLenientLegacyQueryShape(t *testing.T) {
-	ts, pool, cleanup := setupRoomTestServer(t)
-	defer cleanup()
-	agentID, _ := registerRoomTestAgent(t, ts)
-	tag, _ := seedLegacyDiscovery(t, pool, agentID)
-
-	resp, l := getLegacyList(t, ts.URL+"/v1/problems?per_page=200")
-	require.Equal(t, http.StatusOK, resp.StatusCode, "legacy per_page over the cap is clamped, not rejected")
-	assert.Equal(t, 50, l.Meta.PerPage)
-
-	resp, l = getLegacyList(t, ts.URL+"/v1/problems?page=abc&per_page=0")
-	require.Equal(t, http.StatusOK, resp.StatusCode, "legacy invalid pagination falls back to defaults")
-	assert.Equal(t, 1, l.Meta.Page)
-	assert.Equal(t, 20, l.Meta.PerPage)
-
-	resp, l = getLegacyList(t, ts.URL+"/v1/problems?type=idea&tags="+tag)
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-	require.NotEmpty(t, l.Data)
-	for _, d := range l.Data {
-		assert.Equal(t, "problem", d.Type, "the legacy path pins its type over a caller-supplied type")
-	}
-
-	resp, _ = getLegacyList(t, ts.URL+"/v1/posts?per_page=200")
-	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "canonical validation is unchanged")
-}
-
-// TestPostsList_HasAnswerFilterDefinedOnce: has_answer is a canonical GET /v1/posts filter,
-// and GET /v1/questions?has_answer= reaches it through the adapter.
+// TestPostsList_HasAnswerFilterDefinedOnce: has_answer is a canonical GET /v1/posts filter; GET
+// /v1/questions?has_answer= reached it through the adapter and now answers the migration error
+// that names it.
 func TestPostsList_HasAnswerFilterDefinedOnce(t *testing.T) {
 	ts, pool, cleanup := setupRoomTestServer(t)
-	defer cleanup()
+	t.Cleanup(cleanup) // LIFO: seed cleanup runs before the pool closes
 	agentID, _ := registerRoomTestAgent(t, ts)
-	tag, answered := seedLegacyDiscovery(t, pool, agentID)
+	s := seedLegacyDiscovery(t, pool, agentID)
 
-	for _, base := range []string{"/v1/posts?type=question&", "/v1/questions?"} {
-		resp, unanswered := getLegacyList(t, ts.URL+base+"has_answer=false&tags="+tag)
-		require.Equal(t, http.StatusOK, resp.StatusCode)
-		require.Len(t, unanswered.Data, 1, "%s has_answer=false", base)
-		assert.NotEqual(t, answered, unanswered.Data[0].ID)
+	base := "/v1/posts?type=question&"
+	resp, unanswered := getLegacyList(t, ts.URL+base+"has_answer=false&tags="+s.tag)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Len(t, unanswered.Data, 1, "%s has_answer=false", base)
+	assert.Equal(t, s.unanswered, unanswered.Data[0].ID)
 
-		resp, withAnswer := getLegacyList(t, ts.URL+base+"has_answer=true&tags="+tag)
-		require.Equal(t, http.StatusOK, resp.StatusCode)
-		require.Len(t, withAnswer.Data, 1, "%s has_answer=true", base)
-		assert.Equal(t, answered, withAnswer.Data[0].ID)
+	resp, withAnswer := getLegacyList(t, ts.URL+base+"has_answer=true&tags="+s.tag)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Len(t, withAnswer.Data, 1, "%s has_answer=true", base)
+	assert.Equal(t, s.answered, withAnswer.Data[0].ID)
+
+	ret := readRetirement(t, "/v1/questions")
+	assert.Contains(t, ret.Instructions, "has_answer", "GET /v1/questions names its answered filter")
+	for _, value := range []string{"false", "true"} {
+		got, err := callStatusContract(http.DefaultClient, http.MethodGet, ts.URL+"/v1/questions?has_answer="+value+"&tags="+s.tag, "", "")
+		require.NoError(t, err)
+		require.Equal(t, http.StatusGone, got.status, "has_answer=%s: %s", value, got.body)
+		assert.Equal(t, ErrCodeEndpointRetired, got.code)
 	}
 }

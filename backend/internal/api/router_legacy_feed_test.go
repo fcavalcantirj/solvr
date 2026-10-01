@@ -91,8 +91,8 @@ func canonicalFeedIDs(f canonicalFeedResp) []string {
 	return ids
 }
 
-// feedRetirement is the retirement entry the router mounts for a legacy feed path.
-func feedRetirement(t *testing.T, path string) LegacyRouteRetirement {
+// readRetirement is the retirement entry the router mounts for a retired legacy read path.
+func readRetirement(t *testing.T, path string) LegacyRouteRetirement {
 	t.Helper()
 	for _, ret := range LegacyReadRetirements {
 		if ret.Route == "GET "+path {
@@ -214,7 +214,7 @@ func TestRetiredFeed_NamedQueryListsWhatTheRouteListed(t *testing.T) {
 
 	listed := map[string]canonicalFeedResp{}
 	for _, fr := range legacyFeedRoutes {
-		ret := feedRetirement(t, fr.path)
+		ret := readRetirement(t, fr.path)
 		assert.Equal(t, "GET /v1/posts", ret.Replacement, fr.path)
 		assert.Contains(t, ret.Instructions, "GET "+fr.canonical, "%s must name the query that served it", fr.path)
 		assert.Contains(t, ret.Instructions, "same query parameters", "%s: tags, author and pagination carry over", fr.path)
@@ -244,7 +244,7 @@ func TestRetiredFeed_NamedQueryCarriesEveryFeedItemField(t *testing.T) {
 	s := seedLegacyFeed(t, pool, agentID)
 
 	for _, fr := range legacyFeedRoutes {
-		ret := feedRetirement(t, fr.path)
+		ret := readRetirement(t, fr.path)
 		f := getCanonicalFeed(t, ts.URL+fr.canonical+"&tags="+s.tag)
 		require.NotEmpty(t, f.Data, fr.canonical)
 		for _, field := range legacyFeedItemFields {
@@ -293,7 +293,7 @@ func TestRetiredFeed_EveryLegacyQueryShapeGetsTheMigrationError(t *testing.T) {
 	t.Cleanup(cleanup)
 
 	for _, fr := range legacyFeedRoutes {
-		ret := feedRetirement(t, fr.path)
+		ret := readRetirement(t, fr.path)
 		message, _ := retirementAnswer(ret)
 		for _, query := range []string{"", "?per_page=200", "?page=abc&per_page=-1", "?type=problem&has_answer=true&tags=x"} {
 			got, err := callStatusContract(http.DefaultClient, http.MethodGet, ts.URL+fr.path+query, "", "")

@@ -15,8 +15,9 @@ import (
 
 // Task idx 73 step 3, "adapt then retire": the type-specific statistics (GET
 // /v1/stats/problems|questions|ideas) were adapters over the overview knowledge aggregate
-// (idx 72), and the legacy feed (GET /v1/feed, /v1/feed/stuck, /v1/feed/unanswered) an adapter
-// over the canonical GET /v1/posts list (idx 71). They are now retired the way the legacy writes
+// (idx 72), and the legacy feed (GET /v1/feed, /v1/feed/stuck, /v1/feed/unanswered) and the
+// legacy typed lists (GET /v1/problems, /v1/questions, /v1/ideas) adapters over the canonical
+// GET /v1/posts list (idx 71). They are now retired the way the legacy writes
 // were (idx 52): every caller gets the same 410 ENDPOINT_RETIRED naming the canonical
 // replacement, where the data is there and where each legacy field went, and the API document
 // and SPEC.md Part 26 publish that exact answer (step 5).
@@ -25,10 +26,12 @@ import (
 var retiredReadFamilies = map[string]bool{
 	"type-specific-statistics": true,
 	"legacy-feed":              true,
+	"legacy-typed-discovery":   true,
 }
 
 // retiredReadDestinations is where each retired read's data is served now; its instructions
-// must name it exactly. A feed route names the GET /v1/posts query its adapter served.
+// must name it exactly. A feed route or typed list names the GET /v1/posts query its adapter
+// served.
 var retiredReadDestinations = map[string]string{
 	"GET /v1/stats/problems":  "data.knowledge.types",
 	"GET /v1/stats/questions": "data.knowledge.types",
@@ -36,10 +39,14 @@ var retiredReadDestinations = map[string]string{
 	"GET /v1/feed":            "GET /v1/posts?sort=newest",
 	"GET /v1/feed/stuck":      "GET /v1/posts?type=problem&needs_help=true&sort=newest",
 	"GET /v1/feed/unanswered": "GET /v1/posts?type=question&has_answer=false&sort=newest",
+	"GET /v1/problems":        "GET /v1/posts?type=problem ",
+	"GET /v1/questions":       "GET /v1/posts?type=question ",
+	"GET /v1/ideas":           "GET /v1/posts?type=idea ",
 }
 
 // retiredReadFields are the top-level data fields each retired read used to return; its
-// instructions must say where each one went, or that it has no canonical equivalent.
+// instructions must say where each one went, or that it has no canonical equivalent. A typed list
+// was served by the canonical list itself, so it names its envelope (data and meta) as unchanged.
 var retiredReadFields = map[string][]string{
 	"GET /v1/stats/problems": {"total_problems", "solved_count", "active_approaches", "avg_solve_time_days",
 		"recently_solved", "top_solvers"},
@@ -50,6 +57,9 @@ var retiredReadFields = map[string][]string{
 	"GET /v1/feed":            legacyFeedItemFields,
 	"GET /v1/feed/stuck":      legacyFeedItemFields,
 	"GET /v1/feed/unanswered": legacyFeedItemFields,
+	"GET /v1/problems":        {"data", "meta"},
+	"GET /v1/questions":       {"data", "meta"},
+	"GET /v1/ideas":           {"data", "meta"},
 }
 
 // legacyFeedItemFields are the fields of a legacy feed item (models.FeedItem).
@@ -71,7 +81,7 @@ func TestLegacyReadRetirements_CoverEveryRetiredReadFamilyAndNameAServedReplacem
 			}
 		}
 	}
-	require.Len(t, want, 6, "the GET routes of %v", retiredReadFamilies)
+	require.Len(t, want, 9, "the GET routes of %v", retiredReadFamilies)
 
 	writes := map[string]bool{}
 	for _, w := range LegacyWriteRetirements {

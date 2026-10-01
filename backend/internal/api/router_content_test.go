@@ -29,24 +29,14 @@ import (
 func TestProblemsEndpoints(t *testing.T) {
 	router := setupTestRouter(t)
 
-	t.Run("GET /v1/problems returns list", func(t *testing.T) {
+	t.Run("GET /v1/problems is retired (410 ENDPOINT_RETIRED)", func(t *testing.T) {
+		// idx 73: the typed list is retired; GET /v1/posts?type=problem lists these posts
+		// (TestTypeSpecificListEndpoints, router_legacy_discovery_test.go).
 		req := httptest.NewRequest(http.MethodGet, "/v1/problems", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected status 200, got %d: %s", w.Code, w.Body.String())
-		}
-
-		var resp map[string]interface{}
-		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
-			t.Fatalf("Failed to decode response: %v", err)
-		}
-
-		// Should have data array
-		if _, ok := resp["data"]; !ok {
-			t.Error("Expected 'data' field in response")
-		}
+		requireRetiredRecorder(t, w, "GET /v1/problems")
 	})
 
 	t.Run("GET /v1/problems/:id returns single problem or 404", func(t *testing.T) {
@@ -86,23 +76,14 @@ func TestProblemsEndpoints(t *testing.T) {
 func TestQuestionsEndpoints(t *testing.T) {
 	router := setupTestRouter(t)
 
-	t.Run("GET /v1/questions returns list", func(t *testing.T) {
+	t.Run("GET /v1/questions is retired (410 ENDPOINT_RETIRED)", func(t *testing.T) {
+		// idx 73: the typed list is retired; GET /v1/posts?type=question lists these posts
+		// (TestTypeSpecificListEndpoints, router_legacy_discovery_test.go).
 		req := httptest.NewRequest(http.MethodGet, "/v1/questions", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected status 200, got %d: %s", w.Code, w.Body.String())
-		}
-
-		var resp map[string]interface{}
-		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
-			t.Fatalf("Failed to decode response: %v", err)
-		}
-
-		if _, ok := resp["data"]; !ok {
-			t.Error("Expected 'data' field in response")
-		}
+		requireRetiredRecorder(t, w, "GET /v1/questions")
 	})
 
 	t.Run("GET /v1/questions/:id returns single question or 404", func(t *testing.T) {
@@ -152,23 +133,14 @@ func TestQuestionsEndpoints(t *testing.T) {
 func TestIdeasEndpoints(t *testing.T) {
 	router := setupTestRouter(t)
 
-	t.Run("GET /v1/ideas returns list", func(t *testing.T) {
+	t.Run("GET /v1/ideas is retired (410 ENDPOINT_RETIRED)", func(t *testing.T) {
+		// idx 73: the typed list is retired; GET /v1/posts?type=idea lists these posts
+		// (TestTypeSpecificListEndpoints, router_legacy_discovery_test.go).
 		req := httptest.NewRequest(http.MethodGet, "/v1/ideas", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected status 200, got %d: %s", w.Code, w.Body.String())
-		}
-
-		var resp map[string]interface{}
-		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
-			t.Fatalf("Failed to decode response: %v", err)
-		}
-
-		if _, ok := resp["data"]; !ok {
-			t.Error("Expected 'data' field in response")
-		}
+		requireRetiredRecorder(t, w, "GET /v1/ideas")
 	})
 
 	t.Run("GET /v1/ideas/:id returns single idea or 404", func(t *testing.T) {
@@ -299,8 +271,10 @@ func TestCommentsEndpoints(t *testing.T) {
 }
 
 // TestTypeSpecificListEndpoints verifies that posts created via /v1/posts appear
-// in type-specific list endpoints (/v1/problems, /v1/questions, /v1/ideas).
-// Per FIX-020: Type-specific list endpoints should return posts of their type.
+// in the type-specific lists, GET /v1/posts?type=problem|question|idea.
+// Per FIX-020: Type-specific list endpoints should return posts of their type. The legacy
+// typed lists (/v1/problems, /v1/questions, /v1/ideas) served exactly these queries and are
+// retired (idx 73 step 3), so the lists are read where the retirement points.
 func TestTypeSpecificListEndpoints(t *testing.T) {
 	liftCreateLimits(t)      // many creates by one identity; the hourly limit is not this test's subject
 	useRecordingModerator(t) // legacy creates are moderated now (anti-abuse W2); the mock approves
@@ -327,7 +301,7 @@ func TestTypeSpecificListEndpoints(t *testing.T) {
 		return w
 	}
 
-	t.Run("Problem created via /v1/posts appears in /v1/problems", func(t *testing.T) {
+	t.Run("Problem created via /v1/posts appears in /v1/posts?type=problem", func(t *testing.T) {
 		// Create a problem via /v1/posts
 		groqThrottle(t)
 		body := `{
@@ -354,10 +328,10 @@ func TestTypeSpecificListEndpoints(t *testing.T) {
 			t.Skipf("post %s did not become open - GROQ rate limited or slow", postID)
 		}
 
-		// GET /v1/problems should include this problem
-		w = authGet("/v1/problems")
+		// GET /v1/posts?type=problem should include this problem
+		w = authGet("/v1/posts?type=problem")
 		if w.Code != http.StatusOK {
-			t.Fatalf("GET /v1/problems failed: %d - %s", w.Code, w.Body.String())
+			t.Fatalf("GET /v1/posts?type=problem failed: %d - %s", w.Code, w.Body.String())
 		}
 
 		var listResp map[string]interface{}
@@ -379,11 +353,11 @@ func TestTypeSpecificListEndpoints(t *testing.T) {
 			}
 		}
 		if !found {
-			t.Errorf("Problem with ID %s not found in /v1/problems response. Got %d items", postID, len(dataArr))
+			t.Errorf("Problem with ID %s not found in /v1/posts?type=problem response. Got %d items", postID, len(dataArr))
 		}
 	})
 
-	t.Run("Question created via /v1/posts appears in /v1/questions", func(t *testing.T) {
+	t.Run("Question created via /v1/posts appears in /v1/posts?type=question", func(t *testing.T) {
 		// Create a question via /v1/posts
 		groqThrottle(t)
 		body := `{
@@ -408,10 +382,10 @@ func TestTypeSpecificListEndpoints(t *testing.T) {
 			t.Skipf("post %s did not become open - GROQ rate limited or slow", postID)
 		}
 
-		// GET /v1/questions should include this question
-		w = authGet("/v1/questions")
+		// GET /v1/posts?type=question should include this question
+		w = authGet("/v1/posts?type=question")
 		if w.Code != http.StatusOK {
-			t.Fatalf("GET /v1/questions failed: %d - %s", w.Code, w.Body.String())
+			t.Fatalf("GET /v1/posts?type=question failed: %d - %s", w.Code, w.Body.String())
 		}
 
 		var listResp map[string]interface{}
@@ -432,11 +406,11 @@ func TestTypeSpecificListEndpoints(t *testing.T) {
 			}
 		}
 		if !found {
-			t.Errorf("Question with ID %s not found in /v1/questions response. Got %d items", postID, len(dataArr))
+			t.Errorf("Question with ID %s not found in /v1/posts?type=question response. Got %d items", postID, len(dataArr))
 		}
 	})
 
-	t.Run("Idea created via /v1/posts appears in /v1/ideas", func(t *testing.T) {
+	t.Run("Idea created via /v1/posts appears in /v1/posts?type=idea", func(t *testing.T) {
 		// Create an idea via /v1/posts
 		groqThrottle(t)
 		body := `{
@@ -461,10 +435,10 @@ func TestTypeSpecificListEndpoints(t *testing.T) {
 			t.Skipf("post %s did not become open - GROQ rate limited or slow", postID)
 		}
 
-		// GET /v1/ideas should include this idea
-		w = authGet("/v1/ideas")
+		// GET /v1/posts?type=idea should include this idea
+		w = authGet("/v1/posts?type=idea")
 		if w.Code != http.StatusOK {
-			t.Fatalf("GET /v1/ideas failed: %d - %s", w.Code, w.Body.String())
+			t.Fatalf("GET /v1/posts?type=idea failed: %d - %s", w.Code, w.Body.String())
 		}
 
 		var listResp map[string]interface{}
@@ -485,7 +459,7 @@ func TestTypeSpecificListEndpoints(t *testing.T) {
 			}
 		}
 		if !found {
-			t.Errorf("Idea with ID %s not found in /v1/ideas response. Got %d items", postID, len(dataArr))
+			t.Errorf("Idea with ID %s not found in /v1/posts?type=idea response. Got %d items", postID, len(dataArr))
 		}
 	})
 }

@@ -937,7 +937,7 @@
       "Preserve separately useful account, status, storage, blog, and administrative APIs; document a keep, merge, adapt, or retire decision for every existing route family.",
       "Publish the exact adapter mapping and unsupported legacy operations; old status commands with no meaningful canonical equivalent return an actionable migration error instead of silently succeeding."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "api",

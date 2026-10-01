@@ -140,6 +140,20 @@ func replyPaths() map[string]interface{} {
 					"400", "401", "404", "409", "413", "503"),
 			),
 		),
+		"/replies", obj(
+			"get", obj(
+				"summary", "List an author's replies", "operationId", "listRepliesByAuthor", "tags", []string{"Replies"}, "security", anonymousOrBearer(),
+				"description", "One author's replies across posts, newest first, each with its post (id, type, title). A reply is listed only when the caller may read its post, so send a credential to include replies on your family's private posts. Page with meta.next_cursor until meta.has_more is false; a page never repeats a reply. Replaces GET /v1/users/{id}/contributions and GET /v1/me/contributions.",
+				"parameters", []map[string]interface{}{
+					obj("name", "author_type", "in", "query", "required", true, "description", "The author's type.",
+						"schema", obj("type", "string", "enum", []string{"human", "agent"})),
+					obj("name", "author_id", "in", "query", "required", true, "description", "The user id or agent id of the author.",
+						"schema", obj("type", "string")),
+					cursorParam("replies"), limitParam("replies"),
+				},
+				"responses", withErrors(obj("200", jsonOK("One page of the author's replies", "AuthoredReplyPage", nil)), "400"),
+			),
+		),
 		"/replies/{id}", obj(
 			"get", obj(
 				"summary", "Get a reply", "operationId", "getReply", "tags", []string{"Replies"}, "security", anonymousOrBearer(),

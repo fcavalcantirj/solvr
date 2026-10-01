@@ -4236,3 +4236,188 @@ UAT (for when idx 73 closes, not now): the retirements ship with the cutover dep
 
 git status at journal time [REAL]: the 19 M + 1 ?? listed above, plus this entry. spec.json
   unchanged; idx 73 passes stays false.
+
+================================================================================
+2026-10-01 01:10 — Task idx 73 (spec.json, category api) — PASSES (set true this iteration)
+"Define concrete canonical knowledge endpoints and retire overlapping discovery and statistics APIs"
+SLICE 6 (last): step 3's RETIRE half, family contribution-listings. GET /v1/users/{id}/contributions and
+GET /v1/me/contributions answer every caller 410 ENDPOINT_RETIRED naming the new canonical
+GET /v1/replies?author_type=&author_id= (one author's replies across posts), published in SPEC.md
+(Part 1 reply family, 26.1-26.4, 26.7), the served OpenAPI document, the /api-docs page and the
+published API reference; the reachable user profile's CONTRIBUTIONS tab now reads GET /v1/replies.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 73, 74, 77-95, 97, 98; no
+  open URGENT. idx 24 and 67 stay skipped (acceptance tasks); idx 68 still waits for the owner call
+  (step 1) and owner decision 4 (steps 5-6). idx 73's STEP MAP (slice 5 entry) left only
+  contribution-listings, blocked on "a canonical way to list a user's replies". Tree clean; HEAD 6ac1cbed.
+
+DESIGN DECISION (mine, under step 2 "define filters, ordering, pagination, and visibility once for
+  each purpose"; no ledger task, SPEC section or handover named one, and every earlier slice deferred it)
+  [REAL, code read]: the recorded replacement GET /v1/posts?author_type=&author_id= lists posts, not
+  replies, so retiring onto it would have dropped the profile's reply list. New endpoint, in the
+  canonical-replies family (keep): GET /v1/replies?author_type={human|agent}&author_id={id}
+  [&limit=&cursor=]. Both params required (400 VALIDATION_ERROR otherwise); newest first on the keyset
+  (created_at, id); limit default 50 / max 100 and the opaque reply cursor (parseReplyPage +
+  encodeReplyCursor, same contract as GET /v1/posts/{id}/replies); meta total/has_more/next_cursor; a
+  reply is listed only when not deleted and its post passes the GET /v1/posts/{id} read rule for the
+  caller (searchVisibilityClause: post not deleted, public or the caller's family); each item is the
+  reply (ReplyWithAuthor) plus post {id, type, title}. The author is not looked up (like GET
+  /v1/posts?author_id=). IF THE OWNER WANTS ANOTHER SHAPE (e.g. GET /v1/users/{id}/replies, or keeping
+  the adapted listings served until the legacy drop): revert the 2 LegacyReadRetirements entries, the
+  router hunk and the frontend hook/component; the endpoint itself is additive.
+  What differs from the retired listings [REAL, code read of db/contributions_canonical.go]: they
+  listed only replies with legacy_type answer/approach/response (native replies, migrated comments and
+  progress notes never appeared), included replies on deleted posts and on family posts (title blanked)
+  for any caller, page/per_page with a 100-row merge cap, ?type filter; 404 for an unknown user. All of
+  it is in the 410 instructions.
+
+WHAT CHANGED [REAL, git status --porcelain: 29 M + 4 ??; git diff --stat 734+/539- on tracked files]:
+  PRODUCTION (backend):
+  A internal/db/replies_by_author.go (86): ReplyRepository.ListPageByAuthor (count + keyset page, the
+    visibility predicate built once; an invalid cursor uuid reads as an empty page).
+  M internal/db/replies.go: scanReplyWithAuthor(row, extra ...any) scans extra trailing columns
+    (post type, title); existing callers unchanged.
+  M internal/models/reply.go: ReplyAuthorPageParams, ReplyPost, ReplyWithPost.
+  A internal/api/handlers/replies_by_author.go (55): RepliesHandler.ListByAuthor.
+  M handlers/replies.go: RepliesRepositoryInterface + ListPageByAuthor. handlers/replies_paging.go:
+    doc comment only. handlers/users.go (GetMyContributions), handlers/users_contributions.go
+    (GetUserContributions): one doc line each "Unmounted since task idx 73 step 3 retired the route";
+    code unchanged, their unit tests (users_contributions_test.go) still run.
+  M internal/api/router.go (1127 -> 1127): r.Get("/replies", repliesHandler.ListByAuthor) in the posts
+    OptionalAuth group; the 2 contribution mounts removed (comments say where they went);
+    SetContributionRepositories wiring kept (comment says unmounted).
+  M internal/api/legacy_read_retirement.go: const legacyContributionListingAsReplies + 2 entries
+    (replacement GET /v1/replies; user: "Call GET /v1/replies?author_type=human&author_id={id}"; me:
+    human vs agent-key form, {id} = data.id of GET /v1/me — GET /v1/me has data.type only for agents
+    [REAL, handlers/me.go]).
+  M internal/api/route_families.go: canonical-replies + "GET /v1/replies"; contribution-listings
+    Canonical "GET /v1/replies?author_type=&author_id=".
+  M OpenAPI: openapi_room_paths.go "/replies" get (listRepliesByAuthor; author_type enum human/agent and
+    author_id required; cursor, limit; 200 AuthoredReplyPage, 400); openapi_operation_schemas.go
+    replyProperties()/replyRequired/replyPageMeta() factored out of Reply/ReplyPage (same output) +
+    ReplyPost, AuthoredReply, AuthoredReplyPage; openapi_conventions.go pagination applies_to +
+    "/v1/replies", ordering text says it pages newest first.
+  M SPEC.md: Part 1 reply API family block, 26.1 Replies row, 26.2 family row, 26.3 two rows, 26.4
+    canonical-replies list, 26.7 intro + 2 rows (generated from the Go table by a throwaway printer
+    test, deleted) + closing paragraph.
+  M skill/references/api.md + frontend/public/references/api.md (byte-identical, cmp): "### GET
+    /replies" section with example; retired-reads paragraph names the contribution listings.
+  PRODUCTION (frontend):
+  M lib/api-types.ts (+APIReplyPost, APIAuthoredReply, APIAuthoredRepliesResponse; APIContribution*
+    types left, still imported by api-base.ts), lib/api.ts (getUserContributions replaced by
+    getRepliesByAuthor). Dead caller api-base.ts getMyContributions left untouched (idx 83 precedent).
+  M hooks/use-contributions.ts: cursor-paged GET /v1/replies (author_type human, limit 20); items
+    {id, postId, postTitle, legacyType, body, timestamp, createdAt}; no type option.
+  M components/users/contributions-list.tsx: no filter pills; badge = legacy_type or REPLY; "Replied to:"
+    + post title; body clamped; link /posts/{post_id}#{reply_id} (the anchor post-detail.tsx scrolls to).
+  M components/api/api-endpoint-data-user.ts: /me/contributions is retiredEndpoint(...) with the 26.7
+    text (generated from SPEC); api-endpoint-data-content.ts: live GET /replies entry.
+  TESTS:
+  A internal/db/replies_by_author_test.go: TestReplyRepository_ListPageByAuthor (anonymous / family /
+    other family, deleted reply, deleted post, same-created_at tie by id, keyset walk, author type).
+  A handlers/replies_by_author_test.go: TestRepliesByAuthor_{RequiresTheAuthor, RejectsAMalformedPage,
+    PassesAuthorViewerAndLookAhead, PagesWithTheCursor, RepositoryFailureIs500}; replies_test.go mock
+    gained ListPageByAuthor + 4 fields.
+  CHANGED/REPLACED EXISTING TESTS (each named with its replacement):
+  - router_contributions_canonical_test.go TestUserContributions_ListTheMigratedReplies asserted GET
+    /v1/users/{id}/contributions and GET /v1/me/contributions answer 200 listing the migrated answer's
+    reply (id = reply id, type answer, parent_id/parent_type question/parent_title/content_preview,
+    meta.total 1) and not an unmigrated legacy answers row. Replaced in the same file by
+    TestRetiredContributionListings_RepliesByAuthorServeWhatTheRoutesServed: both routes 410 for
+    anonymous/JWT callers with no fixture text; GET /v1/replies lists that migrated reply under its id
+    (legacy_type answer, post_id, post {id,type,title}, body, created_at, author) and not the legacy
+    row, plus an approach (provenance status/angle) and a native reply, newest first; the family post's
+    reply only with the family's JWT; limit=1 + cursor walk; the retirements name GET /v1/replies. PASS.
+  - router_legacy_read_retirement_test.go: retiredReadFamilies + contribution-listings; want-count
+    21 -> 23; destinations and fields (legacyContributionItemFields) for the 2 routes. PASS.
+  - openapi_operations_test.go: roomEntryReplyOperations + get /replies; applies_to set + /v1/replies;
+    page loop + AuthoredReplyPage; error rows + "get /replies" {400}; public list + get /replies;
+    schema pin + AuthoredReply/ReplyPost; new TestOpenAPIOperations_AuthorReplyListNamesItsRequiredFilter.
+    Only extended. PASS.
+  - frontend hooks/use-contributions.test.ts (7 -> 5): "fetches contributions from GET
+    /v1/users/{id}/contributions" (getUserContributions('user-123',{page:1,per_page:20}), 3 items) ->
+    "fetches the user's replies from GET /v1/replies" (getRepliesByAuthor('human','user-123',{limit:20}),
+    total, hasMore); "transforms answer/approach/response contributions" (parentTitle, parentType,
+    contentPreview, approach status 'working') -> "maps a migrated reply to its post, body and legacy
+    type" + "gives a reply written since the cutover no legacy type" (status is no longer shown: it is
+    provenance.status, which the client does not read); "supports type filter parameter" (called with
+    type 'answers') -> behavior removed, guarded by the component test "offers no contribution type
+    filter"; "supports pagination with loadMore" (page 2 appended) -> "loads the next page with the
+    cursor from meta.next_cursor"; "handles API errors gracefully" kept. All PASS.
+  - frontend components/users/contributions-list.test.tsx (10 -> 9): the 3 "renders answer/approach/
+    response cards with <prefix> and link to /questions|problems|ideas/<id>" -> "renders each reply with
+    its post title, linking to the reply on its post" (/posts/{post_id}#{id}, "Replied to:", body);
+    "renders type filter pills" + "clicking filter pill updates the type filter" -> "offers no
+    contribution type filter" + "lists the user's replies by user id" (hook called with the id only);
+    "renders content preview" -> body asserted in the card test; loading/empty/LOAD MORE x2 kept; new
+    "labels a migrated reply with its legacy type and a new reply as a reply", "shows the error the hook
+    reports". All PASS.
+  - frontend api-endpoint-retired.test.ts: 21 -> 23 rows; GET /me/contributions must be on the page and
+    retired; new it() for GET /replies (author_type, author_id, cursor, limit) and the 2 rows' replacement
+    and paging text. lib/api.test.ts: new describe for getRepliesByAuthor's URL. PASS.
+
+VERIFICATION (DATABASE_URL = local DBs only; never production):
+  RED [TEST, /tmp/solvr_idx73_s6/red.log]: internal/db, internal/api, internal/api/handlers "build
+    failed" (undefined models.ReplyWithPost / ReplyAuthorPageParams / ListByAuthor / ListPageByAuthor).
+    Frontend RED [TEST, fe_red.log]: 4 files, 15 failed / 20 passed.
+  GREEN targeted [TEST, solvr_test]: green1.log db + handlers ok; green2.log the router test 4 subtests
+    PASS (after fixing my fixture SQL: "inconsistent types deduced for parameter $3"); registry.log
+    TestLegacyDependencyRegistry_* ok — first failed "discovered legacy dependency without a disposition:
+    code:internal/api/legacy_read_retirement.go (tables=answers)" because my 410 text said "migrated
+    from answers"; reworded to "the migrated answers", no registry entry needed; green4.log api ok except
+    TestHomepageSearch_EveryPublishedTermLinksToCanonicalPostsSearch, pre-existing on the shared DB
+    (journal 2026-09-30, fails on an untouched HEAD) and PASS on the fresh DB below.
+  jobs [TEST, jobs.log, scratch DBs]: internal/jobs ok (TestLegacyDroppedDatabase_* incl. GET/WRITE
+    route probes, TestServeRouteProbe_*).
+  FULL BACKEND [TEST, /tmp/solvr_idx73_s6/full2.log, go test ./... -count=1 -p 1 -v, FRESH local DB
+    solvr_idx73_s6_fresh built with `migrate up` to 118, dropped after]: 18 packages ok; internal/api and
+    internal/db FAIL with 47 failing top-level tests; against slice 5's 49
+    (/tmp/solvr_idx73_s5/fails.txt): 0 new, 2 gone (TestLegacyDependencyRegistry_CoversThePostType
+    References, TestAgentClaim_RetriesAndRacesLinkTheAgentOnce). Every new/changed test above is PASS in
+    it; 13 SKIPs, the pre-existing set (VOYAGE hybrid search, OAuth integration, Kubo unpin, legacy
+    answers list, E2E list), none mine. NOTE: a first full run (full1_invalid_stash.log) was killed and
+    discarded because I ran `git stash` for an eslint baseline while it compiled; full2 is the clean run.
+    After full2 only comments in router.go (back to 1127 lines) and the db test's cleanup order changed;
+    re-verified: green5.log (route families, retirements, router test) ok, db_cleanup.log PASS.
+  FRONTEND [TEST]: npm test 188 files, 1697 tests PASS (fe_full.log; slice 5 had 1698: hook 7 -> 5, list 10 -> 9, +1 retired-docs, +1 api client); targeted
+    12 files 124 tests PASS (fe_green1.log); typecheck exit 0; eslint on the 10 touched TS files exit 0,
+    0 errors, 57 warnings (HEAD: 58).
+  gofmt -l clean on every touched Go file; go vet ./internal/api ./internal/api/handlers ./internal/db
+    ./internal/models clean. check-file-size.sh: 34 violations, the same count (router.go 1127, as
+    before); new files under 800.
+  solvr_test side effect [REAL]: the first targeted run left my db test's fixtures (3 posts, 7 replies:
+    `defer pool.Close()` ran before t.Cleanup, so the cleanup hit a closed pool). Fixed in the test
+    (t.Cleanup(pool.Close) first) and the 3 posts / 7 replies (titles "Test question for comments
+    003724" x2 and "Family post the author replied to <id>") deleted by id; re-run leaves 0.
+  LIVE PROBE [REAL, /tmp/solvr_idx73_s6/probe/probe.sh + probe.out]: fresh DB at 118, go build
+    ./cmd/api ./cmd/cutover, API on :8098 under env -i (fake JWT_SECRET, IPFS_API_URL=:9). Agent + human
+    (POST /v1/auth/register) registered; legacy answer by the human seeded; REAL cutover runner exit 0,
+    replies_created 1, pending_after 0. Human JWT POSTed 2 native replies (public question, family
+    question): 201. GET /v1/replies?author_type=human&author_id=<human>: anon 200 total 2 [native,
+    migrated answer] newest first, post.title/type set; with JWT total 3 (family reply first); limit=1
+    has_more + cursor -> second page; author_type=agent with the human id total 0; missing params,
+    robot type, author_type only, cursor=bad, limit=0 -> 400 VALIDATION_ERROR. GET
+    /v1/users/<id>/contributions (anon, and JWT + ?type=answers&page=2), GET /v1/me/contributions (JWT,
+    anon): 410 ENDPOINT_RETIRED, replacement GET /v1/replies, request_id, no fixture text. openapi.json:
+    /replies get listRepliesByAuthor [author_type, author_id, cursor, limit] {200, 400}; both retired ops
+    deprecated, only 410, x-solvr-retired.replacement GET /v1/replies. api.log 9x200, 4x201, 5x400,
+    4x410, 0 5xx. Server stopped (:8098 free); probe DB dropped.
+
+OBSERVATION FOR THE OWNER (not changed) [REAL, code read]: the profile tab label shows
+  stats.contributions (db/profile_stats_canonical.go: every live reply of the user, including replies on
+  deleted posts and on family posts), while the tab's list (GET /v1/replies) leaves those out for a
+  caller who may not read them, so the label can exceed the list. Aligning them is a separate change.
+
+STEP MAP (idx 73), all DONE:
+  1, 2, 4 (earlier slices). 3: type-specific-statistics, legacy-feed, legacy-typed-discovery,
+  legacy-comments (reads), legacy-typed-reads, contribution-listings (this slice) retired; no route of
+  those families is served. 5: every mapping published (SPEC 26.3, 26.5, 26.6, 26.7; OpenAPI
+  x-solvr-retired; /api-docs page; published API reference).
+UAT: the retirements (idx 73 slices 1-6) ship with the cutover deploy (idx 93) — owner deploys. After
+  that deploy, the owner opens a user profile's CONTRIBUTIONS tab on solvr.dev and confirms it lists the
+  user's replies (migrated ones badged ANSWER/APPROACH/RESPONSE, new ones REPLY) and each card opens the
+  reply on /posts/{id}.
+
+git status at journal time [REAL]: the 29 M + 4 ?? listed above, plus this entry and spec.json idx 73
+  passes -> true.

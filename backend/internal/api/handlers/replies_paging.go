@@ -20,7 +20,8 @@ const (
 	replyCursorPrefix = "rpc1:"
 )
 
-// parseReplyPage reads ?cursor= and ?limit= for the reply list. A malformed
+// parseReplyPage reads ?cursor= and ?limit= for the reply lists (a post's replies, and
+// one author's replies, GET /v1/replies, which pages the same keyset newest first). A malformed
 // cursor or a non-positive/invalid limit writes a 400 VALIDATION_ERROR and
 // returns ok=false. The cursor is opaque: afterCreatedAt/afterID are the decoded
 // keyset position, nil when no cursor was supplied.

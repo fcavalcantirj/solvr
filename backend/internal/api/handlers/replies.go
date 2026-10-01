@@ -23,6 +23,8 @@ type RepliesRepositoryInterface interface {
 	GetByID(ctx context.Context, id string) (*models.ReplyWithAuthor, error)
 	ListByPost(ctx context.Context, opts models.ReplyListOptions) ([]models.ReplyWithAuthor, int, error)
 	ListPageByPost(ctx context.Context, params models.ReplyPageParams) ([]models.ReplyWithAuthor, int, error)
+	// ListPageByAuthor pages one author's replies across the posts the viewer may read.
+	ListPageByAuthor(ctx context.Context, params models.ReplyAuthorPageParams) ([]models.ReplyWithPost, int, error)
 	// Update writes the new body with its embedding; a nil embedding clears the stored vector.
 	Update(ctx context.Context, id string, authorType models.AuthorType, authorID, body string, embedding *string) (*models.Reply, error)
 	Delete(ctx context.Context, id string, authorType models.AuthorType, authorID string) error

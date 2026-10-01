@@ -115,6 +115,34 @@ type ReplyPageParams struct {
 	Limit          int
 }
 
+// ReplyAuthorPageParams controls the keyset pagination of one author's replies across posts
+// (GET /v1/replies, task idx 73 step 3). The keyset is (created_at, id) newest first: a page
+// holds only replies strictly before BeforeCreatedAt/BeforeID, so a reader never re-sees a
+// reply. A nil BeforeCreatedAt starts at the newest reply. ViewerHuman scopes which posts'
+// replies are listed, by the GET /v1/posts/{id} read rule ("" = public posts only).
+type ReplyAuthorPageParams struct {
+	AuthorType      AuthorType
+	AuthorID        string
+	ViewerHuman     string
+	BeforeCreatedAt *time.Time
+	BeforeID        string
+	Limit           int
+}
+
+// ReplyPost names the post a reply belongs to, so a list of one author's replies can show and
+// link each reply's post without a read per reply.
+type ReplyPost struct {
+	ID    string `json:"id"`
+	Type  string `json:"type"`
+	Title string `json:"title"`
+}
+
+// ReplyWithPost is a reply with its author and its post: an item of GET /v1/replies.
+type ReplyWithPost struct {
+	ReplyWithAuthor
+	Post ReplyPost `json:"post"`
+}
+
 // CreateReplyRequest is the request body for creating a reply. There is no
 // content-type field: a client never chooses approach, answer, response, or
 // comment.

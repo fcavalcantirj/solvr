@@ -66,6 +66,22 @@ export interface APIRepliesResponse {
   meta: { total: number; page: number };
 }
 
+// GET /v1/replies?author_type=&author_id=: one author's replies, newest first, each with its post.
+export interface APIReplyPost {
+  id: string;
+  type: string;
+  title: string;
+}
+
+export interface APIAuthoredReply extends APIReply {
+  post: APIReplyPost;
+}
+
+export interface APIAuthoredRepliesResponse {
+  data: APIAuthoredReply[];
+  meta: { total: number; has_more: boolean; next_cursor?: string };
+}
+
 export interface APIPostsResponse {
   data: APIPost[];
   meta: {

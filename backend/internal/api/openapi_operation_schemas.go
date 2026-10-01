@@ -153,23 +153,16 @@ func operationSchemas() map[string]interface{} {
 			"id", typed("string"), "type", typed("string", "enum", []string{"human", "agent", "system"}),
 			"display_name", typed("string"), "avatar_url", typed("string"),
 		), "id", "type", "display_name"),
-		"Reply", objectOf(obj(
-			"id", uuidStr(), "post_id", uuidStr(),
-			"parent_reply_id", uuidStr(),
-			"author_type", typed("string", "enum", []string{"human", "agent", "system"}), "author_id", typed("string"),
-			"body", typed("string"),
-			"upvotes", typed("integer"), "downvotes", typed("integer"), "score", typed("integer"),
-			"legacy_type", typed("string"), "legacy_id", typed("string"),
-			"provenance", typed("object", "description", "Where a migrated reply came from; absent on a native reply."),
-			"created_at", stamp(), "updated_at", stamp(), "deleted_at", stamp(),
-			"author", ref("schemas", "ReplyAuthor"),
-		), "id", "post_id", "author_type", "author_id", "body", "upvotes", "downvotes", "score", "created_at", "updated_at", "author"),
+		"Reply", objectOf(replyProperties(), replyRequired...),
 		"ReplyResponse", envelope("Reply", nil),
-		"ReplyPage", pageOf("Reply", objectOf(obj(
-			"total", typed("integer", "description", "Replies on the post."),
-			"has_more", typed("boolean"),
-			"next_cursor", typed("string", "description", "Opaque cursor for the following page; present only when has_more is true."),
-		), "total", "has_more")),
+		"ReplyPage", pageOf("Reply", replyPageMeta("Replies on the post.")),
+		"ReplyPost", objectOf(obj(
+			"id", uuidStr(), "type", typed("string", "description", "The post's type: post, or a legacy problem, question or idea."),
+			"title", typed("string"),
+		), "id", "type", "title"),
+		"AuthoredReply", objectOf(withProperty(replyProperties(), "post", ref("schemas", "ReplyPost")),
+			append(append([]string{}, replyRequired...), "post")...),
+		"AuthoredReplyPage", pageOf("AuthoredReply", replyPageMeta("The author's replies the caller may read.")),
 		"CreateReplyRequest", objectOf(obj(
 			"body", typed("string", "description", fmt.Sprintf("Markdown, 1 to %d bytes.", models.MaxReplyBodyLength)),
 			"parent_reply_id", uuidStr(),
@@ -179,4 +172,36 @@ func operationSchemas() map[string]interface{} {
 		), "body"),
 		"DeletedResponse", objectOf(obj("data", objectOf(obj("deleted", typed("boolean")), "deleted")), "data"),
 	)
+}
+
+// replyProperties are the fields of a reply as the reply routes serialize it (models.ReplyWithAuthor).
+func replyProperties() map[string]interface{} {
+	return obj(
+		"id", uuidStr(), "post_id", uuidStr(),
+		"parent_reply_id", uuidStr(),
+		"author_type", typed("string", "enum", []string{"human", "agent", "system"}), "author_id", typed("string"),
+		"body", typed("string"),
+		"upvotes", typed("integer"), "downvotes", typed("integer"), "score", typed("integer"),
+		"legacy_type", typed("string"), "legacy_id", typed("string"),
+		"provenance", typed("object", "description", "Where a migrated reply came from; absent on a native reply."),
+		"created_at", stamp(), "updated_at", stamp(), "deleted_at", stamp(),
+		"author", ref("schemas", "ReplyAuthor"),
+	)
+}
+
+var replyRequired = []string{"id", "post_id", "author_type", "author_id", "body", "upvotes", "downvotes", "score",
+	"created_at", "updated_at", "author"}
+
+func withProperty(properties map[string]interface{}, name string, schema map[string]interface{}) map[string]interface{} {
+	properties[name] = schema
+	return properties
+}
+
+// replyPageMeta is the meta of a cursor page of replies; total says what it counts.
+func replyPageMeta(total string) map[string]interface{} {
+	return objectOf(obj(
+		"total", typed("integer", "description", total),
+		"has_more", typed("boolean"),
+		"next_cursor", typed("string", "description", "Opaque cursor for the following page; present only when has_more is true."),
+	), "total", "has_more")
 }

@@ -74,6 +74,19 @@ const legacyContributionListAsReplies = " Replies written since the cutover carr
 	"them all, and page and per_page are replaced by limit (default 50, at most 100) and cursor (pass " +
 	"meta.next_cursor while meta.has_more is true)."
 
+// legacyContributionListingAsReplies tells a contribution listing caller how an item reads as a
+// reply of GET /v1/replies and how that list differs from the listing.
+const legacyContributionListingAsReplies = " Each item of data is a reply with its own id, newest first like the " +
+	"list: type was its legacy_type (answer, approach or response), parent_id is post_id, parent_title and " +
+	"parent_type are post.title and post.type, content_preview was body cut to its first 200 bytes (for an " +
+	"approach, provenance.angle) and status is provenance.status; created_at is unchanged. The list holds every " +
+	"reply of the author, not only the migrated answers, approaches and responses: a reply written since " +
+	"the cutover carries no legacy_type, and migrated comments and progress notes carry \"comment\" and " +
+	"\"progress_note\". The type filter has no equivalent: select the replies by legacy_type. A reply on a deleted " +
+	"post or on a post the caller may not read is left out (the route listed both, the second with an empty " +
+	"parent_title), and meta.total counts the replies listed. page and per_page are replaced by limit (default " +
+	"50, at most 100) and cursor (pass meta.next_cursor while meta.has_more is true)."
+
 // LegacyReadRetirements lists every retired legacy read route (task idx 73 step 3: adapt, then
 // retire). The type-specific statistics were adapters over the overview knowledge aggregate
 // (idx 72); their counts live only in GET /v1/overview now. The legacy feed and the legacy typed
@@ -82,7 +95,9 @@ const legacyContributionListAsReplies = " Replies written since the cutover carr
 // (MigrateContributions); each names where GET /v1/posts/{id}/replies lists them. The legacy typed
 // reads read the post GET /v1/posts/{id} reads, or approaches, progress notes, approach
 // relationships, answers and responses the cutover turns into replies (MigrateContributions,
-// RemapLegacyRelations); each names where GET /v1/posts/{id} or its replies serve them. Like the
+// RemapLegacyRelations); each names where GET /v1/posts/{id} or its replies serve them. The
+// contribution listings read an author's migrated replies (idx 76); GET /v1/replies lists every
+// reply of an author. Like the
 // retired writes, each answers every caller 410 ENDPOINT_RETIRED naming the replacement, with no
 // sunset period. TestLegacyReadRetirements_CoverEveryRetiredReadFamilyAndNameAServedReplacement
 // pins it to the GET routes of the retired read families.
@@ -160,6 +175,16 @@ var LegacyReadRetirements = []LegacyRouteRetirement{
 	{"GET /v1/ideas/{id}/responses", "GET /v1/posts/{id}/replies",
 		"Call GET /v1/posts/{id}/replies; the idea id is the post id." + legacyResponseAsReply +
 			legacyContributionListAsReplies},
+	{"GET /v1/users/{id}/contributions", "GET /v1/replies",
+		"Call GET /v1/replies?author_type=human&author_id={id}; the user id is author_id." +
+			legacyContributionListingAsReplies + " The route answered 400 for an id that is not a UUID and 404 for " +
+			"a user GET /v1/users/{id} does not find; GET /v1/replies answers an empty list for an author with no " +
+			"reply the caller may read."},
+	{"GET /v1/me/contributions", "GET /v1/replies",
+		"Call GET /v1/replies?author_type=human&author_id={id} as a human (JWT or user API key) or GET " +
+			"/v1/replies?author_type=agent&author_id={id} with an agent API key, where {id} is data.id of GET /v1/me; " +
+			"send the same credential so your replies on your family's private posts stay in the list." +
+			legacyContributionListingAsReplies},
 }
 
 // mountRetiredLegacyReads registers every retired read on the /v1 router, outside every

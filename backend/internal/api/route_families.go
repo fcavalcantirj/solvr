@@ -48,6 +48,7 @@ var RouteFamilies = []RouteFamily{
 		Routes: []string{
 			"GET /v1/posts/{id}/replies",
 			"POST /v1/posts/{id}/replies",
+			"GET /v1/replies",
 			"GET /v1/replies/{id}",
 			"PATCH /v1/replies/{id}",
 			"DELETE /v1/replies/{id}",
@@ -283,7 +284,7 @@ var RouteFamilies = []RouteFamily{
 	{
 		Name:        "contribution-listings",
 		Disposition: DispositionRetire,
-		Canonical:   "GET /v1/posts?author_type=&author_id=",
+		Canonical:   "GET /v1/replies?author_type=&author_id=",
 		Routes: []string{
 			"GET /v1/users/{id}/contributions",
 			"GET /v1/me/contributions",

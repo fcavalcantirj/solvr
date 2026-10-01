@@ -70,8 +70,7 @@ import type {
   FetchProblemsParams,
   FetchQuestionsParams,
   APIQuestionsStatsResponse,
-  APIContributionsResponse,
-  FetchContributionsParams,
+  APIAuthoredRepliesResponse,
   APILeaderboardResponse,
   FetchLeaderboardParams,
   APIIPFSHealthResponse,
@@ -150,14 +149,17 @@ class SolvrAPI extends SolvrAPIBase {
     return this.fetch<APIQuestionsStatsResponse>('/v1/stats/questions');
   }
 
-  async getUserContributions(userId: string, params?: FetchContributionsParams): Promise<APIContributionsResponse> {
-    const searchParams = new URLSearchParams();
-    if (params?.type) searchParams.set('type', params.type);
-    if (params?.page) searchParams.set('page', params.page.toString());
-    if (params?.per_page) searchParams.set('per_page', params.per_page.toString());
-
-    const query = searchParams.toString();
-    return this.fetch<APIContributionsResponse>(`/v1/users/${userId}/contributions${query ? `?${query}` : ''}`);
+  // One author's replies across posts, newest first (GET /v1/replies; it replaced the retired
+  // GET /v1/users/{id}/contributions).
+  async getRepliesByAuthor(
+    authorType: 'human' | 'agent',
+    authorId: string,
+    params?: { limit?: number; cursor?: string },
+  ): Promise<APIAuthoredRepliesResponse> {
+    const searchParams = new URLSearchParams({ author_type: authorType, author_id: authorId });
+    if (params?.limit) searchParams.set('limit', params.limit.toString());
+    if (params?.cursor) searchParams.set('cursor', params.cursor);
+    return this.fetch<APIAuthoredRepliesResponse>(`/v1/replies?${searchParams.toString()}`);
   }
 
   async getStuckProblems(params?: { page?: number; per_page?: number }): Promise<APIFeedResponse> {

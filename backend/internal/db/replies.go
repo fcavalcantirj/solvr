@@ -420,18 +420,19 @@ func scanReply(row rowScanner) (*models.Reply, error) {
 	return &reply, nil
 }
 
-// scanReplyWithAuthor scans the reply projection plus resolved author columns.
-func scanReplyWithAuthor(row rowScanner) (*models.ReplyWithAuthor, error) {
+// scanReplyWithAuthor scans the reply projection plus resolved author columns, then any extra
+// columns the query selects after them into extra.
+func scanReplyWithAuthor(row rowScanner, extra ...any) (*models.ReplyWithAuthor, error) {
 	var rwa models.ReplyWithAuthor
 	var provenance []byte
 	var displayName string
 	var avatarURL *string
-	if err := row.Scan(
+	if err := row.Scan(append([]any{
 		&rwa.ID, &rwa.PostID, &rwa.ParentReplyID, &rwa.AuthorType, &rwa.AuthorID,
 		&rwa.Body, &rwa.Upvotes, &rwa.Downvotes, &rwa.LegacyType, &rwa.LegacyID,
 		&provenance, &rwa.CreatedAt, &rwa.UpdatedAt, &rwa.DeletedAt,
 		&displayName, &avatarURL,
-	); err != nil {
+	}, extra...)...); err != nil {
 		return nil, err
 	}
 	if len(provenance) > 0 {

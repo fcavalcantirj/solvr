@@ -22,7 +22,9 @@ import (
 // so GET /v1/posts/{id}/replies serves them. The legacy typed reads (GET /v1/{problems,questions,
 // ideas}/{id} and the problem's approaches, approach history and export, the question's answers
 // and the idea's responses) read the same post as GET /v1/posts/{id}, or contributions the cutover
-// turns into replies (MigrateContributions, RemapLegacyRelations). They are now retired the way
+// turns into replies (MigrateContributions, RemapLegacyRelations). The contribution listings (GET
+// /v1/users/{id}/contributions, GET /v1/me/contributions) listed an author's migrated replies,
+// which GET /v1/replies?author_type=&author_id= lists. They are now retired the way
 // the legacy writes were (idx 52): every caller gets the same 410 ENDPOINT_RETIRED naming the canonical
 // replacement, where the data is there and where each legacy field went, and the API document
 // and SPEC.md Part 26 publish that exact answer (step 5).
@@ -35,6 +37,7 @@ var retiredReadFamilies = map[string]bool{
 	"legacy-typed-discovery":   true,
 	"legacy-comments":          true,
 	"legacy-typed-reads":       true,
+	"contribution-listings":    true,
 }
 
 // retiredReadDestinations is where each retired read's data is served now; its instructions
@@ -69,6 +72,10 @@ var retiredReadDestinations = map[string]string{
 		"progress notes with GET /v1/posts/{id}/replies",
 	"GET /v1/questions/{id}/answers": "Call GET /v1/posts/{id}/replies; the question id is the post id.",
 	"GET /v1/ideas/{id}/responses":   "Call GET /v1/posts/{id}/replies; the idea id is the post id.",
+	"GET /v1/users/{id}/contributions": "Call GET /v1/replies?author_type=human&author_id={id}; the user id is " +
+		"author_id.",
+	"GET /v1/me/contributions": "GET /v1/replies?author_type=agent&author_id={id} with an agent API key, where " +
+		"{id} is data.id of GET /v1/me",
 }
 
 // retiredReadFields are the top-level data fields each retired read used to return; its
@@ -100,7 +107,16 @@ var retiredReadFields = map[string][]string{
 	"GET /v1/problems/{id}/export":   {"markdown", "token_estimate"},
 	"GET /v1/questions/{id}/answers": append(append([]string{}, legacyAnswerFields...), legacyListMetaFields...),
 	"GET /v1/ideas/{id}/responses":   append(append([]string{}, legacyResponseFields...), legacyListMetaFields...),
+	"GET /v1/users/{id}/contributions": append(append([]string{"type"}, legacyContributionItemFields...),
+		legacyListMetaFields...),
+	"GET /v1/me/contributions": append(append([]string{"type"}, legacyContributionItemFields...),
+		legacyListMetaFields...),
 }
+
+// legacyContributionItemFields are the fields of a legacy contribution item (models.ContributionItem)
+// other than type, which is also the name of the list's filter.
+var legacyContributionItemFields = []string{"id", "parent_id", "parent_title", "parent_type", "content_preview",
+	"status", "created_at"}
 
 // legacyApproachFields are the fields of a legacy approach (models.ApproachWithAuthor; the list left
 // deleted approaches out, so deleted_at never appeared) and of its progress notes
@@ -149,7 +165,7 @@ func TestLegacyReadRetirements_CoverEveryRetiredReadFamilyAndNameAServedReplacem
 			}
 		}
 	}
-	require.Len(t, want, 21, "the GET routes of %v", retiredReadFamilies)
+	require.Len(t, want, 23, "the GET routes of %v", retiredReadFamilies)
 
 	writes := map[string]bool{}
 	for _, w := range LegacyWriteRetirements {

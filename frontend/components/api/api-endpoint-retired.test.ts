@@ -124,13 +124,14 @@ describe("retired legacy reads on the API docs page", () => {
     "GET /v1/ideas/{id}/responses",
   ];
   const contributionLists = ["GET /v1/problems/{id}/approaches", "GET /v1/questions/{id}/answers", "GET /v1/ideas/{id}/responses"];
+  const contributionListings = ["GET /v1/users/{id}/contributions", "GET /v1/me/contributions"];
 
-  it("reads all 21 retired reads from SPEC.md 26.7", () => {
-    expect(specRows(READS)).toHaveLength(21);
+  it("reads all 23 retired reads from SPEC.md 26.7", () => {
+    expect(specRows(READS)).toHaveLength(23);
   });
 
-  it("still documents the retired feed routes, typed lists, comment lists and typed reads, so old callers find the migration", () => {
-    for (const route of [...feed, ...typedLists, ...commentLists, ...typedReads]) {
+  it("still documents the retired feed routes, typed lists, comment lists, typed reads and GET /me/contributions, so old callers find the migration", () => {
+    for (const route of [...feed, ...typedLists, ...commentLists, ...typedReads, "GET /v1/me/contributions"]) {
       expect(pageEndpoint(route), `${route} is not on the page`).toBeDefined();
     }
   });
@@ -138,7 +139,7 @@ describe("retired legacy reads on the API docs page", () => {
   it("marks every retired read on the page as retired with the SPEC replacement and instructions", () => {
     const onPage = specRows(READS).filter((row) => pageEndpoint(row.route));
     expect(onPage.map((row) => row.route)).toEqual(
-      expect.arrayContaining([...feed, ...typedLists, ...commentLists, ...typedReads]),
+      expect.arrayContaining([...feed, ...typedLists, ...commentLists, ...typedReads, "GET /v1/me/contributions"]),
     );
     for (const row of onPage) {
       const ep = pageEndpoint(row.route)!;
@@ -186,5 +187,21 @@ describe("retired legacy reads on the API docs page", () => {
     expect(list!.params!.map((p) => p.name)).toEqual(
       expect.arrayContaining(["type", "status", "needs_help", "has_answer", "sort", "tags", "page", "per_page"]),
     );
+  });
+
+  it("documents GET /replies, the contribution listings' replacement, with the author filter and paging the instructions name", () => {
+    const list = pageEndpoint("GET /v1/replies");
+    expect(list, "GET /replies is not documented").toBeDefined();
+    expect(list!.retired).toBeUndefined();
+    expect(list!.params!.map((p) => p.name)).toEqual(
+      expect.arrayContaining(["author_type", "author_id", "cursor", "limit"]),
+    );
+    const rows = specRows(READS).filter((r) => contributionListings.includes(r.route));
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      expect(row.replacement).toBe("GET /v1/replies");
+      expect(row.migration).toContain("GET /v1/replies?author_type=");
+      expect(row.migration).toContain("limit (default 50, at most 100) and cursor");
+    }
   });
 });

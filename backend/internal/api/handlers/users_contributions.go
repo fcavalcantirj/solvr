@@ -55,6 +55,7 @@ type ContributionsMeta struct {
 // GetUserContributions handles GET /v1/users/{id}/contributions.
 // Returns answers, approaches, and responses for a user, unified and sorted by created_at DESC.
 // Supports ?type=answers|approaches|responses filter and page/per_page pagination.
+// Unmounted since task idx 73 step 3 retired the route.
 func (h *UsersHandler) GetUserContributions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := chi.URLParam(r, "id")

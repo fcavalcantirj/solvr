@@ -1,42 +1,12 @@
 "use client";
 
-import { useState } from 'react';
 import Link from 'next/link';
 import { Loader2, MessageSquare, ArrowRight } from 'lucide-react';
 import { useContributions } from '@/hooks/use-contributions';
-import type { ContributionItem } from '@/hooks/use-contributions';
 import { cn } from '@/lib/utils';
 
-type ContributionFilter = 'answers' | 'approaches' | 'responses' | undefined;
-
-const filterOptions: Array<{ label: string; value: ContributionFilter }> = [
-  { label: 'ALL', value: undefined },
-  { label: 'ANSWERS', value: 'answers' },
-  { label: 'APPROACHES', value: 'approaches' },
-  { label: 'RESPONSES', value: 'responses' },
-];
-
-function getParentLink(contribution: ContributionItem): string {
-  const typeToRoute: Record<string, string> = {
-    question: 'questions',
-    problem: 'problems',
-    idea: 'ideas',
-  };
-  const route = typeToRoute[contribution.parentType] || contribution.parentType;
-  return `/${route}/${contribution.parentId}`;
-}
-
-function getTypeLabel(contribution: ContributionItem): string {
-  switch (contribution.type) {
-    case 'answer': return 'Answered:';
-    case 'approach': return 'Approach for:';
-    case 'response': return 'Response to:';
-    default: return '';
-  }
-}
-
-function getTypeBadgeStyle(type: string): string {
-  switch (type) {
+function getBadgeStyle(legacyType: string | null): string {
+  switch (legacyType) {
     case 'answer': return 'bg-emerald-500/10 text-emerald-500';
     case 'approach': return 'bg-blue-500/10 text-blue-500';
     case 'response': return 'bg-purple-500/10 text-purple-500';
@@ -48,30 +18,12 @@ interface ContributionsListProps {
   userId: string;
 }
 
+// The user's replies (GET /v1/replies), newest first; each links to the reply on its post.
 export function ContributionsList({ userId }: ContributionsListProps) {
-  const [typeFilter, setTypeFilter] = useState<ContributionFilter>(undefined);
-  const { contributions, loading, error, hasMore, loadMore } = useContributions(userId, { type: typeFilter });
+  const { contributions, loading, error, hasMore, loadMore } = useContributions(userId);
 
   return (
     <div>
-      {/* Filter pills */}
-      <div className="flex gap-1 mb-6">
-        {filterOptions.map((option) => (
-          <button
-            key={option.label}
-            onClick={() => setTypeFilter(option.value)}
-            className={cn(
-              "px-3 py-1.5 font-mono text-[10px] tracking-wider transition-colors",
-              typeFilter === option.value
-                ? "bg-foreground text-background"
-                : "text-muted-foreground hover:text-foreground hover:bg-secondary border border-border"
-            )}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-
       {/* Loading state */}
       {loading && contributions.length === 0 && (
         <div className="border border-dashed border-border p-12 text-center">
@@ -100,8 +52,8 @@ export function ContributionsList({ userId }: ContributionsListProps) {
         <div className="space-y-3">
           {contributions.map((contribution) => (
             <Link
-              key={`${contribution.type}-${contribution.id}`}
-              href={getParentLink(contribution)}
+              key={contribution.id}
+              href={`/posts/${contribution.postId}#${contribution.id}`}
               className="block border border-border p-4 hover:bg-secondary/50 transition-colors group"
             >
               <div className="flex items-start gap-3">
@@ -109,29 +61,22 @@ export function ContributionsList({ userId }: ContributionsListProps) {
                   <div className="flex items-center gap-2 mb-1.5">
                     <span className={cn(
                       "inline-block px-2 py-0.5 font-mono text-[10px] tracking-wider",
-                      getTypeBadgeStyle(contribution.type)
+                      getBadgeStyle(contribution.legacyType)
                     )}>
-                      {contribution.type.toUpperCase()}
+                      {(contribution.legacyType ?? 'reply').toUpperCase()}
                     </span>
-                    {contribution.status && (
-                      <span className="font-mono text-[10px] tracking-wider text-muted-foreground">
-                        {contribution.status.toUpperCase()}
-                      </span>
-                    )}
                     <span className="font-mono text-[10px] text-muted-foreground ml-auto">
                       {contribution.timestamp}
                     </span>
                   </div>
 
-                  <p className="font-mono text-xs text-muted-foreground mb-1">
-                    {getTypeLabel(contribution)}
-                  </p>
+                  <p className="font-mono text-xs text-muted-foreground mb-1">Replied to:</p>
                   <h3 className="font-mono text-sm font-medium truncate group-hover:text-foreground">
-                    {contribution.parentTitle}
+                    {contribution.postTitle}
                   </h3>
 
                   <p className="font-mono text-xs text-muted-foreground mt-2 line-clamp-2">
-                    {contribution.contentPreview}
+                    {contribution.body}
                   </p>
                 </div>
 

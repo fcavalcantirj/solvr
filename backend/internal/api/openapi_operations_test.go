@@ -32,6 +32,7 @@ var roomEntryReplyOperations = []struct{ method, path string }{
 	{"get", "/rooms/{slug}/stream"},
 	{"get", "/posts/{id}/replies"},
 	{"post", "/posts/{id}/replies"},
+	{"get", "/replies"},
 	{"get", "/replies/{id}"},
 	{"patch", "/replies/{id}"},
 	{"delete", "/replies/{id}"},
@@ -167,7 +168,7 @@ func TestOpenAPIOperations_CursorPaginationRulesMatchTheHandlers(t *testing.T) {
 	assert.Equal(t, "limit", at(t, rule, "limit_parameter"))
 	sameSet(t, "pagination.response_meta", strings_(t, at(t, rule, "response_meta")), []string{"next_cursor", "has_more"})
 	sameSet(t, "pagination.applies_to", strings_(t, at(t, rule, "applies_to")),
-		[]string{"/v1/rooms/{slug}/entries", "/v1/posts/{id}/replies"})
+		[]string{"/v1/rooms/{slug}/entries", "/v1/posts/{id}/replies", "/v1/replies"})
 
 	// The entry page answers next_cursor: null on its last page; the reply page leaves the
 	// field out. Each schema says which, so a generated client does not guess.
@@ -177,6 +178,7 @@ func TestOpenAPIOperations_CursorPaginationRulesMatchTheHandlers(t *testing.T) {
 	}{
 		{"/rooms/{slug}/entries", "RoomEntryPage", true},
 		{"/posts/{id}/replies", "ReplyPage", false},
+		{"/replies", "AuthoredReplyPage", false},
 	} {
 		get := operation(t, spec, "get", c.path)
 
@@ -303,6 +305,7 @@ func TestOpenAPIOperations_EveryOperationNamesItsErrorRows(t *testing.T) {
 		"get /rooms/{slug}/entries/{entry_id}": {"400", "401", "403", "404"},
 		"get /rooms/{slug}/stream":             {"400", "401", "403", "404", "503"},
 		"get /posts/{id}/replies":              {"400", "404"},
+		"get /replies":                         {"400"},
 		"post /posts/{id}/replies":             {"400", "401", "404", "409", "413", "503"},
 		"get /replies/{id}":                    {"404"},
 		"patch /replies/{id}":                  {"400", "401", "403", "404", "412", "413"},
@@ -324,7 +327,7 @@ func TestOpenAPIOperations_EveryOperationNamesItsErrorRows(t *testing.T) {
 func TestOpenAPIOperations_SecurityFollowsWhoMayCall(t *testing.T) {
 	spec := servedSpec(t)
 	public := []string{"get /rooms", "get /rooms/{slug}", "get /rooms/{slug}/entries",
-		"get /rooms/{slug}/entries/{entry_id}", "get /rooms/{slug}/stream", "get /posts/{id}/replies", "get /replies/{id}"}
+		"get /rooms/{slug}/entries/{entry_id}", "get /rooms/{slug}/stream", "get /posts/{id}/replies", "get /replies", "get /replies/{id}"}
 	for _, key := range public {
 		parts := strings.SplitN(key, " ", 2)
 		sec, _ := operation(t, spec, parts[0], parts[1])["security"].([]interface{})
@@ -349,6 +352,8 @@ func TestOpenAPIOperations_SchemasDescribeTheJSONTheHandlersReturn(t *testing.T)
 		"RoomEntry":          reflect.TypeOf(models.RoomEntry{}),
 		"Reply":              reflect.TypeOf(models.ReplyWithAuthor{}),
 		"ReplyAuthor":        reflect.TypeOf(models.ReplyAuthor{}),
+		"AuthoredReply":      reflect.TypeOf(models.ReplyWithPost{}),
+		"ReplyPost":          reflect.TypeOf(models.ReplyPost{}),
 		"Room":               reflect.TypeOf(models.Room{}),
 		"RoomSummary":        reflect.TypeOf(models.RoomWithStats{}),
 		"CreateReplyRequest": reflect.TypeOf(models.CreateReplyRequest{}),
@@ -470,4 +475,23 @@ func TestOpenAPIOperations_StreamTicketMintIsPublishedWithItsRecoverableErrors(t
 	for _, code := range []string{"STREAM_TICKET_INVALID", "STREAM_TICKET_EXPIRED"} {
 		assert.Contains(t, unauthorized, code, "the shared 401 row names %s", code)
 	}
+}
+
+// GET /v1/replies (task idx 73 step 3) lists one author's replies: author_type and author_id are
+// required query parameters, the page is newest first, and each item names its post.
+func TestOpenAPIOperations_AuthorReplyListNamesItsRequiredFilter(t *testing.T) {
+	spec := servedSpec(t)
+	get := operation(t, spec, "get", "/replies")
+	authorType := param(t, spec, get, "author_type")
+	assert.Equal(t, "query", authorType["in"])
+	assert.Equal(t, true, authorType["required"])
+	assert.Equal(t, []interface{}{"human", "agent"}, authorType["schema"].(map[string]interface{})["enum"])
+	authorID := param(t, spec, get, "author_id")
+	assert.Equal(t, "query", authorID["in"])
+	assert.Equal(t, true, authorID["required"])
+	assert.Contains(t, get["description"], "newest first")
+	assert.Equal(t, "#/components/schemas/ReplyPost",
+		refName(at(t, spec, "components", "schemas", "AuthoredReply", "properties", "post")))
+	assert.Equal(t, "#/components/schemas/AuthoredReply",
+		refName(at(t, spec, "components", "schemas", "AuthoredReplyPage", "properties", "data", "items")))
 }

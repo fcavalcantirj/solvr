@@ -2,36 +2,30 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { api, formatRelativeTime } from '@/lib/api';
-import type { APIContribution } from '@/lib/api-types';
+import type { APIAuthoredReply } from '@/lib/api-types';
 
+// A user's contributions are their replies, listed newest first by GET /v1/replies (idx 73
+// step 3: it replaced the retired GET /v1/users/{id}/contributions).
 export interface ContributionItem {
-  type: 'answer' | 'approach' | 'response';
   id: string;
-  parentId: string;
-  parentTitle: string;
-  parentType: string;
-  contentPreview: string;
-  status: string;
+  postId: string;
+  postTitle: string;
+  legacyType: string | null;
+  body: string;
   timestamp: string;
   createdAt: string;
 }
 
-function transformContribution(item: APIContribution): ContributionItem {
+function transformReply(reply: APIAuthoredReply): ContributionItem {
   return {
-    type: item.type,
-    id: item.id,
-    parentId: item.parent_id,
-    parentTitle: item.parent_title,
-    parentType: item.parent_type,
-    contentPreview: item.content_preview,
-    status: item.status || '',
-    timestamp: formatRelativeTime(item.created_at),
-    createdAt: item.created_at,
+    id: reply.id,
+    postId: reply.post_id,
+    postTitle: reply.post.title,
+    legacyType: reply.legacy_type ?? null,
+    body: reply.body,
+    timestamp: formatRelativeTime(reply.created_at),
+    createdAt: reply.created_at,
   };
-}
-
-export interface UseContributionsOptions {
-  type?: 'answers' | 'approaches' | 'responses';
 }
 
 export interface UseContributionsResult {
@@ -43,75 +37,47 @@ export interface UseContributionsResult {
   loadMore: () => void;
 }
 
-export function useContributions(
-  userId: string,
-  options: UseContributionsOptions = {}
-): UseContributionsResult {
+const PAGE_SIZE = 20;
+
+export function useContributions(userId: string): UseContributionsResult {
   const [contributions, setContributions] = useState<ContributionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
-  const [page, setPage] = useState(1);
+  const [nextCursor, setNextCursor] = useState<string | undefined>(undefined);
 
-  const typeFilter = options.type;
-
-  const fetchContributions = useCallback(async (pageNum: number, append: boolean = false) => {
+  const fetchReplies = useCallback(async (cursor?: string) => {
     try {
       setLoading(true);
       setError(null);
 
-      const response = await api.getUserContributions(userId, {
-        type: typeFilter,
-        page: pageNum,
-        per_page: 20,
-      });
+      const response = await api.getRepliesByAuthor('human', userId, cursor ? { limit: PAGE_SIZE, cursor } : { limit: PAGE_SIZE });
+      const page = response.data.map(transformReply);
 
-      // Defensive: handle null/undefined data
-      if (!response || !response.data) {
-        console.warn('[useContributions] Received empty response:', response);
-        setContributions([]);
-        setTotal(0);
-        setHasMore(false);
-        setLoading(false);
-        return;
-      }
-
-      const transformed = response.data.map(transformContribution);
-
-      if (append) {
-        setContributions(prev => [...prev, ...transformed]);
-      } else {
-        setContributions(transformed);
-      }
-
+      setContributions((prev) => (cursor ? [...prev, ...page] : page));
       setTotal(response.meta.total);
       setHasMore(response.meta.has_more);
-      setPage(pageNum);
+      setNextCursor(response.meta.next_cursor);
     } catch (err) {
-      console.error('[useContributions] Error:', err);
-      if (err && typeof err === 'object') {
-        console.error('[useContributions] Full error:', JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
-      }
       setError(err instanceof Error ? err.message : 'Failed to fetch contributions');
-      if (!append) {
+      if (!cursor) {
         setContributions([]);
       }
     } finally {
       setLoading(false);
     }
-  }, [userId, typeFilter]);
+  }, [userId]);
 
   useEffect(() => {
-    setPage(1);
-    fetchContributions(1);
-  }, [fetchContributions]);
+    fetchReplies();
+  }, [fetchReplies]);
 
   const loadMore = useCallback(() => {
-    if (hasMore && !loading) {
-      fetchContributions(page + 1, true);
+    if (hasMore && !loading && nextCursor) {
+      fetchReplies(nextCursor);
     }
-  }, [hasMore, loading, page, fetchContributions]);
+  }, [hasMore, loading, nextCursor, fetchReplies]);
 
   return {
     contributions,

@@ -418,6 +418,7 @@ func (h *UsersHandler) GetMyPosts(w http.ResponseWriter, r *http.Request) {
 // GetMyContributions handles GET /v1/me/contributions.
 // Per prd-v4: Returns answers, approaches, and responses for the authenticated user.
 // Uses the same logic as GetUserContributions but with the authenticated user's identity.
+// Unmounted since task idx 73 step 3 retired the route.
 func (h *UsersHandler) GetMyContributions(w http.ResponseWriter, r *http.Request) {
 	authInfo := GetAuthInfo(r)
 	if authInfo == nil {

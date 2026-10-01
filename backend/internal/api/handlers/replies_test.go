@@ -39,6 +39,21 @@ type MockRepliesRepository struct {
 	postHidden     bool
 	postVisibleErr error
 	visibleCaller  *string
+	// authorPage/authorTotal/authorErr drive ListPageByAuthor; lastAuthorParams records
+	// what the handler passed (author, viewer, keyset, limit).
+	authorPage       []models.ReplyWithPost
+	authorTotal      int
+	authorErr        error
+	lastAuthorParams *models.ReplyAuthorPageParams
+}
+
+func (m *MockRepliesRepository) ListPageByAuthor(_ context.Context, params models.ReplyAuthorPageParams) ([]models.ReplyWithPost, int, error) {
+	p := params
+	m.lastAuthorParams = &p
+	if m.authorErr != nil {
+		return nil, 0, m.authorErr
+	}
+	return m.authorPage, m.authorTotal, nil
 }
 
 func (m *MockRepliesRepository) Create(_ context.Context, reply *models.Reply) (*models.Reply, error) {

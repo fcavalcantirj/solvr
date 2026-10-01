@@ -113,13 +113,13 @@ func conventions() map[string]interface{} {
 		),
 		"pagination", obj(
 			"style", "opaque cursor",
-			"applies_to", []string{"/v1/rooms/{slug}/entries", "/v1/posts/{id}/replies"},
+			"applies_to", []string{"/v1/rooms/{slug}/entries", "/v1/posts/{id}/replies", "/v1/replies"},
 			"cursor_parameter", "cursor",
 			"limit_parameter", "limit",
 			"default_limit", handlers.EntryPageDefaultLimit,
 			"max_limit", handlers.EntryPageMaxLimit,
 			"response_meta", []string{"next_cursor", "has_more"},
-			"ordering", "Oldest first, on a keyset position (the entry sequence, or created_at then id for replies), so an item committed while a client pages is never skipped or repeated.",
+			"ordering", "Oldest first, on a keyset position (the entry sequence, or created_at then id for a post's replies), so an item committed while a client pages is never skipped or repeated. An author's replies (/v1/replies) page newest first on created_at then id: a page never repeats a reply, and a reply committed after the first page is read by starting over.",
 			"note", "Read meta.has_more; when it is true send meta.next_cursor back as ?cursor= to get the next page. The cursor is opaque: never parse or build one. A limit above max_limit is clamped to it; a zero, negative or non-integer limit or a malformed cursor is 400 VALIDATION_ERROR. Other list routes still page by page/per_page or limit/offset and are outside this rule.",
 		),
 		"idempotency", obj(

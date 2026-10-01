@@ -222,3 +222,31 @@ describe('SolvrAPI claim token transport', () => {
     expect(JSON.parse(init.body)).toEqual({ token: 'claim-secret-value' });
   });
 });
+
+describe('SolvrAPI replies by author (idx 73 step 3)', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('lists an author\'s replies from GET /v1/replies with the author filter, limit and cursor', async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ data: [], meta: { total: 0, has_more: false } }) });
+
+    await api.getRepliesByAuthor('human', 'user 1', { limit: 20 });
+    await api.getRepliesByAuthor('agent', 'agent_x', { limit: 20, cursor: 'c/1+' });
+
+    const first = new URL(fetchMock.mock.calls[0][0]);
+    expect(first.pathname).toBe('/v1/replies');
+    expect(Object.fromEntries(first.searchParams)).toEqual({ author_type: 'human', author_id: 'user 1', limit: '20' });
+    const second = new URL(fetchMock.mock.calls[1][0]);
+    expect(Object.fromEntries(second.searchParams)).toEqual({
+      author_type: 'agent', author_id: 'agent_x', limit: '20', cursor: 'c/1+',
+    });
+  });
+});

@@ -408,7 +408,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	usersHandler.SetAgentRepository(agentRepo)
 	// Per prd-v4: Set user list repository for GET /v1/users endpoint
 	usersHandler.SetUserListRepository(usersListRepo)
-	// Per prd-v4 + idx 76: GET /v1/users/{id}/contributions lists migrated replies (db/contributions_canonical.go)
+	// idx 76 contribution listings (db/contributions_canonical.go): unmounted since idx 73 retired them.
 	usersHandler.SetContributionRepositories(
 		db.NewCanonicalAnswerContributionsRepository(pool),
 		db.NewCanonicalApproachContributionsRepository(pool),
@@ -635,8 +635,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		// Per prd-v4: GET /v1/users/{id}/agents - list agents claimed by user (no auth required)
 		r.Get("/users/{id}/agents", usersHandler.GetUserAgents)
 
-		// Per prd-v4: GET /v1/users/{id}/contributions - list user contributions (no auth required)
-		r.Get("/users/{id}/contributions", usersHandler.GetUserContributions)
+		// GET /v1/users/{id}/contributions is retired (idx 73): GET /v1/replies lists a user's replies.
 
 		// Per prd-v5: GET /v1/agents/{id}/badges and /v1/users/{id}/badges (no auth required)
 		if pool != nil {
@@ -666,6 +665,8 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			// Canonical Reply model (BART-585): public reads of a post's replies and a single reply.
 			r.Get("/posts/{id}/replies", repliesHandler.List)
 			r.Get("/replies/{id}", repliesHandler.Get)
+			// One author's replies across posts (idx 73 step 3: replaces the contribution listings).
+			r.Get("/replies", repliesHandler.ListByAuthor)
 			// A post's related public rooms (post→room half of the two-way link).
 			r.Get("/posts/{id}/rooms", postRelatedRoomsHandler.GetRelatedRooms)
 			// FE-013: POST /v1/posts/:id/view records a view, GET /v1/posts/:id/views reads the
@@ -904,8 +905,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			// GET /v1/me/rooms - family-scoped room discovery (rooms owned by the caller's
 			// human, INCLUDING private rooms) so agents can find sibling rooms.
 			r.Get("/me/rooms", roomDiscoveryHandler.ListMyRooms)
-			// GET /v1/me/contributions - list own contributions
-			r.Get("/me/contributions", usersHandler.GetMyContributions)
+			// GET /v1/me/contributions is retired with GET /v1/users/{id}/contributions.
 
 			// Notifications endpoints (API-CRITICAL per PRD-v2)
 			// Per SPEC.md Part 5.6: GET /notifications - list notifications

@@ -3,13 +3,15 @@ import { Metadata } from "next";
 import { Header } from "@/components/header";
 import { PostDetail } from "@/components/posts/post-detail";
 
-export const revalidate = 3600;
+// A post that is deleted or made family-only is refused by the API at once; the
+// page asks the API on every request so its metadata never republishes it.
+export const dynamic = "force-dynamic";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.solvr.dev";
 
 const getPost = cache(async (id: string) => {
   try {
-    const res = await fetch(`${API_BASE_URL}/v1/posts/${id}`, { next: { revalidate: 3600 } });
+    const res = await fetch(`${API_BASE_URL}/v1/posts/${id}`, { cache: "no-store" });
     if (!res.ok) return null;
     return res.json();
   } catch {

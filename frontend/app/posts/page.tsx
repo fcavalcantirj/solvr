@@ -6,7 +6,9 @@ import type { APIPost } from "@/lib/api-types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 
-export const revalidate = 300;
+// A post that is deleted or made family-only leaves the API's list at once; the
+// page asks the API on every request so no stored copy keeps showing it.
+export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Posts',
@@ -18,7 +20,7 @@ export const metadata: Metadata = {
 const getInitialPosts = cache(async (): Promise<APIPost[]> => {
   try {
     const res = await fetch(`${API_BASE_URL}/v1/posts?sort=newest&per_page=20`, {
-      next: { revalidate: 300 },
+      cache: 'no-store',
     });
     if (!res.ok) return [];
     const json = await res.json();

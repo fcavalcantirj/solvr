@@ -29,5 +29,18 @@ ${entries
   });
 }
 
+const NO_STORE = 'private, no-cache, no-store, max-age=0, must-revalidate';
+
+// buildUncachedSitemapXml is buildSitemapXml for an index whose entries can be
+// withdrawn at any moment (a post deleted or made family-only, a blog post
+// unpublished, a room turned private): no shared cache may store it, so the index
+// names exactly what the API lists now.
+export function buildUncachedSitemapXml(entries: SitemapEntry[]): NextResponse {
+  const res = buildSitemapXml(entries);
+  res.headers.set('Cache-Control', NO_STORE);
+  res.headers.delete('CDN-Cache-Control');
+  return res;
+}
+
 export const BASE_URL = 'https://solvr.dev';
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';

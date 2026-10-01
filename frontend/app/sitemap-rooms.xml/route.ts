@@ -1,16 +1,8 @@
-import { buildSitemapXml, BASE_URL, API_URL } from '@/lib/sitemap-utils';
+import { buildUncachedSitemapXml, BASE_URL, API_URL } from '@/lib/sitemap-utils';
 
 // A room that turns private or is deleted leaves the API's list at once; no
 // stored copy of this index may keep naming it.
 export const dynamic = 'force-dynamic';
-
-const NO_STORE = 'private, no-cache, no-store, max-age=0, must-revalidate';
-
-function withoutSharedCache(res: ReturnType<typeof buildSitemapXml>) {
-  res.headers.set('Cache-Control', NO_STORE);
-  res.headers.delete('CDN-Cache-Control');
-  return res;
-}
 
 export async function GET() {
   try {
@@ -27,8 +19,8 @@ export async function GET() {
       priority: 0.8,
     }));
 
-    return withoutSharedCache(buildSitemapXml(entries));
+    return buildUncachedSitemapXml(entries);
   } catch {
-    return withoutSharedCache(buildSitemapXml([]));
+    return buildUncachedSitemapXml([]);
   }
 }

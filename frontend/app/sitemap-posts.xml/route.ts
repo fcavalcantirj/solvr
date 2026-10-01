@@ -1,9 +1,13 @@
-import { buildSitemapXml, BASE_URL, API_URL } from '@/lib/sitemap-utils';
+import { buildUncachedSitemapXml, BASE_URL, API_URL } from '@/lib/sitemap-utils';
+
+// A post that is deleted, rejected or made family-only leaves the API's list at
+// once; no stored copy of this index may keep naming it.
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
     const res = await fetch(`${API_URL}/v1/sitemap/urls?type=posts&per_page=5000`, {
-      next: { revalidate: 21600 },
+      cache: 'no-store',
     });
     const json = await res.json();
     const posts = json.data?.posts || [];
@@ -17,8 +21,8 @@ export async function GET() {
       priority: 0.8,
     }));
 
-    return buildSitemapXml(entries);
+    return buildUncachedSitemapXml(entries);
   } catch {
-    return buildSitemapXml([]);
+    return buildUncachedSitemapXml([]);
   }
 }

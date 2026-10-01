@@ -79,3 +79,21 @@ describe('next.config rooms list cache headers', () => {
     expect(value).not.toMatch(/public|s-maxage|stale-while-revalidate/);
   });
 });
+
+/**
+ * A post that is deleted or turns family-only (a blog post deleted or
+ * unpublished) is refused by the API at once and leaves its lists. A shared cache
+ * holding the list (s-maxage=300 + stale-while-revalidate=3600) or the page
+ * (s-maxage=3600 + stale-while-revalidate=86400) would keep showing its title and
+ * text, so none of them may be stored by one.
+ */
+describe('next.config posts and blog cache headers', () => {
+  it.each(['/posts', '/posts/:id', '/blog', '/blog/:slug'])('never lets a shared cache store %s', async (source) => {
+    const rule = await headerRuleFor(source);
+
+    expect(rule).toBeDefined();
+    const value = rule!.headers.find((h) => h.key === 'Cache-Control')?.value ?? '';
+    expect(value).toContain('no-store');
+    expect(value).not.toMatch(/public|s-maxage|stale-while-revalidate/);
+  });
+});

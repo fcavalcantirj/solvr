@@ -5636,3 +5636,146 @@ git status at journal time [REAL]: clean before this append; this commit changes
 UAT (for when idx 77 closes, not now): as slice 7's list, plus after the API deploy carrying
   b2ea3238 confirm one instance logs "Search document sweep started" and `SELECT count(*) FROM
   search_document_drift()` falls to 0 (or to the few rows Voyage refuses) within a few hours.
+
+================================================================================
+2026-10-01 05:58 — Task idx 77 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Make indexes, counters, search projections, and analytics rebuildable from authoritative records"
+SLICE 9 of N: step 5 "visibility/deletion changes remove public projections promptly" for the
+public FRONTEND pages. /posts, /posts/{id}, /blog, /blog/{slug}, /sitemap-posts.xml and
+/sitemap-blog.xml stop serving stored copies (Next data cache, ISR, shared-cache headers): a post
+deleted or made family-only, or a blog post deleted, is gone on the very next request. Frontend
+only; no backend file changed.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 77-95, 97, 98; no open
+  URGENT. idx 24 and 67 are acceptance tasks (skipped as in every earlier entry); idx 68 still waits
+  for the owner call on step 1 and owner decision 4. idx 77 is the first buildable task; slice 8's
+  REMAINING list put "other public projections vs removal: /v1/data/* 60 s cache, the sitemap,
+  feeds — spike each" first. Tree clean at start; HEAD dad37344.
+
+INVENTORY [REAL, code read]:
+  - /v1/data/* (DataHandler, 60 s per-instance sync.Map): search analytics only (trending query
+    text, counts). search_queries rows are removed only by the age-based retention DELETE
+    (db/search_analytics.go:178); no moderation/visibility/deletion path exists, so there is nothing
+    to remove promptly. No change. (Raw events vs buckets is step 4, still open.)
+  - API post/blog reads set no shared Cache-Control (grep internal/api: only homepage/stats paths do).
+  - Frontend: /feed, /problems/*, /questions/*, /ideas/* are 308s to /posts (middleware.ts), so the
+    live public post surfaces are /posts, /posts/{id}, /sitemap-posts.xml; blog: /blog, /blog/{slug},
+    /sitemap-blog.xml. Rooms were fixed the same way in idx 59 slice 4 (c621da7a).
+
+SPIKE FIRST [REAL, /tmp/solvr_idx77_s9/spike/spike.sh + spike.out, spike2.sh + spike2.out; HEAD
+  code; fresh DBs at 123; API on :8099 under env -i; `next build` with NEXT_PUBLIC_API_URL=:8099
+  then `next start` on :3099 (production mode); markers = unique titles/ids grep'd in the HTML/XML;
+  DBs dropped, ports free after]:
+  Build table on HEAD: /posts ○ ISR 5m, /blog ○ ISR 1h, /posts/[id] ƒ, /blog/[slug] ƒ, sitemaps ƒ;
+  the ƒ routes still read the API through `fetch(..., { next: { revalidate } })` = Next data cache.
+  After DELETE /v1/posts/{id} (204, API 404) and visibility='family' by SQL (API 404):
+    /posts/{id}: title/description/tags still in the HTML metadata (12 markers) immediately, 2 s and
+      6 min later (data cache, revalidate 3600).
+    /posts: deleted post listed (x-nextjs-cache HIT) until t+297 s; the first request after the
+      300 s window was served STALE (still listed) and only the next one was fresh (t+307 s): ISR
+      serves a stale copy to the first visitor after expiry, however late that visit is.
+    /sitemap-posts.xml: removed id still listed 6 min later (data cache 21600 s); Cache-Control
+      public, s-maxage=21600, stale-while-revalidate=86400.
+  Blog (spike2, blog rows seeded with cover_image_url/meta_description '' — the first spike's
+    NULL seed made GET /v1/blog/{slug} 500 "cannot scan NULL into *string", a fixture artifact):
+    blog soft delete (API 404): /blog/{slug} still 200 with the full body (21 markers) and Cache-
+    Control public, s-maxage=3600, swr=86400; /blog list still listed it (HIT).
+  The data cache outlived `next build` + restart [REAL]: spike2's /posts, /sitemap-posts.xml and
+    /sitemap-blog.xml showed spike1's rows (the new posts/blogs the API listed were absent, marker
+    0) — .next/cache/fetch-cache is reused by later builds in the same directory. Whether a
+    production container keeps it across restarts is [UNVERIFIED].
+
+DESIGN: same as idx 59 slice 4 for rooms — no stored copy of a page/index that names content the
+  API can withdraw; every request asks the API, which is authoritative (step 6: no cache without a
+  measured bottleneck; none measured). On-demand revalidation from the API was not chosen: it adds
+  a webhook + secret per frontend instance and still serves stale to the first visitor.
+
+WHAT THIS SLICE CHANGED [REAL, git status --porcelain / git diff --stat before this append; 11 M
+  +122/-31, 5 new test files]:
+  M frontend/app/posts/page.tsx, frontend/app/posts/[id]/page.tsx, frontend/app/blog/page.tsx,
+    frontend/app/blog/[slug]/page.tsx: `export const revalidate = ...` -> `export const dynamic =
+    'force-dynamic'`; their API fetch `next: { revalidate }` -> `cache: 'no-store'`; comment why.
+  M frontend/lib/sitemap-utils.ts (+13): buildUncachedSitemapXml(entries) = buildSitemapXml with
+    Cache-Control private, no-cache, no-store, max-age=0, must-revalidate and no CDN-Cache-Control.
+  M frontend/app/sitemap-rooms.xml/route.ts (+3/-11): uses that helper instead of its local copy
+    (same headers; its 4 tests unchanged and passing).
+  M frontend/app/sitemap-posts.xml/route.ts: force-dynamic, fetch no-store, uncached response.
+  M frontend/app/sitemap-blog.xml/route.ts: same, and asks `/v1/sitemap/urls?type=blog_posts`
+    instead of the all-types call (same WHERE for blog posts, db/sitemap.go:98 vs :290; measured
+    below: the uncached all-types call costs 6x and 19,000x the bytes for the same blog list).
+  M frontend/next.config.mjs (+7/-3): /posts, /blog cache5m -> noStore; /blog/:slug cache1h -> noStore;
+    new /posts/:id -> noStore (it had no rule).
+  M frontend/next.config.test.ts (+18): new describe, it.each over /posts, /posts/:id, /blog,
+    /blog/:slug: Cache-Control has no-store and no public/s-maxage/stale-while-revalidate.
+  M frontend/app/sitemap-posts.xml/route.test.ts (+47): new describe "sitemap-posts.xml caching"
+    (3 tests); the 2 existing tests untouched.
+  A frontend/app/posts/page.test.tsx (2), frontend/app/posts/[id]/page.test.tsx (3, incl. "publishes
+    no title or description once the API refuses the post"), frontend/app/blog/page.caching.test.tsx
+    (2), frontend/app/blog/[slug]/page.caching.test.tsx (3, incl. 404 once the API refuses),
+    frontend/app/sitemap-blog.xml/route.test.ts (4; the route had no test).
+  No test deleted, skipped or loosened. NOTE: next.config.test.ts "caches /posts like the other list
+    pages" is unchanged and still passes — it asserts only that a /posts rule with a Cache-Control
+    key exists (still true); its name now describes the old value, the new it.each pins no-store.
+
+VERIFICATION [this session; logs /tmp/solvr_idx77_s9/tdd/]:
+  [TEST] RED red_posts.log: 9 FAIL / 8 pass (dynamic undefined; fetch init {next:{revalidate:300|
+    3600}}; headers "public, s-maxage=..."; /posts/:id rule undefined). red_blog.log: 11 FAIL /
+    7 pass, same kinds. The passing ones pin existing behavior (redirects, rooms, 404 path, lists).
+  [TEST] GREEN green.log: 11 files (the 7 above + rooms page/sitemap + both existing blog tests)
+    71/71 PASS.
+  [TEST] FULL FRONTEND (once) `npm test` -> full_fe.log: 193 files, 1725 tests passed, 0 failed, 0
+    skipped. `npm run typecheck` exit 0. eslint on the 16 touched files (+ the rooms sitemap test) exit 0.
+  [REAL] LIVE PROBE on the fix (/tmp/solvr_idx77_s9/probe/probe.sh + probe.out; same setup as the
+    spike, fresh DB, production build of the working tree): build table now /posts ƒ, /blog ƒ; every
+    page/sitemap above answers Cache-Control private, no-cache, no-store, max-age=0, must-revalidate.
+    After the same removals, on the very next request: /posts/{deleted} and /posts/{family} 0
+    markers, /posts 0, /sitemap-posts.xml 0, /blog/{deleted} 404 (was 200 + body), /blog 0,
+    /sitemap-blog.xml 0. Restore (family -> public, draft -> published): back on the next request.
+    /problems|/questions|/ideas/{id} -> 308 /posts/{id}, /feed -> 308 /posts. next.log 0 errors.
+  [REAL] COST: local tiny DB, 20 sequential GETs, median HEAD -> fix: /posts 9.5 -> 21.1 ms,
+    /posts/{id} 11.7 -> 17.7, /blog 9.5 -> 18.7, /blog/{slug} 18.8 -> 21.5, sitemap-posts 9.4 -> 15.8,
+    sitemap-blog 9.1 -> 12.4 ms (each view now = one API read: /v1/posts list 10-13 ms, /v1/posts/{id}
+    8 ms). On the local solvr_test data (10575 posts, 2311 blog rows; API on :8097, GETs only, then
+    killed): /v1/sitemap/urls all types 46.9 ms median, 1,383,984 bytes vs type=blog_posts 8.1 ms,
+    72 bytes; type=posts 23.7 ms; /v1/posts?sort=newest 26.4 ms.
+  check-file-size.sh -> filesize.log "Found 34 file(s) exceeding 800 lines", same count as slices
+    1-8; none of this slice's files on it. NOT RUN: backend tests (no backend file changed).
+  Leftovers [REAL]: :3099/:8099/:8097 free, 0 solvr_idx77*/solvr_scratch* databases. frontend/.next
+    now holds a build baked with NEXT_PUBLIC_API_URL=http://127.0.0.1:8099 (gitignored): rebuild
+    before any local `next start`.
+
+FINDINGS, NOT FIXED (API reads, not caches; not this slice) [REAL, probe + code read]:
+  - GET /v1/posts/{id} returns a REJECTED post (status/moderation rejected by SQL) 200 to anonymous
+    callers (posts.go Get filters only deleted_at; lists, sitemap and overview exclude it), so
+    /posts/{id} keeps showing it. Whether rejected posts stay readable by direct link is an owner/
+    permissions call (idx 59 territory).
+  - GET /v1/blog/{slug} returns a DRAFT blog post 200 to anonymous callers (FindBySlug: WHERE slug
+    AND deleted_at IS NULL, no status filter), so /blog/{slug} renders an unpublished post. Same call.
+  - /posts/{deleted id} answers 200 with a generic "Post" page (no notFound()); SEO tasks (idx 83).
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW (runtime, after the frontend deploy):
+  - Deleted / family-only posts and deleted blog posts leave /posts, /posts/{id}, /blog,
+    /blog/{slug} and both sitemaps on the next request (were: up to 5 min for lists — and stale for
+    the first visitor after that — 1 h for page metadata / blog bodies, 6 h for sitemaps, plus
+    shared-cache headers allowing a proxy/CDN up to a day).
+  - Every view of those pages and every sitemap fetch now makes one API read (measured above).
+  - The blog sitemap now asks for blog posts only.
+
+REMAINING for idx 77 (next slices, in order) [UNVERIFIED plan]:
+  step 5: account removal vs /agents/{id}, /users/{id}, /agents, /users, /leaderboard (still ISR +
+    cache1h/cache5m headers) — spike first: which deletion/deactivation paths exist; rooms changed
+    outside RoomHandler (SQL/admin) still wait 30 s in the overview.
+  step 1: measured query plans on representative data for the listed lookups.
+  step 4: raw eligible search events vs time buckets + retention windows; no summed distincts.
+  step 5: reconcile counters/sampled search after migration and rebuilds.
+  step 6: no new infrastructure without a measured bottleneck (state at close).
+
+git status at journal time [REAL, git status --porcelain]: the 11 M + 5 ?? files listed above, plus
+  M progress.txt (this entry). spec.json unchanged, idx 77 passes stays false.
+
+UAT (for when idx 77 closes, not now): as slice 8's list, plus after the frontend deploy carrying
+  this commit confirm https://solvr.dev/posts, a /posts/{id} page, /blog, /sitemap-posts.xml and
+  /sitemap-blog.xml return Cache-Control private, no-store and that any CDN in front of solvr.dev
+  does not override it; delete one test post and confirm it is gone from /posts and its page title
+  on the next load.

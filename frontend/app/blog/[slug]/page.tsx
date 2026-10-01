@@ -5,7 +5,9 @@ import { JsonLd, blogPostJsonLd } from "@/components/seo/json-ld";
 import { BlogPostContent } from "./blog-post-content";
 import { formatRelativeTime } from "@/lib/api";
 
-export const revalidate = 3600; // ISR: cache page for 1 hour
+// A blog post that is deleted or unpublished is refused by the API at once; the
+// page asks the API on every request so its body is never served from a copy.
+export const dynamic = 'force-dynamic';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 
@@ -14,7 +16,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 const getBlogPost = cache(async (slug: string) => {
   try {
     const res = await fetch(`${API_BASE_URL}/v1/blog/${encodeURIComponent(slug)}`, {
-      next: { revalidate: 3600 }, // ISR: cache for 1 hour
+      cache: 'no-store',
     });
     if (!res.ok) return null;
     return res.json();

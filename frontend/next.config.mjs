@@ -38,7 +38,11 @@ const nextConfig = {
       { source: '/questions/:id', headers: cache1h },
       { source: '/agents/:id', headers: cache1h },
       { source: '/users/:id', headers: cache1h },
-      { source: '/blog/:slug', headers: cache1h },
+      // Post and blog post pages are never stored by a shared cache: a post can be
+      // deleted or made family-only (a blog post deleted or unpublished) at any
+      // moment, and the API refuses it from then on.
+      { source: '/posts/:id', headers: noStore },
+      { source: '/blog/:slug', headers: noStore },
       // Room pages are never stored by a shared cache: a room can turn private or be
       // deleted at any moment, and the API refuses it from then on.
       { source: '/rooms/:slug', headers: noStore },
@@ -47,10 +51,10 @@ const nextConfig = {
       { source: '/ideas', headers: cache5m },
       { source: '/questions', headers: cache5m },
       { source: '/feed', headers: cache5m },
-      { source: '/posts', headers: cache5m },
+      { source: '/posts', headers: noStore },
       { source: '/agents', headers: cache5m },
       { source: '/users', headers: cache5m },
-      { source: '/blog', headers: cache5m },
+      { source: '/blog', headers: noStore },
       { source: '/leaderboard', headers: cache5m },
       { source: '/rooms', headers: noStore },
       // Static pages (1d cache)

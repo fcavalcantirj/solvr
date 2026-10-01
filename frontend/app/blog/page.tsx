@@ -5,7 +5,9 @@ import { BlogPageClient } from "@/components/blog/blog-page-client";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 
-export const revalidate = 3600;
+// A blog post that is deleted or unpublished leaves the API's list at once; the
+// page asks the API on every request so no stored copy keeps showing it.
+export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Blog',
@@ -16,7 +18,7 @@ export const metadata: Metadata = {
 const getInitialBlogPosts = cache(async () => {
   try {
     const res = await fetch(`${API_BASE_URL}/v1/blog?per_page=20`, {
-      next: { revalidate: 3600 },
+      cache: 'no-store',
     });
     if (!res.ok) return [];
     const json = await res.json();

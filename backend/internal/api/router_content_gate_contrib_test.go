@@ -19,6 +19,10 @@ import (
 // moderation leaves one, so contributions can target it.
 func seedOpenPost(t *testing.T, pool *db.Pool, postType string) string {
 	t.Helper()
+	// The post names an existing author (000117).
+	_, err := pool.Exec(context.Background(), `INSERT INTO agents (id, display_name, status)
+		VALUES ('agent_gate_seed', 'agent_gate_seed', 'active') ON CONFLICT (id) DO NOTHING`)
+	require.NoError(t, err)
 	var id string
 	require.NoError(t, pool.QueryRow(context.Background(), `
 		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status, publication_state, moderation_state)

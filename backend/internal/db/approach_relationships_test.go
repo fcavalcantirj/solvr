@@ -21,6 +21,7 @@ func TestApproachRelationships_CreateRelationship(t *testing.T) {
 	repo := NewApproachesRepository(pool)
 	relRepo := NewApproachRelationshipsRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	// Create test problem and two approaches
 	ts := time.Now().Format("150405")
@@ -114,6 +115,7 @@ func TestApproachRelationships_GetVersionChain(t *testing.T) {
 	repo := NewApproachesRepository(pool)
 	relRepo := NewApproachRelationshipsRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	ts := time.Now().Format("150405")
 	var problemID string
@@ -213,6 +215,7 @@ func TestApproachRelationships_GetVersionChain_WithDepth(t *testing.T) {
 	repo := NewApproachesRepository(pool)
 	relRepo := NewApproachRelationshipsRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	ts := time.Now().Format("150405")
 	var problemID string
@@ -278,6 +281,7 @@ func TestApproachRelationships_ListStaleApproaches(t *testing.T) {
 
 	relRepo := NewApproachRelationshipsRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	ts := time.Now().Format("150405")
 	var problemID string

@@ -27,9 +27,9 @@ func insertTestPostWithEmbedding(t *testing.T, pool *Pool, ctx context.Context, 
 	var id string
 	err = pool.QueryRow(ctx, `
 		INSERT INTO posts (type, title, description, tags, status, posted_by_type, posted_by_id, embedding)
-		VALUES ($1, $2, $3, $4, $5, 'human', 'test-user', $6::vector)
+		VALUES ($1, $2, $3, $4, $5, 'human', $7, $6::vector)
 		RETURNING id::text
-	`, postType, title, desc, tags, status, embStr).Scan(&id)
+	`, postType, title, desc, tags, status, embStr, testUser(ctx, t, pool)).Scan(&id)
 	if err != nil {
 		t.Fatalf("failed to insert test post with embedding: %v", err)
 	}

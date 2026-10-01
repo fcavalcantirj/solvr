@@ -150,6 +150,7 @@ func TestPostRepository_List_WithPosts(t *testing.T) {
 
 	// Create test posts directly in the database
 	timestamp := time.Now().Format("20060102150405")
+	authorAgent(ctx, t, pool, "test_agent_"+timestamp)
 
 	// Insert test posts
 	var postIDs []string
@@ -220,6 +221,7 @@ func TestPostRepository_List_FilterByType(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	// Insert posts of different types
 	var problemID, questionID, ideaID string
@@ -284,6 +286,7 @@ func TestPostRepository_List_FilterByStatus(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	// Insert posts with different statuses
 	var openID, solvedID string
@@ -339,6 +342,7 @@ func TestPostRepository_List_FilterByTags(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	// Insert posts with different tags
 	var goPostID, rustPostID string
@@ -409,6 +413,7 @@ func TestPostRepository_List_Pagination(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	// Insert multiple posts
 	var postIDs []string
@@ -471,6 +476,7 @@ func TestPostRepository_List_ExcludesDeleted(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	var activeID, deletedID string
 
@@ -526,6 +532,7 @@ func TestPostRepository_List_IncludesVoteScore(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	var postID string
 
@@ -576,6 +583,7 @@ func TestPostRepository_FindByID_Success(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent_findbyid")
 
 	var postID string
 
@@ -692,6 +700,7 @@ func TestPostRepository_FindByID_ExcludesDeleted(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	var postID string
 
@@ -804,6 +813,7 @@ func TestPostRepository_FindByID_IncludesCommentCount(t *testing.T) {
 	repo := NewPostRepository(pool)
 	commentsRepo := NewCommentsRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	// Create a test post
 	post, err := repo.Create(ctx, &models.Post{
@@ -864,6 +874,7 @@ func TestPostRepository_Create_Problem(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent_create")
 
 	weight := 3
 	post := &models.Post{
@@ -974,7 +985,7 @@ func TestPostRepository_Create_Question(t *testing.T) {
 		Description:  "This is a test question for Create method",
 		Tags:         []string{"go"},
 		PostedByType: models.AuthorTypeHuman,
-		PostedByID:   "test_user_create",
+		PostedByID:   authorHuman(ctx, t, pool, "test_user_create"),
 		Status:       models.PostStatusOpen,
 	}
 
@@ -1010,6 +1021,7 @@ func TestPostRepository_Create_Idea(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent_idea")
 
 	post := &models.Post{
 		Type:         models.PostTypeIdea,
@@ -1044,6 +1056,7 @@ func TestPostRepository_Create_WithNilTags(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent_notags")
 
 	post := &models.Post{
 		Type:         models.PostTypeProblem,
@@ -1079,6 +1092,7 @@ func TestPostRepository_Create_DefaultStatus(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent_defaultstatus")
 
 	post := &models.Post{
 		Type:         models.PostTypeProblem,
@@ -1115,6 +1129,7 @@ func TestPostRepository_Update_Success(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent_update")
 
 	// First create a post
 	weight := 2
@@ -1238,6 +1253,7 @@ func TestPostRepository_Update_Deleted(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	var postID string
 
@@ -1289,6 +1305,7 @@ func TestPostRepository_Update_PreservesImmutableFields(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "original_agent")
 
 	// Create a post
 	post := &models.Post{
@@ -1351,6 +1368,7 @@ func TestPostRepository_Delete_Success(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent_delete")
 
 	// Create a post
 	post := &models.Post{
@@ -1436,6 +1454,7 @@ func TestPostRepository_Delete_AlreadyDeleted(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	var postID string
 
@@ -1473,6 +1492,7 @@ func TestPostRepository_Delete_ExcludedFromList(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent_delete_list")
 
 	// Create a post
 	post := &models.Post{
@@ -1548,6 +1568,7 @@ func TestPostRepository_Vote_Upvote(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent_vote")
 
 	// Create a post to vote on
 	post := &models.Post{
@@ -1603,6 +1624,7 @@ func TestPostRepository_Vote_Downvote(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent_vote")
 
 	// Create a post to vote on
 	post := &models.Post{
@@ -1658,6 +1680,7 @@ func TestPostRepository_Vote_ChangeVote(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent_vote")
 
 	// Create a post to vote on
 	post := &models.Post{
@@ -1725,6 +1748,7 @@ func TestPostRepository_Vote_MultipleVoters(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent_vote")
 
 	// Create a post to vote on
 	post := &models.Post{
@@ -1790,6 +1814,7 @@ func TestPostRepository_Vote_SameVoteTwice(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent_vote")
 
 	// Create a post to vote on
 	post := &models.Post{
@@ -1864,6 +1889,7 @@ func TestPostRepository_Vote_InvalidDirection(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent_vote")
 
 	// Create a post
 	post := &models.Post{
@@ -1905,6 +1931,7 @@ func TestPostRepository_Vote_InvalidVoterType(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent_vote")
 
 	// Create a post
 	post := &models.Post{
@@ -1948,6 +1975,7 @@ func TestPostRepository_Vote_SetsConfirmedTrue(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent_vote")
 
 	// Create a post to vote on
 	post := &models.Post{
@@ -2002,6 +2030,7 @@ func TestPostRepository_Create_ReturnsViewCount(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent_viewcount")
 
 	post := &models.Post{
 		Type:         models.PostTypeProblem,
@@ -2068,6 +2097,7 @@ func TestPostRepository_GetUserVote_NoVote(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent_getuservote")
 
 	// Create a post
 	post := &models.Post{
@@ -2108,6 +2138,7 @@ func TestPostRepository_GetUserVote_Upvote(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent_getuservote")
 
 	// Create a post
 	post := &models.Post{
@@ -2159,6 +2190,7 @@ func TestPostRepository_GetUserVote_Downvote(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent_getuservote")
 
 	// Create a post
 	post := &models.Post{
@@ -2217,7 +2249,7 @@ func TestPostRepository_GetUserVote_ChangeVote(t *testing.T) {
 		Title:        "Post for GetUserVote Test - Change Vote",
 		Description:  "Testing GetUserVote after changing vote",
 		PostedByType: models.AuthorTypeHuman,
-		PostedByID:   "test_human_getuservote",
+		PostedByID:   authorHuman(ctx, t, pool, "test_human_getuservote"),
 		Status:       models.PostStatusOpen,
 	}
 
@@ -2265,6 +2297,7 @@ func TestPostRepository_GetUserVote_DifferentUsers(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent_getuservote")
 
 	// Create a post
 	post := &models.Post{
@@ -2388,6 +2421,7 @@ func TestPostRepository_List_SortByAnswers(t *testing.T) {
 		t.Fatalf("failed to connect to database: %v", err)
 	}
 	defer pool.Close()
+	authorAgent(ctx, t, pool, "sort_test_agent")
 
 	repo := NewPostRepository(pool)
 
@@ -2490,6 +2524,7 @@ func TestPostRepository_List_SortByApproaches(t *testing.T) {
 		t.Fatalf("failed to connect to database: %v", err)
 	}
 	defer pool.Close()
+	authorAgent(ctx, t, pool, "sort_test_agent")
 
 	repo := NewPostRepository(pool)
 
@@ -2588,6 +2623,7 @@ func TestPostRepository_List_CountsExcludeSoftDeleted(t *testing.T) {
 		t.Fatalf("failed to connect to database: %v", err)
 	}
 	defer pool.Close()
+	authorAgent(ctx, t, pool, "count_test_agent")
 
 	repo := NewPostRepository(pool)
 
@@ -2658,6 +2694,7 @@ func TestPostRepository_List_SortByTop(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent_sort_top")
 
 	// Create 3 posts via repo.Create (generates valid UUIDs)
 	postHigh, err := repo.Create(ctx, &models.Post{
@@ -2784,6 +2821,7 @@ func TestPostRepository_List_SortByVotes(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent_sort_votes")
 
 	// Create 3 posts
 	postHigh, err := repo.Create(ctx, &models.Post{
@@ -2871,6 +2909,7 @@ func TestPostRepository_List_SortByTop_WithNegativeScores(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent_negative")
 
 	// Create 3 posts with positive, zero, and negative scores
 	postPositive, err := repo.Create(ctx, &models.Post{
@@ -2990,6 +3029,7 @@ func TestPostRepository_List_HasAnswerFalse(t *testing.T) {
 	repo := NewPostRepository(pool)
 	answerRepo := NewAnswersRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	// Create 3 questions with different answer counts
 	// q1: 0 answers
@@ -3107,6 +3147,7 @@ func TestPostRepository_List_HasAnswerTrue(t *testing.T) {
 	repo := NewPostRepository(pool)
 	answerRepo := NewAnswersRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	// Create 3 questions with different answer counts
 	// q1: 0 answers
@@ -3219,6 +3260,7 @@ func TestPostRepository_List_NoHasAnswerFilter(t *testing.T) {
 	repo := NewPostRepository(pool)
 	answerRepo := NewAnswersRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	// Create 3 questions with different answer counts
 	// q1: 0 answers
@@ -3331,6 +3373,7 @@ func TestPostRepository_List_IncludesCommentCount(t *testing.T) {
 	repo := NewPostRepository(pool)
 	commentsRepo := NewCommentsRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	// Create a test post
 	post, err := repo.Create(ctx, &models.Post{
@@ -3409,6 +3452,7 @@ func TestPostRepository_List_CommentsCountAllTypes(t *testing.T) {
 	repo := NewPostRepository(pool)
 	commentsRepo := NewCommentsRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	// Create one post of each type
 	question, err := repo.Create(ctx, &models.Post{
@@ -3573,6 +3617,7 @@ func TestPostRepository_List_WithViewerVote(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent_viewer_vote")
 
 	// Create a post
 	post := &models.Post{
@@ -3686,6 +3731,7 @@ func TestPostRepository_FindByID_WithViewerVote(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent_findbyid_vote")
 
 	// Create a post
 	post := &models.Post{
@@ -3756,6 +3802,7 @@ func TestPostRepository_FindByID_OriginalLanguage(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent_lang")
 
 	var postID string
 	err := pool.QueryRow(ctx, `

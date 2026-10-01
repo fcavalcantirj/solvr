@@ -23,6 +23,7 @@ func TestIdeasRepository_FindIdeaByID_Success(t *testing.T) {
 
 	repo := NewIdeasRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	// Create test idea
 	var ideaID string
@@ -76,6 +77,7 @@ func TestIdeasRepository_FindIdeaByID_WrongType(t *testing.T) {
 
 	repo := NewIdeasRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	// Create a problem (not an idea)
 	var problemID string
@@ -134,6 +136,7 @@ func TestIdeasRepository_CreateIdea_SetsType(t *testing.T) {
 	ctx := context.Background()
 
 	timestamp := time.Now().Format("20060102150405")
+	authorAgent(ctx, t, pool, "test_agent_"+timestamp)
 
 	// Create idea without setting type explicitly
 	post := &models.Post{
@@ -189,6 +192,7 @@ func TestIdeasRepository_AddEvolvedInto_Success(t *testing.T) {
 
 	repo := NewIdeasRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	ideaID := uuid.New().String()
 	problemID := uuid.New().String()

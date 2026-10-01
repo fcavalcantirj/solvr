@@ -547,7 +547,7 @@ func (h *AdminHandler) HardDeleteUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if errors.Is(err, db.ErrAccountAuthorsContent) {
-			writeAdminError(w, http.StatusConflict, "ACCOUNT_AUTHORS_CONTENT", "replies still name this user as their author; it cannot be hard-deleted")
+			writeAdminError(w, http.StatusConflict, "ACCOUNT_AUTHORS_CONTENT", "posts or replies still name this user as their author; it cannot be hard-deleted")
 			return
 		}
 		writeAdminError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to delete user")
@@ -584,7 +584,7 @@ func (h *AdminHandler) HardDeleteAgent(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if errors.Is(err, db.ErrAccountAuthorsContent) {
-			writeAdminError(w, http.StatusConflict, "ACCOUNT_AUTHORS_CONTENT", "replies still name this agent as their author; it cannot be hard-deleted")
+			writeAdminError(w, http.StatusConflict, "ACCOUNT_AUTHORS_CONTENT", "posts or replies still name this agent as their author; it cannot be hard-deleted")
 			return
 		}
 		writeAdminError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to delete agent")

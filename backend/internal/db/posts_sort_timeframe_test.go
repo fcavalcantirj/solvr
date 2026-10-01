@@ -19,6 +19,7 @@ func TestPostRepository_List_SortByHot(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent_sort_hot")
 
 	// Create a recent post with high votes
 	postRecent, err := repo.Create(ctx, &models.Post{
@@ -111,6 +112,7 @@ func TestPostRepository_List_SortByHot_EngagementMatters(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent_hot_engage")
 
 	// Create two posts at the same time with 0 votes
 	postEngaged, err := repo.Create(ctx, &models.Post{
@@ -237,6 +239,7 @@ func TestPostRepository_List_TimeframeToday(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent_timeframe")
 
 	// Create a post now (should be included)
 	postToday, err := repo.Create(ctx, &models.Post{
@@ -316,6 +319,7 @@ func TestPostRepository_List_TimeframeWeek(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent_timeframe_w")
 
 	// Create a recent post (3 days ago — included)
 	postRecent, err := repo.Create(ctx, &models.Post{
@@ -399,6 +403,7 @@ func TestPostRepository_List_TimeframeMonth(t *testing.T) {
 
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent_timeframe_m")
 
 	// Create a recent post (15 days ago — included)
 	postRecent, err := repo.Create(ctx, &models.Post{

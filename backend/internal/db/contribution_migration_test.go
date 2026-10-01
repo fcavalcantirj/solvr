@@ -83,7 +83,7 @@ func TestContributionMigration_ConvertsAllTypesAndIsResumable(t *testing.T) {
 	ctx := context.Background()
 
 	sfx := time.Now().Format("150405.000000")
-	author := "agent_migc_" + sfx
+	author := authorAgent(ctx, t, pool, "agent_migc_"+sfx)
 
 	// Posts: a live problem, a question, an idea, and a soft-deleted problem.
 	probID := insertTestPostWithAuthor(t, pool, ctx, "problem", "migc problem "+sfx, "body", []string{"migc"}, "open", "agent", author)

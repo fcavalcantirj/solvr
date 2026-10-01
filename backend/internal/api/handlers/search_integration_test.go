@@ -788,13 +788,23 @@ func setupDBBackedSearchRepo(t *testing.T) (*db.SearchRepository, *db.Pool) {
 	return db.NewSearchRepository(pool), pool
 }
 
+// searchTestUserID is the human account these posts name (000117: a post names an existing
+// author). It is the shared-database fixture user the db package's search fixtures post as too.
+const searchTestUserID = "7e57c0de-0000-4000-8000-000000000001"
+
 func insertSearchTestPost(t *testing.T, pool *db.Pool, ctx context.Context,
 	postType, title, desc string, tags []string, status string) {
-	_, err := pool.Exec(ctx, `
+	_, err := pool.Exec(ctx, `INSERT INTO users (id, username, display_name, email, auth_provider, auth_provider_id, referral_code)
+		VALUES ($1, 'fixture_test_user', 'Test User', 'fixture-test-user@example.test', 'email', 'fixture-test-user', 'TSTUSER1')
+		ON CONFLICT DO NOTHING`, searchTestUserID)
+	if err != nil {
+		t.Fatalf("failed to create the fixture test user: %v", err)
+	}
+	_, err = pool.Exec(ctx, `
 		INSERT INTO posts (type, title, description, tags, status,
 			posted_by_type, posted_by_id, created_at)
-		VALUES ($1, $2, $3, $4, $5, 'human', 'test-user', NOW())
-	`, postType, title, desc, tags, status)
+		VALUES ($1, $2, $3, $4, $5, 'human', $6, NOW())
+	`, postType, title, desc, tags, status, searchTestUserID)
 	if err != nil {
 		t.Fatalf("failed to insert test post: %v", err)
 	}

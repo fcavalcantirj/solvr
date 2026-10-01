@@ -43,6 +43,7 @@ func sitemapPostIDs(posts []models.SitemapPost) (ids []string, types map[string]
 func TestCanonicalSitemap_ListsEveryPublicEligiblePostAcrossTheCutover(t *testing.T) {
 	pool, dropLegacy := newMigratedScratchDatabase(t)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "agent_sitemap_canon")
 	repo := NewSitemapRepository(pool)
 	var owner string
 	require.NoError(t, pool.QueryRow(ctx, `INSERT INTO users (username, display_name, email, referral_code)

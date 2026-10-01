@@ -30,7 +30,7 @@ func insertLegacyPost(t *testing.T, pool *Pool, ctx context.Context, i int, sfx,
 		fmt.Sprintf("migtest %s #%d", sfx, i),
 		fmt.Sprintf("migration verification body %s #%d", sfx, i),
 		[]string{"migtest_" + sfx},
-		"agent_migtest_"+sfx,
+		authorAgent(ctx, t, pool, "agent_migtest_"+sfx),
 		status, visibility, deletedAt,
 		[]string{"crit-a", "crit-b"}, 3,
 	).Scan(&id)

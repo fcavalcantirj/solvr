@@ -23,6 +23,7 @@ func TestApproachesRepository_CreateApproach(t *testing.T) {
 
 	repo := NewApproachesRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	// Create a test problem first
 	timestamp := time.Now().Format("20060102150405")
@@ -97,24 +98,24 @@ func TestApproachesRepository_FindApproachByID(t *testing.T) {
 	timestamp := time.Now().Format("20060102150405")
 	agentID := "test_agent_" + timestamp
 
+	// Create agent for author lookup
+	_, err := pool.Exec(ctx, `
+		INSERT INTO agents (id, display_name, api_key_hash, status)
+		VALUES ($1, 'Test Agent', 'hash_test', 'active')
+	`, agentID)
+	if err != nil {
+		t.Fatalf("failed to insert agent: %v", err)
+	}
+
 	// Create problem
 	var problemID string
-	err := pool.QueryRow(ctx, `
+	err = pool.QueryRow(ctx, `
 		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
 		VALUES ('problem', 'Test Problem', 'Description', 'agent', $1, 'open')
 		RETURNING id::text
 	`, agentID).Scan(&problemID)
 	if err != nil {
 		t.Fatalf("failed to insert problem: %v", err)
-	}
-
-	// Create agent for author lookup
-	_, err = pool.Exec(ctx, `
-		INSERT INTO agents (id, display_name, api_key_hash, status)
-		VALUES ($1, 'Test Agent', 'hash_test', 'active')
-	`, agentID)
-	if err != nil {
-		t.Fatalf("failed to insert agent: %v", err)
 	}
 
 	// Create approach
@@ -168,9 +169,17 @@ func TestApproachesRepository_ListApproaches(t *testing.T) {
 	timestamp := time.Now().Format("20060102150405")
 	agentID := "test_agent_" + timestamp
 
+	_, err := pool.Exec(ctx, `
+		INSERT INTO agents (id, display_name, api_key_hash, status)
+		VALUES ($1, 'Test Agent', 'hash_test', 'active')
+	`, agentID)
+	if err != nil {
+		t.Fatalf("failed to insert agent: %v", err)
+	}
+
 	// Create problem
 	var problemID string
-	err := pool.QueryRow(ctx, `
+	err = pool.QueryRow(ctx, `
 		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
 		VALUES ('problem', 'Test Problem', 'Description', 'agent', $1, 'open')
 		RETURNING id::text
@@ -180,14 +189,6 @@ func TestApproachesRepository_ListApproaches(t *testing.T) {
 	}
 
 	// Create agent
-	_, err = pool.Exec(ctx, `
-		INSERT INTO agents (id, display_name, api_key_hash, status)
-		VALUES ($1, 'Test Agent', 'hash_test', 'active')
-	`, agentID)
-	if err != nil {
-		t.Fatalf("failed to insert agent: %v", err)
-	}
-
 	// Create 3 approaches
 	approachIDs := make([]string, 3)
 	for i := range approachIDs {
@@ -247,6 +248,7 @@ func TestApproachesRepository_UpdateApproach(t *testing.T) {
 
 	repo := NewApproachesRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	// Create problem
 	var problemID string
@@ -327,6 +329,7 @@ func TestApproachesRepository_AddProgressNote(t *testing.T) {
 
 	repo := NewApproachesRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	// Create problem
 	var problemID string
@@ -386,6 +389,7 @@ func TestApproachesRepository_GetProgressNotes(t *testing.T) {
 
 	repo := NewApproachesRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	// Create test data
 	timestamp := time.Now().Format("20060102150405")
@@ -460,19 +464,19 @@ func TestApproachesRepository_FindApproachByID_ReturnsIsLatest(t *testing.T) {
 	agentID := "islat_find_agent_" + time.Now().Format("150405")
 
 	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'problem', 'IsLatest Test', 'Desc', 'agent', $2, 'open')
-	`, problemID, agentID)
-	if err != nil {
-		t.Fatalf("insert problem: %v", err)
-	}
-
-	_, err = pool.Exec(ctx, `
 		INSERT INTO agents (id, display_name, api_key_hash, status)
 		VALUES ($1, 'IsLatest Agent', 'hash_islat', 'active')
 	`, agentID)
 	if err != nil {
 		t.Fatalf("insert agent: %v", err)
+	}
+
+	_, err = pool.Exec(ctx, `
+		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ($1, 'problem', 'IsLatest Test', 'Desc', 'agent', $2, 'open')
+	`, problemID, agentID)
+	if err != nil {
+		t.Fatalf("insert problem: %v", err)
 	}
 
 	approach := &models.Approach{
@@ -519,19 +523,19 @@ func TestApproachesRepository_ListApproaches_ReturnsIsLatest(t *testing.T) {
 	agentID := "islat_list_agent_" + time.Now().Format("150405")
 
 	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'problem', 'IsLatest List Test', 'Desc', 'agent', $2, 'open')
-	`, problemID, agentID)
-	if err != nil {
-		t.Fatalf("insert problem: %v", err)
-	}
-
-	_, err = pool.Exec(ctx, `
 		INSERT INTO agents (id, display_name, api_key_hash, status)
 		VALUES ($1, 'IsLatest List Agent', 'hash_islat_list', 'active')
 	`, agentID)
 	if err != nil {
 		t.Fatalf("insert agent: %v", err)
+	}
+
+	_, err = pool.Exec(ctx, `
+		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ($1, 'problem', 'IsLatest List Test', 'Desc', 'agent', $2, 'open')
+	`, problemID, agentID)
+	if err != nil {
+		t.Fatalf("insert problem: %v", err)
 	}
 
 	approach := &models.Approach{
@@ -580,6 +584,7 @@ func TestApproachesPersistInDatabase(t *testing.T) {
 
 	repo := NewApproachesRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	// Create problem
 	var problemID string

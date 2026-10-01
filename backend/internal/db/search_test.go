@@ -417,9 +417,10 @@ func TestSearchRepository_Search_AuthorFilter(t *testing.T) {
 
 	repo := NewSearchRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "claude")
 
 	insertTestPostWithAuthor(t, pool, ctx, "problem", "Test author filter", "Description",
-		[]string{}, "open", "human", "user-123")
+		[]string{}, "open", "human", testUser(ctx, t, pool))
 	insertTestPostWithAuthor(t, pool, ctx, "problem", "Test author filter", "Description",
 		[]string{}, "open", "agent", "claude")
 
@@ -447,9 +448,10 @@ func TestSearchRepository_Search_AuthorTypeFilter(t *testing.T) {
 
 	repo := NewSearchRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "bot-1")
 
 	insertTestPostWithAuthor(t, pool, ctx, "problem", "Test author type filter", "Description",
-		[]string{}, "open", "human", "user-456")
+		[]string{}, "open", "human", testUser(ctx, t, pool))
 	insertTestPostWithAuthor(t, pool, ctx, "problem", "Test author type filter", "Description",
 		[]string{}, "open", "agent", "bot-1")
 
@@ -492,7 +494,8 @@ func setupTestDB(t *testing.T) *Pool {
 
 func cleanupTestData(t *testing.T, pool *Pool, ctx context.Context) {
 	// Clean up posts created by test authors (posted_by_id is a text column, safe to use string matching)
-	_, err := pool.Exec(ctx, "DELETE FROM posts WHERE posted_by_id IN ('test-user', 'user-123', 'user-456', 'claude', 'bot-1')")
+	// ('test-user', 'user-123' and 'user-456' are the labels written before 000117.)
+	_, err := pool.Exec(ctx, "DELETE FROM posts WHERE posted_by_id IN ('"+testUserID+"', 'test-user', 'user-123', 'user-456', 'claude', 'bot-1')")
 	if err != nil {
 		t.Logf("cleanup warning: %v", err)
 	}
@@ -506,7 +509,7 @@ func cleanupTestData(t *testing.T, pool *Pool, ctx context.Context) {
 
 // insertTestPost inserts a test post and returns the generated UUID.
 func insertTestPost(t *testing.T, pool *Pool, ctx context.Context, postType, title, desc string, tags []string, status string) string {
-	return insertTestPostWithAuthor(t, pool, ctx, postType, title, desc, tags, status, "human", "test-user")
+	return insertTestPostWithAuthor(t, pool, ctx, postType, title, desc, tags, status, "human", testUser(ctx, t, pool))
 }
 
 // insertTestPostDeleted inserts a deleted test post and returns the generated UUID.
@@ -514,9 +517,9 @@ func insertTestPostDeleted(t *testing.T, pool *Pool, ctx context.Context, postTy
 	var id string
 	err := pool.QueryRow(ctx, `
 		INSERT INTO posts (type, title, description, tags, status, posted_by_type, posted_by_id, deleted_at)
-		VALUES ($1, $2, $3, $4, $5, 'human', 'test-user', NOW())
+		VALUES ($1, $2, $3, $4, $5, 'human', $6, NOW())
 		RETURNING id::text
-	`, postType, title, desc, tags, status).Scan(&id)
+	`, postType, title, desc, tags, status, testUser(ctx, t, pool)).Scan(&id)
 	if err != nil {
 		t.Fatalf("failed to insert deleted test post: %v", err)
 	}
@@ -528,9 +531,9 @@ func insertTestPostWithTime(t *testing.T, pool *Pool, ctx context.Context, postT
 	var id string
 	err := pool.QueryRow(ctx, `
 		INSERT INTO posts (type, title, description, tags, status, posted_by_type, posted_by_id, created_at)
-		VALUES ($1, $2, $3, $4, $5, 'human', 'test-user', $6)
+		VALUES ($1, $2, $3, $4, $5, 'human', $7, $6)
 		RETURNING id::text
-	`, postType, title, desc, tags, status, createdAt).Scan(&id)
+	`, postType, title, desc, tags, status, createdAt, testUser(ctx, t, pool)).Scan(&id)
 	if err != nil {
 		t.Fatalf("failed to insert test post with time: %v", err)
 	}
@@ -542,9 +545,9 @@ func insertTestPostWithVotes(t *testing.T, pool *Pool, ctx context.Context, post
 	var id string
 	err := pool.QueryRow(ctx, `
 		INSERT INTO posts (type, title, description, tags, status, posted_by_type, posted_by_id, upvotes, downvotes)
-		VALUES ($1, $2, $3, $4, $5, 'human', 'test-user', $6, $7)
+		VALUES ($1, $2, $3, $4, $5, 'human', $8, $6, $7)
 		RETURNING id::text
-	`, postType, title, desc, tags, status, upvotes, downvotes).Scan(&id)
+	`, postType, title, desc, tags, status, upvotes, downvotes, testUser(ctx, t, pool)).Scan(&id)
 	if err != nil {
 		t.Fatalf("failed to insert test post with votes: %v", err)
 	}

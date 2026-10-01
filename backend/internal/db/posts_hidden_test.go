@@ -134,7 +134,7 @@ func TestListPosts_AuthorSeesOwnHidden(t *testing.T) {
 	ctx := context.Background()
 
 	authorType := "human"
-	authorID := "test-hidden-author"
+	authorID := authorHuman(ctx, t, pool, "test-hidden-author")
 
 	// Insert a pending_review post by specific author
 	insertTestPostWithAuthor(t, pool, ctx, "question", "My pending review question",

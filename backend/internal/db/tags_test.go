@@ -97,6 +97,7 @@ func TestTagsRepository_AddTagsToPost(t *testing.T) {
 
 	repo := NewTagsRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	timestamp := time.Now().Format("20060102150405")
 
@@ -161,6 +162,7 @@ func TestTagsRepository_GetTagsForPost(t *testing.T) {
 
 	repo := NewTagsRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	timestamp := time.Now().Format("20060102150405")
 

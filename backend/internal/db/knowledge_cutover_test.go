@@ -26,6 +26,7 @@ func seedCutoverLegacy(t *testing.T, pool *Pool) cutoverSeed {
 		return v
 	}
 	var s cutoverSeed
+	authorAgent(ctx, t, pool, "kc-agent") // the legacy posts name an existing author (000117)
 	s.question = id(`INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
 		VALUES ('question', 'cutover question', 'body', 'agent', 'kc-agent', 'open') RETURNING id::text`)
 	// A stored upvote no vote row backs: the rebuild must repair it (rehearsal: 2 such answers).
@@ -108,6 +109,7 @@ func TestKnowledgeCutover_DryRunReportsWithoutWriting(t *testing.T) {
 func TestKnowledgeCutover_StopsBeforeConvertingWhenAPostCannotBeVerified(t *testing.T) {
 	pool, _ := newMigratedScratchDatabase(t)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "kc-agent")
 	seedCutoverLegacy(t, pool)
 	_, err := pool.Exec(ctx, `INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
 		VALUES ('idea', '  ', 'untitled', 'agent', 'kc-agent', 'open')`)

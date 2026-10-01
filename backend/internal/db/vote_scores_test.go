@@ -75,7 +75,7 @@ func voteTargets(ctx context.Context, t *testing.T, pool *Pool, label string) (p
 	post, err := NewPostRepository(pool).Create(ctx, &models.Post{
 		Type: models.PostTypePost, Title: "Vote score target " + label,
 		Description:  "A post whose score is derived from its votes (" + label + ")",
-		PostedByType: models.AuthorTypeAgent, PostedByID: "score_author", Status: models.PostStatusOpen,
+		PostedByType: models.AuthorTypeAgent, PostedByID: authorAgent(ctx, t, pool, "score_author"), Status: models.PostStatusOpen,
 	})
 	require.NoError(t, err)
 	return post.ID, extraReply(ctx, t, pool, post.ID, label)

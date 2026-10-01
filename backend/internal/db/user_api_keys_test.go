@@ -729,6 +729,7 @@ func cleanupTestDBWithAPIKeys(t *testing.T, pool *Pool) {
 	_, _ = pool.Exec(ctx, "DELETE FROM refresh_tokens")
 	_, _ = pool.Exec(ctx, "DELETE FROM notifications")
 	_, _ = pool.Exec(ctx, "DELETE FROM replies WHERE author_agent_id IS NOT NULL OR author_human_id IS NOT NULL") // they name accounts (000116)
+	deletePostsNamingAccounts(ctx, pool)                                                                          // they name accounts (000117)
 	_, _ = pool.Exec(ctx, "DELETE FROM agents")
 	_, _ = pool.Exec(ctx, "DELETE FROM users")
 	pool.Close()

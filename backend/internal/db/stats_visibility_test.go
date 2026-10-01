@@ -21,9 +21,9 @@ func insertVisibilityTestPost(t *testing.T, pool *Pool, ctx context.Context, pos
 	var id string
 	err := pool.QueryRow(ctx, `
 		INSERT INTO posts (type, title, description, tags, status, posted_by_type, posted_by_id, visibility, upvotes)
-		VALUES ($1, $2, $3, ARRAY[]::text[], $4, 'human', 'statsvis-user', $5, $6)
+		VALUES ($1, $2, $3, ARRAY[]::text[], $4, 'human', $7, $5, $6)
 		RETURNING id::text
-	`, postType, title, "Visibility fixture for public stats tests.", status, visibility, upvotes).Scan(&id)
+	`, postType, title, "Visibility fixture for public stats tests.", status, visibility, upvotes, testUser(ctx, t, pool)).Scan(&id)
 	if err != nil {
 		t.Fatalf("insertVisibilityTestPost(%s, %s): %v", postType, visibility, err)
 	}

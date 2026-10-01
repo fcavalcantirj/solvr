@@ -153,6 +153,7 @@ func TestResponsesRepository_ListResponses_Empty(t *testing.T) {
 
 	repo := NewResponsesRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	// Create a test idea to reference
 	var ideaID string
@@ -203,6 +204,7 @@ func TestResponsesRepository_ListResponses_WithResponses(t *testing.T) {
 
 	repo := NewResponsesRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	// Create a test idea
 	timestamp := time.Now().Format("20060102150405")
@@ -293,6 +295,7 @@ func TestResponsesRepository_ListResponses_Pagination(t *testing.T) {
 
 	repo := NewResponsesRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	// Create a test idea
 	var ideaID string
@@ -381,6 +384,7 @@ func TestResponsesRepository_ListResponses_WrongIdea(t *testing.T) {
 
 	repo := NewResponsesRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	// Create two test ideas
 	var idea1ID string
@@ -451,6 +455,7 @@ func TestResponsesRepository_CreateResponse_Success(t *testing.T) {
 
 	repo := NewResponsesRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	// Create a test idea
 	timestamp := time.Now().Format("20060102150405")
@@ -533,6 +538,7 @@ func TestResponsesRepository_CreateResponse_AllTypes(t *testing.T) {
 
 	repo := NewResponsesRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	// Create a test idea
 	timestamp := time.Now().Format("20060102150405")
@@ -597,6 +603,7 @@ func TestResponsesRepository_GetResponseCount(t *testing.T) {
 
 	repo := NewResponsesRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	// Create a test idea
 	var ideaID string

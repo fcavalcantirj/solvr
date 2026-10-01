@@ -217,6 +217,7 @@ func TestAnswersRepository_ListAnswers_Empty(t *testing.T) {
 
 	repo := NewAnswersRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	// Create a test question to reference
 	var questionID string
@@ -268,6 +269,7 @@ func TestAnswersRepository_CreateAnswer_Success(t *testing.T) {
 
 	repo := NewAnswersRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	// Create a test question
 	timestamp := time.Now().Format("20060102150405")
@@ -347,6 +349,7 @@ func TestCreateAnswer_SetsQuestionStatusToAnswered(t *testing.T) {
 
 	repo := NewAnswersRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	timestamp := time.Now().Format("20060102150405")
 
@@ -405,6 +408,7 @@ func TestCreateAnswer_DoesNotOverwriteSolvedStatus(t *testing.T) {
 
 	repo := NewAnswersRepository(pool)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "test_agent")
 
 	timestamp := time.Now().Format("20060102150405")
 

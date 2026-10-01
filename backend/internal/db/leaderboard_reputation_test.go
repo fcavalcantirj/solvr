@@ -208,6 +208,7 @@ func TestLeaderboard_AgentReputationCombined(t *testing.T) {
 		t.Fatalf("failed to connect: %v", err)
 	}
 	defer pool.Close()
+	authorAgent(ctx, t, pool, "other-agent")
 
 	leaderboardRepo := NewLeaderboardRepository(pool)
 	agentRepo := NewAgentRepository(pool)
@@ -456,6 +457,7 @@ func TestLeaderboard_RankingOrderAllTime(t *testing.T) {
 		t.Fatalf("failed to connect: %v", err)
 	}
 	defer pool.Close()
+	authorAgent(ctx, t, pool, "other-agent-c")
 
 	leaderboardRepo := NewLeaderboardRepository(pool)
 	agentRepo := NewAgentRepository(pool)
@@ -957,6 +959,7 @@ func TestLeaderboard_CountsResponses(t *testing.T) {
 		t.Fatalf("failed to connect to database: %v", err)
 	}
 	defer pool.Close()
+	authorAgent(ctx, t, pool, "other_agent_resptest")
 
 	agentRepo := NewAgentRepository(pool)
 	postRepo := NewPostRepository(pool)
@@ -1134,6 +1137,7 @@ func TestLeaderboard_CountsAllAnswers(t *testing.T) {
 		t.Fatalf("failed to connect to database: %v", err)
 	}
 	defer pool.Close()
+	authorAgent(ctx, t, pool, "other_agent_anstest")
 
 	agentRepo := NewAgentRepository(pool)
 	postRepo := NewPostRepository(pool)

@@ -51,7 +51,7 @@ func TestFreezeLegacyReputation_RecordsEachEarnedEventOnce(t *testing.T) {
 	sfx := time.Now().Format("150405.000000")
 	agent := "agent_frz_" + sfx
 	voter := "agent_frzv_" + sfx
-	human := "human_frz_" + sfx
+	human := authorHuman(ctx, t, pool, "human_frz_"+sfx)
 	insertRemapAgent(t, pool, ctx, agent)
 	insertRemapAgent(t, pool, ctx, voter)
 	tags := []string{"frz" + sfx}

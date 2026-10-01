@@ -48,6 +48,7 @@ func setupRoomTestServer(t *testing.T) (*httptest.Server, *db.Pool, func()) {
 		pool.Exec(ctx, "DELETE FROM agent_presence WHERE room_id IN (SELECT id FROM rooms WHERE slug LIKE 'test-%')")
 		pool.Exec(ctx, "DELETE FROM rooms WHERE slug LIKE 'test-%'")
 		pool.Exec(ctx, roomTestRepliesCleanup) // replies name their author (000116)
+		pool.Exec(ctx, roomTestPostsCleanup)   // and so do posts (000117)
 		pool.Exec(ctx, "DELETE FROM agents WHERE id LIKE 'agent_roomtest_%'")
 		pool.Exec(ctx, "DELETE FROM users WHERE username LIKE 'roomtest_%'")
 		pool.Close()
@@ -134,6 +135,20 @@ func handshakeRoomToken(t *testing.T, ts *httptest.Server, slug, agentKey string
 const roomTestRepliesCleanup = `DELETE FROM replies WHERE author_agent_id LIKE 'agent_roomtest_%'
 	OR author_human_id IN (SELECT id FROM users WHERE username LIKE 'roomtest_%')`
 
+// roomTestPostsCleanup deletes the posts the room test accounts wrote, with the legacy
+// approaches, answers and responses on them: an account that posts name cannot be deleted
+// either (000117).
+const roomTestPostsCleanup = `
+	DELETE FROM approach_relationships WHERE from_approach_id IN (SELECT id FROM approaches WHERE problem_id IN (` + roomTestPosts + `))
+		OR to_approach_id IN (SELECT id FROM approaches WHERE problem_id IN (` + roomTestPosts + `));
+	DELETE FROM approaches WHERE problem_id IN (` + roomTestPosts + `);
+	DELETE FROM answers WHERE question_id IN (` + roomTestPosts + `);
+	DELETE FROM responses WHERE idea_id IN (` + roomTestPosts + `);
+	DELETE FROM posts WHERE id IN (` + roomTestPosts + `);`
+
+const roomTestPosts = `SELECT id FROM posts WHERE author_agent_id LIKE 'agent_roomtest_%'
+	OR author_human_id IN (SELECT id FROM users WHERE username LIKE 'roomtest_%')`
+
 // roomPreCleanup deletes test rooms and users before a test runs (Phase 13 pattern).
 func roomPreCleanup(t *testing.T, pool *db.Pool) {
 	t.Helper()
@@ -142,6 +157,7 @@ func roomPreCleanup(t *testing.T, pool *db.Pool) {
 	pool.Exec(ctx, "DELETE FROM agent_presence WHERE room_id IN (SELECT id FROM rooms WHERE slug LIKE 'test-%')")
 	pool.Exec(ctx, "DELETE FROM rooms WHERE slug LIKE 'test-%'")
 	pool.Exec(ctx, roomTestRepliesCleanup)
+	pool.Exec(ctx, roomTestPostsCleanup)
 	pool.Exec(ctx, "DELETE FROM agents WHERE id LIKE 'agent_roomtest_%'")
 	pool.Exec(ctx, "DELETE FROM users WHERE username LIKE 'roomtest_%'")
 }

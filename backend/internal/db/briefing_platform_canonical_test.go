@@ -320,7 +320,8 @@ func TestCanonicalPlatformBriefing_RecentVictoriesAreRoomOutcomes(t *testing.T) 
 	cbInsertReply(t, pool, ctx, agentWin, "human", authorHuman(ctx, t, pool, "cbpl-r2"), time.Minute, false)
 	cbInsertReply(t, pool, ctx, agentWin, "system", "moderation", time.Minute, false)
 	ghost := fmt.Sprintf("cbpl-ghost-%d", time.Now().UnixNano())
-	humanWin := outcome("victory by an unresolved human", room, cbPostSeed{byType: "human", byID: ghost, age: 10 * time.Minute})
+	humanWin := outcome("victory by an unresolved human", room, cbPostSeed{byType: "human", byID: authorHuman(ctx, t, pool, "cbpl-ghost"), age: 10 * time.Minute})
+	makePostAuthorHistorical(ctx, t, pool, humanWin, "human", ghost) // stored before 000117, no account behind it
 	t.Cleanup(func() { _, _ = pool.Exec(context.Background(), `DELETE FROM posts WHERE posted_by_id = $1`, ghost) })
 	orphanWin := outcome("victory from a vanished room", "00000000-0000-4000-8000-00000000cb01", cbPostSeed{age: 2 * time.Hour})
 

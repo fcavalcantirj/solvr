@@ -37,6 +37,7 @@ func TestContentGate_DayCounterPatternAgreesInGoAndPostgres(t *testing.T) {
 func TestContentDuplicates_AuthorFinders(t *testing.T) {
 	pool, _ := newMigratedScratchDatabase(t)
 	ctx := context.Background()
+	authorAgent(ctx, t, pool, "agent_a")
 	repo := NewContentDuplicateRepository(pool)
 	id := func(sql string, args ...any) string {
 		t.Helper()

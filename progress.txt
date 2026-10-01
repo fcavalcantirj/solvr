@@ -3025,3 +3025,179 @@ UAT (for when idx 68 closes, not now): apply 000115 and 000116 on production bef
 
 git status at journal time [REAL]: the 19 M + 6 ?? listed above, plus this entry. spec.json
   unchanged; idx 68 passes stays false.
+
+================================================================================
+2026-09-30 21:17 — Task idx 68 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Reduce the live knowledge database to posts and replies with enforceable relationships"
+SLICE 3 of N: step 3 for POSTS. A post names its human or agent author through a foreign key,
+with an exactly-one-author constraint. A post stored before this migration whose author has no
+account keeps its label as historical attribution. Replies got the same in slice 2.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 73, 74, 77-95, 97, 98;
+  no open URGENT. idx 24 and 67 stay skipped (acceptance tasks, as recorded). idx 68 is first
+  buildable; slice 2 left "POSTS OPEN" under step 3. Tree clean at start; HEAD 09f88757.
+
+MEASURED FIRST [REAL, read-only counts on local DBs]:
+  - Unresolved post authors: solvr_rehearsal_purge113 (production after the purge) 444 agent + 188
+    human posts, 0 unresolved, 0 non-UUID human ids. solvr_cutover_rehearsal and
+    solvr_rehearsal_pristine: 558 + 1667, 0 unresolved. solvr_test: 2983 of 3018 agent and 7588 of
+    7592 human posts name no account (fixture junk).
+  - posts has no triggers, so the backfill UPDATEs move no timestamp.
+  - Production code: posts.go Create is the only INSERT INTO posts; no code rewrites
+    posted_by_type/posted_by_id; no wildcard select on posts (the new columns cannot leak into a scan).
+  - Posts have no legacy_id and no later migration writer (the knowledge cutover converts them in
+    place). The legacy write routes (problems/questions/ideas handlers) still create legacy-typed
+    posts until cutover. So "historical" cannot be keyed on the type; see DESIGN.
+
+DESIGN (migration 000117_post_author_fks) [TEST + REAL]:
+  - posts gains author_human_id uuid -> users, author_agent_id varchar(50) -> agents (no ON DELETE
+    action) and historical_author boolean. Partial indexes on both links.
+  - Trigger posts_resolve_author (BEFORE INSERT OR UPDATE OF posted_by_type, posted_by_id and the
+    three derived columns) derives the links from the label. An agent or human author must have an
+    account (explicit EXISTS); otherwise the write is refused with foreign_key_violation under
+    posts_author_agent_fkey / posts_author_human_fkey (a non-UUID human id and a 60-char agent id
+    too). The only exception: an UPDATE that keeps the label of a row that is already historical
+    stays historical. A new post, or a relabelled one, must name an account, whatever its type.
+  - Stored rows are resolved once by the migration; the ones that name no account become
+    historical. No account is invented.
+  - CHECK posts_exactly_one_author (historical: 0 links + non-blank label; else exactly 1) and
+    CHECK posts_author_matches_label (a link is the account the label names). With the trigger
+    bypassed (session_replication_role = replica) they still refuse an unlinked non-historical
+    row and a link that does not match the label [TEST].
+  - Down drops trigger, function, indexes, constraints and columns. The columns are derived, so no
+    attribution is lost.
+  - Admin hard delete: authorsContent() now also maps posts_author_{human,agent}_fkey, so an
+    account that authors posts (soft-deleted ones included) answers 409 ACCOUNT_AUTHORS_CONTENT.
+    The error and the two 409 messages now say "posts or replies".
+
+WHAT CHANGED [REAL, git status --porcelain: 39 M + 4 ??; git diff --stat 323+/100- on tracked files]:
+  PRODUCTION:
+  A backend/migrations/000117_post_author_fks.up.sql / .down.sql (above).
+  M backend/internal/db/account_hard_delete.go: ErrAccountAuthorsContent text "account still authors
+    posts or replies"; authorsContent() is a switch over the 4 constraint names; doc comments.
+  M backend/internal/api/handlers/admin.go: the two 409 messages say "posts or replies".
+  M backend/cmd/cutover/main.go: --expect-version default 116 -> 117 (checkSchema refuses any other
+    version; same precedent as 114->115->116).
+  NEW TESTS:
+  A internal/db/posts_author_integrity_test.go (3 tests, scratch DBs):
+    TestPostAuthors_ANewPostNamesExactlyOneExistingAccount (agent, human, upper-case human UUID link;
+      unknown agent / unknown human UUID / non-UUID human / 60-char agent refused for type post AND
+      problem; relabel to a missing account refused; writing the derived columns is recomputed;
+      re-attribution to another account moves the link),
+    TestPostAuthors_TheMigrationLinksStoredPostsAndLabelsTheRest (117.down, 4 posts, 117.up: links
+      + 2 historical, no account invented; a historical post keeps its label through an edit and
+      through a write of historical_author=false; relabelling it to a missing account is refused, to
+      a real one links it; a new post with a historical label is refused; trigger-bypassed writes
+      are refused by both CHECKs),
+    TestPostAuthors_AnAccountThatAuthorsPostsIsNotHardDeleted (agent + human with posts, one
+      soft-deleted, get ErrAccountAuthorsContent; idle accounts still delete).
+  M internal/api/handlers/admin_hard_delete_authors_test.go: +TestAdminHandler_HardDeleteAnAccount
+    ThatAuthorsPostsIsAConflict (an account with posts and no replies: 409, account and posts stay).
+  A internal/db/post_author_fixtures_test.go: testUserID/testUser (one fixed fixture human,
+    "7e57c0de-0000-4000-8000-000000000001", created on first use, replaces the "test-user" label so
+    cleanupTestData still finds the posts by author), deletePostsNamingAccounts (posts naming an
+    account plus their legacy approaches/answers/responses/approach_relationships), and
+    makePostAuthorHistorical (turns a post into a pre-000117 historical row with the trigger
+    bypassed; the CHECKs still apply).
+  CHANGED EXISTING TESTS. No assertion was loosened, none deleted or skipped:
+  - Version pins moved by the new migration: cmd/cutover/main_test.go asserted the default 116 and
+    the checkSchema cases at 116; they now use 117 and PASS. internal/db/cutover_rollback_test.go
+    asserted `require.Equal(t, 32, applied, "down migrations 000116..000085")`; it now asserts 33
+    (000117..000085) and PASSES. Its two agents are now created before their posts.
+  - Fixture setup only (a post's author now exists), 197 tests in 59 files failed on that before
+    [TEST, full1.log]:
+    - internal/db had 154 of the 197 (internal/api + handlers 43). authorAgent(ctx, t, pool, "<label>") registers the literal agent label the test's
+      posts use (posts_test.go 46 + 3 by hand, answers, approach_relationships, approaches (4 more
+      moved their existing agent INSERT above the post), content_gate_finders, ideas, knowledge_
+      cutover (+seedCutoverLegacy registers kc-agent), leaderboard_reputation, posts_sort_timeframe,
+      responses, search (claude, bot-1), sitemap_canonical, tags, contribution_migration, post_
+      migration, vote_scores (voteTargets)); human labels became authorHuman(...) accounts
+      (posts_test Create_Question and GetUserVote_ChangeVote, posts_hidden AuthorSeesOwnHidden,
+      reputation_history human_frz_).
+    - "test-user", "user-123", "user-456", "statsvis-user" became testUser() in the shared helpers:
+      search_test insertTestPost/Deleted/WithTime/WithVotes and the two author-filter tests,
+      posts_translation, search_semantic, search_similarity, stats_visibility. cleanupTestData
+      deletes the fixture user's posts and still the old labels.
+    - briefing_platform_canonical RecentVictoriesAreRoomOutcomes pins "an unresolved author falls
+      back to its id". Such a post can now only be a historical one, so the fixture creates the post
+      by a real human and makePostAuthorHistorical turns it into the ghost-labelled historical row;
+      the same assertion PASSES.
+    - homepage_totals (db_test): the fixture's posts are authored by one SUSPENDED fixture agent
+      (created in post(), deleted after the posts). A suspended agent is not a registered agent, so
+      the existing RegisteredAgents delta assertion (=1) is unchanged and PASSES.
+    - cohort_comparison: the room post's author agent is created before it and deleted after it
+      (the cohort repository reads no accounts table).
+    - users_test cleanupTestDB / user_api_keys_test cleanupTestDBWithAPIKeys call
+      deletePostsNamingAccounts before the wholesale account wipe. MEASURED why [REAL, full1.log]:
+      the wipe failed as a whole once any post named an account, "emailuser" stayed, and the next
+      test failed "username already exists".
+    - internal/api: router_rooms_test cleanup and roomPreCleanup run roomTestPostsCleanup (the room
+      test accounts' posts with their legacy answers/approaches/responses). MEASURED why [REAL,
+      DB after api_run2]: 32 posts named roomtest accounts, 4 questions had legacy answers, so a
+      plain DELETE was refused by answers_question_id_fkey, 154 roomtest_ users and 277 agents
+      stayed, and ~24 room tests then collided on users_username_key/users_referral_code_key.
+      seedOpenPost registers agent_gate_seed; hpoInsertPostWithReply registers agent_hpotest before
+      the post (it did so only before the reply); seedTypeStats posts as its created replier;
+      the expiry-listings test creates its post author agent and deletes it after the post;
+      handlers search_integration insertSearchTestPost posts as the same fixed fixture user.
+  - users_test.go, posts_test.go, search_test.go and handlers/search_integration_test.go were
+    already not gofmt-clean at HEAD; gofmt -d shows no line of this slice. One accidental gofmt -w
+    of a users_test.go comment was reverted by hand before any run.
+
+VERIFICATION (DATABASE_URL = a FRESH local DB solvr_idx68_s3_fresh built from all 117 up
+  migrations via psql, rebuilt before each package run; never production):
+  RED [TEST, /tmp/solvr_idx68_s3/red.log]: the 3 TestPostAuthors_* FAIL (no author columns; no
+    000117 file; HardDelete succeeded). [TEST, red_handler.log, on solvr_test at 116]: the new
+    handler test FAILS "status 200 ... want 409 ACCOUNT_AUTHORS_CONTENT".
+  GREEN targeted [TEST, green1.log]: 7/7 TestPostAuthors_* + TestReplyAuthors_* PASS.
+  HEAD BASELINE: the 47 failing tests recorded by slice 2 (/tmp/solvr_idx68_s2/fix1_fails.txt, its
+    full run of the tree committed as 09f88757). Not re-run.
+  FIRST FULL RUN with 000117 [TEST, full1.log]: 243 failing = 47 baseline - 1 + 197 new (above).
+  PACKAGE RUNS after the fixture fixes [TEST]: internal/db alone (db_full2.log) 0 failures outside
+    the baseline; internal/api + handlers (api_run3.log) 0 outside the baseline (1 failing,
+    TestIPFSHealthEndpoint).
+  FULL BACKEND [TEST, /tmp/solvr_idx68_s3/full_final.log, go test ./... -count=1 -p 1 -v, fresh DB]:
+    18 packages ok; internal/api and internal/db FAIL with 46 failing tests, every one in the
+    recorded baseline: 0 new. The baseline's TestSearchAnalyticsRepository_GetTrending passed this
+    time (the time-window test idx 98 is about). 13 SKIPs, the same pre-existing ones (VOYAGE,
+    OAuth, Kubo, a legacy answers list). The 3 new db tests, the new handler test, the 3 changed
+    pins and every fixture-changed test PASS; none SKIP.
+  Observation, not changed: TestPostRepository_List_HasAnswerTrue only passes when the database
+    already holds a question with a reply (it creates legacy answers, which add no replies). It
+    passes in every full run (internal/api runs first) and failed once in a db-only subset run.
+  go vet ./internal/db ./internal/api/... ./cmd/cutover clean. check-file-size.sh: 34 violations,
+    unchanged count; posts_test.go 3784 -> 3831 and search_test.go -> 1002 were already over.
+  LIVE PROBE [REAL, /tmp/solvr_idx68_s3/probe/]: go build ./cmd/api, run on :8097 under env -i
+    against a fresh local DB at 117 (IPFS_API_URL=http://127.0.0.1:9, fake JWT_SECRET, probe
+    ADMIN_API_KEY). Agent registered; POST /v1/posts 201; the row has author_agent_id =
+    agent_probe_post_author_s3, historical_author f. DELETE /admin/agents/<id> 409
+    ACCOUNT_AUTHORS_CONTENT "posts or replies still name this agent ..."; the agent still exists;
+    GET the post 200. Raw SQL on the same DB: an agent post by no_such_agent, a human post by
+    "some-label", and relabelling the post to no_such_agent are each refused "post author ... has no
+    account". A PATCH with the post's ETag 200 keeps the link (an earlier PATCH with an empty
+    If-Match got 412, my probe's mistake); GET /v1/posts 200; DELETE 204 soft-deletes and keeps the
+    link. 0 responses with a 5xx status in api.log. Server stopped; :8097 free. Probe and fresh DBs
+    dropped.
+  PRODUCTION-COPY MEASUREMENT [REAL]: CREATE DATABASE ... TEMPLATE solvr_rehearsal_purge113, then
+    000117.up inside BEGIN ... ROLLBACK (spike file built with printf; the first attempt with a zsh
+    echo '\timing on' turned \t into a tab and stopped at line 2 under ON_ERROR_STOP, nothing ran):
+    444 agent + 188 human posts link, 0 historical; ~170 ms (the agent backfill UPDATE 107 ms).
+    The copy was dropped; solvr_rehearsal_purge113 has no new column.
+  LOCAL DBs [REAL]: solvr_test got 000117.up in one transaction, version 117; 10571 of its 10610
+    posts (fixture junk) are historical, 39 link. solvr_rehearsal_purge113 and
+    solvr_cutover_rehearsal are unchanged (113).
+
+STEP MAP (idx 68):
+  1 OPEN: ER diagram + migration contract.
+  2 DONE (slice 1).
+  3 DONE for posts (this slice) and replies (slice 2). Votes, snapshots and source links are
+    supporting relations, not authored content; not audited here.
+  4 OPEN: typed columns vs JSON audit.
+  5-6 GATED by owner decision 4.
+UAT (for when idx 68 closes, not now): apply 000115, 000116 and 000117 on production before the
+  idx 93 cutover (cmd/cutover now expects 117). Expect 0 historical posts and replies there
+  (measured on the post-purge copy).
+
+git status at journal time [REAL]: the 39 M + 4 ?? listed above, plus this entry. spec.json
+  unchanged; idx 68 passes stays false.

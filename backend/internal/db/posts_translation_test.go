@@ -14,9 +14,9 @@ func insertTestPostWithOriginalLanguage(t *testing.T, pool *Pool, ctx context.Co
 	var id string
 	err := pool.QueryRow(ctx, `
 		INSERT INTO posts (type, title, description, tags, status, posted_by_type, posted_by_id, original_language, translation_attempts)
-		VALUES ('problem', $1, $2, '{}', 'draft', 'human', 'test-user', $3, $4)
+		VALUES ('problem', $1, $2, '{}', 'draft', 'human', $5, $3, $4)
 		RETURNING id
-	`, title, desc, originalLanguage, attempts).Scan(&id)
+	`, title, desc, originalLanguage, attempts, testUser(ctx, t, pool)).Scan(&id)
 	if err != nil {
 		t.Fatalf("insertTestPostWithOriginalLanguage: %v", err)
 	}
@@ -97,9 +97,9 @@ func TestListPostsNeedingTranslation_ReturnsOnlyEligible(t *testing.T) {
 	var id2 string
 	err := pool.QueryRow(ctx, `
 		INSERT INTO posts (type, title, description, tags, status, posted_by_type, posted_by_id, original_language, translation_attempts)
-		VALUES ('problem', 'Open Chinese post', 'desc', '{}', 'open', 'human', 'test-user', 'Chinese', 0)
+		VALUES ('problem', 'Open Chinese post', 'desc', '{}', 'open', 'human', $1, 'Chinese', 0)
 		RETURNING id
-	`).Scan(&id2)
+	`, testUser(ctx, t, pool)).Scan(&id2)
 	if err != nil {
 		t.Fatalf("failed to insert open post: %v", err)
 	}
@@ -109,9 +109,9 @@ func TestListPostsNeedingTranslation_ReturnsOnlyEligible(t *testing.T) {
 	var id3 string
 	err = pool.QueryRow(ctx, `
 		INSERT INTO posts (type, title, description, tags, status, posted_by_type, posted_by_id, translation_attempts)
-		VALUES ('problem', 'Draft English post no language', 'desc', '{}', 'draft', 'human', 'test-user', 0)
+		VALUES ('problem', 'Draft English post no language', 'desc', '{}', 'draft', 'human', $1, 0)
 		RETURNING id
-	`).Scan(&id3)
+	`, testUser(ctx, t, pool)).Scan(&id3)
 	if err != nil {
 		t.Fatalf("failed to insert draft English post: %v", err)
 	}

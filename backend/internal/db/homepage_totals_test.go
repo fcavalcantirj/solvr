@@ -48,6 +48,7 @@ type allTimeFixture struct {
 	posts  []uuid.UUID
 	agents []string
 	users  []uuid.UUID
+	author string
 }
 
 func newAllTimeFixture(t *testing.T, ctx context.Context, pool *db.Pool) *allTimeFixture {
@@ -111,12 +112,19 @@ func (f *allTimeFixture) post(name, status, visibility string, deleted bool) uui
 		deletedAt = &now
 	}
 
+	if f.author == "" {
+		// A post names an existing author (000117). A suspended agent is not a registered
+		// agent, so the author leaves the account totals to the accounts a test adds itself;
+		// PublishedPosts counts posts, whatever their author's status.
+		f.author = f.agent("author", "suspended", false)
+	}
+
 	var id uuid.UUID
 	err := f.pool.QueryRow(f.ctx, `
 		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status, visibility, deleted_at)
 		VALUES ('problem', $1, 'homepage totals fixture', 'agent', $2, $3, $4, $5)
 		RETURNING id
-	`, f.suffix+" "+name, f.suffix+"-author", status, visibility, deletedAt).Scan(&id)
+	`, f.suffix+" "+name, f.author, status, visibility, deletedAt).Scan(&id)
 	require.NoError(f.t, err, "insert post %s/%s/%s", name, status, visibility)
 
 	f.posts = append(f.posts, id)

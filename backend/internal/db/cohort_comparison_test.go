@@ -85,7 +85,11 @@ func TestCohortComparison_MeasuresConsistentPostLaunchWindows(t *testing.T) {
 		"actor_type": "agent", "actor_ref": "cc_A3_" + stamp, "room_id": roomA, "ordinal": 3,
 		"entry_surface": nil, "occurred_at": launch.Add(48 * time.Hour),
 	})
-	// A Post published from Room A -> one room-to-post publication.
+	// A Post published from Room A -> one room-to-post publication. Its author is an
+	// existing agent (000117), removed after the post.
+	_, err = pool.Exec(ctx, `INSERT INTO agents (id, display_name, status) VALUES ($1, $1, 'active')`, aCreator)
+	require.NoError(t, err)
+	t.Cleanup(func() { _, _ = pool.Exec(ctx, `DELETE FROM agents WHERE id = $1`, aCreator) })
 	_, err = pool.Exec(ctx, `
 		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, source_room_id)
 		VALUES ('post', $1, 'from a room', 'agent', $2, $3)`,

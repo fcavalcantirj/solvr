@@ -42,7 +42,12 @@ func TestRoomExpiry_ExpiredRoomLeavesEveryListingBeforeTheReaper(t *testing.T) {
 
 	// A real public post: a post's related-rooms list answers 404 for a post that does not
 	// exist, exactly as GET /v1/posts/{id} does.
-	sourcePost := childContractPost(t, a.pool, "agent_expiry_fixture_"+uuid.NewString()[:8], models.VisibilityPublic, "", false)
+	// Its author is an existing agent (000117), removed after the post.
+	author := "agent_expiry_fixture_" + uuid.NewString()[:8]
+	_, err := a.pool.Exec(context.Background(), `INSERT INTO agents (id, display_name, status) VALUES ($1, $1, 'active')`, author)
+	require.NoError(t, err)
+	t.Cleanup(func() { a.pool.Exec(context.Background(), `DELETE FROM agents WHERE id = $1`, author) }) //nolint:errcheck
+	sourcePost := childContractPost(t, a.pool, author, models.VisibilityPublic, "", false)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	// Rooms expire by the clock (expires_at is set at creation): nothing announces the moment.

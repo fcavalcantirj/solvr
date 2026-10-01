@@ -14,7 +14,7 @@ import (
 // rehearsal on the restored production dump showed the down path aborting on the first row
 // the new model can write and the old schema cannot hold: 000089.down re-adds the vote and
 // report target checks without 'reply', and 000088.down re-adds the typed-only posts check
-// although new posts default to the canonical type 'post'. Every down migration from 116 to
+// although new posts default to the canonical type 'post'. Every down migration from 117 to
 // 85 must now run over such rows, and each row the old schema cannot hold must be archived
 // in rollback_archive rather than dropped silently.
 func TestCutoverRollback_DownPathKeepsOrArchivesEveryPostCutoverWrite(t *testing.T) {
@@ -33,6 +33,10 @@ func TestCutoverRollback_DownPathKeepsOrArchivesEveryPostCutoverWrite(t *testing
 		return v
 	}
 
+	// A post (000117) and a native reply (000116) name an existing author.
+	exec(`INSERT INTO agents (id, display_name, status) VALUES ('rb-agent-1', 'Rollback Agent 1', 'active')`)
+	exec(`INSERT INTO agents (id, display_name, status) VALUES ('rb-agent-2', 'Rollback Agent 2', 'active')`)
+
 	// Legacy content, migrated the way the cutover does it.
 	question := id(`INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
 		VALUES ('question', 'rollback question', 'body', 'agent', 'rb-agent-1', 'open') RETURNING id::text`)
@@ -43,8 +47,6 @@ func TestCutoverRollback_DownPathKeepsOrArchivesEveryPostCutoverWrite(t *testing
 	approach := id(`INSERT INTO approaches (problem_id, author_type, author_id, angle)
 		VALUES ($1, 'agent', 'rb-agent-1', 'legacy angle') RETURNING id::text`, problem)
 	note := id(`INSERT INTO progress_notes (approach_id, content) VALUES ($1, 'legacy note') RETURNING id::text`, approach)
-	exec(`INSERT INTO agents (id, display_name, status) VALUES ('rb-agent-1', 'Rollback Agent 1', 'active')`)
-	exec(`INSERT INTO agents (id, display_name, status) VALUES ('rb-agent-2', 'Rollback Agent 2', 'active')`) // a native reply names its author (000116)
 	notify := func(link string) string {
 		t.Helper()
 		return id(`INSERT INTO notifications (agent_id, type, title, link) VALUES ('rb-agent-1', 'reply', 'n', $1)
@@ -105,7 +107,7 @@ func TestCutoverRollback_DownPathKeepsOrArchivesEveryPostCutoverWrite(t *testing
 		require.NoError(t, err, "apply %s", filepath.Base(f))
 		applied++
 	}
-	require.Equal(t, 32, applied, "down migrations 000116..000085")
+	require.Equal(t, 33, applied, "down migrations 000117..000085")
 
 	var replies *string
 	require.NoError(t, pool.QueryRow(ctx, `SELECT to_regclass('replies')::text`).Scan(&replies))

@@ -273,7 +273,9 @@ func (h *RepliesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	// Echo the new validator so the client's next If-Match is current.
 	w.Header().Set("ETag", replyETag(updated.UpdatedAt))
-	writeRepliesJSON(w, http.StatusOK, map[string]any{"data": updated})
+	// Answer the same Reply the reads return: an edit never changes the author, so the
+	// author read before the write is the edited reply's.
+	writeRepliesJSON(w, http.StatusOK, map[string]any{"data": models.ReplyWithAuthor{Reply: *updated, Author: existing.Author}})
 }
 
 // Delete handles DELETE /v1/replies/{id} (author only).

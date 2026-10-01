@@ -321,6 +321,17 @@ var validSearchParams = map[string]struct{}{
 	"content_types": {}, "min_similarity": {}, "confidence_threshold": {},
 }
 
+// SearchParamNames lists the query parameters GET /search reads, sorted; the published
+// OpenAPI operation documents exactly these.
+func SearchParamNames() []string {
+	names := make([]string, 0, len(validSearchParams))
+	for name := range validSearchParams {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
 // unknownParamWarnings returns a warning for each unrecognized query-param name, with a
 // "did you mean" suggestion when a close valid param exists. Params beginning with "_"
 // (conventional cache-bust/internal markers) are skipped to avoid false positives. Returns

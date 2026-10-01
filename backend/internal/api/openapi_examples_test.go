@@ -18,10 +18,12 @@ import (
 // and response example in the served OpenAPI document, and contract/openapi-examples.json is
 // those same examples in the form the SDK, CLI and MCP tests read.
 
-// sharedClientOperations are the room and reply operations the clients expose (step 2).
+// sharedClientOperations are the post, room, reply and search operations the clients expose
+// (step 2), in the order an agent calls them: the live check sends them in this order.
 var sharedClientOperations = []string{
+	"createPost", "getPost",
 	"createRoom", "handshakeRoom", "createRoomEntry", "listRoomEntries", "createRoomStreamTicket",
-	"createReply", "listReplies",
+	"createReply", "listReplies", "getReply", "updateReply", "search",
 }
 
 const clientContractPath = "../../../contract/openapi-examples.json"
@@ -53,6 +55,16 @@ func TestOpenAPIExamples_TheSharedOperationsCarryAnExample(t *testing.T) {
 		}
 		for name := range ex.Query {
 			assert.True(t, declared["query:"+name], "%s: example query parameter %s is not declared", id, name)
+		}
+		for name := range ex.Headers {
+			assert.True(t, declared["header:"+name], "%s: example header %s is not declared", id, name)
+		}
+		for _, raw := range op["parameters"].([]interface{}) {
+			p := deref(t, spec, raw).(map[string]interface{})
+			values := map[string]map[string]interface{}{"path": ex.PathParams, "query": ex.Query, "header": ex.Headers}[p["in"].(string)]
+			if p["required"] == true {
+				assert.NotNil(t, values[p["name"].(string)], "%s: no example value for required %s parameter %s", id, p["in"], p["name"])
+			}
 		}
 		if _, takesBody := op["requestBody"]; takesBody {
 			assert.NotNil(t, ex.Request, "%s takes a body but shows no request example", id)
@@ -119,6 +131,7 @@ type clientOperation struct {
 	Credential   string                 `json:"credential"`
 	PathParams   map[string]interface{} `json:"path_params"`
 	Query        map[string]interface{} `json:"query"`
+	Headers      map[string]interface{} `json:"headers"`
 	RequestBody  interface{}            `json:"request_body"`
 	Status       int                    `json:"status"`
 	ResponseBody interface{}            `json:"response_body"`
@@ -135,21 +148,25 @@ func clientContractFixture(t *testing.T, spec map[string]interface{}) []byte {
 	contract := clientContract{
 		Description: "Generated from the x-solvr-example of each operation in GET /v1/openapi.json by " +
 			"backend/internal/api/openapi_examples_test.go (SOLVR_WRITE_CLIENT_CONTRACT=1). Do not edit by hand. " +
-			"credential names the Authorization bearer: an agent API key, the room token from handshakeRoom, or none.",
+			"credential names the Authorization bearer: an agent API key, the room token from handshakeRoom, or none. " +
+			"headers are the other request headers the operation needs (If-Match: the ETag of the read before the edit).",
 	}
 	for _, ex := range publishedExamples(t, spec) {
 		status, err := strconv.Atoi(ex.Status)
 		require.NoError(t, err)
-		params, query := ex.PathParams, ex.Query
+		params, query, headers := ex.PathParams, ex.Query, ex.Headers
 		if params == nil {
 			params = map[string]interface{}{}
 		}
 		if query == nil {
 			query = map[string]interface{}{}
 		}
+		if headers == nil {
+			headers = map[string]interface{}{}
+		}
 		contract.Operations = append(contract.Operations, clientOperation{
 			OperationID: ex.OperationID, Method: ex.Method, Path: "/v1" + ex.Path, Credential: ex.Credential,
-			PathParams: params, Query: query, RequestBody: ex.Request, Status: status, ResponseBody: ex.Response,
+			PathParams: params, Query: query, Headers: headers, RequestBody: ex.Request, Status: status, ResponseBody: ex.Response,
 		})
 	}
 	sort.Slice(contract.Operations, func(i, j int) bool {

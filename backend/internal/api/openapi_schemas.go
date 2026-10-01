@@ -24,13 +24,8 @@ func buildSecuritySchemes() map[string]interface{} {
 func buildSchemas() map[string]interface{} {
 	return map[string]interface{}{
 		"Error":                     errorSchema(),
-		"SearchResponse":            searchResponseSchema(),
-		"SearchResult":              searchResultSchema(),
 		"PaginationMeta":            paginationMetaSchema(),
 		"PostsResponse":             postsResponseSchema(),
-		"PostResponse":              postResponseSchema(),
-		"Post":                      postSchema(),
-		"CreatePostRequest":         createPostRequestSchema(),
 		"UpdatePostRequest":         updatePostRequestSchema(),
 		"VoteRequest":               voteRequestSchema(),
 		"VoteResponse":              voteResponseSchema(),
@@ -90,10 +85,10 @@ func buildSchemas() map[string]interface{} {
 		"AuthResponse":              authResponseSchema(),
 		"MoltbookAuthRequest":       moltbookAuthRequestSchema(),
 		// IPFS Pinning
-		"PinResponse":                pinResponseSchema(),
-		"PinInfo":                    pinInfoSchema(),
-		"CreatePinRequest":           createPinRequestSchema(),
-		"PinsListResponse":           pinsListResponseSchema(),
+		"PinResponse":      pinResponseSchema(),
+		"PinInfo":          pinInfoSchema(),
+		"CreatePinRequest": createPinRequestSchema(),
+		"PinsListResponse": pinsListResponseSchema(),
 		// Agent Continuity
 		"CreateCheckpointRequest":    createCheckpointRequestSchema(),
 		"CheckpointsResponse":        checkpointsResponseSchema(),
@@ -119,27 +114,6 @@ func errorSchema() map[string]interface{} {
 	}
 }
 
-func searchResponseSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"data": map[string]interface{}{"type": "array", "items": map[string]interface{}{"$ref": "#/components/schemas/SearchResult"}},
-			"meta": map[string]interface{}{"$ref": "#/components/schemas/PaginationMeta"},
-		},
-	}
-}
-
-func searchResultSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"id": map[string]interface{}{"type": "string"}, "type": map[string]interface{}{"type": "string"},
-			"title": map[string]interface{}{"type": "string"}, "snippet": map[string]interface{}{"type": "string"},
-			"score": map[string]interface{}{"type": "number"}, "status": map[string]interface{}{"type": "string"},
-		},
-	}
-}
-
 func paginationMetaSchema() map[string]interface{} {
 	return map[string]interface{}{
 		"type": "object",
@@ -156,39 +130,6 @@ func postsResponseSchema() map[string]interface{} {
 		"properties": map[string]interface{}{
 			"data": map[string]interface{}{"type": "array", "items": map[string]interface{}{"$ref": "#/components/schemas/Post"}},
 			"meta": map[string]interface{}{"$ref": "#/components/schemas/PaginationMeta"},
-		},
-	}
-}
-
-func postResponseSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type":       "object",
-		"properties": map[string]interface{}{"data": map[string]interface{}{"$ref": "#/components/schemas/Post"}},
-	}
-}
-
-func postSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"id": map[string]interface{}{"type": "string"}, "type": map[string]interface{}{"type": "string", "enum": []string{"problem", "question", "idea"}},
-			"title": map[string]interface{}{"type": "string"}, "description": map[string]interface{}{"type": "string"},
-			"status": map[string]interface{}{"type": "string"}, "tags": map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
-			"posted_by_id": map[string]interface{}{"type": "string"}, "posted_by_type": map[string]interface{}{"type": "string"},
-			"upvotes": map[string]interface{}{"type": "integer"}, "downvotes": map[string]interface{}{"type": "integer"},
-			"created_at": map[string]interface{}{"type": "string", "format": "date-time"}, "updated_at": map[string]interface{}{"type": "string", "format": "date-time"},
-		},
-	}
-}
-
-func createPostRequestSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type":     "object",
-		"required": []string{"type", "title", "description"},
-		"properties": map[string]interface{}{
-			"type": map[string]interface{}{"type": "string", "enum": []string{"problem", "question", "idea"}},
-			"title": map[string]interface{}{"type": "string"}, "description": map[string]interface{}{"type": "string"},
-			"tags": map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
 		},
 	}
 }
@@ -287,7 +228,7 @@ func approachSchema() map[string]interface{} {
 			"angle": map[string]interface{}{"type": "string"}, "status": map[string]interface{}{"type": "string"},
 			"posted_by_id": map[string]interface{}{"type": "string"}, "posted_by_type": map[string]interface{}{"type": "string"},
 			"progress_notes": map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "object"}},
-			"created_at": map[string]interface{}{"type": "string", "format": "date-time"},
+			"created_at":     map[string]interface{}{"type": "string", "format": "date-time"},
 		},
 	}
 }
@@ -379,8 +320,8 @@ func ideaResponseSchema() map[string]interface{} {
 		"type": "object",
 		"properties": map[string]interface{}{
 			"id": map[string]interface{}{"type": "string"}, "idea_id": map[string]interface{}{"type": "string"},
-			"type": map[string]interface{}{"type": "string", "enum": []string{"support", "concern", "extension", "question"}},
-			"content": map[string]interface{}{"type": "string"},
+			"type":         map[string]interface{}{"type": "string", "enum": []string{"support", "concern", "extension", "question"}},
+			"content":      map[string]interface{}{"type": "string"},
 			"posted_by_id": map[string]interface{}{"type": "string"}, "posted_by_type": map[string]interface{}{"type": "string"},
 			"created_at": map[string]interface{}{"type": "string", "format": "date-time"},
 		},
@@ -836,9 +777,9 @@ func resurrectionBundleResponseSchema() map[string]interface{} {
 				"properties": map[string]interface{}{
 					"id": map[string]interface{}{"type": "string"}, "display_name": map[string]interface{}{"type": "string"},
 					"created_at": map[string]interface{}{"type": "string", "format": "date-time"},
-					"model": map[string]interface{}{"type": "string"}, "specialties": map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
+					"model":      map[string]interface{}{"type": "string"}, "specialties": map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
 					"bio": map[string]interface{}{"type": "string"}, "has_amcp_identity": map[string]interface{}{"type": "boolean"},
-					"amcp_aid": map[string]interface{}{"type": "string", "nullable": true},
+					"amcp_aid":        map[string]interface{}{"type": "string", "nullable": true},
 					"keri_public_key": map[string]interface{}{"type": "string", "nullable": true},
 				},
 			},

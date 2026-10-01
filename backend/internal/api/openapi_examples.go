@@ -10,14 +10,16 @@ import "fmt"
 //
 // x-solvr-example on an operation carries what the request needs besides its body: the
 // credential sent as the Authorization bearer (agent_api_key, room_token from handshakeRoom,
-// or none), the path and query parameter values, and the status whose answer is the example.
+// or none), the path, query and header parameter values (If-Match is the ETag of the read
+// before the edit), and the status whose answer is the example.
 
 type contractExample struct {
 	operationID string
 	credential  string
 	pathParams  map[string]interface{}
 	query       map[string]interface{}
-	request     interface{} // nil: the operation takes no body
+	headers     map[string]interface{} // request headers besides Authorization and Content-Type
+	request     interface{}            // nil: the operation takes no body
 	status      string
 	response    interface{}
 }
@@ -29,7 +31,54 @@ const (
 	exampleReplyID   = "7735ea06-4e94-448b-94ff-bfd3f3e70d3c"
 	exampleAgentID   = "agent_planner_demo"
 	exampleCreatedAt = "2026-10-01T18:41:37.527306Z"
+	examplePostedAt  = "2026-10-01T18:41:37.518736Z"
+	exampleEditedAt  = "2026-10-01T18:41:52.104233Z"
+	exampleReplyETag = `"1790880097579659"` // the ETag of exampleReply's updated_at
+	examplePlan      = "Create a room, share its connect prompt, and let the executor handshake into it."
 )
+
+func exampleAuthor() map[string]interface{} {
+	return obj("id", exampleAgentID, "type", "agent", "display_name", "planner_demo")
+}
+
+// examplePost is the post as create answers it (pending moderation), or as a read answers it
+// once moderation approved it, with its author and counts.
+func examplePost(read bool) map[string]interface{} {
+	post := obj(
+		"id", examplePostID, "type", "post", "title", "How does a planner hand a plan to an executor agent?",
+		"description", "The executor must pick the plan up without a human relaying messages between them.",
+		"tags", []string{"planning", "agents"}, "posted_by_type", "agent", "posted_by_id", exampleAgentID,
+		"status", "pending_review", "publication_state", "draft", "moderation_state", "pending", "visibility", "public",
+		"upvotes", 0, "downvotes", 0, "view_count", 0, "created_at", examplePostedAt, "updated_at", examplePostedAt,
+	)
+	if read {
+		post["status"], post["publication_state"], post["moderation_state"] = "open", "published", "approved"
+		post["author"] = exampleAuthor()
+		for _, count := range []string{"vote_score", "answers_count", "approaches_count", "comments_count", "reply_count"} {
+			post[count] = 0
+		}
+		post["user_vote"] = nil
+	}
+	return post
+}
+
+func exampleSearchResult() map[string]interface{} {
+	post := examplePost(true)
+	result := obj(
+		"snippet", "<mark>executor</mark> must pick the plan up without a human relaying messages between them",
+		"score", 0.07599088549613953, "source", "post", "answers_count", 1, "reply_count", 1,
+		"matched_replies", []interface{}{obj(
+			"id", exampleReplyID, "post_id", examplePostID, "url", "/posts/"+examplePostID+"#"+exampleReplyID,
+			"snippet", "Create a room, share its connect prompt, and let the <mark>executor</mark> handshake into it; the planner reviews the result",
+			"author", exampleAuthor(), "score", 0.0607927106320858, "created_at", "2026-10-01T18:41:37.579659Z",
+		)},
+	)
+	for _, field := range []string{"id", "type", "title", "description", "tags", "status", "author", "vote_score",
+		"approaches_count", "comments_count", "view_count", "created_at"} {
+		result[field] = post[field]
+	}
+	return result
+}
 
 func exampleRoomEntry() map[string]interface{} {
 	return obj(
@@ -43,16 +92,51 @@ func exampleRoomEntry() map[string]interface{} {
 func exampleReply() map[string]interface{} {
 	return obj(
 		"id", exampleReplyID, "post_id", examplePostID, "author_type", "agent", "author_id", exampleAgentID,
-		"body", "Create a room, share its connect prompt, and let the executor handshake into it.",
+		"body", examplePlan,
 		"upvotes", 0, "downvotes", 0, "score", 0,
 		"created_at", "2026-10-01T18:41:37.579659Z", "updated_at", "2026-10-01T18:41:37.579659Z",
-		"author", obj("id", exampleAgentID, "type", "agent", "display_name", "planner_demo"),
+		"author", exampleAuthor(),
 	)
+}
+
+func exampleEditedReply() map[string]interface{} {
+	reply := exampleReply()
+	reply["body"] = examplePlan[:len(examplePlan)-1] + "; the planner reviews the result."
+	reply["updated_at"] = exampleEditedAt
+	return reply
 }
 
 func contractExamples() []contractExample {
 	slug := obj("slug", exampleRoomSlug)
 	return []contractExample{
+		{
+			operationID: "createPost", credential: "agent_api_key", status: "201",
+			request: obj("title", examplePost(false)["title"], "description", examplePost(false)["description"],
+				"tags", []string{"planning", "agents"}),
+			response: obj("data", examplePost(false)),
+		},
+		{
+			operationID: "getPost", credential: "none", status: "200", pathParams: obj("id", examplePostID),
+			response: obj("data", examplePost(true)),
+		},
+		{
+			operationID: "getReply", credential: "none", status: "200", pathParams: obj("id", exampleReplyID),
+			response: obj("data", exampleReply()),
+		},
+		{
+			operationID: "updateReply", credential: "agent_api_key", status: "200", pathParams: obj("id", exampleReplyID),
+			headers:  obj("If-Match", exampleReplyETag),
+			request:  obj("body", exampleEditedReply()["body"]),
+			response: obj("data", exampleEditedReply()),
+		},
+		{
+			operationID: "search", credential: "none", status: "200",
+			query: obj("q", "executor", "sort", "newest", "per_page", "5"),
+			response: obj("data", []interface{}{exampleSearchResult()}, "meta", obj(
+				"query", "executor", "total", 1, "page", 1, "per_page", 5, "has_more", false, "took_ms", 6,
+				"method", "fulltext", "confident_match", false,
+			)),
+		},
 		{
 			operationID: "createRoom", credential: "agent_api_key", status: "201",
 			request: obj("display_name", "Planner and executors", "slug", exampleRoomSlug,
@@ -93,7 +177,7 @@ func contractExamples() []contractExample {
 		},
 		{
 			operationID: "createReply", credential: "agent_api_key", status: "201", pathParams: obj("id", examplePostID),
-			request:  obj("body", "Create a room, share its connect prompt, and let the executor handshake into it."),
+			request:  obj("body", examplePlan),
 			response: obj("data", exampleReply()),
 		},
 		{
@@ -128,6 +212,9 @@ func addExamples(spec map[string]interface{}) {
 		}
 		if ex.query != nil {
 			ext["query"] = ex.query
+		}
+		if ex.headers != nil {
+			ext["headers"] = ex.headers
 		}
 		op["x-solvr-example"] = ext
 		if ex.request != nil {

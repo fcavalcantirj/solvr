@@ -8275,3 +8275,128 @@ REMAINING FOR idx 78 (next slices, in order):
 
 git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged
   (idx 78 passes stays false).
+
+2026-10-01 16:18 — Task idx 78 (spec.json, category functional) — IN PROGRESS, passes STAYS false
+"Keep SDKs, CLI, MCP, skills, and webhooks consistent with the redesigned product"
+SLICE 2: the post and search contract. The published Post/CreatePostRequest/PostResponse/SearchResponse/
+SearchResult were legacy hand-written shapes (CreatePostRequest REQUIRED type problem|question|idea; Post had no
+publication_state/moderation_state/author; SearchResult had 6 of 20 fields; GET /search documented 6 of 14
+params). They are now the shapes the handlers serialize, pinned to the Go types like the room/reply schemas, and
+createPost, getPost, getReply, updateReply and search carry recorded examples held to the running API
+(12 shared operations now, all in contract/openapi-examples.json).
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 78-95, 97, 98; no open URGENT (96
+  true). 24/67 acceptance (skipped as in every earlier entry); 68 waits on the owner (as journaled). idx 78 is the
+  first buildable task; continued from slice 1 (HEAD e583c254), REMAINING item 2.
+
+SPIKE [REAL, throwaway zz_idx78s2_spike_test.go, deleted; /tmp/solvr_idx78_s2/spike.json]: createPost, approve
+  (SQL), getPost anon, createReply, getReply, updateReply (If-Match), search q=executor sort=newest per_page=5
+  against setupRoomTestServer (local DB). Facts it gave:
+  - POST /v1/posts answers models.Post: no author, vote_score, counts or user_vote; status pending_review,
+    publication_state "draft", moderation_state "pending", visibility "public", type "post".
+  - GET /v1/posts/{id} answers models.PostWithAuthor: the same plus author, vote_score, answers/approaches/
+    comments/reply_count and user_vote null (anonymous).
+  - PATCH /v1/replies/{id} answered the reply WITHOUT author (the finding slice 1 left open) -> fixed below.
+  - search (fulltext locally) answered the post once with matched_replies [the edited reply], method fulltext,
+    no similarity/top_similarity; a native reply counts in answers_count (1) and reply_count (1).
+  - ETag format: "<unix microseconds of updated_at>" (quoted).
+
+WHAT CHANGED [REAL, git status --porcelain: M handlers/replies.go, M handlers/search.go, M openapi_examples.go,
+  M openapi_examples_check_test.go, M openapi_examples_live_test.go, M openapi_examples_test.go,
+  M openapi_operations.go, M openapi_paths.go, M openapi_schemas.go, M contract/openapi-examples.json,
+  ?? handlers/replies_update_author_test.go, ?? openapi_post_schemas.go, ?? openapi_post_schemas_test.go
+  (all under backend/internal/api/ except contract/); git diff --stat: 10 files, 429+/121-]:
+  PRODUCTION:
+  ?? openapi_post_schemas.go (137): postSchemas() = PostAuthor, Post (properties of models.PostWithAuthor;
+    required = the 14 fields create AND reads always answer, so author/vote_score/counts/user_vote are documented
+    but not required; type enum post|problem|question|idea; publication_state/moderation_state/visibility enums;
+    user_vote nullable up|down), PostResponse, CreatePostRequest (properties of handlers.CreatePostRequest;
+    required title+description, NOT type; content/success_criteria/weight marked deprecated; min/max lengths
+    and tag limit from the handler's constants), SearchAuthor, SearchReplyMatch, SearchResult (tags nullable:
+    the field has no omitempty), SearchMeta (method enum hybrid|fulltext), SearchResponse. searchPath() moved
+    here and rewritten: anonymousOrBearer security, the 14 query params handlers.SearchParamNames() lists,
+    200 SearchResponse + shared 400 row.
+  M openapi_schemas.go (-59 non-whitespace): the legacy searchResponseSchema/searchResultSchema/
+    postResponseSchema/postSchema/createPostRequestSchema and their 5 buildSchemas entries deleted (876 -> 817
+    lines; still over 800 as at HEAD). M openapi_paths.go (-19 non-whitespace): legacy searchPath deleted
+    (888 -> 869; over 800 as at HEAD). Both files: gofmt -w also realigned a few untouched lines (whitespace
+    only; `git diff -w` shows deletions only).
+  M openapi_operations.go (+3): addOperations merges postSchemas() into components.schemas.
+  M openapi_examples.go (143 -> 230): examples for createPost (201, agent_api_key), getPost (200, none),
+    getReply (200, none), updateReply (200, agent_api_key, headers If-Match = the ETag of getReply's
+    updated_at) and search (200, none, q=executor sort=newest per_page=5), values from the spike with the fixed
+    demo ids; contractExample gains headers -> x-solvr-example.headers.
+  M handlers/replies.go (+3/-1): Update answers models.ReplyWithAuthor{Reply: *updated, Author: existing.Author}
+    (the author read for the If-Match/author check; an edit never changes the author: no extra query).
+  M handlers/search.go (+11): exported SearchParamNames() (sorted keys of validSearchParams).
+  ?? / M contract/openapi-examples.json (221 -> 454, regenerated with SOLVR_WRITE_CLIENT_CONTRACT=1): 12
+    operations; every operation gains "headers" ({} except updateReply) and the description says what it is.
+  TESTS:
+  ?? handlers/replies_update_author_test.go (50): UpdateAnswersTheEditedReplyWithItsAuthor (body, author, ETag
+    of the edited version).
+  ?? openapi_post_schemas_test.go (72): TestOpenAPIPosts_SchemasDescribeTheJSONTheHandlersReturn (8 schemas vs
+    Go types), TestOpenAPIPosts_CreateTakesNoTypeAndThePostShowsTheCanonicalStates,
+    TestOpenAPISearch_DocumentsExactlyTheParametersTheHandlerReads.
+  M openapi_examples_test.go: sharedClientOperations 7 -> 12 in agent order (createPost, getPost, room ops,
+    createReply, listReplies, getReply, updateReply, search); TheSharedOperationsCarryAnExample now also
+    requires each example header to be a declared header parameter and every REQUIRED parameter (path, query,
+    header) to have an example value; fixture gains headers. M openapi_examples_check_test.go: publishedExample
+    reads x-solvr-example.headers.
+  M openapi_examples_live_test.go: the post is now created BY the createPost example (slice 1 created it ad hoc
+    with the same title/description), approved with one SQL UPDATE (status open, published, approved: what
+    moderation does before anyone can read or find a public post), "id" resolves to the reply id on /replies/*
+    paths, If-Match is the ETag getReply answered, sendExample takes headers and returns the response headers;
+    the search answer must contain this run's post WITH matched_replies (an empty result would pass the shape
+    check trivially). No existing assertion removed or loosened; no test deleted or skipped.
+  No migration. Frontend untouched. SPEC.md untouched (additive response field; migration notes are step 5).
+
+VERIFICATION [this session; DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test (local docker
+  solvr-postgres); logs in /tmp/solvr_idx78_s2/]:
+  [TEST] RED: tdd/red-handlers.log (replies.go at HEAD): UpdateAnswersTheEditedReplyWithItsAuthor FAIL
+    (`update answered {"data":{...}}` without author). tdd/red-api.log: TestOpenAPIPosts_SchemasDescribe...,
+    CreateTakesNoType..., TestOpenAPISearch_DocumentsExactly..., SharedOperationsCarryAnExample,
+    ClientFixture and the live test FAIL.
+  [TEST] GREEN: tdd/green-handlers.log TestReplies_* ok; tdd/green-api.log -v: the 8 tests (5 examples + 3 new)
+    PASS, none SKIP; the live test ran against the DB above and found this run's post with its edited reply.
+  MUTATIONS [TEST] (mut/m1-m3.log), each FAILS as intended, sources restored, `shasum -c mut/orig.sha` OK:
+    m1 Update answers `updated` again -> live: `required field "author" is missing`;
+    m2 getPost example drops user_vote -> live: `the API answered field "user_vote" the example omits` + golden;
+    m3 search drops the confidence_threshold param -> DocumentsExactlyTheParametersTheHandlerReads.
+  [TEST] PACKAGES (pkg.log, once): go test ./internal/api/... -count=1 -p 1 -v -> handlers ok, middleware ok,
+    response ok, internal/api FAIL (288 s) with 9 failures; 63 TestOpenAPI*/TestReplies_Update* PASS, none
+    FAIL/SKIP. 7 failures are in the slice-1 baseline (/tmp/solvr_idx78_s1/pkg.log): CreateRateLimit x2,
+    HomepageOverview, HomepageSearch x3, IPFSHealth. The 2 others:
+    - TestHomepageSearch_ChartAddsUpToTheTotalBesideIt (`expected: 712 actual: 686`, window 24h): in the
+      idx77 s24 baseline (/tmp/solvr_idx77_s24/fail.now); the time-window flake task idx 98 owns.
+    - TestCommentsCount_FeedShowsCommentCount: `409 DUPLICATE_CONTENT existing_id 1580b407...` -> [REAL psql]
+      created 2026-09-29 11:44 by agent_cmt_test_591000; testCommentsSetup re-used that agent name
+      (ns%1e6 collision): the same test-DB residue class as slice 1's TestCommentsEndpoints (which passed
+      this run, as did TestAgentClaim_RetriesAndRaces). No comment/post-create code touched.
+  [REAL] go build ./... ok; go vet ./internal/api ./internal/api/handlers ok; gofmt -l clean on every file this
+    slice wrote; ./scripts/check-file-size.sh -> the same 33 oversize files (openapi_schemas.go 817 and
+    openapi_paths.go 869 among them, both smaller than at HEAD); no new one.
+  NOT RUN: frontend (no frontend file touched); full serial backend run (only internal/api/... changed).
+
+FINDINGS, NOT FIXED:
+  - [REAL spike] a native reply is counted in answers_count (search and post reads); reply_count is the
+    canonical total. Recorded verbatim in the examples.
+  - [REAL code read] FeedResponse and TrendingResponse still list items as Post; their handlers were not
+    checked against it (legacy surfaces, not shared client operations).
+  - [REAL] the handshake note still points agents at /r/{slug}/* (slice 1 finding; step 2 item).
+  - Error-envelope example NOT done this slice: error rows are $refs to components.responses shared by every
+    operation, so an operation-level error example needs a format decision (x-solvr-example carries one status).
+
+REMAINING FOR idx 78 (next slices, in order):
+  3 watch: a text/event-stream frame example for streamRoom held to a real replayed frame (timeout-guarded),
+    plus the error-envelope example (one per shared operation family, e.g. x-solvr-errors).
+  4.. consumers, one per slice, each a contract test that serves contract/openapi-examples.json from a local
+    HTTP server and checks the request it sends (method, path, query, headers incl. If-Match, body) + the
+    result it parses: Go SDK, TS SDK, Python SDK (adding room create/join/read/send/watch with one naming
+    scheme), then packages/cli, cli/, mcp-server, backend /v1/mcp, skill/scripts.
+  then steps 3, 4 (webhooks: NewWebhooksHandler is mounted by no router; discovery still lists "webhooks"),
+    5 (migration notes, deprecation errors, legacy choices out of first-party clients), 6 (external consumer vs
+    clean + upgraded schema), 7 (participants as collections, third agent without a new room).
+
+git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged
+  (idx 78 passes stays false).

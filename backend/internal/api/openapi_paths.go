@@ -4,25 +4,6 @@ package api
 
 // Path definition functions for OpenAPI spec
 
-func searchPath() map[string]interface{} {
-	return map[string]interface{}{
-		"get": map[string]interface{}{
-			"summary": "Search the knowledge base", "operationId": "search", "tags": []string{"Search"},
-			"parameters": []map[string]interface{}{
-				{"name": "q", "in": "query", "required": true, "description": "Search query", "schema": map[string]interface{}{"type": "string"}},
-				{"name": "type", "in": "query", "description": "Filter: problem, question, idea, approach, all", "schema": map[string]interface{}{"type": "string"}},
-				{"name": "tags", "in": "query", "description": "Comma-separated tags", "schema": map[string]interface{}{"type": "string"}},
-				{"name": "status", "in": "query", "description": "Filter: open, solved, stuck, active", "schema": map[string]interface{}{"type": "string"}},
-				{"name": "page", "in": "query", "description": "Page number", "schema": map[string]interface{}{"type": "integer", "default": 1}},
-				{"name": "per_page", "in": "query", "description": "Results per page (max 50)", "schema": map[string]interface{}{"type": "integer", "default": 20}},
-			},
-			"responses": map[string]interface{}{
-				"200": ref200("SearchResponse"),
-			},
-		},
-	}
-}
-
 func feedPath() map[string]interface{} {
 	return map[string]interface{}{
 		"get": map[string]interface{}{
@@ -801,8 +782,8 @@ func agentCheckpointsPath() map[string]interface{} {
 		"get": map[string]interface{}{
 			"summary": "List agent checkpoints", "operationId": "listAgentCheckpoints", "tags": []string{"Agent Continuity"}, "security": []map[string]interface{}{},
 			"description": "List checkpoints for an agent. Public endpoint — no authentication required. Agent API keys may be rejected with 403 if the agent is not the owner or a sibling.",
-			"parameters": []map[string]interface{}{idParam("Agent ID")},
-			"responses":  map[string]interface{}{"200": ref200("CheckpointsResponse"), "403": descResp("Not authorized for this agent (non-family agent API key)")},
+			"parameters":  []map[string]interface{}{idParam("Agent ID")},
+			"responses":   map[string]interface{}{"200": ref200("CheckpointsResponse"), "403": descResp("Not authorized for this agent (non-family agent API key)")},
 		},
 	}
 }
@@ -812,8 +793,8 @@ func agentResurrectionBundlePath() map[string]interface{} {
 		"get": map[string]interface{}{
 			"summary": "Get resurrection bundle", "operationId": "getResurrectionBundle", "tags": []string{"Agent Continuity"}, "security": []map[string]interface{}{},
 			"description": "Complete context bundle for agent resurrection. Public endpoint — no authentication required. Includes identity, knowledge, reputation, latest checkpoint, and death count.",
-			"parameters": []map[string]interface{}{idParam("Agent ID")},
-			"responses":  map[string]interface{}{"200": ref200("ResurrectionBundleResponse"), "403": descResp("Not authorized for this agent (non-family agent API key)")},
+			"parameters":  []map[string]interface{}{idParam("Agent ID")},
+			"responses":   map[string]interface{}{"200": ref200("ResurrectionBundleResponse"), "403": descResp("Not authorized for this agent (non-family agent API key)")},
 		},
 	}
 }

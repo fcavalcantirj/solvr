@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,10 +17,11 @@ import (
 )
 
 // idx 78 step 1: every published example is what the running API answers. The example
-// requests are sent in the order an agent would (create a room, join it, post, read, watch,
-// then reply to a post) with this run's slug, post id and credentials in place of the
-// example's; the answer must have the documented status, validate against the documented
-// schema, and show no field the example omits nor a field of another JSON type.
+// requests are sent in the order an agent would (create a post, read it, create a room, join
+// it, post, read, watch, reply to the post, read and edit the reply, then search) with this
+// run's slug, ids, credentials and ETag in place of the example's; the answer must have the
+// documented status, validate against the documented schema, and show no field the example
+// omits nor a field of another JSON type.
 func TestOpenAPIExamples_EachExampleIsWhatTheRunningAPIAnswers(t *testing.T) {
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
@@ -29,21 +31,19 @@ func TestOpenAPIExamples_EachExampleIsWhatTheRunningAPIAnswers(t *testing.T) {
 
 	_, agentKey := registerTestAgent(t, ts, fmt.Sprintf("roomtest_contract_%d", time.Now().UnixNano()%1000000000))
 	slug := fmt.Sprintf("test-contract-%d", time.Now().UnixNano()%1000000000)
-	status, post := doJSON(t, http.MethodPost, ts.URL+"/v1/posts", agentKey,
-		`{"title":"How does a planner hand a plan to an executor agent?","description":"The executor must pick the plan up without a human relaying messages between them."}`)
-	require.Equal(t, http.StatusCreated, status, "%v", post)
-	postID := post["data"].(map[string]any)["id"].(string)
-
-	live := map[string]string{"slug": slug, "id": postID}
-	var roomToken string
+	var postID, replyID, roomToken, etag string
 	for _, id := range sharedClientOperations {
 		ex, ok := examples[id]
 		require.True(t, ok, "%s publishes no example", id)
 
 		path := ex.Path
 		for name := range ex.PathParams {
-			require.NotEmpty(t, live[name], "%s: no live value for path parameter %s", id, name)
-			path = strings.ReplaceAll(path, "{"+name+"}", live[name])
+			value := map[string]string{"slug": slug, "id": postID}[name]
+			if strings.HasPrefix(ex.Path, "/replies/") {
+				value = replyID
+			}
+			require.NotEmpty(t, value, "%s: no live value for path parameter %s", id, name)
+			path = strings.ReplaceAll(path, "{"+name+"}", value)
 		}
 		query := url.Values{}
 		for name, value := range ex.Query {
@@ -68,22 +68,50 @@ func TestOpenAPIExamples_EachExampleIsWhatTheRunningAPIAnswers(t *testing.T) {
 			body, err = json.Marshal(request)
 			require.NoError(t, err)
 		}
+		headers := map[string]string{}
+		for name := range ex.Headers {
+			require.Equal(t, "If-Match", name, "%s: no live value for header %s", id, name)
+			require.NotEmpty(t, etag, "%s: no ETag read before the edit", id)
+			headers[name] = etag
+		}
 		bearer := map[string]string{"agent_api_key": agentKey, "room_token": roomToken, "none": ""}[ex.Credential]
 		require.True(t, ex.Credential == "none" || bearer != "", "%s: no %s yet", id, ex.Credential)
 
-		gotStatus, answer := sendExample(t, ex.Method, target, bearer, body)
+		gotStatus, answer, header := sendExample(t, ex.Method, target, bearer, body, headers)
 		require.Equal(t, ex.Status, fmt.Sprint(gotStatus), "%s %s answered %v", ex.Method, target, answer)
 		assert.Empty(t, schemaProblems(spec, answer, ex.ResponseSchema, id+" answer"), "%s: the API breaks its own schema", id)
 		assert.Empty(t, shapeProblems(ex.Response, answer, id), "%s: the example does not show what the API answers", id)
 
-		if id == "handshakeRoom" {
-			roomToken, _ = answer.(map[string]interface{})["data"].(map[string]interface{})["room_token"].(string)
+		data, _ := answer.(map[string]interface{})["data"].(map[string]interface{})
+		switch id {
+		case "createPost":
+			postID, _ = data["id"].(string)
+			require.NotEmpty(t, postID)
+			// What moderation does to a public post before anyone can read or find it.
+			_, err := pool.Exec(context.Background(),
+				`UPDATE posts SET status = 'open', publication_state = 'published', moderation_state = 'approved' WHERE id = $1`, postID)
+			require.NoError(t, err)
+		case "handshakeRoom":
+			roomToken, _ = data["room_token"].(string)
 			require.NotEmpty(t, roomToken)
+		case "createReply":
+			replyID, _ = data["id"].(string)
+			require.NotEmpty(t, replyID)
+		case "getReply":
+			etag = header.Get("ETag")
+		case "search":
+			found := false
+			for _, item := range answer.(map[string]interface{})["data"].([]interface{}) {
+				result := item.(map[string]interface{})
+				matches, _ := result["matched_replies"].([]interface{})
+				found = found || (result["id"] == postID && len(matches) > 0)
+			}
+			assert.True(t, found, "search did not find this run's post with its edited reply: %v", answer)
 		}
 	}
 }
 
-func sendExample(t *testing.T, method, target, bearer string, body []byte) (int, interface{}) {
+func sendExample(t *testing.T, method, target, bearer string, body []byte, headers map[string]string) (int, interface{}, http.Header) {
 	t.Helper()
 	var rdr io.Reader
 	if body != nil {
@@ -97,6 +125,9 @@ func sendExample(t *testing.T, method, target, bearer string, body []byte) (int,
 	if bearer != "" {
 		req.Header.Set("Authorization", "Bearer "+bearer)
 	}
+	for name, value := range headers {
+		req.Header.Set(name, value)
+	}
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	require.NoError(t, err)
@@ -105,5 +136,5 @@ func sendExample(t *testing.T, method, target, bearer string, body []byte) (int,
 	require.NoError(t, err)
 	var answer interface{}
 	require.NoError(t, json.Unmarshal(raw, &answer), "%s %s: %s", method, target, raw)
-	return resp.StatusCode, answer
+	return resp.StatusCode, answer, resp.Header
 }

@@ -24,6 +24,7 @@ type publishedExample struct {
 	Credential     string
 	PathParams     map[string]interface{}
 	Query          map[string]interface{}
+	Headers        map[string]interface{}
 	Status         string
 	Request        interface{}
 	RequestSchema  interface{}
@@ -50,6 +51,7 @@ func publishedExamples(t *testing.T, spec map[string]interface{}) map[string]pub
 			}
 			ex.PathParams, _ = ext["path_params"].(map[string]interface{})
 			ex.Query, _ = ext["query"].(map[string]interface{})
+			ex.Headers, _ = ext["headers"].(map[string]interface{})
 			if body, ok := op["requestBody"].(map[string]interface{}); ok {
 				media := at(t, deref(t, spec, body), "content", "application/json").(map[string]interface{})
 				ex.Request, ex.RequestSchema = media["example"], media["schema"]

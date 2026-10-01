@@ -16,7 +16,8 @@ const RoomEntryChannel = "solvr_room_entries"
 // RoomPresenceChannel carries presence change notices between API instances (see
 // hub.PresenceChange). Unlike RoomEntryChannel these are not wakeups for a durable
 // record: presence is read from agent_presence, and a lost notice only costs a live
-// stream one presence frame.
+// stream one presence frame. The database sends one too (origin "database", migration
+// 000124) for each presence row an agent's removal ends.
 const RoomPresenceChannel = "solvr_room_presence"
 
 // NotifyRoomPresence sends payload on RoomPresenceChannel to every listening instance.

@@ -14,7 +14,7 @@ import (
 // rehearsal on the restored production dump showed the down path aborting on the first row
 // the new model can write and the old schema cannot hold: 000089.down re-adds the vote and
 // report target checks without 'reply', and 000088.down re-adds the typed-only posts check
-// although new posts default to the canonical type 'post'. Every down migration from 123 to
+// although new posts default to the canonical type 'post'. Every down migration from 124 to
 // 85 must now run over such rows, and each row the old schema cannot hold must be archived
 // in rollback_archive rather than dropped silently.
 func TestCutoverRollback_DownPathKeepsOrArchivesEveryPostCutoverWrite(t *testing.T) {
@@ -107,7 +107,7 @@ func TestCutoverRollback_DownPathKeepsOrArchivesEveryPostCutoverWrite(t *testing
 		require.NoError(t, err, "apply %s", filepath.Base(f))
 		applied++
 	}
-	require.Equal(t, 39, applied, "down migrations 000123..000085")
+	require.Equal(t, 40, applied, "down migrations 000124..000085")
 
 	var replies *string
 	require.NoError(t, pool.QueryRow(ctx, `SELECT to_regclass('replies')::text`).Scan(&replies))

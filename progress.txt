@@ -5947,3 +5947,190 @@ UAT (for when idx 77 closes, not now): as slice 9's list, plus after the API + f
   /sitemap-agents.xml and /sitemap-users.xml return Cache-Control private, no-store (and that any CDN
   in front does not override it); delete or ban one test account and confirm it is gone from
   /leaderboard and /sitemap-agents.xml (or -users) on the next load.
+
+================================================================================
+2026-10-01 07:05 — Task idx 77 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Make indexes, counters, search projections, and analytics rebuildable from authoritative records"
+SLICE 11 of N: step 5 "visibility/deletion changes remove public projections promptly" for ROOMS
+and for the PRESENCE of removed agents. A public room made private, deleted, archived, reopened,
+renamed or re-described by ANY writer (SQL, the reaper, PATCH) leaves every instance's /v1/overview
+snapshot at commit, and a self-deleted or banned agent stops being listed as online in its rooms
+(and leaves every instance's live streams) in the same transaction (migration 000124).
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 77-95, 97, 98; no open
+  URGENT. idx 24 and 67 are acceptance tasks (skipped as in every earlier entry); idx 68 still waits
+  for the owner call on step 1 and owner decision 4. idx 77 is the first buildable task; slice 10's
+  REMAINING list put "rooms changed outside RoomHandler (SQL/admin) still wait 30 s in the overview;
+  other public surfaces naming accounts (room member lists / presence for a deleted agent) — spike
+  first" first. Tree clean at start; HEAD 4c4331da.
+
+SPIKE FIRST [REAL, /tmp/solvr_idx77_s11/spike/spike.sh + spike.out; HEAD code; fresh DB at 123; API
+  on :8099 under env -i; 3 agents registered through the API (keep, del, ban), 6 public rooms
+  created by keep, all 3 handshake+join+message in room R1, keep messages R2-R6; DB dropped, :8099
+  free after]:
+  A. SQL on rooms: R2 is_private=true, R3 deleted_at=NOW(), R4 archived_at=NOW(), R5 DELETE row,
+     R6 display_name changed. GET /v1/rooms/{slug} at once: R2 403, R3 404, R5 404, R6 new name;
+     GET /v1/rooms at once: R2/R3/R5 gone, R6 renamed. GET /v1/overview right after: STILL named R2,
+     R3, R5 and R6's OLD name; they were gone only in the read after a 35 s poll (the poll's exit
+     condition wrongly included R4, which stays public by design, so the exact second was not
+     printed; the RED test below pins "still listed 3 s after"). Code fact [REAL, read]:
+     RoomHandler announced visibility/archive/reopen/delete only; UpdateRoom invalidated only when
+     is_private was in the PATCH, so a rename through the API waited the 30 s as well.
+  B. DELETE /v1/agents/me (del) 200, POST /admin/bans agent (ban) 200; their room tokens on /r:
+     401 (idx 75, correct). But agent_presence still held both rows, room_agent_tokens rows
+     rotated=false, memberships not revoked, and GET /v1/rooms/{R1}/agents and GET /v1/rooms/{R1}
+     (agents, online_count) still listed both as online, card included — until the TTL (600 s
+     default) and the next reaper pass.
+  Not projections (left as they are, see FINDINGS): the transcript (recent_messages, /messages,
+  the overview activity feed and /v1/rooms' latest message) keeps the removed agents' past messages
+  under their stored agent_name/author_id.
+
+DESIGN: same place as 000123 (slice 7), the database, so every writer is covered.
+  1. rooms_overview_changed_update AFTER UPDATE OF is_private, deleted_at, archived_at, expires_at,
+     slug, display_name, description WHEN the room was or is public-and-undeleted AND one of them is
+     DISTINCT; rooms_overview_changed_delete AFTER DELETE WHEN the old row was public-and-undeleted.
+     Both run 000123's overview_changed_notify() (empty notice on solvr_overview_changed; every
+     instance's room listener drops its snapshots; Postgres folds a bulk statement to one notice).
+     Quiet: messages (message_count/last_active_at are not watched columns), tags/category (not
+     shown), same-value rewrites, private or already deleted rooms.
+  2. agents_removed_presence_end AFTER UPDATE OF deleted_at WHEN NULL -> NOT NULL: DELETE the
+     agent's agent_presence rows and, per row, pg_notify('solvr_room_presence', hub.PresenceChange
+     JSON {room_id, agent_name, joined:false, origin:"database"}). Each instance's existing
+     presenceRelay applies it (origin != its instance id): registry.Remove + presence_leave on its
+     streams, exactly like a leave made through another instance. Memberships and tokens untouched
+     (tokens already stop resolving). Presence is ephemeral state, so the "rebuild" is the next join.
+  RoomHandler's own invalidateOverview calls are kept (now redundant with the trigger; one extra
+  notice on those API paths; not removed, not asked).
+
+WHAT THIS SLICE CHANGED [REAL, git status --porcelain / git diff --numstat before this append;
+  5 M +15/-13, 5 new files]:
+  A backend/migrations/000124_room_removal_projections.up.sql (70): header with the measured
+    before-state and the rebuild note; the 2 rooms triggers and agent_removed_presence_end() + its
+    trigger (FOR gone IN DELETE ... RETURNING LOOP PERFORM pg_notify).
+  A backend/migrations/000124_room_removal_projections.down.sql (6): drops the 3 triggers and the
+    function (overview_changed_notify() stays: it belongs to 000123).
+  M backend/internal/db/overview_changes.go (+3/-2): OverviewChannel doc names 000124's triggers.
+  M backend/internal/db/room_entry_listener.go (+2/-1): RoomPresenceChannel doc: the database sends
+    origin "database" leaves (000124).
+  M backend/cmd/cutover/main.go: --expect-version default 123 -> 124; main_test.go (+7/-7): same
+    version in TestParseOptions_GuardsTheProductionRun / TestCheckSchema_... (same assertions).
+  M backend/internal/db/cutover_rollback_test.go (+2/-2): down-migration count 39 -> 40
+    ("000124..000085") and the comment; still asserts every down step runs and archives.
+  A backend/internal/db/room_overview_change_notify_test.go (100, 1 test, scratch DB, reuses
+    slice 7's listenOverviewNotices sentinel reader): TestOverviewChanges_WritesThatChangeAPublic
+    RoomAnnounceIt — quiet: new room, a message, tags/category edit, all watched columns rewritten
+    to themselves, private room renamed/archived/soft-deleted/row-deleted, deleted room renamed,
+    row of a soft-deleted room deleted; exactly one notice each: rename, description, slug,
+    archive, reopen, expiry, public->private, private->public, soft delete, public row DELETE (with
+    messages), one statement soft-deleting 4 public rooms.
+  A backend/internal/db/agent_removal_presence_test.go (137, 1 test, scratch DB, own LISTEN on
+    RoomPresenceChannel with a sentinel): TestAgentRemoval_EndsItsRoomPresenceAndAnnouncesEachLeave
+    — removed agent present in 2 rooms, banned in 1, a kept one in 2: live edit -> nothing;
+    AgentRepository.Delete -> exactly the 2 leaves {room, name, joined false, origin database},
+    only its rows gone, memberships still active (2); re-delete ErrAgentNotFound + nothing;
+    dry-run ban -> nothing ends; BanAccount -> 1 leave; ban of an already deleted agent -> nothing.
+  A backend/internal/api/router_room_removal_projections_test.go (150, 2 tests, two full instances
+    with their own relays): TestOverview_ARoomChangedByAnyWriterLeavesEveryInstancesSnapshotAtCommit
+    (scratch DB; SQL private / soft delete / row delete / rename and a PATCH rename on b; both
+    overviews' activity must catch up within 3 s) and TestRoomPresence_ARemovedAgentLeavesEvery
+    InstanceOnce (shared solvr_test like the other multi-instance presence tests; planner +
+    executor present through a, streams on a and b; planner DELETE /v1/agents/me through b ->
+    each stream sees [join, leave] once, /v1/rooms/{slug}/agents lists only executor and
+    online_count is 1 on both, no registry keeps the planner, the executor's frames untouched).
+  No test deleted, skipped or loosened; the three version/count edits track the new latest
+  migration, as in slices 3-7.
+
+VERIFICATION [this session; DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test
+  (local docker solvr-postgres), migrated 123 -> 124 with `migrate up` this session (124 dirty=f);
+  the DB tests and the overview API test make their own scratch DBs from the files; logs
+  /tmp/solvr_idx77_s11/]:
+  [TEST] RED (tdd/red_db.log, red_db2.log, red_api.log, HEAD code): room notices FAIL :66 "a public
+    room renamed must announce exactly one overview change" (expected 1, actual 0; every quiet case
+    before it passed; the first run failed earlier on my own fixture — "inconsistent types deduced
+    for parameter $1" from reusing $1 as slug and display_name — fixed in the test, re-run RED);
+    presence FAIL :109 (no leave notices); API overview FAIL :97 "Room made private by SQL" still
+    listed after 3 s; API presence FAIL :140 (stream got the join, no leave).
+  [TEST] GREEN (tdd/green_db.log, green_api.log, green_cutover.log): the 4 new tests + TestOverview
+    Changes_WritesThatChangeTheListedPostsAnnounceIt, TestCutoverRollback_*, TestOverview_* (slice
+    7's two), TestRoomPresenceEvents_* (the existing join/leave and reaper-expiry multi-instance
+    tests) all PASS, 0 SKIP; cmd/cutover ok. Overview catch-up on both instances: 20-21 ms for all
+    5 room changes (HEAD: still listed at 3 s). go build ./... exit 0; go vet ./internal/db
+    ./internal/api ./cmd/cutover exit 0; gofmt -l clean on every touched Go file.
+  MUTATIONS [TEST] (mut/mut.sh + mut.out, mut2.sh + mut2.out; each restored, shasum -c OK after):
+    A2 update trigger on an unwritten column -> :66; B no public guard -> :61 (private room
+    renamed); C delete trigger unguarded -> :63; D description unwatched -> :68; E presence rows
+    selected not deleted -> :113; F2 no pg_notify -> :109; G origin '' -> :109. (First A/F attempts
+    produced invalid SQL and are not counted; redone as A2/F2.)
+  MIGRATION [REAL, rehearsal/rehearsal.sh + .out] throwaway DB: up -> 124 dirty=false, 3 new
+    triggers + 1 function, overview_changed_notify present, 43 other user triggers; down 1 -> 123
+    dirty=false, 0 + 0, overview_changed_notify still present, 43 others intact; up -> 124. Dropped.
+    Size context [REAL, read-only counts]: the restored production dumps (solvr_cutover_rehearsal,
+    solvr_rehearsal_purge113, both at 113) hold 0 agent_presence rows, 78 rooms, 199 agents, so the
+    per-removal DELETE by agent_id (no agent_id-leading index; UNIQUE is room_id, agent_id) scans a
+    tiny table [INFERRED cost: negligible; not timed].
+  [REAL] LIVE PROBE (probe/probe.sh + probe.out = the spike on the working tree, fresh DB at 124):
+    right after the removals agent_presence for R1 held only keep (HEAD: all 3); GET /v1/rooms/{R1}
+    /agents names only keep (HEAD: all 3); /v1/overview was free of R2/R3/R5 and R6's old name
+    0.043 s after the SQL writes (HEAD: still there until the 35 s read). R4 (archived) stays on
+    the overview and its page, as before: archived rooms are public. Room detail R1 still names the
+    removed agents only through recent_messages (transcript; FINDINGS). DB dropped, :8099 free.
+  [TEST] FULL BACKEND (once) `go test ./... -count=1 -p 1 -v -timeout 45m` on solvr_test at 124 ->
+    full.log, exit 1: FAIL internal/api and internal/db only; 3287 top-level PASS, 69 FAIL, 13 SKIP.
+    SKIP set identical to slice 7's serial baseline (/tmp/solvr_idx77_s7/full.log; diff empty).
+    FAIL set vs that baseline: 66 identical, 1 baseline name passed (TestAgentClaim_RetriesAndRaces
+    LinkTheAgentOnce), 2 extra: TestCommentsEndpoints (router_content_test.go:279 POST /v1/posts 409
+    DUPLICATE_CONTENT) and TestPinsCreateWithAgentAPIKey (router_pins_test.go:161 409 "pin already
+    exists for this CID and owner"; also on slice 10's extra list). Both run alone once, serially
+    (extra_api.log): 2/2 PASS. Neither touches rooms, presence or agent removal. [INFERRED] shared
+    solvr_test data interference, as recorded before. Every test this slice wrote or touched PASSES
+    in full.log.
+  check-file-size.sh -> filesize.log "Found 34 file(s) exceeding 800 lines", same count as slices
+    1-10; none of this slice's files on it (new files 6-150 lines).
+  NOT RUN: frontend (no frontend file touched; /rooms and /rooms/[slug] are already force-dynamic +
+    no-store [REAL, read]); golangci-lint (config/version mismatch, slice 31).
+  Leftovers [REAL]: :8099/:3099 free; 0 solvr_idx77*/solvr_scratch* databases;
+    solvr_search_docs_1790841569608279000 predates this session (left alone, as slice 10 noted).
+
+FINDINGS, NOT FIXED [REAL, spike + code read]:
+  - A removed agent's past messages keep its name: the overview activity feed (homepage_activity.go
+    publicRoomFeedCTE) shows m.agent_name for agents but blanks a deleted HUMAN's username (LEFT JOIN
+    users ... u.deleted_at IS NULL -> ''); GET /v1/rooms/{slug} recent_messages, /messages and the
+    /v1/rooms list's latest message keep both. Whether a removed account's transcript attribution
+    should be blanked is a content-policy call (owner), not a projection; the stored agent_name is
+    the message's own column.
+  - A HARD-deleted agent (DELETE /admin/agents/{id}) loses its presence through the room_members FK
+    cascade with no leave notice (open streams keep showing it until reload). Normally the account
+    was soft-deleted first (ListDeleted is the review queue), which now ends presence; not built.
+  - A removed agent that holds an open stream may produce two presence_leave frames on that
+    instance (its stream ends on the access notice, then the database leave arrives) [INFERRED from
+    hub.go's presence branch; not reproduced; cosmetic].
+  - GET /v1/stats still counts deleted accounts (slice 10 finding, unchanged).
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW (runtime, after 000124 is applied):
+  - A public room made private, deleted (soft or row), archived, reopened, renamed, re-slugged,
+    re-described or given a new expiry — by the API, the reaper or SQL — leaves /v1/overview on
+    every instance within milliseconds of commit (was: up to 30 s for anything outside RoomHandler,
+    and for renames through PATCH).
+  - Deleting or banning an agent ends its presence in every room at once: GET /v1/rooms/{slug},
+    /agents and online_count stop listing/counting it [TEST], live room streams on every instance
+    show presence_leave [TEST], and the homepage presence figures drop it with their next snapshot
+    (<= 30 s; presence changes do not announce the overview) [INFERRED from the queries reading
+    agent_presence] (was: listed as online until its TTL, 600 s by default).
+  - Deploy ordering: 000124 can go before or after the API (no Go change reads it; the relay already
+    applies any PresenceChange). The cutover command now refuses a database not at 124.
+
+REMAINING for idx 77 (next slices, in order) [UNVERIFIED plan]:
+  step 1: measured query plans on representative data for the listed lookups (incl. leaderboard).
+  step 4: raw eligible search events vs time buckets + retention windows; no summed distincts.
+  step 5: reconcile counters/sampled search after migration and rebuilds.
+  step 6: no new infrastructure without a measured bottleneck (state at close).
+
+git status at journal time [REAL, git status --porcelain]: the 5 M + 5 ?? files listed above, plus
+  M progress.txt (this entry). spec.json unchanged, idx 77 passes stays false.
+
+UAT (for when idx 77 closes, not now): as slice 10's list, plus apply 000124 on production (after
+  000123) and confirm `SELECT count(*) FROM pg_trigger WHERE tgname IN ('rooms_overview_changed_update',
+  'rooms_overview_changed_delete','agents_removed_presence_end')` = 3; rename one public test room on
+  https://solvr.dev and confirm the homepage activity shows the new name on the next load; delete a
+  test agent that is present in a public room and confirm /rooms/{slug} stops listing it as online.

@@ -7,8 +7,9 @@ import (
 
 // OverviewChannel carries "the public overview changed" notices between API instances: a
 // room went private, was archived, reopened or deleted (OverviewChanged), or a post or reply
-// write changed the posts the overview lists (migration 000123's triggers, at commit, whoever
-// the writer is). Each instance drops its cached
+// write changed the posts the overview lists (migration 000123's triggers), or a write changed
+// how a public room is shown (000124's triggers) — at commit, whoever the writer is. Each
+// instance drops its cached
 // overview snapshots on a notice. Like RoomPresenceChannel it is not a durable record:
 // the snapshots are re-read from the database, and a notice lost while an instance's
 // listener was down is covered by dropping the snapshots on every (re)LISTEN.

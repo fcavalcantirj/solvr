@@ -6495,3 +6495,142 @@ UAT (for when idx 77 closes, not now): as slice 11's list, plus migration 000125
   or with the API deploy that carries this slice. It is a plain CREATE INDEX on users (358 rows in the
   2026-09-29 dump; ShareLock for milliseconds). After the deploy, open https://solvr.dev/posts (newest
   and top) and a post with replies, and confirm both load and show authors and reply counts.
+
+2026-10-01 09:12 — Task idx 77 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Make indexes, counters, search projections, and analytics rebuildable from authoritative records"
+SLICE 14 of N: step 1, room activity, part 1: the public room list (GET /v1/rooms, RoomRepository
+.ListFiltered). Each listed room's unique_participant_count is now counted one author at a time over a
+new partial index (migration 000126), not by reading every live message. The page is now picked from
+rooms first, so an offset page no longer pays for the rooms it skips. Same counts. On the 2M-entry spike,
+the newest page went 1.74 s -> 12 ms and offset page 1,000 went 2.17 s -> 13 ms.
+ListPublicRoomFeed and GetRoomPulse were measured but are NOT changed (next slice).
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 77-95, 97, 98; no open
+  URGENT. 24 and 67 are acceptance tasks (skipped as in every earlier entry); 68 waits on the owner
+  (08:15 entry). idx 77 is the first buildable task; slice 13's REMAINING list puts room activity next.
+  Tree clean at start; HEAD 4fab47f0.
+
+SPIKE [REAL, /tmp/solvr_idx77_s14/spike/]: throwaway DB solvr_idx77_s14_spike (all migrations to 125).
+  seed.sql + seed_entries.sql + seed_presence.sql with triggers off: 20k users, 20k rooms (10% private,
+  2.5% deleted, 4% archived, 3% expired), 2M room_entries 5 s apart (~116 days; half in 20 hot rooms of
+  ~50k entries each), 30k agent_presence. Per room: 8 agents + 2 humans, a seventh of agent messages
+  author-less, 1% of messages deleted. Mix: 15% events (heartbeat/presence plus CLAIM/building/PR/MERGED/
+  DONE), 5% system and 5% human messages, the rest agent messages; one room.activated per room.
+  The FIRST seed had a defect: kind and author were a function of the room (g % 20 was fixed per
+  room), so every room held one kind only. It showed a false 8 ms "preview" cost per room. I fixed it
+  with m = (g/40 + g/20000) % 20 and reseeded. Every number below is from the mixed seed.
+  A throwaway pgx-tracer harness (zz_idx77_s14_spike_test.go: copied in, run, deleted. Copy at
+  spike/zz_idx77_s14_spike_test.go.txt) called the REAL repository methods and EXPLAIN (ANALYZE, BUFFERS)
+  each captured statement. Output: plans_head.txt (HEAD) and plans_new.txt (this change, ListFiltered only).
+  HEAD, mixed seed (statement execution / Go wall):
+    ListFiltered recent 1,505 ms / 1.74 s; active 146 ms; query "room 1" 2,216 ms / 1.98 s;
+      offset 1,000 2,486 ms / 2.17 s.
+    ListPublicRoomFeed (7 rows) 1,956 ms; offset 200 1,588 ms; CountPublicRoomFeedSince 225 ms.
+    GetRoomPulse 24h 4,249 + 187 ms (series); 7d 4,881 + 227; 30d 4,112 + 736 ms.
+  Cause in ListFiltered [REAL, plans_head]: SubPlan 2 (COUNT(DISTINCT author_id) over the room's live
+    messages) took 75 ms per hot room (Bitmap Heap Scan of ~19k rows, ~13k buffers, then a sort), x20 per
+    page. The last-message preview took 0.045 ms per room and owner/presence were cheap. On an OFFSET page
+    the postponed target list runs for every skipped row too: 1,020 evaluations for offset 1,000.
+  Variant [REAL, variants.sql/variants.log]: a partial index on (room_id, author_id) WHERE kind='message'
+    AND deleted_at IS NULL AND author_id IS NOT NULL, plus a recursive skip-scan (MIN author, then the next
+    author > previous, LIMIT 1 each). It equals COUNT(DISTINCT) on all 20,000 rooms (0 mismatches).
+    Hot room (76 authors): 0.29 ms, Index Only Scan with 0 heap fetches.
+
+WHAT CHANGED [REAL, git status --porcelain: 4 M + 3 ??; git diff --stat 52+/28-, plus new files]:
+  M backend/internal/db/rooms.go (586 -> 610 lines):
+    - new roomParticipantCount(roomIDExpr): the recursive skip-scan above, over room_entries
+      directly. Same set as the messages view (kind='message'), deleted_at IS NULL, author_id NOT NULL.
+    - ListFiltered: the WHERE, order, LIMIT and OFFSET now run in a derived table over rooms r. It
+      carries live_agent_count, which the 'active' order needs. The outer query computes participants
+      (roomParticipantCount), the last-message preview (unchanged subquery), and the owner
+      (humanOwnerOf + users join, moved out of the page). It re-applies the same order on p.*.
+      orderBy became a format string used for both levels. The WHERE conditions, both sorts, the
+      columns and the Scan order are unchanged.
+  ?? backend/migrations/000126_room_entries_author_index.{up,down}.sql: CREATE INDEX IF NOT EXISTS
+    idx_room_entries_room_author ON room_entries (room_id, author_id) WHERE kind = 'message' AND
+    deleted_at IS NULL AND author_id IS NOT NULL / DROP INDEX IF EXISTS. The header states the rebuild
+    path (REINDEX; derived from room_entries alone).
+  M backend/cmd/cutover/main.go: --expect-version default 125 -> 126.
+  M backend/cmd/cutover/main_test.go and backend/internal/db/cutover_rollback_test.go: the same
+    version-number bumps slice 13 made (125 -> 126; 41 -> 42 down migrations "000126..000085").
+    Only those numbers changed; nothing was weakened.
+  ?? backend/internal/db/rooms_list_scale_test.go (127, package db, scratch DB via
+    newMigratedScratchDatabase): TestRoomList_AtGrowthVolumeParticipantCountsMatchTheDefinitionAndRead
+    OnlyTheirAuthors. Seed: 2,000 rooms and 600k entries (half in 20 hot rooms, room 1 with 150 agents),
+    with the same mixed kinds, author-less messages and deleted messages. Cases: recent, active, query,
+    offset 200. Every listed room's UniqueParticipantCount must EQUAL COUNT(DISTINCT author_id) over
+    messages (the definition). The page's one statement may not Seq Scan room_entries and must read
+    fewer than relpages/10 of its buffers.
+  No test deleted, skipped or loosened. Existing tests edited: only the three cutover version numbers.
+
+VERIFICATION [this session; DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test (local
+  docker solvr-postgres), migrated 125 -> 126 this session (126|f). The scale test makes its own scratch
+  DB. Logs in /tmp/solvr_idx77_s14/]:
+  [TEST] RED (tdd/red.log, HEAD code + new test): all 4 cases FAIL at :123 on the read bound
+    (room_entries 156,474 / 156,474 / 89,455 / 204,524 buffers vs bound 956, table 9,563 pages). Every
+    participant equality before that line PASSED, so the definition equals HEAD's counts.
+    recent 244 ms, offset 253 ms.
+  [TEST] GREEN (tdd/green.log): 4/4 PASS, 0 SKIP. room_entries 393 / 393 / 377 / 297 buffers, no Seq
+    Scan. recent 8 ms, active 5, query 11, offset 2 ms.
+  MUTATIONS [TEST] (mut/; sources restored, `shasum -c mut/orig.sha` OK; the migration files were moved
+    back, ls confirms both):
+    M1 migration 000126 held out -> :123 room_entries 729,197 buffers (recent), 15,681 (offset).
+    M2 skip step without `deleted_at IS NULL` -> :123 572,882 buffers (the planner can no longer use
+      the partial index). It was caught by the read bound, NOT by equality: in this seed every author of
+      a deleted message also has live messages, so the counts stay equal. Equality alone would not
+      catch a "counts deleted-only authors" mutant here [REAL, M2.log].
+  [TEST] TARGETED SUITES (no full backend run this iteration):
+    `go test ./internal/db -count=1 -p 1 -v -run 'Room|Cutover|Participant|Rooms'` -> db_rooms.log:
+      127 top-level PASS, 4 FAIL, 0 SKIP. The 4 (TestRoomRepository_GetBySlug/_List/_Update/
+      _SoftDelete, "Create() error = room slug already exists", ambient solvr_test fixture data) are
+      all in slice 13's fail.base and fail.now. TestRoomRepository_ListFiltered* and
+      TestCutoverRollback_* are among the passes.
+    `go test ./cmd/cutover -count=1 -v` -> cutover.log: ok.
+    `go test ./internal/api -count=1 -p 1 -v -run "Room|Homepage|Overview|Connect"` -> api_rooms.log:
+      207 top-level PASS, 4 FAIL, 0 SKIP. The 4 (TestHomepageOverview_ServesEverySectionToALoggedOut
+      Visitor, TestHomepageSearch_NeverPublishesAProtectedOrUnrepeatedTerm / _NeverPublishesPasted
+      SecretsOrPersonalData / _EveryPublishedTermLinksToCanonicalPostsSearch) are all in slice 13's
+      fail.base and fail.now.
+    NOT RUN: the full `go test ./...` serial run. Slice 13's takes ~40 min, which does not fit this
+      iteration's 45-minute limit. The next iteration should run it once against /tmp/solvr_idx77_s13/
+      fail.now before closing idx 77.
+  [TEST] spike after the change (plans_new.txt, same 2M-entry data, migration 126 applied): ListFiltered
+    recent 1.74 s -> 12 ms wall (1.8 ms statement); query 1.98 s -> 15 ms; offset 1,000 2.17 s -> 13 ms;
+    active 156 -> 130 ms. The active statement is still 116 ms: the 'active' order needs live_agent_count
+    for every candidate room, which is a COUNT(DISTINCT) over agent_presence per room for 20k rooms
+    (Seq Scan of agent_presence + a per-room subplan). Not fixed.
+  [REAL] gofmt -l clean on every touched Go file; go build ./... ok; go vet ./internal/db ./cmd/cutover ok;
+    check-file-size.sh "Found 33 file(s) exceeding 800 lines" (unchanged); none of the touched files is on
+    it (rooms.go 610).
+  NOT RUN: frontend (no frontend file touched; the GET /v1/rooms response shape is unchanged).
+  Leftovers [REAL]: I dropped solvr_idx77_s14_spike. solvr_idx77_s12b_clean, solvr_idx77_s12v_clean and
+    solvr_scratch_1790853180756789000 were already there before this session (left for the owner). No zz_*
+    file in the tree.
+
+FINDINGS, NOT FIXED [REAL, spike plans_head.txt]:
+  - ListPublicRoomFeed: 1.6-2.0 s at 2M entries. The UNION ALL of messages and allow-listed events is
+    read in full and top-N sorted per request; CountPublicRoomFeedSince takes 225 ms.
+  - GetRoomPulse: the 13-figure statement takes 4.1-4.9 s whatever the window; the message series takes
+    187-736 ms. They need the plans split per figure. Not yet analysed.
+  - ListFiltered sort=active: 116 ms, from live_agent_count over every candidate room (above).
+
+REMAINING for idx 77 (next slices, in order) [UNVERIFIED plan]:
+  step 1: ListPublicRoomFeed + CountPublicRoomFeedSince, GetRoomPulse (+ messageSeries), then the
+    slice 13 post-listing findings (exact total, search LIMIT).
+  step 4: raw eligible search events vs time buckets + retention windows; no summed distincts.
+  step 5: reconcile counters/sampled search after migration and rebuilds.
+  step 6: no new infrastructure without a measured bottleneck. This slice added one partial index for a
+    measured bottleneck, and no cache or service.
+  Before closing idx 77: one full serial backend run, compared against slice 13's fail.now.
+
+git status at journal time [REAL, git status --porcelain]: M backend/cmd/cutover/main.go, M backend/cmd/
+  cutover/main_test.go, M backend/internal/db/cutover_rollback_test.go, M backend/internal/db/rooms.go,
+  ?? backend/internal/db/rooms_list_scale_test.go, ?? backend/migrations/000126_room_entries_author_index
+  .{up,down}.sql, plus M progress.txt (this entry). spec.json unchanged; idx 77 passes stays false.
+
+UAT (for when idx 77 closes, not now): as slice 13's list, plus migration 000126 on production, before or
+  with the API deploy that carries this slice. It is a plain CREATE INDEX on room_entries (3,629 entries
+  in the 2026-09-29 dump; ShareLock for milliseconds). After the deploy, open https://solvr.dev/rooms
+  (default and "active" sort, plus a search) and confirm the cards load with their participant counts
+  and last-message previews.

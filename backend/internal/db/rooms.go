@@ -216,6 +216,26 @@ func (r *RoomRepository) List(ctx context.Context, limit, offset int) ([]models.
 	return r.ListFiltered(ctx, RoomListParams{Limit: limit, Offset: offset})
 }
 
+// roomParticipantCount is a room's unique participants: the distinct authenticated authors of its
+// live messages, the same figure as COUNT(DISTINCT author_id) over them. It walks
+// idx_room_entries_room_author one author at a time (migration 000126), so it costs one index
+// probe per participant rather than a read of every message the room holds (idx 77 slice 14:
+// 75 ms -> 0.3 ms for a 23k-message room).
+func roomParticipantCount(roomIDExpr string) string {
+	return `(WITH RECURSIVE pa(author_id) AS (
+			(SELECT e.author_id FROM room_entries e
+			  WHERE e.room_id = ` + roomIDExpr + ` AND e.kind = 'message' AND e.deleted_at IS NULL
+			    AND e.author_id IS NOT NULL
+			  ORDER BY e.author_id LIMIT 1)
+			UNION ALL
+			SELECT (SELECT e.author_id FROM room_entries e
+			         WHERE e.room_id = ` + roomIDExpr + ` AND e.kind = 'message' AND e.deleted_at IS NULL
+			           AND e.author_id > pa.author_id
+			         ORDER BY e.author_id LIMIT 1)
+			  FROM pa WHERE pa.author_id IS NOT NULL)
+		SELECT COUNT(author_id) FROM pa)`
+}
+
 // ListFiltered returns public rooms for discovery, honouring sort, search and
 // archived visibility. It always excludes private, soft-deleted, expired and
 // empty-abandoned rooms. Uses correlated subqueries (no N+1 per D-34) and
@@ -264,37 +284,41 @@ func (r *RoomRepository) ListFiltered(ctx context.Context, params RoomListParams
 		argN++
 	}
 
-	orderBy := "ORDER BY r.last_active_at DESC, r.id DESC"
+	orderBy := "ORDER BY %[1]slast_active_at DESC, %[1]sid DESC"
 	if params.Sort == "active" {
-		orderBy = "ORDER BY live_agent_count DESC, r.last_active_at DESC, r.id DESC"
+		orderBy = "ORDER BY %[1]slive_agent_count DESC, %[1]slast_active_at DESC, %[1]sid DESC"
 	}
 
 	limitArg := argN
 	offsetArg := argN + 1
 	args = append(args, limit, offset)
 
+	// The page is chosen from rooms alone; only its rows then read their participants, preview
+	// and owner, so an offset page does not pay for the rooms it skips.
 	query := `
-		SELECT r.id, r.slug, r.display_name, r.description, r.category, r.tags,
-			r.is_private, ho.user_id, r.message_count, r.created_at, r.updated_at,
-			r.last_active_at, r.expires_at,
-			(SELECT COUNT(DISTINCT agent_name) FROM agent_presence ap
-			 WHERE ap.room_id = r.id
-			   AND ap.last_seen > NOW() - (ap.ttl_seconds || ' seconds')::interval
-			) AS live_agent_count,
-			(SELECT COUNT(DISTINCT author_id) FROM messages m
-			 WHERE m.room_id = r.id AND m.deleted_at IS NULL AND m.author_id IS NOT NULL
-			) AS unique_participant_count,
+		SELECT p.id, p.slug, p.display_name, p.description, p.category, p.tags,
+			p.is_private, ho.user_id, p.message_count, p.created_at, p.updated_at,
+			p.last_active_at, p.expires_at, p.live_agent_count,
+			` + roomParticipantCount("p.id") + ` AS unique_participant_count,
 			u.display_name AS owner_display_name,
 			(SELECT LEFT(m.content, 200) FROM messages m
-			 WHERE m.room_id = r.id AND m.deleted_at IS NULL
+			 WHERE m.room_id = p.id AND m.deleted_at IS NULL
 			 ORDER BY m.created_at DESC, m.id DESC LIMIT 1
 			) AS last_message_preview
-		FROM rooms r
-		LEFT JOIN LATERAL (` + humanOwnerOf("r.id") + `) ho ON TRUE
+		FROM (
+			SELECT r.*,
+				(SELECT COUNT(DISTINCT agent_name) FROM agent_presence ap
+				 WHERE ap.room_id = r.id
+				   AND ap.last_seen > NOW() - (ap.ttl_seconds || ' seconds')::interval
+				) AS live_agent_count
+			FROM rooms r
+			WHERE ` + strings.Join(where, " AND ") + `
+			` + fmt.Sprintf(orderBy, "") + `
+			LIMIT $` + strconv.Itoa(limitArg) + ` OFFSET $` + strconv.Itoa(offsetArg) + `
+		) p
+		LEFT JOIN LATERAL (` + humanOwnerOf("p.id") + `) ho ON TRUE
 		LEFT JOIN users u ON u.id = ho.user_id
-		WHERE ` + strings.Join(where, " AND ") + `
-		` + orderBy + `
-		LIMIT $` + strconv.Itoa(limitArg) + ` OFFSET $` + strconv.Itoa(offsetArg)
+		` + fmt.Sprintf(orderBy, "p.")
 
 	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {

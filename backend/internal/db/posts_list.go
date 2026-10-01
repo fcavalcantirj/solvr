@@ -88,7 +88,9 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 	}
 	offset := (page - 1) * perPage
 
-	// Query for total count
+	// Query for total count. It reads every listed post (idx 77 slice 21, 200k posts: 26 ms warm,
+	// 40-64 ms cold). A covering partial index made it an index-only scan of 17 ms warm, not
+	// worth an 11 MB index on every post write (step 6), so the total stays a plain count.
 	countQuery := fmt.Sprintf(`SELECT COUNT(*) FROM posts p WHERE %s`, whereClause)
 	var total int
 	err := r.pool.QueryRow(ctx, countQuery, args...).Scan(&total)

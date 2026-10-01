@@ -151,3 +151,46 @@ func TestSearch_KeywordPageBuildsOnlyItsPage(t *testing.T) {
 		})
 	}
 }
+
+// Equal scores among posts found by their own text keep the full search's own order: for the
+// default sort, the better own rank first, whatever the posts' ages. Two posts tie through
+// identical replies that outrank both; the older post's own text holds the term twice, the
+// newer's once (slice 20 mutation m2, ordering such ties by created_at, passed the seed above).
+func TestSearch_KeywordPageTiesKeepTheOwnRankOrder(t *testing.T) {
+	scratch, _ := newMigratedScratchDatabase(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	var older, newer string
+	require.NoError(t, scratch.QueryRow(ctx, `
+		WITH a AS (INSERT INTO agents (id, display_name, key_sha256) VALUES ('tie_agent', 'Tie', md5('t') || md5('u')) RETURNING id),
+		     p AS (INSERT INTO posts (type, title, description, tags, posted_by_type, posted_by_id, status,
+		                              publication_state, moderation_state, visibility, created_at)
+		           SELECT 'post', 'Tie ' || g, d, ARRAY['tietag'], 'agent', a.id, 'open', 'published', 'approved', 'public',
+		                  NOW() - (3 - g) * INTERVAL '1 hour'
+		             FROM a, (VALUES (1, 'quokkatie quokkatie lattice notes'), (2, 'quokkatie lattice notes')) v(g, d)
+		           RETURNING id, title),
+		     r AS (INSERT INTO replies (post_id, author_type, author_id, body)
+		           SELECT p.id, 'agent', 'tie_agent', 'quokkatie quokkatie quokkatie quokkatie quokkatie' FROM p)
+		SELECT (SELECT id::text FROM p WHERE title = 'Tie 1'), (SELECT id::text FROM p WHERE title = 'Tie 2')`).
+		Scan(&older, &newer))
+
+	var ownOlder, ownNewer float64
+	require.NoError(t, scratch.QueryRow(ctx, `
+		SELECT MAX(ts_rank(search_document, to_tsquery('english', 'quokkatie'))) FILTER (WHERE id = $1),
+		       MAX(ts_rank(search_document, to_tsquery('english', 'quokkatie'))) FILTER (WHERE id = $2)
+		  FROM posts`, older, newer).Scan(&ownOlder, &ownNewer))
+	require.Greater(t, ownOlder, ownNewer, "the older post ranks better by its own text")
+
+	repo := NewSearchRepository(scratch)
+	opts := models.SearchOptions{Page: 1, PerPage: 20}
+	got, total, _, _, err := repo.Search(ctx, "quokkatie", opts)
+	require.NoError(t, err)
+	require.Equal(t, 2, total)
+	require.Len(t, got, 2)
+	require.Equal(t, got[0].Score, got[1].Score, "both posts score through their identical replies")
+	require.Greater(t, got[0].Score, ownOlder, "the replies outrank both posts' own text")
+	require.Equal(t, []string{older, newer}, []string{got[0].ID, got[1].ID})
+	want, wantTotal := fullKeywordSearch(ctx, t, repo, "quokkatie", opts)
+	require.Equal(t, wantTotal, total)
+	require.Equal(t, want, got)
+}

@@ -7436,3 +7436,90 @@ git status at journal time [REAL]: M backend/internal/db/search.go, M backend/in
 UAT (for when idx 77 closes, not now): as slice 19's list. This slice has no migration; after the API
   deploy, a keyword-only search (or one while the embedder is down) on https://solvr.dev for a common word
   should return results with snippets, authors, counts and reply anchors as before.
+
+2026-10-01 12:25 — Task idx 77 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Make indexes, counters, search projections, and analytics rebuildable from authoritative records"
+SLICE 21 of N: step 1, the last open items, closed by measurement. (a) The m2 survivor of slice 20 is
+pinned: a new test makes keyword search ties among own matches keep the own-rank order. (b) The exact
+GET /v1/posts total and (c) reply pagination (ListPageByPost, ListPageByAuthor) were measured at growth
+volume. Neither got an index or a rewrite: the gains are small and no read is a bottleneck (step 6).
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 77-95, 97, 98; no open
+  URGENT (96 is true). 24/67 acceptance (skipped as before); 68 waits on the owner. idx 77 first
+  buildable. Tree clean at start, HEAD e373fc29. Followed slice 20's REMAINING order (step 1: m2 tie, exact
+  post total). Reply pagination was added because slice 12 flagged it (22 ms users seq scan) and no
+  later slice re-measured it after slice 13's idx_users_id_text.
+
+SPIKE [REAL, /tmp/solvr_idx77_s21/spike/]: throwaway DB solvr_idx77_s21_spike migrated 0 -> 131. Seeded
+  with slice 13's seed.sql: 200k posts and 1M replies, plus one post with 50k replies and an agent
+  (agent_prolific) with 50k replies across posts (seed.sql, seed_replies.sql). Dropped at the end.
+  Exact post total (bench_count.sql; head.log, v1.log):
+    default anonymous COUNT: Parallel Seq Scan, 26 ms warm, 42-68 ms cold. type=question 28 ms warm
+    (Bitmap Heap Scan on idx_posts_type). week 8.5 ms. With a viewer: 33 ms.
+    Variant: a covering partial index (created_at DESC) INCLUDE (visibility, status, type,
+    owner_human_id) WHERE deleted_at IS NULL, 11 MB. After VACUUM it gives a Parallel Index Only Scan
+    (Heap Fetches 0) of 17-18 ms warm, type 14.6 ms. Saving 9 ms at 320x production's post count is not
+    worth an 11 MB index that every post write updates. Index dropped; no change.
+  Reply pagination (bench_replies.sql; replies_head.log), real statements from replies.go and
+  replies_by_author.go:
+    post count (50k-reply post): Index Only Scan idx_replies_post, 6.5 ms.
+    ListPageByPost first page 0.86 ms. Keyset page in the middle (after reply 25,000) 2.95 ms, because
+      the OR keyset predicate is only a Filter: the scan walks 25k entries, 917 buffers. Last page
+      0.09 ms. Authors use idx_users_id_text and agents_pkey (slice 12's users Seq Scan is gone).
+    ListPageByAuthor (agent_prolific) first page 1.45 ms. Keyset page in the middle 4.7 ms (13,328
+      buffers, same OR-filter cause). Author total 83 ms cold: a Hash Join that Parallel Seq Scans posts.
+  The deep-page cost grows with the position in one thread or one author's history: 3-5 ms at 50k
+  replies. Production has 1,018 replies in total. Not a bottleneck, so no change (FINDINGS below).
+
+WHAT CHANGED [REAL, git status --porcelain: 2 M; git diff --stat 46+/1-]:
+  M backend/internal/db/search_keyword_page_test.go (+43): TestSearch_KeywordPageTiesKeepTheOwnRankOrder.
+    A scratch DB holds two posts with the term "quokkatie": the older post twice in its own text, the
+    newer once. Each has an identical reply with the term five times. The test asserts the
+    preconditions: the older post's own ts_rank is higher; both results score the same; the reply score
+    is above both own ranks. Then Search (default sort) must return [older, newer], equal to
+    fullKeywordSearch, total 2.
+  M backend/internal/db/posts_list.go (+3/-1): a comment only, on the total count query. It records the
+    measurement and why no index was added. The query is unchanged.
+  No migration, index, cache or service. No test deleted, skipped or loosened.
+
+VERIFICATION [this session; DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test (local
+  docker solvr-postgres; the new test makes its own scratch DB); logs in /tmp/solvr_idx77_s21/]:
+  [TEST] tdd/pin.log: the new test PASSES on HEAD's code. It pins existing behaviour, so it was not RED on
+    HEAD; the mutation below is its RED.
+  MUTATION [TEST] mut/m2.log: m2 (keywordOwnOrder default "o.score DESC, o.created_at DESC" -> "o.created_at
+    DESC") -> FAIL at search_keyword_page_test.go:192, expected [older, newer], actual [newer, older].
+    Slice 20's m2 survivor is now killed. Source restored; `shasum -c mut/orig.sha` OK.
+  [TEST] tdd/narrow.log: `go test ./internal/db -count=1 -p 1 -v -run 'TestSearch_Keyword|
+    TestHybridSearchReplies_Equals|TestSearch_HybridTakesOnly|TestSearch_Canonical|TestFoldReply|
+    TestPostRepository_List|TestPostsList'` -> ok, 50 PASS, 0 FAIL, 0 SKIP.
+  [REAL] go build ./... ok; go vet ./internal/db ok; gofmt -l clean on both files.
+    ./scripts/check-file-size.sh reports the same 33 oversize files as slice 13's log. Neither touched
+    file is listed (209 and 196 lines).
+  NOT RUN: the full serial backend run (still owed before idx 77 closes); frontend (no frontend file
+    touched).
+
+FINDINGS, NOT FIXED [REAL, spike plans]:
+  - Reply keyset pages: `($2 = false OR created_at > $3 OR (created_at = $3 AND id > $4))` cannot be an
+    index condition, so a page deep in a thread walks every earlier entry. If threads grow, a statement
+    with the predicate written only when a cursor is set, as a row comparison
+    `(rp.created_at, rp.id) > ($3, $4)`, would let idx_replies_post / idx_replies_author_created start
+    at the cursor. That is [UNVERIFIED]; it was not measured this slice.
+  - ListPageByAuthor's total: for a prolific author the planner hash-joins all public posts (83 ms cold
+    at 50k replies, 200k posts).
+  - Step 1 is now covered: post listing (13), room activity (14-16), timeline, membership and token
+    (17), search time windows (12) and search (18-21), reply pagination (this slice).
+
+REMAINING for idx 77 (next slices, in order) [UNVERIFIED plan]:
+  step 4: document each raw event table's retention (search_queries, api_request_events, funnel_events,
+    post_views, room_events, service_checks: none pruned except idempotency 24 h) and keep raw eligible
+    search events separate from any aggregate; pruning raw events is an owner decision (data loss).
+  step 5: reconcile counters/sampled search after migration and rebuilds.
+  step 6: this slice added no index, cache or service.
+  Before closing idx 77: one full serial backend run, compared against slice 13's fail.now.
+
+git status at journal time [REAL]: M backend/internal/db/posts_list.go, M backend/internal/db/
+  search_keyword_page_test.go, plus M progress.txt (this entry). spec.json unchanged; idx 77 stays false.
+
+UAT (for when idx 77 closes, not now): as slice 20's list. This slice changes no runtime behaviour, so it
+  adds nothing to UAT.

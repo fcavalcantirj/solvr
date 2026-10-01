@@ -6906,3 +6906,132 @@ UAT (for when idx 77 closes, not now): as slice 15's list, plus migration 000128
   the 2026-09-29 dump; ShareLock for milliseconds). After the deploy, open https://solvr.dev, switch the
   room section between 24 hours, 7 days and 30 days, and confirm the six statistics and the sparkline
   load and move with the window while "agents online" stays the same.
+
+2026-10-01 10:40 — Task idx 77 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Make indexes, counters, search projections, and analytics rebuildable from authoritative records"
+SLICE 17 of N: step 1, timeline replay, membership lookup and token lookup, measured on representative
+data. All of these reads already used their indexes. One index was a duplicate: room_entries had two
+indexes on (room_id, sequence), the unique constraint and a plain copy, and every room entry write
+updated both. A schema check found five more plain duplicates of unique indexes. Migration 000129
+drops those six (users keeps its two). Measured on 100k room entry inserts: 1,257 -> 1,078 ms and
+1,193 -> 997 ms, WAL 103-104 -> 94 MB.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 77-95, 97, 98; no open
+  URGENT. 24 and 67 are acceptance tasks (skipped as in every earlier entry); 68 waits on the owner
+  (08:15 entry). idx 77 is the first buildable task. Tree clean at start; HEAD 223d6271. Slice 16's
+  REMAINING list put the slice 13 post-listing findings first (exact total, keyword search LIMIT). I
+  took the step 1 reads it lists as "not yet measured" (membership / token / timeline replay)
+  instead, because a search rewrite (two-phase rank-then-load, fold of reply matches) did not fit one
+  iteration safely. The search finding stays open (below).
+
+SPIKE [REAL, /tmp/solvr_idx77_s17/spike/]: throwaway DB solvr_idx77_s17_spike (migrated to 128),
+  seed.sql = slice 15's seedRoomFeed (2,000 rooms, 600k entries, 20 hot rooms of 15,000) plus 16,000
+  agents, 16,667 room members, 64,000 room tokens. EXPLAIN (ANALYZE, BUFFERS) of every read SQL,
+  PREPAREd, under plan_cache_mode force_custom_plan (plans_force_custom_plan.txt) and
+  force_generic_plan (plans_force_generic_plan.txt):
+    - Custom plans: every read is an index scan. ListPage pages 68-500 buffers; SequenceAfterEntry 4
+      (own id) to 158 (an id the room never held); MaxSequence 4; ListRecent 77; QueryEvents 6-125;
+      messages ListAfter/ListBefore/ListRecent 87-107; GetByID 4; IsMember 3; ListByRoom 11;
+      ResolveByHash 7-9; WasRotated 4.
+    - Generic plan of ListPage: a Bitmap Heap Scan of the whole room after the cursor, then a sort
+      (15,000 rows from sequence 0, 36 ms). auto.sql / auto2.sql: after 6 EXECUTEs with tail or
+      mid-room cursors, Postgres still chose the custom plan (pg_prepared_statements generic_plans=0,
+      custom_plans=7). So pgx's cached statements keep the index scan [REAL at this volume; other
+      data shapes UNVERIFIED].
+    - CountMessages (custom plan): 9,811 buffers cold, 194 ms. It has no caller outside internal/db
+      (grep), so no change was made.
+    - Duplicate indexes (catalog query, same relam/indkey/indclass/indcollation/indoption/exprs/pred):
+      8 pairs. users_username_key/idx_users_username, users_email_key/idx_users_email,
+      idx_refresh_tokens_token_hash_unique/idx_refresh_tokens_token_hash, config_pkey/idx_config_key,
+      rate_limit_config_pkey/idx_rate_limit_config_key, tags_name_key/idx_tags_name,
+      auth_methods_unique_oauth_id/idx_auth_methods_provider_lookup,
+      room_entries_room_seq_unique/idx_room_entries_room_seq.
+    - bench.sql (bench.txt), run twice. idx_room_entries_room_seq is 37 MB at 600k entries.
+      100k inserts in one room: 1,257 -> 1,078 ms and 1,193 -> 997 ms without it; WAL 103-104 -> 94 MB.
+  The spike DB was dropped at the end.
+
+WHAT CHANGED [REAL, git status --porcelain: 3 M + 3 ??; git diff --stat 9+/9-, plus the new files]:
+  ?? backend/migrations/000129_drop_duplicate_indexes.{up,down}.sql. Up drops idx_room_entries_room_seq,
+    idx_refresh_tokens_token_hash, idx_auth_methods_provider_lookup, idx_tags_name, idx_config_key,
+    idx_rate_limit_config_key (IF EXISTS). In each pair the unique index stays. Down recreates the six
+    with their original definitions (from migrations 000014/015/020/024/032/093). The header gives the
+    measurements. It also says why users keeps idx_users_username and idx_users_email:
+    TestMigrations_UsersTable (migrations_test.go:53-57) asserts both names exist. Dropping them means
+    editing that test, which is left for the owner.
+  ?? backend/internal/db/room_timeline_scale_test.go (303 lines, package db, scratch DBs):
+    - TestSchema_NoIndexDuplicatesAnotherIndexOfItsTable: on a freshly migrated scratch DB, no public
+      table may hold two indexes with the same access method, columns, operator classes, collations,
+      orderings, expressions and predicate. Exceptions are only the two names in
+      keptDuplicateIndexes (users, with the reason), and both must still exist.
+    - TestRoomTimeline_AtGrowthVolumeReplayMembershipAndTokenReadsStayOnTheirIndexes: seedRoomFeed +
+      new seedRoomAccess (agents, members, tokens as in the spike). It calls the REAL repository
+      methods through a traced pool: ListPage (from the start, mid-room, tail, events only, one
+      issue's CLAIMs), SequenceAfterEntry (own id, an id the room never held), MaxSequence,
+      ListRecent, QueryEvents, GetByID, messages ListAfter/ListBefore, IsMember, IsUserMember,
+      ListByRoom, ResolveByHash, IsLive, WasRotated. Each call must return the expected page size or
+      truth value. Every captured statement is EXPLAIN ANALYZEd: no Seq Scan on any table. A SELECT
+      may read at most walked + walked/50 + 30 buffers. walked is a COUNT of the room entries the
+      call has to step over (0 for one-row lookups). The bound is not applied to writes. The one
+      write is ResolveByHash's `UPDATE room_agent_tokens SET last_used_at`, which reads 31 buffers
+      under tableReads (the ModifyTable node's count includes its child scan).
+  M backend/cmd/cutover/main.go: --expect-version default 128 -> 129.
+  M backend/cmd/cutover/main_test.go, M backend/internal/db/cutover_rollback_test.go: the same version
+    bumps as slices 13-16 (128 -> 129; 44 -> 45 down migrations "000129..000085"). Only those numbers.
+  No test deleted, skipped or loosened. Existing tests edited: only the cutover version numbers.
+
+VERIFICATION [this session; DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test (local
+  docker solvr-postgres), migrated 128 -> 129 this session. The new tests make and drop their own
+  scratch DBs. Logs are in /tmp/solvr_idx77_s17/]:
+  [TEST] RED (tdd/red.log, HEAD schema + new tests): TestSchema_* FAIL. It lists the 6 duplicates
+    (auth_methods, config, rate_limit_config, refresh_tokens, room_entries, tags) and logs the 2 kept
+    users pairs. TestRoomTimeline_*: 18 of 19 reads PASS on HEAD (a pin; HEAD's plans were already
+    good). token_resolution failed only because the bound was applied to the UPDATE (31 > 30). The
+    test then limited the bound to SELECTs, as described above.
+  [TEST] GREEN (tdd/green.log): `go test ./internal/db -count=1 -p 1 -v -run 'TestSchema_NoIndexDuplicates|
+    TestRoomTimeline_AtGrowthVolume|TestCutover|TestMigrations|TestRoomEntr|TestRefreshToken|TestTag|
+    TestConfig|TestRateLimitConfig|TestAuthMethod|TestRoomAgentToken|TestRoomMember|TestMessageRepository|
+    TestRoomRelay'` -> ok, 82 top-level PASS, 0 FAIL, 0 SKIP. Both new tests PASS, and so does
+    TestCutoverRollback_DownPathKeepsOrArchivesEveryPostCutoverWrite (45 down steps, including
+    000129 down). Replay reads after the drop: 67-499 buffers, each within its bound (e.g. from the
+    start 67 / bound 132, events only 499 / 810, foreign cursor 162 / 183). Lookups: 3-11 buffers.
+    `go test ./cmd/cutover -count=1` -> ok.
+  MUTATION [TEST] M1 (mut/m1.log): 000129 also drops room_entries_room_seq_unique, so (room_id,
+    sequence) has no index. 7 reads FAIL (from the start, middle, tail, events only, foreign cursor,
+    latest sequence, recent transcript), e.g. "9811" > 132. Source restored; `shasum -c mut/orig.sha` OK.
+  [REAL] gofmt -l clean on every touched Go file; go build ./... ok; go vet ./internal/db ./cmd/cutover
+    ok; check-file-size.sh "Found 33 file(s) exceeding 800 lines" (unchanged); the new file (303) is
+    not on it.
+  NOT RUN: the full serial backend run. It is still owed before idx 77 closes, compared against
+    /tmp/solvr_idx77_s13/fail.now. Frontend not run (no frontend file touched).
+  Leftovers [REAL]: solvr_idx77_s17_spike dropped. solvr_idx77_s12b_clean, solvr_idx77_s12v_clean and
+    solvr_scratch_1790853180756789000 already existed at the start (left for the owner). No zz_* file.
+
+FINDINGS, NOT FIXED:
+  - [REAL, spike] ResolveByHash runs an UPDATE of last_used_at on every token-authenticated request.
+    That is one write per request on room_agent_tokens. Not measured under load; no change.
+  - users keeps two duplicate indexes (above): owner's call, because it means editing
+    TestMigrations_UsersTable.
+  - Keyword search without LIMIT and the exact GET /v1/posts total (slice 13 findings): unchanged.
+    When no query embedding is available (fulltext_only), searchPosts and searchReplyMatches
+    ts_headline, join reply counts and return every match, and Go pages the result. The hybrid path is
+    bounded by hybridMatchCount.
+
+REMAINING for idx 77 (next slices, in order) [UNVERIFIED plan]:
+  step 1: the full-text search fallback (rank every match cheaply, load snippets / authors / counts
+    only for the page) and the exact post total.
+  step 4: raw eligible search events vs time buckets + retention windows; no summed distincts.
+  step 5: reconcile counters/sampled search after migration and rebuilds.
+  step 6: this slice removed six indexes for measured write cost and added nothing.
+  Before closing idx 77: one full serial backend run, compared against slice 13's fail.now.
+
+git status at journal time [REAL, git status --porcelain]: M backend/cmd/cutover/main.go, M backend/cmd/
+  cutover/main_test.go, M backend/internal/db/cutover_rollback_test.go, ?? backend/internal/db/
+  room_timeline_scale_test.go, ?? backend/migrations/000129_drop_duplicate_indexes.{up,down}.sql, plus
+  M progress.txt (this entry). spec.json unchanged; idx 77 passes stays false.
+
+UAT (for when idx 77 closes, not now): as slice 16's list, plus migration 000129 on production, before or
+  with the API deploy that carries this slice. It runs six DROP INDEX statements. Each takes an ACCESS
+  EXCLUSIVE lock on its table for milliseconds; room_entries is 3,629 entries in the 2026-09-29 dump.
+  After the deploy, open a room on https://solvr.dev, scroll back through its history and reload, sign
+  in with a refreshed session, and confirm that the transcript and the login still load.

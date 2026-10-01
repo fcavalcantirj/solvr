@@ -7738,3 +7738,136 @@ UAT (for when idx 77 closes, not now): as slice 21's list. In addition, the prod
   carries view_* / reputation_* / search_documents_pending. Read them, and expect search_documents_pending > 0
   until SearchDocumentJob has embedded those rows (251 on the post-purge copy). A non-zero view/reputation
   drift_after fails the run, as vote/room drift already did.
+
+================================================================================
+2026-10-01 13:55 — Task idx 77 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Make indexes, counters, search projections, and analytics rebuildable from authoritative records"
+SLICE 24 of N: step 5, measuring the counter reconcile path at scale before deciding on a periodic
+rebuild. The measurement found agent_reputation_drift() is O(agents^2): 44-60 s for a check that finds
+nothing at 20k agents, and the cutover's agent_reputation step took 185.6 s with every agent row locked.
+Migration 000132 rewrites it to read every agent's missing activations in one pass: same rows, same
+order, 0.12-0.18 s; the cutover at scale 207.6 s -> 25.7 s.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 77-95, 97, 98; no open
+  URGENT. 24/67 acceptance (skipped as before); 68 waits on the owner. idx 77 first buildable. Tree clean
+  at start, HEAD 629647ad. Followed slice 23's REMAINING order (step 5: measure the drift functions at
+  scale before adding any periodic job).
+
+SPIKE [REAL, /tmp/solvr_idx77_s24/spike/]: DB solvr_idx77_s24_spike migrated 1 -> 131, seeded with
+  triggers off (seed.sql): 20k users, 20k agents (a third claimed, half with a model), 200k posts, 1M
+  replies, 1M votes (600k post, 400k reply, 90% confirmed), 1M post_views, 20k rooms, 1M room_entries;
+  then every rebuild_*() once (rebuild_all.log: votes 64.8 s / 540k repaired, rooms 1.8 s, views 41.9 s,
+  reputation 102.5 s / 13,333 repaired). Steady state, every drift 0 (bench_drift.log, 2 runs each):
+    vote_score_drift 4.0 / 3.3 s; room_activity_drift 1.3 / 0.9 s; view_count_drift 0.7 / 0.6 s;
+    search_document_drift 0.7 s (1,193,940 rows: seeded with no vectors);
+    agent_reputation_drift 60.6 / 44.6 s  <- the outlier.
+  EXPLAIN ANALYZE of its body (explain_rep_old.log): the correlated agent_activation_grants(a.id) is
+    inlined with "(a.id IS NULL OR id = a.id)", which no index serves, so both UNION ALL arms seq-scan
+    agents once per agent: 40,000 seq scans of agents, 36,390,140 shared buffer hits, 44.4 s.
+  Rewrite (v2.sql, compared as agent_reputation_drift_v2 in cmp.log): agent_activation_grants(p_agent_id)
+    called once, its missing keys grouped per agent and LEFT JOINed. With 551 agents broken three ways
+    (stored +7 on 300, 200 claim grants deleted with triggers off, 100 model grants deleted with the
+    trigger, 50 newly claimed with no grant): old 551 rows in 45.7 s, v2 551 rows in 0.12 s; EXCEPT ALL
+    empty both ways; agent_id order identical; one-agent calls identical. scans.sql: v2 reads agents 3
+    times for all agents; old one-agent call 5 seq + 4 idx, v2 one-agent 3 seq + 3 idx (both O(agents),
+    as before; nothing in the API calls the one-agent form).
+  Rebuild (step.log, rolled back): rebuild_agent_reputation() holds every agent row locked;
+    nothing to repair 51.2 s -> 0.18 s; 347 drifted 99.5 s -> 0.37 s, 347 repaired by both.
+
+WHAT CHANGED [REAL, git status --porcelain: M backend/cmd/cutover/main.go, M backend/cmd/cutover/
+  main_test.go, M backend/internal/db/cutover_rollback_test.go, ?? backend/internal/db/
+  agent_reputation_drift_scale_test.go, ?? backend/migrations/000132_agent_reputation_drift_set_wise.
+  {up,down}.sql; git diff --stat: 3 files, 9+/9-]:
+  ?? migrations/000132_agent_reputation_drift_set_wise.up.sql (41 lines): header with the measurements
+    above; CREATE OR REPLACE agent_reputation_drift(varchar), same signature and RETURNS TABLE:
+    agent_activation_grants(p_agent_id) once, NOT EXISTS against the grants, GROUP BY agent, LEFT JOIN
+    on a.id; missing_activations COALESCEd to '{}' as 000121 returned it; ORDER BY a.id kept.
+    agent_activation_grants() stays the one definition of which activations a row shows.
+    rebuild_agent_reputation() is unchanged and calls the new definition.
+  ?? ...000132_...down.sql (21 lines): 000121's agent_reputation_drift verbatim (diffed against 000121:
+    identical body).
+  M cmd/cutover/main.go: --expect-version default 131 -> 132. Nothing else.
+  M cmd/cutover/main_test.go: the same version numbers 131 -> 132 (parse default, clean/dirty/84
+    checks), as slices 13-19 did on each migration. No assertion loosened.
+  M internal/db/cutover_rollback_test.go: down steps 47 -> 48 ("000132..000085"), same reason.
+  ?? internal/db/agent_reputation_drift_scale_test.go (126 lines, scratch DB, 1 test):
+    TestAgentReputationDrift_ScansTheAgentsTableAFixedNumberOfTimes: 40 then 160 agents with every
+    tenth broken three ways (score +7; claim grant deleted; model set by SQL). At each size the drift is
+    exactly the expected rows in agent id order; the check's own agents scans (seq + idx, a delta read
+    twice inside one transaction from pg_stat_xact_user_tables, because a backend's earlier unreported
+    transactions are in that view) are equal at 40 and 160 and <= 4; no row has NULL
+    missing_activations; a full rebuild repairs all of them and the drift is then empty.
+  No index, cache, job or service added. No existing test deleted, skipped or loosened.
+
+VERIFICATION [this session; DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test (local docker
+  solvr-postgres), `migrate up` 131 -> 132 on it (migrate_test.log); the new test runs in its own scratch
+  DB; logs in /tmp/solvr_idx77_s24/]:
+  [TEST] RED (tdd/red.log, on 000121): rows matched exactly at both sizes, scans "expected: 236 actual:
+    1025" (that first read still included the seed's unreported scans; the delta version of the helper
+    measured old 81 vs 321 in mutation m1 below).
+  [TEST] GREEN (tdd/green2.log, tdd/green.log): `go test ./internal/db ./cmd/cutover -count=1 -p 1 -v -run
+    'TestAgentReputation|TestKnowledgeCutover|TestCutoverCounters|TestCutoverRollback|TestSchemaVersion|
+    TestParseOptions|TestCheckSchema|TestSchema_'` -> both ok, 18 top-level PASS, 0 FAIL, 0 SKIP
+    (incl. the 6 existing TestAgentReputation_* tests and the down path through 000132).
+  MUTATIONS [TEST] (mut/m1..m3.log), all FAIL as intended; up file restored, `shasum -c mut/orig.sha` OK:
+    m1 000132 up = 000121's definition -> :113 scans expected 81 actual 321.
+    m2 no COALESCE on the keys -> :119 "an agent missing no activation reads '{}'".
+    m3 missing keys joined ON true -> :107 rows differ (scale_0001 gets model_declared); the existing
+       TestAgentReputation_DriftNamesBrokenAgentsAndTheRebuildRepairsThem also FAILs (:270).
+  [REAL] spike DB at scale, real `migrate up` 131 -> 132 then the built ./cmd/cutover binary:
+    --dry-run 6.8 s, every drift 0. Injected drift (view_count +1 on 5 posts, reputation +50 on 3 agents,
+    model set on 2 agents, upvotes +1 on 4 posts), --confirm-prod run: 25.7 s, vote 4 / view 5 /
+    reputation 5 rebuilt, every drift_after 0; replay 23.1 s, all zeros. Then `migrate down 1` (000132
+    down applied by migrate, 9 ms), the same injection, the cutover with --expect-version 131: 207.6 s,
+    the same 4 / 5 / 5 repaired. Ledger step durations (spike/ledger_steps.txt), new / replay / old:
+    agent_reputation 0.65 / 0.44 / 185.56 s; vote_scores 13.98 / 14.48 / 13.36 s; room_activity ~3.1 s;
+    view_counts 2.4-3.4 s; remap_legacy_relations 0.6-2.7 s; others < 1.2 s. `migrate up` re-applied
+    000132 (9 ms). Spike DB dropped.
+  [REAL] post-purge production copy (solvr_rehearsal_purge113 cloned to solvr_idx77_s24_real, `migrate
+    goto 131`): 199 agents, drift 0. The same injected breakage inside a rolled-back transaction (+7 on
+    20, 10 newly claimed, 10 models set, 10 grants deleted) printed 43 drift rows at 131 and, after
+    `migrate up` to 132, the byte-identical 43 rows (cmp real_old.txt real_new.txt). Cutover --dry-run at
+    132: exit 0, all drift 0, search_documents_pending 251. Copy dropped.
+  [TEST] FULL BACKEND (once, full.log): `go test ./... -count=1 -p 1 -v -timeout 45m` on solvr_test at 132
+    -> exit 1; only internal/api and internal/db FAIL, as in slice 13's baseline. 3307 top-level PASS,
+    70 FAIL, 13 SKIP. Against /tmp/solvr_idx77_s13/fail.now (68): 66 of them still fail, 2 pass now, 4
+    are new names: TestAPIUsagePulse_RejectedCallsAreNotSuccessfulCalls (expected 56053 actual 56049),
+    TestHomepageSearch_ChartAddsUpToTheTotalBesideIt (expected 703 actual 661, window 24h),
+    TestSearch_Similarity_PopulatedAndTopSimilarity ("post A missing", in slice 23's list),
+    TestSearchPulse_SeriesCoversTheWindowAndExcludesMonitoring (expected 720 actual 687, in slice 23's
+    list). new4_fresh.log: those 4 on a fresh DB solvr_idx77_s24_fresh migrated to 132 -> 4 PASS, 0 FAIL,
+    0 SKIP (DB dropped). They count rows of the shared DB inside time windows (idx 98's class), none
+    reads agent reputation. None of this slice's tests is in fail.now or skip.now; the new test and
+    TestCutoverRollback_DownPath... PASS in full.log. This is the full serial run slices 13-23 owed.
+  [REAL] go build ./... ok; go vet ./internal/db ./cmd/cutover ok; gofmt -l clean on the changed Go files;
+    ./scripts/check-file-size.sh -> the same 33 oversize files as slices 22/23, none of this slice's.
+    solvr_scratch_1790853180756789000 predates this session (left).
+  NOT RUN: frontend (no frontend file touched).
+
+DECISION INPUT FOR "periodic rebuilds" (measured above, nothing built):
+  - Every drift function is read-only and, after 000132, linear: ~5 s for all four counters at 200k
+    posts / 1M replies / 1M votes / 1M views / 20k rooms / 20k agents, vote_score_drift the largest.
+  - The full rebuild_*() form locks EVERY target row for its duration: the cutover's vote_scores step
+    holds all posts, replies and blog posts for ~14 s at this size even when nothing drifted. Right for
+    a cutover window, wrong for a periodic job on live traffic. A periodic reconcile, if added, must
+    read the drift and call the one-target form (rebuild_vote_scores(type, id), rebuild_view_counts(id),
+    rebuild_room_activity(id), rebuild_agent_reputation(id)) for each drifted row only.
+  - Triggers keep every counter in the writing transaction, so drift comes only from deploy windows
+    and direct SQL (production migrations go through /admin/query).
+
+REMAINING for idx 77 (next slices, in order) [UNVERIFIED plan]:
+  step 5: decide the periodic counter reconcile with the numbers above (drift read, per-row rebuild,
+    one instance at a time like SearchDocumentJob), or record why the cutover plus the documented rebuild
+    path is enough. Sampled search on real data before/after the cutover: idx 53's representative
+    queries against a real-data copy.
+  step 6: this slice added no index, cache or service.
+  Before closing idx 77: the full serial run is done (above); re-run only if a later slice touches
+    shared code, and compare against /tmp/solvr_idx77_s24/fail.now.
+
+git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged;
+  idx 77 stays false.
+
+UAT (for when idx 77 closes, not now): as slice 21's list, plus migration 000132 on production (a
+  CREATE OR REPLACE FUNCTION, no table change; apply before the cutover binary, which now expects 132).
+  Expect the cutover's agent_reputation step in well under a second at production's 199 agents, as before.

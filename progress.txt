@@ -7334,3 +7334,105 @@ UAT (for when idx 77 closes, not now): as slice 18's list, plus migration 000131
   or with the API deploy that carries this slice (CREATE OR REPLACE FUNCTION only, no table lock beyond
   the function's). After the deploy, search on https://solvr.dev for a common word and a rare one and
   confirm results, reply anchors and each result's answer/approach/comment counts appear.
+
+2026-10-01 12:10 — Task idx 77 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Make indexes, counters, search projections, and analytics rebuildable from authoritative records"
+SLICE 20 of N: step 1, search from measured plans. Keyword search (no embedder, or content_types=posts
+without one) pages in two phases: one statement ranks every match from the stored search documents and
+returns the page's post ids, scores and the total; snippets, authors, reply counts and reply anchors are
+then built for the page's posts only. Term in every post at 50k posts / 250k replies: knowledge 4.9 s ->
+0.38 s, content_types=posts 3.8 s -> 80 ms; results identical to HEAD in all 36 spike cases.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 77-95, 97, 98; no open
+  URGENT. 24/67 acceptance (skipped as before); 68 waits on the owner. idx 77 first buildable. Tree clean
+  at start, HEAD 531c7e23. Followed slice 19's REMAINING order (keyword two-phase page first). Step 4 was
+  surveyed first [REAL, grep]: no stored time-bucketed aggregate table exists (every series is computed
+  from raw rows at read time), no SQL sums bucket-level distinct counts, and nothing prunes search_queries
+  (SearchAnalyticsRepository.DeleteOlderThan has no caller); retention of raw events is undocumented.
+
+SPIKE [REAL, /tmp/solvr_idx77_s20/spike/]: throwaway DB solvr_idx77_s20_spike migrated 0 -> 131, seeded
+  with slice 19's seed.sql scaled to 50k posts / 250k replies (seed.sql; ~1.5 min), no embeddings.
+  Harness (copy zz_idx77_s20_spike_test.go.txt, removed from the tree) calls the real Search for
+  3 terms x {knowledge, posts} x sort {relevance, newest, votes} x page {1, 3}, records wall time and a
+  signature per result (id, score, 3 counts, author, snippet prefix, anchor ids+scores) + total/method.
+  run_head.txt (HEAD) vs run_new.txt (this commit): `diff` of the 36 RES lines is EMPTY.
+  Wall time HEAD -> new: kubernetes (every post) knowledge 4.9-13.3 s -> 0.23-0.44 s, posts 3.7-7.4 s ->
+  65-128 ms; postgres (1 in 10 posts) knowledge 371-660 -> 26-91 ms, posts ~410 -> 13-16 ms; zeromq
+  (rare) 59-257 -> 2-35 ms. Spike DB dropped at the end.
+
+WHAT CHANGED [REAL, git status --porcelain: 2 M + 2 ??; git diff --stat 42+/21-]:
+  ?? backend/internal/db/search_keyword_page.go (154 lines): keywordPaged (no embedding, no
+    min_similarity, content types empty or only "posts"), searchKeywordPage (rank, then loadSearchPosts
+    for the page ids with the per-post counts join, scores set from the ranking, then for knowledge
+    searchReplyMatches of the page's posts and foldReplyMatches), rankKeywordPage (one statement: own
+    matches CTE + for knowledge DISTINCT ON best reply match per post, FULL JOIN, row_number over
+    GREATEST score DESC, own-first, keywordOwnOrder, best reply created_at, id; returns total + page),
+    keywordOwnOrder (getSearchOrderBy over the own CTE).
+  M backend/internal/db/search.go: Search dispatches keywordPaged searches to searchKeywordPage before
+    the merge path; the inline paging moved to searchPage (same rules: 20 default, 50 cap, page<1 = 1),
+    used by both paths.
+  M backend/internal/db/search_canonical.go: searchReplyMatches takes postIDs (nil = all, as before; the
+    keyword branch adds r.post_id = ANY($2)); both existing callers pass nil; loadSearchPosts doc comment
+    now names both of its uses.
+  ?? backend/internal/db/search_keyword_page_test.go (153 lines, scratch DBs): seedKeywordPage
+    (seedSearchDocuments + 20k filler replies, rare "zeromq" only in replies, 1/40 deleted, varied
+    votes/updated_at, a tenth of posts in sd1's family);
+    - TestSearch_KeywordPageEqualsTheFullSearch: 5 queries x {knowledge, posts} x 4 sorts x 5 option
+      sets (viewer, tags+from_date, per_page 0/7/50, page 0/2/3/400): Search equals fullKeywordSearch
+      (searchKnowledge/searchPosts built in full, stable score sort, paged) result for result, plus total,
+      method fulltext_only and nil top similarity; asserts > 100 non-empty cases compared.
+    - TestSearch_KeywordPageBuildsOnlyItsPage: knowledge / knowledge rare / posts; replies rows taken
+      (EXPLAIN ANALYZE, slice 19's replyRowsTaken) <= 2 x matching + 2 x page x max replies per post.
+  No migration, index, cache or service. No test deleted, skipped or loosened.
+
+VERIFICATION [this session; logs in /tmp/solvr_idx77_s20/]:
+  [TEST] RED (tdd/red.log; HEAD search_canonical.go, no dispatch, only searchPage extracted; DATABASE_URL=
+    postgres://solvr:solvr_dev@localhost:5435/solvr_test): reads test FAILS: knowledge took 28,033 replies
+    of 25,673 live (bound 5,240), posts 25,673; the definition test PASSES on HEAD (it is HEAD's
+    behaviour). knowledge rare failed only its precondition (16 posts, not > a 50 page); changed to page
+    2 of 5 before GREEN.
+  [TEST] GREEN (tdd/green.log, same DB): both PASS. knowledge took 2,644 of 25,674 (bound 5,242),
+    rare 61 (bound 148), posts 260.
+  MUTATIONS [TEST] (mut/*.log, definition test): m1 drop "own matches first" tie key -> FAIL; m3 best
+    reply created_at DESC -> FAIL; m2 relevance ties by created_at instead of own score -> PASSES
+    (SURVIVOR: the seed has no two own matches with equal folded score but different own scores).
+    Source restored, `shasum -c mut/orig.sha` OK.
+  [TEST] narrow (tdd/narrow.log): `go test ./internal/db -count=1 -p 1 -v -run 'TestSearch_Keyword|
+    TestSearch_HybridTakesOnly|TestHybridSearchReplies_Equals|TestSearchKnowledge|TestSearch_Canonical|
+    TestFoldReply'` -> ok, 23 PASS, 0 FAIL, 0 SKIP.
+  [TEST] `go test ./internal/api/... ./internal/services/... -count=1 -run Search` (tdd/api.log): handlers,
+    middleware ok; internal/api FAIL in 3 TestHomepageSearch_* (NeverPublishesAProtectedOrUnrepeatedTerm,
+    NeverPublishesPastedSecretsOrPersonalData, EveryPublishedTermLinksToCanonicalPostsSearch): all 3 are
+    in /tmp/solvr_idx77_s13/fail.now (shared-DB search_queries leftovers; they read the homepage pulse,
+    not SearchRepository.Search). An attempted HEAD comparison via git stash did not compile (untracked
+    new file stayed) and is NOT evidence.
+  [REAL] go build ./... ok; go vet ./internal/db ok; gofmt -l clean on the 4 touched files; no zz_* file.
+  NOT RUN: the full serial backend run (still owed before idx 77 closes); the shared-DB TestSearch|
+    TestHybrid sweep of slice 19; frontend (no frontend file touched).
+
+FINDINGS, NOT FIXED:
+  - m2 survivor above [TEST]: the relevance tie order among own matches (own score DESC before created_at)
+    is unpinned by the definition test; a fixture with two posts tying on folded score with different own
+    ranks would pin it.
+  - Search's stable sort by score after the SQL order makes sort=newest/votes/activity only tie breaks
+    (HEAD behaviour, kept exactly) [REAL, code read]; whether those sorts should order by date/votes is a
+    product question.
+  - Step 4 survey above [REAL, grep]: search_queries has no retention job; no bucket-distinct sums found.
+
+REMAINING for idx 77 (next slices, in order) [UNVERIFIED plan]:
+  step 1: pin the m2 tie (fixture); the exact post total (slice 13 finding, 25-40 ms at 200k).
+  step 4: document each raw event table's retention (search_queries, api_request_events, funnel_events,
+    post_views, room_events, service_checks: none pruned except idempotency 24 h) and keep raw eligible
+    search events separate from any aggregate; pruning raw events is an owner decision (data loss).
+  step 5: reconcile counters/sampled search after migration and rebuilds.
+  step 6: this slice added no index, cache or service.
+  Before closing idx 77: one full serial backend run, compared against slice 13's fail.now.
+
+git status at journal time [REAL]: M backend/internal/db/search.go, M backend/internal/db/
+  search_canonical.go, ?? backend/internal/db/search_keyword_page.go, ?? backend/internal/db/
+  search_keyword_page_test.go, plus M progress.txt (this entry). spec.json unchanged; idx 77 stays false.
+
+UAT (for when idx 77 closes, not now): as slice 19's list. This slice has no migration; after the API
+  deploy, a keyword-only search (or one while the embedder is down) on https://solvr.dev for a common word
+  should return results with snippets, authors, counts and reply anchors as before.

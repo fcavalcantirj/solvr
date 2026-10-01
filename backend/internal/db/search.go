@@ -74,6 +74,16 @@ func (r *SearchRepository) Search(ctx context.Context, query string, opts models
 	contentTypes := opts.ContentTypes
 	searchAll := len(contentTypes) == 0
 
+	// A keyword search of knowledge or of posts ranks every match and builds only its page.
+	if keywordPaged(queryEmbedding, opts) {
+		page, total, err := r.searchKeywordPage(ctx, tsquery, opts, searchAll)
+		if err != nil {
+			return nil, 0, "", nil, err
+		}
+		LogSearchCompleted(ctx, query, time.Since(start).Milliseconds(), len(page), searchMethod)
+		return page, total, searchMethod, nil, nil
+	}
+
 	var allResults []models.SearchResult
 
 	// The default search (task idx 53) finds posts by their own text and by their replies'
@@ -130,19 +140,7 @@ func (r *SearchRepository) Search(ctx context.Context, query string, opts models
 
 	// Apply pagination
 	total := len(allResults)
-	limit := opts.PerPage
-	if limit == 0 {
-		limit = 20
-	}
-	if limit > 50 {
-		limit = 50
-	}
-
-	offset := (opts.Page - 1) * limit
-	if offset < 0 {
-		offset = 0
-	}
-
+	limit, offset := searchPage(opts)
 	if offset >= total {
 		duration := time.Since(start).Milliseconds()
 		LogSearchCompleted(ctx, query, duration, 0, searchMethod)
@@ -158,6 +156,23 @@ func (r *SearchRepository) Search(ctx context.Context, query string, opts models
 	LogSearchCompleted(ctx, query, duration, len(allResults[offset:end]), searchMethod)
 
 	return allResults[offset:end], total, searchMethod, topSimilarity, nil
+}
+
+// searchPage is the page Search returns: per_page defaults to 20 and is capped at 50, and a page
+// before the first is the first.
+func searchPage(opts models.SearchOptions) (limit, offset int) {
+	limit = opts.PerPage
+	if limit == 0 {
+		limit = 20
+	}
+	if limit > 50 {
+		limit = 50
+	}
+	offset = (opts.Page - 1) * limit
+	if offset < 0 {
+		offset = 0
+	}
+	return limit, offset
 }
 
 // maxSimilarity returns a pointer to the highest non-nil Similarity across results,

@@ -39,7 +39,7 @@ func (r *SearchRepository) searchKnowledge(ctx context.Context, embedding []floa
 	if err != nil {
 		return nil, err
 	}
-	matches, err := r.searchReplyMatches(ctx, embedding, tsquery, opts)
+	matches, err := r.searchReplyMatches(ctx, embedding, tsquery, opts, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +66,8 @@ func (r *SearchRepository) searchPostResults(ctx context.Context, embedding []fl
 // found only when it is live and not a system reply, and its post passes replyMatchPostRule, the
 // viewer's visibility and the search's post filters. With a query embedding it uses
 // hybrid_search_replies and falls back to full text if that query fails, like the post search.
-func (r *SearchRepository) searchReplyMatches(ctx context.Context, embedding []float32, tsquery string, opts models.SearchOptions) ([]models.SearchReplyMatch, error) {
+// postIDs, when not nil, keeps the full-text matches of those posts only (a keyword page's).
+func (r *SearchRepository) searchReplyMatches(ctx context.Context, embedding []float32, tsquery string, opts models.SearchOptions, postIDs []string) ([]models.SearchReplyMatch, error) {
 	var (
 		query string
 		args  []any
@@ -82,6 +83,10 @@ func (r *SearchRepository) searchReplyMatches(ctx context.Context, embedding []f
 		query = replyMatchSelect("$1", "ts_rank(r.search_document, to_tsquery('english', $1))",
 			"NULL::float8", "replies r") +
 			" WHERE r.deleted_at IS NULL AND r.search_document @@ to_tsquery('english', $1)"
+		if postIDs != nil {
+			args = append(args, postIDs)
+			query += " AND r.post_id = ANY($2::uuid[])"
+		}
 	}
 	argNum := len(args) + 1
 	query += " AND r.author_type <> 'system' AND " + replyMatchPostRule +
@@ -93,7 +98,7 @@ func (r *SearchRepository) searchReplyMatches(ctx context.Context, embedding []f
 	if err != nil {
 		if embedding != nil {
 			LogSearchEmbeddingFailed(ctx, fmt.Sprintf("hybrid_search_replies query failed: %v", err))
-			return r.searchReplyMatches(ctx, nil, tsquery, opts)
+			return r.searchReplyMatches(ctx, nil, tsquery, opts, nil)
 		}
 		LogQueryError(ctx, "Search.ReplyMatches", "replies", err)
 		return nil, fmt.Errorf("search reply matches query failed: %w", err)
@@ -147,11 +152,12 @@ func scanReplyMatches(rows pgx.Rows) ([]models.SearchReplyMatch, error) {
 	return matches, nil
 }
 
-// loadSearchPosts loads the posts found only through their replies, as post results with score
-// 0 and no similarity (foldReplyMatches gives them their best reply's). The post rule, the
-// viewer's visibility and the post filters are applied again. The hybrid reply search returns
-// at most hybridMatchCount matches, so their posts' reply counts are read per post; the keyword
-// fallback's every match keeps the one aggregate (searchPostSelect).
+// loadSearchPosts loads posts by id, in the order of the ids, as post results with score 0 and
+// no similarity: the posts found only through their replies (foldReplyMatches gives them their
+// best reply's score), or a keyword page's posts (searchKeywordPage sets their scores). The post
+// rule, the viewer's visibility and the post filters are applied again. At most hybridMatchCount
+// posts (the hybrid reply search's matches, a keyword page) have their reply counts read per
+// post; more keep the one aggregate (searchPostSelect).
 func (r *SearchRepository) loadSearchPosts(ctx context.Context, ids []string, tsquery string, opts models.SearchOptions) ([]models.SearchResult, error) {
 	args := []any{tsquery, ids}
 	argNum := 3

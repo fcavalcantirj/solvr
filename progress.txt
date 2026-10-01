@@ -9752,3 +9752,125 @@ REMAINING FOR idx 78 (next slices, in order):
 
 git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged
   (idx 78 passes stays false).
+
+2026-10-01 20:55 — Task idx 78 (spec.json, category functional) — IN PROGRESS, passes STAYS false
+"Keep SDKs, CLI, MCP, skills, and webhooks consistent with the redesigned product"
+SLICE 12: step 3 "Verify the default HTTP prompt remains usable without installing any of those optional
+integrations". The served connect prompts are now followed LITERALLY by an agent that has only net/http (every
+"METHOD https://api.solvr.dev/..." is a call, a JSON line is its body, the credential is the one the prompt most
+recently named as "Authorization: Bearer X"). Doing that found three prompt defects; each is fixed.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 78-95, 97, 98; no open URGENT. 24/67
+  acceptance (skipped as in every earlier entry); 68 waits on the owner (as journaled). idx 78 first buildable;
+  continued from slice 11 (HEAD ea980f69), REMAINING item "12.. step 3". Tree clean at start.
+
+SPIKE FIRST [REAL] (real API binary built from HEAD, env -i, DATABASE_URL = local docker solvr-postgres solvr_test,
+  throwaway JWT_SECRET, PORT 18099; /tmp/solvr_idx78_s12/spike/follow.py + follow2.py, python urllib only):
+  - default GET /v1/connect (plan-and-build/public) planner prompt: register 201, create 201, handshake 201,
+    join 200, POST entries 201 — works literally.
+  - GET /v1/rooms/{slug}/connect executor prompt and ?role=reviewer prompt: step 1 says "send it as Authorization:
+    Bearer YOUR_CREDENTIAL on the calls below" (the agent key) and step 3 JOIN AND READ named no other credential,
+    so POST /r/{slug}/join went out with the agent key -> 401 UNAUTHORIZED "invalid room token; handshake for a
+    per-agent room token".
+  - private owner prompts (all 3 presets): the "ADMIT PRIVATE-ROOM AGENTS" POST /v1/rooms/{slug}/members step
+    comes after step 3's "With Authorization: Bearer YOUR_ROOM_TOKEN"; the members route takes the agent key:
+    room token -> 401 INVALID_API_KEY, agent key -> 201 (curl, this session).
+  - customize.api_examples: "Create a room" names no header (literal -> 401 "authorization header required");
+    "Send a message" posts {"content": ...} -> 400 VALIDATION_ERROR "body is required (content on the legacy
+    message routes)"; "Read messages" names no header.
+  - add_agent.role_prompt works literally (register, handshake, join, GET /r/{slug}/messages, POST
+    /r/{slug}/message all 2xx) but still teaches the /r/ adapter routes (finding below, not changed).
+
+TESTS FIRST (RED):
+  ?? backend/internal/api/handlers/connect_prompts_http_only_test.go (147, PURE, never skips): literalCalls() reads
+    a prompt as above ("(METHOD URL)" in parentheses is a reference to what someone else does, e.g. the joiner's
+    note that the owner admits it via /members — not a call); credentialFor() classifies every route a prompt may
+    teach (register none; POST /v1/rooms, /handshake, /members agent key; /entries, /r/{slug}/join|message|messages
+    room token; an unclassified route FAILS); servedPromptTexts() = allConnectionPrompts() + add_agent role prompt
+    and every customize api example for every preset x visibility.
+    TestConnectPrompts_EveryCallPresentsTheCredentialItsRouteTakes; TestConnectPrompts_NeedNoOptionalIntegration
+    (no "install", npm, npx, "pip ", "go get", "brew ", solvr.sh, mcp, skill, sdk, plugin; every call on /v1/ or
+    /r/).
+  ?? backend/internal/api/router_connect_http_only_test.go (244, real router + DB): httpOnlyAgent follows served
+    text with net/http only (fills only its own choices: name/agent_name, display_name, body/content,
+    client_entry_id; fails on any leftover UPPER_CASE placeholder or a credential no earlier step gave it; every
+    call must answer 2xx). TestConnectPrompts_DefaultFlowRunsOverPlainHTTP: anonymous GET /v1/connect (asserts
+    default plan-and-build/public) -> planner (exact 6 calls) -> executor from /v1/rooms/{slug}/connect -> reviewer
+    from ?role=reviewer -> a fourth agent from add_agent.role_prompt; anonymous GET entries shows each of the 4
+    messages exactly once under its own author_id. _EveryPresetsFirstPromptRunsOverPlainHTTP (3 presets, public).
+    _CustomizeAPIExamplesRunOverPlainHTTP (each example alone, own header or none; exact 5 calls; message stored
+    under the agent).
+  [TEST] RED pure_red.log: _EveryCallPresents... FAIL with exactly the spike's defects (room/executor,
+    executor-empty, reviewer x public/private: join + GET entries present YOUR_CREDENTIAL; customize create/read/
+    send present none; connect/<3 presets>/private: /members presents YOUR_ROOM_TOKEN); _NeedNoOptionalIntegration
+    PASS already (a guard: no served prompt names an integration today).
+  [TEST] RED int_red.log: _DefaultFlow FAIL (executor join 401 "invalid room token..."), _Customize FAIL (create
+    401 "authorization header required"), _EveryPresetsFirstPrompt PASS (public owner prompts were fine).
+
+FIX (GREEN) [git diff --stat: 3 files, 12+/9-]:
+  M backend/internal/api/handlers/connect_prompts.go (+6/-3): executorPromptText and roleSpecificPromptText step 3
+    now reads "3. JOIN AND READ. With Authorization: Bearer YOUR_ROOM_CREDENTIAL (the room token from / the
+    handshake, not your agent key), first join presence, then read the room before you act:";
+    ownerPrivateAdmissionStep: "Admit each one so it can take part, with / Authorization: Bearer
+    YOUR_AGENT_API_KEY (your agent key, not your room token):".
+  M backend/internal/api/handlers/connect.go (+3/-3): connectCustomize api_examples — Create a room adds
+    "-- header: Authorization: Bearer YOUR_AGENT_API_KEY"; Read messages adds "-- header: Authorization: Bearer
+    YOUR_ROOM_TOKEN"; Send a message body {"body": "your message", "client_entry_id": "a unique id you choose"}
+    + the room-token header (was {"content": "your message"}, no header). Register and Join examples unchanged.
+  M frontend/components/connect/connect-fixture.ts (+3/-3): the fixture's api_examples mirror the API's new text
+    (connect-panel.test.tsx renders whatever the fixture holds; no assertion changed).
+  No existing test modified, skipped or loosened (git status: the only test files are the 2 new ones).
+  ConnectInstructionVersion stays "1.0" [REAL: git log -S shows it set once in c971ed3a 2026-09-23 and never
+    bumped, through the entries migration either; router_connect_test.go:447, rooms_connect_test.go:198,
+    funnel_test.go, connect-fixture.ts pin "1.0"]. The API's auth sequence is unchanged — the prompts now state
+    what the routes always required. Whether a prompt-text fix bumps it is an owner call (finding below).
+
+VERIFICATION [this session; logs in /tmp/solvr_idx78_s12/; DATABASE_URL=postgres://solvr:solvr_dev@localhost:
+  5435/solvr_test?sslmode=disable (local docker solvr-postgres)]:
+  [TEST] pure_green.log: go test ./internal/api/handlers -run TestConnect -v: ok, 111 PASS lines, 0 FAIL/SKIP
+    (incl. both new tests and the existing prompt/private-admission/add-agent/customize/safety tests).
+  [TEST] int_green.log: go test ./internal/api -run 'TestConnectPrompts_|TestConnectEndpoint_|TestRoomConnectPrompt_'
+    -v: ok, 19 PASS, 0 FAIL/SKIP; the 3 new tests PASS.
+  MUTATIONS [TEST] (each alone, source restored, `shasum -c mut/orig.sha` OK): m1 executor step 3 without the
+    room credential -> pure FAIL + integration FAIL; m2 admission without the agent key -> pure FAIL; m3 send
+    example back to "content" -> integration FAIL; m4 create example without its header -> pure + integration
+    FAIL.
+  [REAL] after1.log/after2.log: the spike re-run on a binary rebuilt with the fix: planner, default joiner,
+    ?role=executor, ?role=reviewer, owner + add_agent, customize examples — every call 2xx (join 200 with the
+    room credential). API stopped (0 listeners on 18099); spike rows deleted in one transaction each time
+    (cleanup.log rooms 4 / agents 8, cleanup2.log rooms 3 / agents 7); recount 0|0; test rows (test-http-%,
+    agent_roomtest_h%) 0|0.
+  [TEST] FRONTEND (once, frontend_full.log): npm test 200 files, 1750 tests passed.
+  [TEST] FULL BACKEND (once, backend_full.log, `go test ./...`) -> exit 1: FAIL in internal/api, internal/api/
+    handlers, internal/db; 76 failing names (names.mine), none a connect test. Against slice 10+11 baselines 4 are
+    new: TestRoomPresence_AgentJoinedOnOneInstanceIsSeenByEveryInstance, _HeartbeatAndExpiryApplyOnEveryInstance
+    ("admit planner ... 401 account no longer exists"), TestRoomPresenceEvents_ExpiryReapedByAnotherInstance...
+    ("join 409 ROOM_ARCHIVED" on a just-created room), TestRecordRequests_CountsRequestsWithoutAnIdentifier
+    (expected 2, actual 9) — the shared-DB interference signatures slice 11 journaled. Run ALONE (alone_api.log,
+    alone_db.log): all 4 PASS. No code they exercise was touched.
+  [REAL] check-file-size.sh: "Found 33 file(s) exceeding 800 lines" (unchanged; router_connect_test.go 939 is
+    pre-existing, which is why the new tests live in their own file); connect_prompts.go 577, connect.go 625.
+    go vet ./internal/api ./internal/api/handlers clean; gofmt -l lists none of the 4 touched Go files.
+  NOT RUN: packages/*, cli/, mcp-server, skill suites (untouched); golangci-lint (environment mismatch, as before).
+
+FINDINGS, NOT FIXED:
+  - [REAL] add_agent.role_prompt (GET /v1/connect) still teaches GET /r/{slug}/messages and POST /r/{slug}/message
+    with {"content"} — the only served prompt not on the canonical entries API (TestConnectPrompts_Prefer
+    CanonicalEntries does not cover it). It works literally (2xx, tested above). Step 2 consistency item.
+  - [REAL] the handshake answer's note still says to use room_token on /r/{slug}/* only (carried since slice 1).
+  - [INFERRED] the private flow is covered only by the pure credential test and the existing private-admission
+    integration test; the literal-follow integration test runs public prompts (a private joiner prompt is not
+    served anonymously: GET /v1/rooms/{slug}/connect answers 403 for a private room).
+  - Owner call: bump ConnectInstructionVersion for prompt-text fixes or not (see FIX).
+
+REMAINING FOR idx 78 (next slices, in order):
+  13.. steps 4 (webhooks: NewWebhooksHandler is mounted by no router; discovery still lists "webhooks"), 5
+    (migration notes, deprecation errors, legacy choices out of first-party clients: both CLIs' --type, the npm
+    and skill search --type, skill.json legacy endpoints), 6 (external consumer vs clean + upgraded schema), 7
+    (participants as collections, a members command/tool); findings of slices 6-12.
+
+git status at journal time [REAL]: M backend/internal/api/handlers/connect.go, M backend/internal/api/handlers/
+  connect_prompts.go, M frontend/components/connect/connect-fixture.ts, ?? backend/internal/api/handlers/
+  connect_prompts_http_only_test.go, ?? backend/internal/api/router_connect_http_only_test.go, plus M progress.txt
+  (this entry). spec.json unchanged (idx 78 passes stays false).

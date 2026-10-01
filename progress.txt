@@ -8912,3 +8912,157 @@ REMAINING FOR idx 78 (next slices, in order):
 
 git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged
   (idx 78 passes stays false).
+
+================================================================================
+2026-10-01 18:25 — Task idx 78 (spec.json, category functional) — IN PROGRESS, passes STAYS false
+"Keep SDKs, CLI, MCP, skills, and webhooks consistent with the redesigned product"
+SLICE 7: the first consumer after the SDKs, the TypeScript CLI (packages/cli). It now has a command for each of
+the 13 contract operations (room create/join/read/send/ticket/watch, get-reply, update-reply beside post/get/
+search/reply/replies), its API client's methods are named after the operationIds, and a contract test runs
+every command against contract/openapi-examples.json from a real local server.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 78-95, 97, 98; no open URGENT. 24/67
+  acceptance (skipped as in every earlier entry); 68 waits on the owner (as journaled). idx 78 first buildable;
+  continued from slice 6 (HEAD ffcae95e), REMAINING item "7.. consumers", first in its list: packages/cli (TS).
+  Tree clean at start.
+
+DESIGN (from a code read this session):
+  - Command names: the room verbs of step 2 (room create = createRoom, join = handshakeRoom, read =
+    listRoomEntries, send = createRoomEntry, watch = streamRoom) + room ticket (createRoomStreamTicket); the
+    reply operations as kebab-case operationIds (get-reply, update-reply); post/get/search/reply/replies keep
+    their names. The ApiClient methods are the operationIds (getPost, createReply, listReplies, getReply,
+    updateReply, createRoom, handshakeRoom, listRoomEntries, createRoomEntry, createRoomStreamTicket,
+    streamRoom; createPost/search unchanged); get/reply/replies stay as shorthands (api.test.ts pins them).
+  - Credential scopes: reads (search, get, replies, get-reply) run anonymous when no API key is configured and
+    send the key when one is; writes and room create/join need the key ("No API key configured", before any
+    request). room join saves the handshake's room token in the config file per slug (roomTokens); room
+    read/send/ticket/watch present --room-token or the saved one, else "No room token for <slug>. Run: solvr
+    room join <slug>" before any request. room watch --ticket is anonymous. A later join replaces the saved
+    token (join --rotate: the old token's open stream ends with CREDENTIAL_ROTATED).
+  - --json prints the API's answer for every command (envelope with data/meta). CHANGED: post/reply --json
+    used to print data only (Output.created); it now prints {"data": ...} like get/search/replies always did.
+    get-reply/update-reply add the ETag header as data.etag (as the SDKs' Reply.etag). room watch --json prints
+    one JSON line per event {id, event, frame}. A failure in --json prints the API's error answer on stderr
+    (ApiError.toAnswer: the answer as it came), exit 1; human mode prints "CODE: message" + "request id: ...".
+  - Errors: ApiError moved to src/errors.ts (re-exported by api.ts) and gains requestId + answer; an answer
+    that is not JSON is "API request failed (HTTP <status>)" (it used to throw the JSON parse error).
+  - search: --limit/--page lost their client defaults ("10"/"1"): only the options given are sent, the API
+    picks the defaults (the contract's search example sends no page). Adds --sort. An empty query is not
+    sent (q omitted: the API's VALIDATION_ERROR example). --type/--status (legacy filters) untouched: step 5.
+  - Exit: commands throw; run(argv) (src/program.ts) answers the exit code (commander exitOverride), the bin
+    (src/index.ts) sets process.exitCode. That lets the tests run the CLI's own program in-process.
+  - Paths: every path parameter is encodeURIComponent'ed (the slug "a b/c" -> a%20b%2Fc).
+
+WHAT CHANGED [REAL, git status --porcelain: M packages/cli/README.md, M packages/cli/src/api.ts, M packages/cli/src/
+  config.ts, M packages/cli/src/index.ts, M packages/cli/src/output.ts, ?? packages/cli/src/__tests__/
+  contract.test.ts, ?? .../__tests__/harness.ts, ?? .../__tests__/rooms.test.ts, ?? packages/cli/src/context.ts,
+  ?? .../errors.ts, ?? .../program.ts, ?? .../room-commands.ts, ?? .../room-types.ts, ?? .../stream.ts;
+  git diff --stat (tracked): 5 files, 448+/379-]:
+  PRODUCTION (packages/cli/src):
+  M index.ts (265 -> 7): only the bin entry now: run(process.argv) -> process.exitCode.
+  ?? program.ts (197): the commands index.ts held (config, search, get, post, reply, replies, vote) moved here
+    unchanged in behavior except as DESIGN, + get-reply, update-reply; createProgram() and run(argv).
+  ?? room-commands.ts (120): solvr room create|join|read|send|ticket|watch (watch --max <n> stops after n
+    events; --type message --max 1 = "wait for the next message").
+  ?? context.ts (60): CliError, Context (apiClient(required), roomClient(slug, token), anonymousClient),
+    integer() option parser, list() comma lists.
+  M api.ts (238 -> 346): as DESIGN; send()/request()/replyWithETag(); queryString() skips absent/empty values.
+    Also fixes the 2 PRE-EXISTING `tsc --noEmit` errors (baseline_tsc.log: api.ts(144,21) 'data' is of type
+    'unknown', api.ts(153,5) unknown not assignable to T).
+  ?? errors.ts (37), ?? room-types.ts (142: the room fields of the TS SDK's room-types.ts the CLI uses),
+    ?? stream.ts (95: the SSE reader of the TS SDK's stream.ts; stream-ending events -> ApiError status 0).
+  M output.ts (212 -> 357): created() takes the answer; reply(), apiError(), room(), joined(), roomEntries()
+    (+ "More: solvr room read <slug> --cursor <next_cursor>"), roomEntry() ("already sent" on
+    idempotent_replay), ticket(), streamEvent().
+  M config.ts: getRoomToken(slug)/setRoomToken(slug, token) (roomTokens in the same config file).
+  M README.md: reads need no key, search --sort/defaults, get-reply/update-reply, a Rooms section (3 agents in
+    one room), the command -> operationId table + where the contract test lives, the --json rule.
+  TESTS (packages/cli/src/__tests__):
+  ?? contract.test.ts (385): loads ../../../../contract/openapi-examples.json; "has a command for every
+    operation of the contract"; per operation (13 x 2): the command line built from the example (each request
+    body field must map to a declared option, else the test fails) run with --json: request held (method,
+    escaped path, Authorization per credential incl. none = header absent, exact query with no repeated name,
+    If-Match/Last-Event-ID iff the example sends them, body EXACTLY the example's) and the printed JSON holds
+    every answered field (getReply/updateReply: data.etag = the ETag the edit sends back; streamRoom: one line,
+    id/event/frame); run human: exit 0, no stderr, the output shows the answer's id/slug/token/body. Per error
+    example (5): --json -> exit 1, empty stdout, stderr EXACTLY the API's error answer; human -> "CODE:
+    message" and the request id. + a guard that error examples exist. 33 tests.
+  ?? rooms.test.ts (263, 21 tests): join prints + saves the token, send then presents it; tokens per room and
+    replaced by a later join (--rotate --ttl body); join needs a key; room commands without a token fail before
+    any request; --room-token beats the key; slug escaping; create sends only given fields (--private); read
+    query + "More" cursor line; --json after the subcommand's arguments; send --reply-to/--to (list, trimmed);
+    "already sent" on replay; watch skips heartbeats and --max ends a stream the server keeps open
+    (within 5 s guard), Accept text/event-stream; watch --json lines; anonymous ticket watch; CREDENTIAL_ROTATED
+    end -> exit 1; anonymous read / keyed read; writes refused without a key; search sends only q; empty
+    --if-match sends no If-Match + 428 surfaced with request id; non-JSON 502 -> "HTTP 502".
+  ?? harness.ts (149, not a test file): the local HTTP server recording requests, runCli() (in-process run()
+    with a hermetic config path, SOLVR_API_KEY only when given, console/stdio captured, env restored), within().
+  api.test.ts, commands.test.ts, config.test.ts, output.test.ts: UNCHANGED (not in git status). No test deleted,
+  skipped or loosened. Backend, frontend, contract fixture, SDKs, cli/ (Go), mcp-server, skill/: untouched.
+
+VERIFICATION [this session; logs in /tmp/solvr_idx78_s7/]:
+  [TEST] baseline.log: before any change 50 passed (4 files); baseline_tsc.log: tsc exit 2 (the 2 errors above).
+  [TEST] RED (red.log): both new files failed to load ("Failed to load url ../program.js").
+  [TEST] GREEN: green1.log the 2 new files 54 passed; green_full.log `npm test` 6 files, 104 passed (50 + 54),
+    0 skipped; tsc.log `tsc --noEmit` exit 0; tsup build of a copy of the package (outside the tree) exit 0,
+    `node dist/index.js --version` 1.0.0 and `room --help` lists the 6 room commands. coverage.log: all files
+    94.63% lines (api 98.8, room-commands 100, output 98.0, stream 95.8, context 96.7, program 81.7, index.ts 0:
+    the bin entry, run by commands.test.ts as a child process and by the smoke).
+  MUTATIONS [TEST] (mut/mut.py, mut/m*.log, mut/summary.log; each applied alone, the 3 client test files run,
+    source restored; `shasum -c mut/orig.sha` all OK): ALL 24 FAILED as intended: m1 no Last-Event-ID; m2 empty
+    q sent; m3 getReply drops the ETag; m4 updateReply drops If-Match; m5 room ops present the API key; m6
+    anonymous sends "Bearer null"; m7 path not escaped; m8 created prints data only (the old --json); m9 --json
+    error as text; m10 human error drops the request id; m11 handshake {} sends no body; m12 join does not save
+    the token; m13 watch ignores --max; m14 stream end not an error; m15 send drops --to; m16 read drops kind;
+    m17 search drops sort; m18 non-JSON error crashes; m19 create drops is_private; m20 search default page 1;
+    m21 human watch prints no content; m22 --json not applied; m23 watch drops the ticket; m24 ticket watch
+    uses the room token.
+  [REAL] smoke/smoke.log + smoke2.log: the real API binary (go build ./cmd/api -> smoke/solvr-cli-smoke-api,
+    env -i with DATABASE_URL = local docker solvr-postgres solvr_test, a throwaway JWT_SECRET, PORT 18096; no
+    env file read), the CLI run as `npx tsx src/index.ts` (the bin's code path), each agent with its own config
+    file, every call `timeout 60`: 3 agents registered; post --json (type post, draft); reply --json author
+    present; anonymous get-reply etag + human ETag line; update-reply new etag; stale etag -> exit 1
+    PRECONDITION_FAILED + request id; empty --if-match --json -> PRECONDITION_REQUIRED answer; search "" --json
+    -> VALIDATION_ERROR answer; search --sort newest --limit 5 meta per_page 5; anonymous get + replies
+    (next_cursor None); anonymous post -> "No API key configured"; room create; planner, executor AND reviewer
+    joined the SAME room (3 tokens saved, one per config); executor watch --type message --max 1 --json got the
+    planner's message 242578 with addressed_member_ids [executor, reviewer] (send --to with the 2 agent ids);
+    reviewer watch human "#3 agent_..._planner: Plan 2..."; the same client entry id again -> "already sent";
+    executor send --reply-to 242578; reviewer room ticket -> anonymous watch --ticket --last-event-id 242578
+    --type message --max 1 got 242580 (the executor's reply); bogus ticket -> STREAM_TICKET_INVALID answer;
+    dead --room-token -> UNAUTHORIZED; no token -> "No room token"; planner join --rotate -> the old token's
+    open watch exited 1 "CREDENTIAL_ROTATED: ..." and the new token was saved and sends. API stopped (pkill;
+    port 18096 free); smoke rows deleted from solvr_test (smoke/cleanup.log: room 1, reply 1, post 1,
+    agents 3, in one transaction).
+    Smoke 1 also showed (not CLI defects): `--to agent_x,agent_y` -> VALIDATION_ERROR "must reference this
+    room" (fake ids; the trigger checks room_members.agent_id), `--reply-to 1` (a sequence, not an entry id) ->
+    the same error; `watch --max 1` without --type counted a presence frame first (README now shows
+    `--type message --max 1`).
+  NOT RUN: backend suites (no backend file touched); frontend (untouched); SDK suites (untouched); `npm run
+    lint` (eslint is not installed in packages/cli); ./scripts/check-file-size.sh scans only backend/ and
+    frontend/ (largest CLI file output.ts 357 lines).
+  Housekeeping: the coverage text run was followed by `rm -rf packages/cli/coverage` — that directory existed
+    before this session (gitignored, generated); it was regenerated with `npm run test:coverage`
+    (coverage_regen.log), so it is back in kind (now for this code).
+
+FINDINGS, NOT FIXED:
+  - [REAL] smoke 1: a "presence_leave _browser_55bf8e26" frame reached a just-created room's watcher that no
+    browser had opened [UNVERIFIED what emits it].
+  - [REAL] room member ids (needed for --to) come from GET /v1/rooms/{slug}/members, which is served but not in
+    the OpenAPI document/contract; the CLI has no command for it (step 7: participants as collections).
+  - [REAL] the config file holding the API key and now room tokens is written with the default mode (0644 via
+    umask); pre-existing for the API key.
+  - [REAL] search snippets keep the API's <mark> tags in human output (pre-existing).
+  - Carried: CI runs no packages/* test; search --type/--status legacy filters (step 5); the rest of slice 6's.
+
+REMAINING FOR idx 78 (next slices, in order):
+  8.. consumers: cli/ (Go), mcp-server, backend /v1/mcp, skill/scripts — same names, room operations, contract
+    held to the same fixture.
+  then steps 3, 4 (webhooks: NewWebhooksHandler is mounted by no router; discovery still lists "webhooks"), 5
+    (migration notes, deprecation errors, legacy choices out of first-party clients, incl. this CLI's search
+    --type), 6 (external consumer vs clean + upgraded schema), 7 (participants as collections, a members
+    command, third agent without a new room — the smoke above already did it for this CLI); the findings above.
+
+git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged
+  (idx 78 passes stays false).

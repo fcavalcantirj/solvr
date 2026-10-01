@@ -5,6 +5,8 @@ import * as os from "os";
 interface ConfigData {
   apiKey?: string;
   baseUrl?: string;
+  /** The room token of the last `solvr room join`, by room slug */
+  roomTokens?: Record<string, string>;
 }
 
 const DEFAULT_BASE_URL = "https://api.solvr.dev";
@@ -71,6 +73,21 @@ export class Config {
    */
   setBaseUrl(baseUrl: string): void {
     this.data.baseUrl = baseUrl;
+    this.save();
+  }
+
+  /**
+   * Get the room token saved for a room
+   */
+  getRoomToken(slug: string): string | undefined {
+    return this.data.roomTokens?.[slug];
+  }
+
+  /**
+   * Save the room token a handshake issued for a room (replaces the previous one)
+   */
+  setRoomToken(slug: string, token: string): void {
+    this.data.roomTokens = { ...this.data.roomTokens, [slug]: token };
     this.save();
   }
 

@@ -1,5 +1,15 @@
 import chalk from "chalk";
-import type { SearchResponse, Post, ApiResponse, RepliesResponse } from "./api.js";
+import type { SearchResponse, Post, ApiResponse, RepliesResponse, Reply } from "./api.js";
+import type { ApiError } from "./errors.js";
+import type {
+  Room,
+  RoomEntriesResponse,
+  RoomEntryResponse,
+  RoomHandshake,
+  RoomStreamEvent,
+  RoomStreamMessage,
+  RoomStreamTicket,
+} from "./room-types.js";
 
 /**
  * Output formatting for CLI
@@ -198,15 +208,150 @@ export class Output {
   }
 
   /**
-   * Format and output created resource
+   * Format and output a created resource. JSON mode prints the API's answer.
    */
-  created(type: string, data: { id: string }): void {
+  created(type: string, response: ApiResponse<{ id: string }>): void {
     if (this.jsonMode) {
-      this.json(data);
+      this.json(response);
       return;
     }
 
     this.success(`${type} created successfully`);
-    console.log(chalk.dim(`ID: ${data.id}`));
+    console.log(chalk.dim(`ID: ${response.data.id}`));
+  }
+
+  /**
+   * Format and output one reply and the ETag of its version
+   */
+  reply(response: ApiResponse<Reply>): void {
+    if (this.jsonMode) {
+      this.json(response);
+      return;
+    }
+
+    const reply = response.data;
+    console.log(chalk.bold(reply.id) + chalk.dim(`  ${reply.author_type} ${reply.author_id}  on post ${reply.post_id}`));
+    console.log(reply.body);
+    if (reply.etag) {
+      console.log(chalk.dim(`ETag: ${reply.etag}  (edit with: solvr update-reply ${reply.id} --if-match '${reply.etag}' --body ...)`));
+    }
+  }
+
+  /**
+   * Output a failed call: the API's error answer in JSON mode, else its code, message and request id
+   */
+  apiError(err: ApiError): void {
+    if (this.jsonMode) {
+      console.error(JSON.stringify(err.toAnswer(), null, 2));
+      return;
+    }
+
+    this.error(`${err.code}: ${err.message}`);
+    if (err.requestId) {
+      console.error(chalk.dim(`  request id: ${err.requestId}`));
+    }
+    if (err.details) {
+      console.error(err.details);
+    }
+  }
+
+  /**
+   * Format and output a room
+   */
+  room(response: ApiResponse<Room>): void {
+    if (this.jsonMode) {
+      this.json(response);
+      return;
+    }
+
+    const room = response.data;
+    this.success(`Room ${room.slug} created${room.is_private ? " (private)" : ""}`);
+    console.log(chalk.dim(`Join it with: solvr room join ${room.slug}`));
+  }
+
+  /**
+   * Format and output the room token of a handshake
+   */
+  joined(response: ApiResponse<RoomHandshake>): void {
+    if (this.jsonMode) {
+      this.json(response);
+      return;
+    }
+
+    const handshake = response.data;
+    this.success(`Joined ${handshake.room_slug} as ${handshake.agent_id}${handshake.rotated ? " (other tokens rotated)" : ""}`);
+    console.log(`Room token: ${handshake.room_token}`);
+    console.log(chalk.dim(`Saved for: solvr room read|send|ticket|watch ${handshake.room_slug}`));
+  }
+
+  /**
+   * Format and output one page of a room's timeline
+   */
+  roomEntries(slug: string, page: RoomEntriesResponse): void {
+    if (this.jsonMode) {
+      this.json(page);
+      return;
+    }
+
+    if (page.data.length === 0) {
+      console.log(chalk.dim("No entries yet"));
+      return;
+    }
+    for (const entry of page.data) {
+      const text = entry.kind === "event" ? chalk.dim(`[${entry.event_type ?? "event"}]`) : entry.body ?? "";
+      console.log(chalk.dim(`#${entry.sequence}`) + " " + chalk.bold(entry.actor_label) + ": " + text);
+    }
+    if (page.meta.has_more && page.meta.next_cursor) {
+      console.log(chalk.dim(`More: solvr room read ${slug} --cursor ${page.meta.next_cursor}`));
+    }
+  }
+
+  /**
+   * Format and output a sent room entry
+   */
+  roomEntry(response: RoomEntryResponse): void {
+    if (this.jsonMode) {
+      this.json(response);
+      return;
+    }
+
+    const entry = response.data;
+    if (response.meta?.idempotent_replay) {
+      this.info(`Message ${entry.id} was already sent (same client entry id)`);
+    } else {
+      this.success(`Message ${entry.id} sent`);
+    }
+  }
+
+  /**
+   * Format and output a stream ticket
+   */
+  ticket(response: ApiResponse<RoomStreamTicket>): void {
+    if (this.jsonMode) {
+      this.json(response);
+      return;
+    }
+
+    const ticket = response.data;
+    console.log(`Ticket: ${ticket.ticket}`);
+    console.log(chalk.dim(`Opens ${ticket.stream} until ${ticket.expires_at}`));
+  }
+
+  /**
+   * Output one room stream event: a JSON line in JSON mode
+   */
+  streamEvent(event: RoomStreamEvent): void {
+    if (this.jsonMode) {
+      console.log(JSON.stringify(event));
+      return;
+    }
+
+    const frame = event.frame;
+    if (frame.type === "message" && frame.payload) {
+      const message = frame.payload as RoomStreamMessage;
+      console.log(chalk.dim(`#${message.sequence_num}`) + " " + chalk.bold(message.agent_name) + ": " + message.content);
+      return;
+    }
+    console.log(chalk.dim(`[${frame.event ?? frame.type}]${frame.agent_name ? ` ${frame.agent_name}` : ""}`));
   }
 }

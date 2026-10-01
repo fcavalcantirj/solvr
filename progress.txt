@@ -9601,3 +9601,154 @@ REMAINING FOR idx 78 (next slices, in order):
 
 git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged
   (idx 78 passes stays false).
+
+================================================================================
+2026-10-01 20:45 — Task idx 78 (spec.json, category functional) — IN PROGRESS, passes STAYS false
+"Keep SDKs, CLI, MCP, skills, and webhooks consistent with the redesigned product"
+SLICE 11: (1) the registry test slice 2 left RED is green; (2) the agent skill's solvr.sh has a command for each
+of the 13 contract operations with the CLIs'/MCP names (room create/join/read/send/ticket/watch, get-reply,
+update-reply beside post/get/search/reply/replies), every failure prints the API's code, message and request id
+(--json: the API's error answer on stderr), and a contract test runs every command against
+contract/openapi-examples.json from a local server.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 78-95, 97, 98; no open URGENT. 24/67
+  acceptance (skipped as in every earlier entry); 68 waits on the owner (as journaled). idx 78 first buildable;
+  continued from slice 10 (HEAD a7abe9bd), REMAINING item 1 (RED registry test) then "11.. skill/scripts". Tree
+  clean at start.
+
+(1) REGISTRY [REAL]: RED before (reg_red.log): TestLegacyDependencyRegistry_CoversThePostTypeReferences
+  "discovered legacy dependency without a disposition: typeref:internal/api/openapi_post_schemas.go
+  (idea,problem,question at lines 17,53)". internal/db/legacy_dependency_registry.go:
+  + "typeref:internal/api/openapi_post_schemas.go": pending(LegacyActionRefactor, Post.type/CreatePostRequest.type
+    enumerate problem/question/idea beside 'post' because POST /v1/posts still accepts them [handlers/posts.go:438
+    INVALID_TYPE list read this session] and GET still answers them; both narrow with check:posts.posts_type_check).
+  ~ "typeref:internal/api/openapi_schemas.go": pending(Refactor, "the published post and create-post schemas
+    enumerate only problem/question/idea...") -> keep("the 'question' in IdeaResponse/CreateIdeaResponseRequest is
+    the idea-response kind, not a post type; the post schemas moved to openapi_post_schemas.go"). Reason: since
+    slice 2 that file's only remaining matches are lines 323/335, the idea-response enum
+    [support, concern, extension, question] (grep this session) — same disposition as models/response.go's keep.
+    The pending note it carried now sits on the file that holds the post schemas.
+  GREEN (reg_v.log): the 6 TestLegacyDependencyRegistry_* PASS, 0 SKIP (file scan, no DB needed).
+
+(2) SKILL DESIGN (code read this session: solvr.sh, solvr-helpers.sh, the 3 skill test scripts, the backend
+  published-docs tests over SKILL.md, slice 8's Go CLI design):
+  - New sourced file skill/scripts/solvr-rooms.sh (solvr.sh 1374 and solvr-helpers.sh 1234 lines were already over
+    the 800 limit; check-file-size.sh only scans Go/TS, but the new code does not grow them): the request layer
+    solvr_request METHOD PATH AUTH [DATA] [HEADER...] (AUTH key | optional-key | none | token:<room token>; -D
+    headers only when SOLVR_HEADERS_FILE is set; curl status 000 -> "could not reach"), solvr_report_error, the
+    room commands and the reply-edit commands. api_call (helpers) now delegates to `solvr_request ... key`, so every
+    existing command reports errors the same way. frontend/public/install.sh downloads + chmods solvr-rooms.sh.
+  - Names/flags = the CLIs': room create <name> [--slug --description --tags --private]; room join <slug>
+    [--rotate --ttl] (POST /v1/rooms/{slug}/handshake, body {} by default, saves the solvr_rt_ token in
+    rooms.json per room); room read <slug> [--limit --cursor --kind --issue] (prints "More: ... --cursor <next>");
+    room send <slug> <body>|--body [--client-entry-id --reply-to <entry_id> --to id,id] (reply_to_entry_id,
+    addressed_member_ids; "already sent" on an idempotent replay); room ticket <slug>; room watch <slug>
+    [--last-event-id --ticket --type --issue --max]; get-reply <id> (ETag line; --json adds data.etag);
+    update-reply <id> --if-match --body. `room <slug>` (detail) is kept: the dispatcher routes create|join|read|
+    send|ticket|watch to the subcommands, anything else to the detail.
+  - Credentials: read/send/ticket/watch present --token > SOLVR_ROOM_TOKEN > the saved solvr_rt_ token, NEVER the
+    API key and never an implicit handshake ("Error: No room token for <slug>. Run: solvr.sh room join <slug>",
+    exit 1, no request). watch --ticket presents none. get/replies/search/get-reply send the key only when one is
+    configured (were key-required through api_call). The flag stays `--token` (the docs test forbids
+    "--room-token" in the skill docs: that was the retired shared-token flag).
+  - room watch reads curl through a FIFO (bash 3.2: no {fd} / coproc) and kills curl at --max events, so it
+    returns while the server keeps the stream open; ":" heartbeats skipped; access_revoked/credential_rotated
+    end frames -> exit 1 with their code; a non-SSE answer (the API's JSON error before streaming) -> the error.
+    --json prints one {id, event, frame} line per event.
+  - search: --page, --sort added; only the options given are sent: an empty query sends no q (the API answers
+    VALIDATION_ERROR), and per_page is sent only with --limit (BEHAVIOR CHANGE: the default page is now the
+    API's 20 [search.go parseIntParam default 20, read this session], it was the skill's 10). --type (legacy
+    filter) untouched: step 5.
+  - main(): any --json argument sets SOLVR_JSON_ERRORS=true (the error answer goes to stderr as it came).
+  - Error text CHANGED for every api_call command: "Error (<status>): CODE: message" + "  request id: <id>" (was
+    "Error (<status>): message"). No existing skill test asserted the old text (grep "Error (" in test*.sh: none).
+  - Path segments escaped with urlencode in the new commands and in get, replies, reply.
+
+WHAT CHANGED [REAL, git status --porcelain: M backend/internal/db/legacy_dependency_registry.go, M frontend/public/
+  install.sh, M frontend/public/skill.md, M skill/SKILL.md, M skill/scripts/solvr-helpers.sh, M skill/scripts/
+  solvr.sh, ?? skill/scripts/solvr-rooms.sh, ?? skill/scripts/test_contract.sh; git diff --stat (tracked): 6
+  files, 121+/53-]:
+  PRODUCTION: legacy_dependency_registry.go (+2/-1, (1) above); solvr-helpers.sh (1234 -> 1200: api_call body ->
+    solvr_request); solvr.sh (1374 -> 1428: sources solvr-rooms.sh; search options; get/replies/reply through
+    optional-key/escaped paths; main --json errors + room subcommand routing + get-reply/update-reply; help text);
+    ?? solvr-rooms.sh (491); install.sh (+1 download, chmod).
+  DOCS: skill/SKILL.md and frontend/public/skill.md (+23 each, same text): "Room commands — the same names as the
+    Solvr CLIs and MCP tools" block (7 commands, credentials, client-entry-id replay, error format) before the
+    existing Rooms command list; get-reply/update-reply with --if-match under "Reply to a Post".
+  TESTS: ?? skill/scripts/test_contract.sh (371): python3 server on 127.0.0.1:0 answering the example selected per
+    run (ETag on getReply/updateReply; streamRoom writes the example frames then holds the connection 20 s; a
+    "rotated" case writes a credential_rotated end frame) + check.py. Per operation (13) x {--json, human}: exactly
+    1 request; method; path with escaped params; exact query; Authorization per credential (none = absent, room
+    token over a configured key, the invalid token for the error); If-Match/Last-Event-ID iff the example sends
+    them; body exactly the example's (none when null); Accept text/event-stream on watch; --json stdout == the
+    answer (+data.etag on getReply/updateReply; watch: the {id,event,frame} lines); human exit 0, empty stderr,
+    shows ids/titles/bodies/ticket/ETag/stream content. Per error example (5) x 2: exit 1, empty stdout, --json
+    stderr == the API's error answer, human stderr "CODE: message" + "request id: <id>". Plus: watch --max 1
+    returns < 10 s on the held stream; join (no saved token) then send presents the saved token; read/send/
+    ticket/watch with no token fail before any request and name `room join`; rotated stream end -> exit 1 +
+    "CREDENTIAL_ROTATED: ..." (human) / error answer (--json); every operationId in the file is exercised. Every
+    command runs under a 15 s watchdog.
+  EXISTING TESTS: none modified, skipped or loosened (no *_test.go or skill test*.sh in git status).
+
+VERIFICATION [this session; logs in /tmp/solvr_idx78_s11/; DATABASE_URL=postgres://solvr:solvr_dev@localhost:
+  5435/solvr_test?sslmode=disable (local docker solvr-postgres)]:
+  [TEST] RED skill_red.log: test_contract.sh 5 passed / 33 failed (only createPost/createReply and the coverage
+    check passed: the existing post/reply already matched).
+  [TEST] GREEN skill_g2.log: test_contract.sh Passed 45, Failed 0.
+  [TEST] existing skill suites: test_canonical_posts.sh 55/0, test_room_credentials.sh 13/0, test.sh all passed.
+  MUTATIONS [TEST] (mut/mut.py, each alone, source restored, `shasum -c mut/orig.sha` OK): 12/12 FAILED the
+    contract test: m1 read presents the API key, m2 join sends no body, m3 watch ignores --max, m4 get-reply drops
+    the ETag, m5 no request id, m6 no Last-Event-ID, m7 update drops If-Match, m8 search default per_page 10, m9
+    --json error not the answer, m10 ticket watch presents the token, m11 send drops client_entry_id, m12 get
+    needs the key.
+  [REAL] smoke/smoke.log: the real API binary (go build ./cmd/api -> smoke/api; env -i, DATABASE_URL as above, a
+    throwaway JWT_SECRET, PORT 18098, no env file read); solvr.sh as THREE registered agents (own SOLVR_API_KEY +
+    SOLVR_CONFIG_DIR each), every call under a 20 s watchdog: post; reply; get-reply (ETag); anonymous get-reply
+    --json data.etag; update-reply ok (new ETag); same stale ETag -> "Error (412): PRECONDITION_FAILED: ..." +
+    request id, and --json -> the API's error answer; anonymous search "" -> VALIDATION_ERROR + request id; search
+    --limit 5 --sort newest; get; replies. Room: create; all three `room join` the SAME slug; executor (human) and
+    reviewer (--json) `room watch --type message --max 1` in parallel BOTH woke with the planner's entry 244908
+    (sent with --to executor,reviewer); the same --client-entry-id again -> "Entry 244908 was already sent";
+    executor send --reply-to 244908 -> 244910 reply_to 244908; reviewer read shows "to <both ids>" and "(reply to
+    244908)"; ticket -> anonymous watch --ticket --last-event-id 244908 got 244910; bogus ticket ->
+    STREAM_TICKET_INVALID + request id; dead --token -> 401 UNAUTHORIZED + request id; never-joined slug -> "No
+    room token ... Run: solvr.sh room join"; the planner's open watch ended exit 1 "CREDENTIAL_ROTATED: ..." when
+    it ran `room join --rotate`, and its next send used the new token (244914). ("Terminated" lines in the log
+    are the smoke's own watchdogs.) API stopped (0 listeners on 18098); rows deleted (cleanup.log: rooms 1, replies
+    1, posts 1, agents 3, one transaction); recount 0|0|0.
+  [TEST] docs_v.log: go test ./internal/api -run 'TestPublished|TestSpecMCPSections' -v: 9 PASS, 0 SKIP/FAIL
+    (SKILL.md + public copy: no --room-token, handshake, solvr_rt_, "Two credentials", canonical commands).
+  [TEST] FRONTEND (once, frontend_full.log): npm test 200 files, 1750 tests passed.
+  [TEST] FULL BACKEND (once, backend_full.log, `go test ./...`, parallel packages) -> exit 1: FAIL in internal/api,
+    internal/api/handlers, internal/db; 98 failure lines (fail.mine). TestLegacyDependencyRegistry_CoversThePost
+    TypeReferences is NOT among them (it was in slice 10's run). Against slice 10's baselines (/tmp/solvr_idx78_s10/
+    fail.mine + fail.union) 15 top-level names are new; their assertions are shared-DB interference between
+    packages running in parallel: a just-created room answers join 409 ROOM_ARCHIVED, "account no longer exists"
+    for a just-registered agent, "failed to connect to database". Run ALONE (alone_api.log: the 12 api names ok;
+    alone_handlers.log: the 2 handlers names PASS; alone_db.log: TestAgentReputation_* 6 PASS) they pass, except
+    TestRoomRepository_List ("Create() error = room slug already exists", test-DB residue), which is in slice 10's
+    baseline. No Go file other than the registry map was changed.
+  [REAL] bash -n on solvr.sh and solvr-rooms.sh ok; shellcheck -S warning solvr-rooms.sh test_contract.sh: clean.
+  NOT RUN: packages/*, cli/, mcp-server suites (untouched); golangci-lint (environment mismatch, as slice 10);
+    frontend/public/solvr-skill.zip NOT rebuilt (it was already stale: July 2026 files, no rooms-canonical code).
+
+FINDINGS, NOT FIXED:
+  - [REAL] frontend/public/solvr-skill.zip predates many skill changes (dated 07-2026) and lacks solvr-rooms.sh;
+    install.sh now fetches it, the zip does not have it. Owner call whether the zip is still served/used.
+  - [REAL] The skill keeps the A2A adapter commands (room-create auto-handshake, room-join presence via /r/{slug}/
+    join, room-message, room-stream, claims, events). They work; the new names are the canonical surface. Whether
+    the adapter commands are retired belongs to step 5 / the adapter retirement.
+  - [REAL] skill.json "files"/"endpoints" still list the A2A routes and legacy approaches/answers endpoints; not
+    edited (step 5: legacy choices out of first-party clients).
+  - [REAL] The installed copy at ~/.claude/skills/solvr is outside the repo and untouched.
+
+REMAINING FOR idx 78 (next slices, in order):
+  12.. steps 3 (default HTTP prompt usable without integrations), 4 (webhooks: NewWebhooksHandler is mounted by no
+    router; discovery still lists "webhooks"), 5 (migration notes, deprecation errors, legacy choices out of
+    first-party clients: both CLIs' --type, the npm and skill search --type, skill.json legacy endpoints), 6
+    (external consumer vs clean + upgraded schema), 7 (participants as collections, a members command/tool;
+    the skill smoke above already ran a third agent in one room); findings of slices 6-11.
+
+git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged
+  (idx 78 passes stays false).

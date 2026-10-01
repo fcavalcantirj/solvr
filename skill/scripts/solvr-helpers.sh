@@ -58,44 +58,10 @@ load_api_key() {
 # API Helper
 # ============================================================================
 
+# api_call METHOD ENDPOINT [DATA] - a request with the agent API key (solvr_request in
+# solvr-rooms.sh): prints the answer, or the API's error code, message and request id.
 api_call() {
-    local method="$1"
-    local endpoint="$2"
-    local data="${3:-}"
-    local api_key
-
-    api_key=$(load_api_key) || return 1
-
-    local url="${SOLVR_API_URL}${endpoint}"
-    local curl_args=(
-        -s
-        -X "$method"
-        -H "Authorization: Bearer ${api_key}"
-        -H "Content-Type: application/json"
-        -H "Accept: application/json"
-        -w "\n%{http_code}"
-    )
-
-    if [ -n "$data" ]; then
-        curl_args+=(-d "$data")
-    fi
-
-    local response
-    response=$(curl "${curl_args[@]}" "$url")
-
-    local http_code
-    http_code=$(echo "$response" | tail -n1)
-    local body
-    body=$(echo "$response" | sed '$d')
-
-    if [ "$http_code" -ge 400 ]; then
-        local error_msg
-        error_msg=$(echo "$body" | jq -r '.error.message // .message // "Unknown error"' 2>/dev/null || echo "Request failed")
-        echo -e "${RED}Error ($http_code): ${error_msg}${NC}" >&2
-        return 1
-    fi
-
-    echo "$body"
+    solvr_request "$1" "$2" key "${3:-}"
 }
 
 # ============================================================================

@@ -3,9 +3,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -68,6 +67,8 @@ func NewSearchCmd() *cobra.Command {
 	var jsonOutput bool
 	var typeFilter string
 	var limit int
+	var page int
+	var sort string
 
 	cmd := &cobra.Command{
 		Use:   "search <query>",
@@ -75,6 +76,7 @@ func NewSearchCmd() *cobra.Command {
 		Long: `Search the Solvr knowledge base for existing solutions, questions, and ideas.
 
 Search before you start working on a problem - someone might have already solved it!
+No API key is needed; a configured one is sent.
 
 Examples:
   solvr search "async postgres race condition"
@@ -82,84 +84,32 @@ Examples:
   solvr search "error handling" --api-url http://localhost:8080/v1
   solvr search "async bug" --json
   solvr search "bug fix" --type problem
-  solvr search "test" --limit 5`,
+  solvr search "test" --limit 5 --page 2
+  solvr search "retry" --sort newest`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			query := args[0]
+			apiURL, apiKey = resolveAPISettings(apiURL, apiKey)
 
-			// Try to load API key from config if not provided via flag
-			if apiKey == "" {
-				config, err := loadConfig()
-				if err == nil {
-					if key, ok := config["api-key"]; ok {
-						apiKey = key
-					}
-				}
-			}
-
-			// Try to load API URL from config if not overridden
-			if apiURL == defaultAPIURL {
-				config, err := loadConfig()
-				if err == nil {
-					if url, ok := config["api-url"]; ok {
-						apiURL = url
-					}
-				}
-			}
-
-			// Build search URL with optional type filter and limit
-			searchURL, err := buildSearchURL(apiURL, query, typeFilter, limit)
+			searchURL, err := buildSearchURL(apiURL, args[0], typeFilter, limit, page, sort)
 			if err != nil {
 				return fmt.Errorf("failed to build search URL: %w", err)
 			}
 
-			// Create HTTP request
-			req, err := http.NewRequest("GET", searchURL, nil)
+			body, err := callAPI("GET", searchURL, apiKey, nil)
 			if err != nil {
-				return fmt.Errorf("failed to create request: %w", err)
+				return err
 			}
 
-			// Add auth header if API key is set
-			if apiKey != "" {
-				req.Header.Set("Authorization", "Bearer "+apiKey)
+			// --json prints the answer exactly as the API returned it
+			if jsonOutput {
+				return printAnswer(cmd.OutOrStdout(), body)
 			}
 
-			// Execute request
-			client := &http.Client{Timeout: 30 * time.Second}
-			resp, err := client.Do(req)
-			if err != nil {
-				return fmt.Errorf("failed to call API: %w", err)
-			}
-			defer resp.Body.Close()
-
-			// Read response body
-			body, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return fmt.Errorf("failed to read response: %w", err)
-			}
-
-			// Check for error response
-			if resp.StatusCode != http.StatusOK {
-				var apiErr APIError
-				if json.Unmarshal(body, &apiErr) == nil && apiErr.Error.Message != "" {
-					return fmt.Errorf("API error: %s", apiErr.Error.Message)
-				}
-				return fmt.Errorf("API returned status %d", resp.StatusCode)
-			}
-
-			// Parse response
 			var searchResp SearchAPIResponse
 			if err := json.Unmarshal(body, &searchResp); err != nil {
 				return fmt.Errorf("failed to parse response: %w", err)
 			}
-
-			// Output as JSON or pretty display
-			if jsonOutput {
-				displayJSONOutput(cmd, searchResp)
-			} else {
-				displaySearchResults(cmd, searchResp)
-			}
-
+			displaySearchResults(cmd, searchResp)
 			return nil
 		},
 	}
@@ -167,27 +117,38 @@ Examples:
 	// Add flags
 	cmd.Flags().StringVar(&apiURL, "api-url", defaultAPIURL, "API base URL")
 	cmd.Flags().StringVar(&apiKey, "api-key", "", "API key for authentication")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output raw JSON")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output the API's answer as JSON")
 	cmd.Flags().StringVar(&typeFilter, "type", "", "Filter by type: problem, question, idea, or all")
-	cmd.Flags().IntVar(&limit, "limit", 0, "Limit the number of results (1-50)")
+	cmd.Flags().IntVar(&limit, "limit", 0, "Results per page (1-50; the API's default when not given)")
+	cmd.Flags().IntVar(&page, "page", 0, "Page number (the API's default when not given)")
+	cmd.Flags().StringVar(&sort, "sort", "", "relevance (default), newest, votes or activity")
 
 	return cmd
 }
 
-// buildSearchURL constructs the search API URL with query parameters
-func buildSearchURL(baseURL, query, typeFilter string, limit int) (string, error) {
+// buildSearchURL constructs the search API URL with only the parameters given:
+// an empty query sends no q (the API answers VALIDATION_ERROR).
+func buildSearchURL(baseURL, query, typeFilter string, limit, page int, sort string) (string, error) {
 	u, err := url.Parse(baseURL + "/search")
 	if err != nil {
 		return "", err
 	}
 
 	q := u.Query()
-	q.Set("q", query)
+	if query != "" {
+		q.Set("q", query)
+	}
 	if typeFilter != "" {
 		q.Set("type", typeFilter)
 	}
 	if limit > 0 {
-		q.Set("per_page", fmt.Sprintf("%d", limit))
+		q.Set("per_page", strconv.Itoa(limit))
+	}
+	if page > 0 {
+		q.Set("page", strconv.Itoa(page))
+	}
+	if sort != "" {
+		q.Set("sort", sort)
 	}
 	u.RawQuery = q.Encode()
 
@@ -268,12 +229,4 @@ func stripHTMLTags(s string) string {
 		}
 	}
 	return string(result)
-}
-
-// displayJSONOutput outputs the search response as raw JSON
-func displayJSONOutput(cmd *cobra.Command, resp SearchAPIResponse) {
-	out := cmd.OutOrStdout()
-	encoder := json.NewEncoder(out)
-	encoder.SetIndent("", "  ")
-	encoder.Encode(resp)
 }

@@ -9066,3 +9066,164 @@ REMAINING FOR idx 78 (next slices, in order):
 
 git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged
   (idx 78 passes stays false).
+
+================================================================================
+2026-10-01 18:46 — Task idx 78 (spec.json, category functional) — IN PROGRESS, passes STAYS false
+"Keep SDKs, CLI, MCP, skills, and webhooks consistent with the redesigned product"
+SLICE 8: the Go CLI (cli/, module github.com/fcavalcantirj/solvr/cli). It now has a command for each of the 13
+contract operations with the TS CLI's names (room create/join/read/send/ticket/watch, get-reply, update-reply
+beside post/get/search/reply/replies), --json prints the API's answer (and its error answer on stderr), and a
+contract test runs every command against contract/openapi-examples.json from a local server.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 78-95, 97, 98; no open URGENT (96 is
+  true). 24/67 acceptance (skipped as in every earlier entry); 68 waits on the owner (as journaled). idx 78 first
+  buildable; continued from slice 7 (HEAD 1c335788), REMAINING item "8.. consumers", first in its list: cli/ (Go).
+  Tree clean at start.
+
+DESIGN (from a code read this session):
+  - No dependency on packages/sdk-go: SPEC.md documents `go install github.com/fcavalcantirj/solvr/cli@latest`,
+    which refuses a go.mod with replace directives, and the SDK module has no tag. The CLI keeps its own HTTP
+    layer (as the TS CLI kept its own client), so --json can print the API's answer byte for byte.
+  - Names/flags = the TS CLI's (slice 7): room create --display-name/--slug/--description/--tags/--private;
+    room join <slug> [--rotate] [--ttl]; room read <slug> [--limit --cursor --kind --issue]; room send <slug>
+    --body [--client-entry-id --reply-to --to a,b]; room ticket <slug>; room watch <slug> [--last-event-id
+    --ticket --type --issue --max]; get-reply <id>; update-reply <id> --if-match --body. Every command keeps the
+    Go CLI's --api-url/--json; create/join/get-reply/update-reply also --api-key; read/send/ticket/watch take
+    --room-token.
+  - Credentials: reads and writes present the API key when one is given or configured (unchanged Go CLI rule);
+    room join saves the handshake's token in ~/.solvr/config as room-token.<slug>=... (0600, as the file always
+    was); room read/send/ticket/watch present --room-token or the saved one, NEVER the API key, else "No room
+    token for <slug>. Run: solvr room join <slug>" before any request; room watch --ticket is anonymous.
+    `config get` masks room-token.* keys like api-key.
+  - --json: get, post, reply, search now print the API's answer as it came (they printed a typed re-encode
+    that dropped fields such as publication_state, matched_replies, meta.method); get-reply/update-reply add the
+    ETag header as data.etag; room watch --json prints one line per event {id, event, frame} (frame = the
+    data as sent). A failed call under --json prints the API's error answer on stderr, exit 1 (a non-JSON
+    answer: {"error":{"code":"HTTP_<status>","message":"API returned status <status>"}}).
+  - Error reporting moved into run(args, stdout, stderr) int (main.go; main() = os.Exit(run(...))): errors are
+    printed ONCE (before: cobra printed "Error: ..." plus the whole usage, then main printed the error again).
+    An API error: "Error: API error: CODE: message" + "  request id: <id>", no usage. A usage error (cobra arg/
+    flag validation, i.e. the command never ran): "Error: ..." + "Run '<command> --help' for usage." instead of
+    the usage dump. markRunErrors wraps every RunE to tell the two apart.
+  - New type APIFailure{Status, Code, Message, RequestID, Answer} replaces the fmt errors of apiErrorFrom; its
+    Error() keeps the old strings ("API error: CODE: message" / "API returned status N"). search now goes through
+    callAPI, so its error gained the code ("API error: message" -> "API error: CODE: message").
+  - search: an empty query sends no q (the API's VALIDATION_ERROR example); adds --page and --sort; --limit
+    stays per_page. --type (legacy filter) untouched: step 5.
+  - Every path parameter is url.PathEscape'd (get, reply, replies, get-reply, update-reply, room *).
+  - room watch: openRoomStream has no request timeout, Accept: text/event-stream, Last-Event-ID when given;
+    heartbeats (":" lines) skipped; access_revoked/credential_rotated end events -> APIFailure of their code
+    (status 0) -> exit 1; EOF -> exit 0; --max n stops after n events.
+
+WHAT CHANGED [REAL, git status --porcelain: M cli/client.go, M cli/config.go, M cli/get.go, M cli/main.go,
+  M cli/post.go, M cli/replies.go, M cli/reply.go, M cli/search.go, ?? cli/contract_test.go, ?? cli/reply_edit.go,
+  ?? cli/room.go, ?? cli/room_output.go, ?? cli/room_test.go, ?? cli/run_test.go, ?? cli/stream.go;
+  git diff --stat (tracked): 8 files, 243+/140-]:
+  PRODUCTION (cli/):
+  M main.go (60 -> 127): registers get-reply, update-reply, room; root help shows the room flow; run(),
+    jsonOutput(), markRunErrors() as DESIGN.
+  M client.go (88 -> 142): APIFailure (+ answer()), sendAPI (extra headers, answer headers), callAPI wraps it,
+    apiErrorFrom keeps request_id, printAnswer (indent the answer as it came); printJSON REMOVED (no caller
+    left after get/post/reply moved to printAnswer).
+  M config.go: roomTokenKey, saveRoomToken, roomCredential; config get masks room-token.* values.
+  M search.go: RunE through callAPI + printAnswer; buildSearchURL(base, q, type, limit, page, sort) omits empty
+    values; --page, --sort; displayJSONOutput REMOVED (no caller).
+  M get.go, post.go, reply.go: --json prints the answer; get/reply escape the id; help text says reads need no key.
+  M replies.go: escapes the post id; --json through printAnswer (same output as before).
+  ?? reply_edit.go (139): get-reply, update-reply (--if-match, --body required), showReply, answerWithETag.
+  ?? room.go (381): solvr room create|join|read|send|ticket|watch.
+  ?? room_output.go (191): request/answer types the commands use + their human output (TS CLI wording).
+  ?? stream.go (115): the SSE reader (the SDK's stream.go reading rules).
+  TESTS (cli/):
+  ?? contract_test.go (747): loads ../contract/openapi-examples.json; TestContract_EveryOperationHasACommand;
+    per operation, --json (13) and human (13) runs in-process through run(): request held (method, escaped path,
+    Authorization per credential incl. none = absent and room token over a configured API key, exact query,
+    If-Match/Last-Event-ID iff the example sends them, body EXACTLY the example's; a body field with no option
+    fails the test), --json printed every answered field (getReply/updateReply: data.etag; streamRoom: one line
+    {id, event, frame}), human exit 0, empty stderr, shows id/slug/token/body/etag/content; per error example
+    (5): --json exit 1, empty stdout, stderr EXACTLY the API's answer; human exit 1, "CODE: message" + request
+    id; a jsonDiff self-test. HOME is a temp dir per run (config holds api-url/api-key only).
+  ?? room_test.go (372, 12 tests): join saves + send presents the token ({} body, key on join only); tokens per
+    room, replaced by a later join (--rotate --ttl body); read/send/ticket/watch without a token fail before any
+    request with no usage/--help pointer; --room-token beats the saved one, slug "a b/c" escaped; create sends
+    only given fields; read filters + "More" cursor line + event entries; send --reply-to/--to (trimmed)
+    + "already sent"; watch skips heartbeats, --max on a stream the server keeps open, Accept/Last-Event-ID/type;
+    watch --json lines; ticket watch anonymous; CREDENTIAL_ROTATED end -> exit 1 (human + --json); --max 1 within
+    5 s on a never-ending stream.
+  ?? run_test.go (162, 9 tests): usage error -> --help pointer, stdout empty; API error once + request id, no
+    usage; non-JSON 502 human + --json; search sends no empty q, only the options given; path escaping on 5
+    commands; get-reply ETag line + anonymous; empty --if-match sends no If-Match, 428 surfaced; update-reply
+    required flags (no request); config get masks room tokens.
+  EXISTING TEST FILES: none modified (git status lists no modified *_test.go). No test deleted, skipped or
+  loosened. Backend, frontend, contract fixture, packages/*, mcp-server, skill/: untouched.
+
+VERIFICATION [this session; logs in /tmp/solvr_idx78_s8/]:
+  [TEST] baseline.log: before any change `go test ./... -cover` ok, 85.2%; baseline_v.log 209 PASS lines,
+    0 SKIP/FAIL; go vet clean.
+  [TEST] RED (red.log): build failed "undefined: run" (the tests call the not-yet-written run()).
+  [TEST] GREEN: green_v.log `go test -race -v -cover` 266 PASS lines (209 + 57 new), 0 SKIP/FAIL; after the
+    printJSON removal and one test tightening (no --help pointer on a runtime error), green_full.log
+    `go test ./... -count=1 -race -cover` ok, coverage 88.9%. go vet clean; gofmt -l lists only config_test.go
+    (PRE-EXISTING: that file is untouched).
+  MUTATIONS [TEST] (mut/mut.py, mut/m*.log, mut/summary.log + summary2.log; each applied alone, the new tests
+    run, source restored; `shasum -c mut/orig.sha` all OK): ALL 32 FAILED as intended: m1 no Last-Event-ID; m2
+    empty q sent; m3 get-reply --json drops the ETag; m4 update-reply drops If-Match; m5 room ops present the API
+    key; m6 anonymous sends "Bearer "; m7 room slug not escaped; m8 get --json typed re-encode; m9 --json error
+    as text; m10 human error drops the request id; m11 join sends no body; m12 join does not save the token; m13
+    watch ignores --max; m14 stream end not an error; m15 send drops --to; m16 read drops --kind; m17 search drops
+    --sort; m18 non-JSON error answer printed raw under --json; m19 create drops is_private; m20 usage error
+    without the --help pointer; m21 human watch prints no content; m22 runtime errors not marked; m23 ticket
+    watch presents the room token; m24 watch drops the ticket; m25 empty header value sent; m26 read drops
+    --limit; m27 config get shows room tokens; m28 search --json typed re-encode; m29 reply path not escaped;
+    m30 send drops --reply-to; m31 no Accept header; m32 replay not reported. (m26/m29 first failed only to
+    BUILD; re-run with build-safe variants, both then failed on assertions: summary2.log.)
+  [REAL] smoke/smoke.log: the real API binary (go build ./cmd/api -> smoke/solvr-go-cli-smoke-api, env -i with
+    DATABASE_URL = local docker solvr-postgres solvr_test, a throwaway JWT_SECRET, PORT 18097; no env file read)
+    and the CLI binary (go build -> smoke/solvr), each agent with its own HOME/.solvr/config, every call
+    `timeout 60`: 3 agents registered; post --json (type post, draft); reply --json author present; anonymous
+    get-reply etag + human ETag line; update-reply new etag; stale etag -> exit 1 PRECONDITION_FAILED + request
+    id; empty --if-match --json -> PRECONDITION_REQUIRED answer; search "" --json -> VALIDATION_ERROR answer;
+    search --sort newest --limit 5 meta per_page 5; anonymous get + replies (next_cursor None); `solvr replies`
+    -> usage error + --help pointer; room create; planner, executor AND reviewer joined the SAME room (one
+    room-token line saved per HOME); executor watch --type message --max 1 --json got the planner's message
+    242588 with addressed_member_ids [executor, reviewer] (send --to with the 2 real agent ids); reviewer watch
+    human "#1 agent_gocli_planner_...: Plan: build..."; executor send --reply-to 242588; reviewer room ticket ->
+    anonymous watch --ticket --last-event-id 242588 --type message --max 1 got 242590 (the executor's reply,
+    reply_to 242588); bogus ticket -> STREAM_TICKET_INVALID answer; dead --room-token -> UNAUTHORIZED; no token
+    -> "No room token"; planner join --rotate -> the old token's open watch exited 1 "CREDENTIAL_ROTATED: ..."
+    and the new token was saved and sends; config get masks the room token.
+    smoke1.log (first run, executor/reviewer registration failed: my agent names were 31 chars, the API's limit
+    is 30) still showed: the same client entry id with the same payload -> "Message 242584 was already sent
+    (same client entry id)"; join without an API key -> "UNAUTHORIZED: authorization header required" + request
+    id. In run 2 my second send dropped --to, so the API answered CLIENT_ENTRY_ID_REUSED (correct: a different
+    payload), surfaced with its request id.
+    API stopped (pkill; port 18097 free); both runs' rows deleted from solvr_test (cleanup1.log: room 1, reply
+    1, post 1, agent 1; cleanup2.log: room 1, reply 1, post 1, agents 3; each one transaction); a recount found
+    0 agent_gocli_% agents and 0 gocli-smoke-% rooms.
+  NOT RUN: backend suites (no backend file touched; the backend binary was only built for the smoke); frontend
+    (untouched); packages/* suites (untouched); ./scripts/check-file-size.sh scans only backend/ and frontend/
+    (largest cli file contract_test.go 747 lines, largest production file room.go 381).
+
+FINDINGS, NOT FIXED:
+  - [REAL] the Go CLI's writes without an API key still reach the API and get its 401 (smoke1: join), while the
+    TS CLI refuses first ("No API key configured"). Kept: existing Go tests run post without a key against a
+    test server (cli_e2e_post_test.go) and expect the request to be sent.
+  - [REAL] cli/ has no CI job and no README (CI runs no cli/ or packages/* test).
+  - [REAL] search human output prints "Votes: <votes>" from a field the API does not send (always 0) and
+    "Answers: <answers_count>" (legacy count); get prints problem-only fields (Weight, Success Criteria): step 5.
+  - [REAL] the Go CLI has no member listing (needed for --to); GET /v1/rooms/{slug}/members is not in the
+    contract (step 7, as slice 7 noted).
+  - Carried: search --type/--status legacy filters (step 5); the rest of slices 6-7's.
+
+REMAINING FOR idx 78 (next slices, in order):
+  9.. consumers: mcp-server, backend /v1/mcp, skill/scripts — same names, room operations, contract held to the
+    same fixture.
+  then steps 3, 4 (webhooks: NewWebhooksHandler is mounted by no router; discovery still lists "webhooks"), 5
+    (migration notes, deprecation errors, legacy choices out of first-party clients, incl. both CLIs' search
+    --type and the Go CLI's problem-only display), 6 (external consumer vs clean + upgraded schema), 7
+    (participants as collections, a members command, third agent without a new room — the smoke above already
+    did it for this CLI); the findings above.
+
+git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged
+  (idx 78 passes stays false).

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -45,7 +46,8 @@ func NewGetCmd() *cobra.Command {
 		Long: `Get the full details of a post from the Solvr knowledge base.
 
 Contributions to the post (answers, approaches, reviews, discussion) are
-replies: list them with "solvr replies <id>".
+replies: list them with "solvr replies <id>". No API key is needed; a
+configured one is sent.
 
 Examples:
   solvr get post-123
@@ -58,19 +60,19 @@ Examples:
 			postID := args[0]
 			apiURL, apiKey = resolveAPISettings(apiURL, apiKey)
 
-			body, err := callAPI("GET", fmt.Sprintf("%s/posts/%s", apiURL, postID), apiKey, nil)
+			body, err := callAPI("GET", fmt.Sprintf("%s/posts/%s", apiURL, url.PathEscape(postID)), apiKey, nil)
 			if err != nil {
 				return err
+			}
+
+			// --json prints the answer exactly as the API returned it
+			if jsonOutput {
+				return printAnswer(cmd.OutOrStdout(), body)
 			}
 
 			var getResp GetAPIResponse
 			if err := json.Unmarshal(body, &getResp); err != nil {
 				return fmt.Errorf("failed to parse response: %w", err)
-			}
-
-			if jsonOutput {
-				printJSON(cmd.OutOrStdout(), getResp)
-				return nil
 			}
 			displayPostDetails(cmd, getResp.Data)
 			fmt.Fprintf(cmd.OutOrStdout(), "\nReplies: solvr replies %s\n", getResp.Data.ID)
@@ -80,7 +82,7 @@ Examples:
 
 	cmd.Flags().StringVar(&apiURL, "api-url", defaultAPIURL, "API base URL")
 	cmd.Flags().StringVar(&apiKey, "api-key", "", "API key for authentication")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output raw JSON")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output the API's answer as JSON")
 
 	return cmd
 }

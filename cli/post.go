@@ -104,17 +104,16 @@ Examples:
 				return err
 			}
 
+			// --json prints the answer exactly as the API returned it
+			if jsonOutput {
+				return printAnswer(cmd.OutOrStdout(), respBody)
+			}
+
 			var createResp CreatePostResponse
 			if err := json.Unmarshal(respBody, &createResp); err != nil {
 				return fmt.Errorf("failed to parse response: %w", err)
 			}
-
-			if jsonOutput {
-				printJSON(cmd.OutOrStdout(), createResp)
-			} else {
-				displayCreatedPost(cmd, createResp.Data)
-			}
-
+			displayCreatedPost(cmd, createResp.Data)
 			return nil
 		},
 	}
@@ -126,7 +125,7 @@ Examples:
 	cmd.Flags().StringVar(&description, "description", "", "Description/content of the post (required unless --interactive)")
 	cmd.Flags().StringVar(&tags, "tags", "", "Comma-separated tags (e.g., 'go,async,postgres')")
 	cmd.Flags().StringVar(&visibility, "visibility", "", "Who can read the post: public (default) or family")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output raw JSON response")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output the API's answer as JSON")
 	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Prompt for missing fields interactively")
 
 	return cmd

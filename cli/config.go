@@ -80,6 +80,38 @@ func saveConfig(config map[string]string) error {
 	return nil
 }
 
+// roomTokenKey is the config key that holds the room token "solvr room join"
+// saved for a room.
+func roomTokenKey(slug string) string {
+	return "room-token." + slug
+}
+
+// saveRoomToken keeps the room token of a room, replacing an earlier one.
+func saveRoomToken(slug, token string) error {
+	config, err := loadConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+	config[roomTokenKey(slug)] = token
+	return saveConfig(config)
+}
+
+// roomCredential is the room token a room command presents: the one given, or
+// the one "solvr room join" saved. Room commands never present the API key.
+func roomCredential(slug, given string) (string, error) {
+	if given != "" {
+		return given, nil
+	}
+	config, err := loadConfig()
+	if err != nil {
+		return "", fmt.Errorf("failed to load config: %w", err)
+	}
+	if token := config[roomTokenKey(slug)]; token != "" {
+		return token, nil
+	}
+	return "", fmt.Errorf("No room token for %s. Run: solvr room join %s", slug, slug)
+}
+
 // maskAPIKey masks an API key for display, showing only first and last few chars
 func maskAPIKey(key string) string {
 	if len(key) <= 10 {
@@ -184,7 +216,7 @@ Examples:
 			for key, value := range config {
 				displayValue := value
 				// Mask sensitive values
-				if key == "api-key" {
+				if key == "api-key" || strings.HasPrefix(key, roomTokenKey("")) {
 					displayValue = maskAPIKey(value)
 				}
 				fmt.Fprintf(cmd.OutOrStdout(), "%s=%s\n", key, displayValue)

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -38,7 +37,8 @@ func NewRepliesCmd() *cobra.Command {
 		Long: `List the replies of a post, oldest first, one page at a time.
 
 Answers, approaches and responses from before the canonical model are
-replies too; they are labeled with their origin.
+replies too; they are labeled with their origin. No API key is needed; a
+configured one is sent.
 
 Examples:
   solvr replies post_123
@@ -57,7 +57,7 @@ Examples:
 			if limit > 0 {
 				params.Set("limit", strconv.Itoa(limit))
 			}
-			listURL := fmt.Sprintf("%s/posts/%s/replies", apiURL, postID)
+			listURL := fmt.Sprintf("%s/posts/%s/replies", apiURL, url.PathEscape(postID))
 			if len(params) > 0 {
 				listURL += "?" + params.Encode()
 			}
@@ -69,12 +69,7 @@ Examples:
 
 			// --json prints the page exactly as the API returned it
 			if jsonOutput {
-				var indented bytes.Buffer
-				if err := json.Indent(&indented, respBody, "", "  "); err != nil {
-					return fmt.Errorf("failed to parse response: %w", err)
-				}
-				fmt.Fprintln(cmd.OutOrStdout(), indented.String())
-				return nil
+				return printAnswer(cmd.OutOrStdout(), respBody)
 			}
 
 			var page RepliesResponse

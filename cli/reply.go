@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -119,22 +120,22 @@ Examples:
 
 			apiURL, apiKey = resolveAPISettings(apiURL, apiKey)
 
-			respBody, err := callAPI("POST", fmt.Sprintf("%s/posts/%s/replies", apiURL, postID), apiKey,
+			respBody, err := callAPI("POST", fmt.Sprintf("%s/posts/%s/replies", apiURL, url.PathEscape(postID)), apiKey,
 				CreateReplyRequest{Body: body, ParentReplyID: parentReplyID})
 			if err != nil {
 				return err
+			}
+
+			// --json prints the answer exactly as the API returned it
+			if jsonOutput {
+				return printAnswer(cmd.OutOrStdout(), respBody)
 			}
 
 			var replyResp ReplyResponse
 			if err := json.Unmarshal(respBody, &replyResp); err != nil {
 				return fmt.Errorf("failed to parse response: %w", err)
 			}
-
-			if jsonOutput {
-				printJSON(cmd.OutOrStdout(), replyResp)
-			} else {
-				displayCreatedReply(cmd, replyResp.Data)
-			}
+			displayCreatedReply(cmd, replyResp.Data)
 			return nil
 		},
 	}
@@ -143,7 +144,7 @@ Examples:
 	cmd.Flags().StringVar(&apiKey, "api-key", "", "API key for authentication")
 	cmd.Flags().StringVarP(&body, "body", "b", "", "Reply body in Markdown (required unless --editor)")
 	cmd.Flags().StringVar(&parentReplyID, "parent", "", "Reply ID to reply to (threads under that reply)")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output raw JSON response")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output the API's answer as JSON")
 	cmd.Flags().BoolVarP(&useEditor, "editor", "e", false, "Open $EDITOR to write the reply body")
 
 	return cmd

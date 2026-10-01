@@ -103,28 +103,36 @@ const pendingContributionsSQL = `SELECT
 // cutoverCounter is a counter stored on a row and kept by trigger from the records it counts:
 // drift lists the rows whose stored value disagrees with those records (read-only), rebuild
 // recomputes them and returns how many it repaired (a consistent row is not rewritten).
+// keys selects, from a drift row, the arguments of rebuildOne, the rebuild of that one row
+// (CounterReconciler).
 type cutoverCounter struct {
 	step, drift, rebuild string
+	keys, rebuildOne     string
 	fields               func(*KnowledgeCutoverReport) (before, rebuilt, after *int64)
 }
 
 // cutoverCounters are every stored counter of the schema, each reconciled with its records
-// once the records are converted (idx 77 step 5). Every *_drift() function in the schema is
-// here except searchDocumentDrift, whose rebuild needs the embedding service.
+// once the records are converted (idx 77 step 5), and again row by row every hour by
+// jobs.CounterReconcileJob. Every *_drift() function in the schema is here except
+// searchDocumentDrift, whose rebuild needs the embedding service.
 var cutoverCounters = []cutoverCounter{
 	{"vote_scores", "vote_score_drift", "rebuild_vote_scores", // 000113, 000119
+		"target_type, target_id::text", "rebuild_vote_scores($1, $2::uuid)",
 		func(r *KnowledgeCutoverReport) (*int64, *int64, *int64) {
 			return &r.VoteDriftBefore, &r.VoteScoresRebuilt, &r.VoteDriftAfter
 		}},
 	{"room_activity", "room_activity_drift", "rebuild_room_activity", // 000112
+		"room_id::text", "rebuild_room_activity($1::uuid)",
 		func(r *KnowledgeCutoverReport) (*int64, *int64, *int64) {
 			return &r.RoomDriftBefore, &r.RoomActivityRebuilt, &r.RoomDriftAfter
 		}},
 	{"view_counts", "view_count_drift", "rebuild_view_counts", // 000120
+		"post_id::text", "rebuild_view_counts($1::uuid)",
 		func(r *KnowledgeCutoverReport) (*int64, *int64, *int64) {
 			return &r.ViewDriftBefore, &r.ViewCountsRebuilt, &r.ViewDriftAfter
 		}},
-	{"agent_reputation", "agent_reputation_drift", "rebuild_agent_reputation", // 000121
+	{"agent_reputation", "agent_reputation_drift", "rebuild_agent_reputation", // 000121, 000132
+		"agent_id", "rebuild_agent_reputation($1)",
 		func(r *KnowledgeCutoverReport) (*int64, *int64, *int64) {
 			return &r.ReputationDriftBefore, &r.ReputationRebuilt, &r.ReputationDriftAfter
 		}},

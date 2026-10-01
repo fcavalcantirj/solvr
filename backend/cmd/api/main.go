@@ -197,6 +197,19 @@ func main() {
 		log.Println("Search document sweep started (runs every 5 minutes)")
 	}
 
+	// Start the counter reconcile job if database is available: it repairs, row by row, the
+	// stored scores, view counts, room activity and agent reputation that drifted from their
+	// records outside the triggers that keep them (a deploy window, direct SQL), one instance
+	// at a time.
+	var counterReconcileCancel context.CancelFunc
+	if pool != nil {
+		counterReconcileJob := jobs.NewCounterReconcileJob(db.NewCounterReconciler(pool), jobs.DefaultCounterReconcileLimit)
+		var counterReconcileCtx context.Context
+		counterReconcileCtx, counterReconcileCancel = context.WithCancel(context.Background())
+		go counterReconcileJob.RunScheduled(counterReconcileCtx, jobs.DefaultCounterReconcileInterval)
+		log.Println("Counter reconcile job started (runs every hour)")
+	}
+
 	// Start health check monitoring job if database is available
 	var healthCheckCancel context.CancelFunc
 	if pool != nil {
@@ -265,6 +278,9 @@ func main() {
 	}
 	if searchDocumentCancel != nil {
 		searchDocumentCancel()
+	}
+	if counterReconcileCancel != nil {
+		counterReconcileCancel()
 	}
 	if healthCheckCancel != nil {
 		healthCheckCancel()

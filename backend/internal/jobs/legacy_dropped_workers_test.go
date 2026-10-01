@@ -341,6 +341,12 @@ func scheduledWorkers(pool *db.Pool, tracer *dbErrorTracer) []probeWorker {
 				t.Errorf("search document job = %+v, %v; want the seeded rows embedded", result, err)
 			}
 		}},
+		{"job:CounterReconcileJob", func(ctx context.Context, t *testing.T) {
+			job := jobs.NewCounterReconcileJob(db.NewCounterReconciler(pool), jobs.DefaultCounterReconcileLimit)
+			if run, err := job.RunOnce(ctx); err != nil || run.Busy || len(run.Counters) == 0 {
+				t.Errorf("counter reconcile job = %+v, %v; want every counter reconciled", run, err)
+			}
+		}},
 	}
 }
 

@@ -7871,3 +7871,141 @@ git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this en
 UAT (for when idx 77 closes, not now): as slice 21's list, plus migration 000132 on production (a
   CREATE OR REPLACE FUNCTION, no table change; apply before the cutover binary, which now expects 132).
   Expect the cutover's agent_reputation step in well under a second at production's 199 agents, as before.
+
+2026-10-01 14:40 — Task idx 77 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Make indexes, counters, search projections, and analytics rebuildable from authoritative records"
+SLICE 25 of N: step 5 "periodic rebuilds" for the stored counters. Decided with slice 24's numbers plus
+this slice's spike: BUILD a periodic reconcile, row by row. New jobs.CounterReconcileJob (hourly, one
+API instance at a time) reads each counter's drift function and repairs each listed row with the
+one-row rebuild_*(id) form, which locks only that row. The full rebuild_*() stays the cutover's and
+the operator's (it locks every target row).
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 77-95, 97, 98; no open
+  URGENT. 24/67 acceptance (skipped as before); 68 waits on the owner. idx 77 first buildable. Tree clean
+  at start, HEAD 73b8ba1c. Followed slice 24's REMAINING order (step 5: decide the periodic reconcile).
+
+WHY BUILD, NOT "CUTOVER IS ENOUGH" [REAL, code read]: triggers keep every counter in its write's own
+  transaction, so drift only comes from outside them: deploy windows (old API + new trigger double-count,
+  slices 4/5) and direct SQL, which is how production migrations are applied (/admin/query). Without a
+  periodic path, drift from either stays until an operator runs a rebuild by hand. Each migration's
+  header already documents the operator REBUILD PATH (000112, 000113/000119, 000120, 000121), and every
+  one-row rebuild locks its row before it recounts (read in the migration bodies), so a per-row repair
+  is safe on live traffic. The existing *_ARebuildAnd...NeverLoseEachOther tests cover those functions.
+
+SPIKE [REAL, /tmp/solvr_idx77_s25/spike/]: DB solvr_idx77_s25_spike migrated 1 -> 132, slice 24's
+  seed.sql (20k users, 20k agents, 200k posts, 1M replies, 1M votes, 1M post_views, 20k rooms, 1M
+  room_entries), rebuild_all (votes 69.4 s, rooms 1.9 s, views 41.9 s, reputation 1.3 s).
+  perrow.log: drift reads at steady state vote 5.1 s, room 1.6 s, view 0.8 s, reputation 0.18 s.
+  100-200 drifted rows per counter (rolled back), drift read + one-row repairs in plpgsql: votes 200
+  rows 4.7 s, rooms 100 rows 1.5 s, views 100 rows 0.6 s, reputation 100 rows 0.24 s; drift after 0.
+  perrow_big.log: views 10,000 rows 6.0 s, reputation 5,000 rows 3.9 s, votes 10,000 rows 11.1 s,
+  so a one-row repair costs ~0.6-1.1 ms at this size, linear. Spike DB dropped at the end.
+
+WHAT CHANGED [REAL, git status --porcelain: M backend/cmd/api/main.go, M backend/internal/db/
+  knowledge_cutover.go, M backend/internal/db/legacy_dependency_registry.go, M backend/internal/db/
+  search_document_queue.go, M backend/internal/jobs/legacy_dropped_workers_test.go, ?? backend/internal/
+  db/advisory_lock.go, ?? backend/internal/db/counter_reconcile.go, ?? backend/internal/db/
+  counter_reconcile_test.go, ?? backend/internal/jobs/counter_reconcile.go, ?? backend/internal/jobs/
+  counter_reconcile_db_test.go, ?? backend/internal/jobs/counter_reconcile_test.go; git diff --stat:
+  5 files, 37+/35-]:
+  ?? internal/db/advisory_lock.go (41 lines): tryAdvisoryLock(ctx, pool, name), the body of
+    SearchDocumentQueue.TryLockSweep moved verbatim with the lock name as a parameter (error texts now
+    name the lock: "take lock <name>", nothing asserted the old ones, grep-checked).
+  M internal/db/search_document_queue.go (136 -> 107): TryLockSweep calls tryAdvisoryLock with the same
+    searchDocumentSweepLock name; unused sync/time imports dropped. Behaviour unchanged (its 9 job tests
+    and TestSearchDocumentJob_ClearedVectorsComeBackOnceAcrossInstances PASS below).
+  M internal/db/knowledge_cutover.go (347 -> 355): cutoverCounter gains keys (the drift columns that
+    are the one-row rebuild's arguments) and rebuildOne; each registry entry fills them:
+    vote_scores "target_type, target_id::text" -> rebuild_vote_scores($1, $2::uuid); room_activity
+    room_id -> rebuild_room_activity($1::uuid); view_counts post_id -> rebuild_view_counts($1::uuid);
+    agent_reputation agent_id -> rebuild_agent_reputation($1). Comment names the job. The cutover's
+    own steps are unchanged.
+  ?? internal/db/counter_reconcile.go (96 lines): CounterReconciler{pool}. TryLock (advisory lock
+    "solvr:counter_reconcile", not the sweep's), Counters() (registry step names, in order),
+    Reconcile(ctx, counter, limit) -> (drifted, repaired): SELECT <keys> FROM <drift>() LIMIT limit,
+    then one `SELECT <rebuildOne>` statement per row (autocommit, so a row is locked only while it is
+    recounted), summing what each returned (a row consistent again by then returns 0). Unknown counter
+    or limit <= 0 is an error.
+  ?? internal/jobs/counter_reconcile.go (112 lines): CounterReconcileJob. DefaultCounterReconcileInterval
+    1 h, DefaultCounterReconcileLimit 5000 rows per counter per run (~5 s of repairs at 1.1 ms/row).
+    RunOnce: lock (Busy when another instance holds it), every counter reconciled, a failing counter
+    reported via errors.Join without stopping the others. RunScheduled runs at once then every interval;
+    logs "Counter reconcile: <counter> N drifted, M repaired" only when something drifted.
+  M cmd/api/main.go (+16): starts the job when the DB pool exists (after the search document sweep),
+    cancels it on shutdown.
+  M internal/db/legacy_dependency_registry.go (+1): "job:CounterReconcileJob": keep(... touches no
+    legacy table) -- the scheduled-job probe requires a disposition for every job main.go schedules.
+  M internal/jobs/legacy_dropped_workers_test.go (+6): scheduledWorkers gains the job (the two
+    probes require the workers to be exactly what main.go schedules). Added, nothing removed/loosened.
+  ?? internal/db/counter_reconcile_test.go (280 lines, scratch DBs, 5 tests):
+    - RepairsOnlyTheDriftedRowsWithoutWaitingForTheRest: one drifted + one consistent row per counter;
+      a transaction holds FOR UPDATE on every consistent row; each Reconcile (10 s deadline) returns
+      vote 2/2, room 1/1, view 1/1, reputation 1/1; then every drift fn is empty, exact values on the
+      drifted rows, consistent rows untouched; a replay returns 0/0 everywhere.
+    - ALimitBoundsOneRunAndTheNextRunContinues: 2 drifted view counts, limit 1 -> 1/1, 1/1, 0/0.
+    - ReconcilesExactlyTheCutoverCounters: Counters() == registry steps; unknown name and limit 0 err.
+    - OneInstanceAtATime: second pool cannot take the lock while the first holds it; the sweep's lock
+      held does not block it; double unlock harmless.
+    - AVoteInFlightIsCountedByTheRepair: an uncommitted vote on the drifted post; Reconcile blocks on
+      its row lock (seen in pg_stat_activity), the vote commits, repair writes 3 (v1, v2, in-flight).
+  ?? internal/jobs/counter_reconcile_test.go (159 lines, fake reconciler, 6 tests): every counter with
+    the limit, default limit, Busy, lock error, failing counter does not stop the others, RunScheduled
+    runs at once and stops with its context. Passes under -race.
+  ?? internal/jobs/counter_reconcile_db_test.go (122 lines, scratch DB, 1 test): two pools/two jobs on
+    3 drifted view counts + 1 drifted reputation; a run while the lock is held elsewhere is Busy; both
+    jobs run concurrently -> repaired summed across them exactly 3 + 1, drift 0, values exact; replay on
+    either repairs nothing.
+  No migration, index, cache or service. No existing test deleted, skipped or loosened.
+
+VERIFICATION [this session; DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test (local docker
+  solvr-postgres, schema 132, not dirty); new tests use scratch DBs; logs in /tmp/solvr_idx77_s25/]:
+  [TEST] RED (tdd/red.log): `go vet ./internal/db ./internal/jobs` -> undefined NewCounterReconciler,
+    NewCounterReconcileJob, CounterReconcileResult, DefaultCounterReconcileLimit.
+  [TEST] GREEN (tdd/green.log): `go test ./internal/db ./internal/jobs -count=1 -p 1 -v -run
+    'TestCounterReconcile|TestCutoverCounters|TestKnowledgeCutover_Reconciles|TestSearchDocumentJob|
+    TestLegacyDroppedDatabase_ScheduledJobs|TestRetiredLegacyLifecycles'` -> both ok, 24 PASS, 0 FAIL,
+    0 SKIP. tdd/unit_race.log: the 6 job unit tests with -race -> 6 PASS, no race.
+  MUTATIONS [TEST] (mut/m1..m5.log), all FAIL as intended; sources restored, `shasum -c mut/orig.sha` OK:
+    m1 Reconcile calls the full rebuild_*() -> RepairsOnly... :133 deadline error (it waited for the
+       held rows); ALimit... :181 expected 1 actual 2.
+    m2 vote scores written from the drift read's values, no lock-then-recount -> AVoteInFlight... :278
+       expected 3 actual 2 (the in-flight vote lost).
+    m3 TryLock uses the sweep's lock name -> OneInstanceAtATime :221.
+    m4 job breaks at the first failing counter -> OneFailingCounter... :120 calls stop at room_activity.
+    m5 LIMIT dropped -> ALimit... :180 expected 1 actual 2.
+  [REAL] at scale, the built API binary (go build ./cmd/api), two instances (ports 8097, 8098, env -i
+    with only DATABASE_URL=spike DB, JWT_SECRET, PORT, IPFS_API_URL=http://127.0.0.1:1) started together
+    on the spike DB after committed drift (inject.log: vote 300, room 50, view 300, reputation 40).
+    api_8097.log: "Counter reconcile job started" 14:25:44, then at 14:25:52 vote_scores 300/300,
+    room_activity 50/50, view_counts 300/300, agent_reputation 40/40. api_8098.log: started, no repair
+    line (lock held by 8097). drift_after.log: all four 0. /health 200 on both after the run. Both
+    stopped (pkill), each logged "Counter reconcile job stopped". Spike DB dropped.
+  [TEST] PACKAGES (pkg.log, once): `go test ./internal/db ./internal/jobs ./cmd/... -count=1 -p 1 -v
+    -timeout 45m` -> exit 1: internal/db FAIL; internal/jobs, cmd/backfill-embeddings, cmd/cutover,
+    cmd/migrate-quorum, cmd/moderate-existing ok; cmd/api [no tests to run]. 951 top-level PASS,
+    61 FAIL, 6 SKIP. `comm -23 fail.now /tmp/solvr_idx77_s24/fail.now` is EMPTY: every failure is in
+    slice 24's baseline (shared solvr_test data collisions). The 6 SKIPs are the hybrid/embedding tests
+    and TestListAnswersWithHumanAuthor, as before. All 12 new tests PASS in it.
+  [REAL] go build ./... ok; go vet ./internal/db ./internal/jobs ./cmd/api ok; gofmt -l clean on every
+    file this slice wrote or edited (cmd/api/main.go's one gofmt diff is a blank line after the imports
+    that predates this slice, left alone); ./scripts/check-file-size.sh -> the same 33 oversize files as
+    slices 22-24, none of this slice's.
+  NOT RUN: internal/api (no file of it touched; the full serial run was done in slice 24); frontend (no
+    frontend file touched).
+
+REMAINING for idx 77 (next slices, in order) [UNVERIFIED plan]:
+  step 5: sampled search on real data before/after the cutover: idx 53's representative queries
+    (TestCanonicalSearch_RepresentativeQueriesBeforeAndAfterCutover is the fixture form) against a
+    real-data copy (solvr_rehearsal_purge113 cloned, migrate to 132, cutover), compare results.
+  step 6: this slice added no index, cache or service (a job in the API process, like the sweep).
+  Before closing idx 77: re-run the full serial backend only if a later slice touches shared code;
+  compare against /tmp/solvr_idx77_s24/fail.now.
+
+git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged;
+  idx 77 stays false.
+
+UAT (for when idx 77 closes, not now): as slice 24's list. After the API deploy carrying this commit, the
+  log shows "Counter reconcile job started (runs every hour)" once per instance; a "Counter reconcile:
+  <counter> N drifted" line means something wrote a counter outside its trigger (deploy window or direct
+  SQL) and was repaired. Expect such lines right after the deploy that crosses the old API, then none.

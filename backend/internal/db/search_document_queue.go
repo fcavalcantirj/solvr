@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
 )
@@ -88,37 +86,10 @@ func (q *SearchDocumentQueue) StoreVector(ctx context.Context, doc models.Search
 	return tag.RowsAffected() == 1, nil
 }
 
-// TryLockSweep takes the sweep lock on a connection of its own; ok is false while another
-// session (another instance, or this one's previous run) holds it. The lock lives in that
-// session, so it ends with it. unlock releases it (calls after the first do nothing); a
-// connection that cannot release it is closed instead of going back to the pool still
-// holding it.
+// TryLockSweep takes the sweep lock (see tryAdvisoryLock); ok is false while another session
+// (another instance, or this one's previous run) holds it.
 func (q *SearchDocumentQueue) TryLockSweep(ctx context.Context) (unlock func(), ok bool, err error) {
-	conn, err := q.pool.pool.Acquire(ctx)
-	if err != nil {
-		return nil, false, fmt.Errorf("acquire sweep connection: %w", err)
-	}
-	if err := conn.QueryRow(ctx, `SELECT pg_try_advisory_lock(hashtextextended($1, 0))`, searchDocumentSweepLock).Scan(&ok); err != nil {
-		_ = conn.Hijack().Close(context.Background())
-		return nil, false, fmt.Errorf("take sweep lock: %w", err)
-	}
-	if !ok {
-		conn.Release()
-		return nil, false, nil
-	}
-	var once sync.Once
-	return func() {
-		once.Do(func() {
-			c, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			var released bool
-			if err := conn.QueryRow(c, `SELECT pg_advisory_unlock(hashtextextended($1, 0))`, searchDocumentSweepLock).Scan(&released); err != nil || !released {
-				_ = conn.Hijack().Close(c)
-				return
-			}
-			conn.Release()
-		})
-	}, true, nil
+	return tryAdvisoryLock(ctx, q.pool, searchDocumentSweepLock)
 }
 
 // vectorLiteral formats a vector as a pgvector literal: [0.1,0.2,0.3].

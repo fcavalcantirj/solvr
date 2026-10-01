@@ -190,18 +190,19 @@ func (r *ClaimTokenRepository) MarkUsed(ctx context.Context, tokenID, humanID st
 
 // ClaimAgent atomically links an unclaimed agent, grants the claim rewards, and consumes
 // the claim token. A failure in any write rolls the whole claim back, so clients can safely
-// retry without observing a linked agent with a reusable token or missing rewards.
+// retry without observing a linked agent with a reusable token or missing rewards. The
+// reputation bonus is the agent's human_claim grant (000121): an agent claimed again after
+// its first owner left keeps the bonus it has and gains nothing more.
 func (r *ClaimTokenRepository) ClaimAgent(ctx context.Context, tokenID, agentID, humanID string, reputationBonus int) error {
 	return r.pool.WithTx(ctx, func(tx Tx) error {
 		result, err := tx.Exec(ctx, `
 			UPDATE agents
 			SET human_id = $2,
 				human_claimed_at = NOW(),
-				reputation = reputation + $3,
 				has_human_backed_badge = true,
 				updated_at = NOW()
 			WHERE id = $1 AND human_id IS NULL AND deleted_at IS NULL
-		`, agentID, humanID, reputationBonus)
+		`, agentID, humanID)
 		if err != nil {
 			if strings.Contains(err.Error(), "agent_already_claimed") {
 				return ErrAgentAlreadyClaimed
@@ -217,6 +218,14 @@ func (r *ClaimTokenRepository) ClaimAgent(ctx context.Context, tokenID, agentID,
 				return ErrAgentAlreadyClaimed
 			}
 			return ErrAgentNotFound
+		}
+
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO agent_reputation_grants (agent_id, grant_key, points)
+			VALUES ($1, $2, $3)
+			ON CONFLICT (agent_id, grant_key) DO NOTHING
+		`, agentID, ReputationGrantHumanClaim, reputationBonus); err != nil {
+			return err
 		}
 
 		result, err = tx.Exec(ctx, `

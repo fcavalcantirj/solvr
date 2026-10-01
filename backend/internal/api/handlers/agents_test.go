@@ -19,6 +19,7 @@ import (
 // MockAgentRepository implements AgentRepositoryInterface for testing.
 type MockAgentRepository struct {
 	agents       map[string]*models.Agent
+	grants       map[string]bool // agentID + "/" + grant key, as agent_reputation_grants' primary key
 	createCalled bool
 	createErr    error
 	findErr      error

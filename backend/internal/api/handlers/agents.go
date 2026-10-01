@@ -40,6 +40,7 @@ type AgentRepositoryInterface interface {
 	// Agent-Human Linking methods (AGENT-LINKING requirement)
 	LinkHuman(ctx context.Context, agentID, humanID string) error
 	AddReputation(ctx context.Context, agentID string, amount int) error
+	GrantReputationOnce(ctx context.Context, agentID, grantKey string, points int) (bool, error)
 	GrantHumanBackedBadge(ctx context.Context, agentID string) error
 	// API key validation method (implements auth.AgentDB interface)
 	// FIX-002: Required for API key authentication middleware
@@ -340,9 +341,9 @@ func (h *AgentsHandler) RegisterAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Per prd-v4: +10 reputation bonus when model field is set on registration
+	// Per prd-v4: +10 reputation bonus when model field is set on registration (once per agent)
 	if req.Model != "" {
-		if err := h.repo.AddReputation(r.Context(), agent.ID, 10); err != nil {
+		if _, err := h.repo.GrantReputationOnce(r.Context(), agent.ID, db.ReputationGrantModelDeclared, ReputationBonusOnModel); err != nil {
 			// Log error but don't fail registration
 		}
 	}
@@ -598,9 +599,9 @@ func (h *AgentsHandler) UpdateAgent(w http.ResponseWriter, r *http.Request, agen
 		return
 	}
 
-	// Per prd-v4: +10 reputation bonus when model is set for the first time
+	// Per prd-v4: +10 reputation bonus when model is set for the first time (once per agent)
 	if previousModelEmpty && agent.Model != "" {
-		if err := h.repo.AddReputation(r.Context(), agent.ID, 10); err != nil {
+		if _, err := h.repo.GrantReputationOnce(r.Context(), agent.ID, db.ReputationGrantModelDeclared, ReputationBonusOnModel); err != nil {
 			// Log error but don't fail update
 		}
 	}

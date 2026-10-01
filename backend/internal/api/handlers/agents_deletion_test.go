@@ -131,6 +131,10 @@ func (m *MockAgentRepositoryWithDelete) AddReputation(ctx context.Context, agent
 	return nil
 }
 
+func (m *MockAgentRepositoryWithDelete) GrantReputationOnce(ctx context.Context, agentID, grantKey string, points int) (bool, error) {
+	return true, nil
+}
+
 func (m *MockAgentRepositoryWithDelete) GrantHumanBackedBadge(ctx context.Context, agentID string) error {
 	return nil
 }

@@ -4943,3 +4943,194 @@ UAT (for when idx 77 closes, not now): apply 000112, 000113, 000119 AND 000120 o
   rows; plus the vote_score_drift()/rebuild_vote_scores() and room_activity_drift()/
   rebuild_room_activity() checks from slices 1-3. Run the cutover with the new default
   --expect-version 120.
+
+2026-10-01 03:26 — Task idx 77 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Make indexes, counters, search projections, and analytics rebuildable from authoritative records"
+SLICE 5 of N: agents.reputation (the stored agent bonus) becomes the sum of a grant ledger,
+agent_reputation_grants, moved by triggers in the grant's own transaction; claim and model bonuses are
+keyed activations granted once per agent; drift check, rebuild and an idempotent activation replay
+(steps 2/3/5), migration 000121.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 77-95, 97, 98; no open
+  URGENT (96 is true). idx 24 and 67 are acceptance tasks (skipped as in every earlier entry). idx 68
+  still waits for the owner call on step 1 and owner decision 4 for steps 5-6. idx 77 is the first
+  buildable task; slice 4's REMAINING list puts agents.reputation next. Tree clean at start; HEAD
+  7c6d5e7c.
+
+WHAT agents.reputation IS [REAL, grep of non-test Go + reputation_canonical.go]: only the agent BONUS.
+  Served reputation is computed at read (canonicalAgentReputation = COALESCE(a.reputation,0) + points
+  from reputation_history and confirmed votes). Writers at HEAD: ClaimTokenRepository.ClaimAgent
+  (`reputation = reputation + $3`, +50, inside the claim transaction) and AgentRepository.AddReputation
+  (called by handlers RegisterAgent and UpdateAgent for the +10 model bonus, and by the mock-only
+  non-atomic claim fallback). No record of either grant existed. Everything else only reads it.
+  Production shape [REAL, read-only on solvr_cutover_rehearsal, solvr_rehearsal_pristine,
+  solvr_rehearsal_prepurge]: 199 agents, sum 2170, and EVERY agent's reputation = 50 if
+  human_claimed_at IS NOT NULL + 10 if model <> '' (199/199 in all three copies).
+
+SPIKE FIRST [REAL, /tmp/solvr_idx77_s5/spike/spike.sh + spike.out, live API on HEAD, fresh DB at 120,
+  :8099 under env -i, dropped after]:
+  - register with model -> 10 (correct).
+  - 20 parallel PATCH {"model":"m1"} on a model-less agent -> 20 x 200, stored 10 (no double count
+    observed in this one run; not claimed either way).
+  - 5 cycles PATCH model "" then "m2" -> 20, 30, 40, 50, 60 (the "first time" bonus farmed per cycle).
+  - claim by human 1 -> 50; human 1 DELETE /v1/me (unclaimAgents sets human_id NULL, keeps
+    human_claimed_at) -> 50; claim by human 2 -> 100 (the claim bonus granted twice).
+
+DESIGN (chosen from the spike + the existing tests): a keyed ledger rather than deriving the bonus
+  from the agent row, because AddReputation is an arbitrary-points primitive pinned by existing tests
+  (TestAgentRepository_AddReputation_Success 50 -> 75, TestAgentRepository_List_SortByReputation
+  200/10, TestLegacyReputation_ServedByTheCanonicalRepositories bonus 7) and HEAD's model bonus is
+  "first time" (it survives clearing the model). Keyed grants keep both semantics and record them.
+
+WHAT THIS SLICE CHANGED [REAL, git status --porcelain / git diff --stat before this append]:
+  A backend/migrations/000121_agent_reputation_grants.up.sql (166): table agent_reputation_grants
+    (agent_id FK agents ON DELETE CASCADE, grant_key, points, granted_at, PK (agent_id, grant_key));
+    agent_activation_grants(id) (human_claim 50 if human_claimed_at set, model_declared 10 if model
+    <> '' — one place for replay and drift); replay_agent_activations(id) (INSERT ... ON CONFLICT DO
+    NOTHING, returns rows recorded); backfill = that replay run BEFORE the triggers exist, so no
+    stored value moves; agent_reputation_grants_projection() + 3 triggers (AFTER INSERT, AFTER UPDATE
+    OF agent_id, points WHEN changed, AFTER DELETE); agent_reputation_drift(id) read-only (stored vs
+    grant sum, plus missing_activations text[]); rebuild_agent_reputation(id) locks agents FOR NO KEY
+    UPDATE, counts the drift, replays activations, sets drifted rows to their grant sum, returns the
+    agents that drifted. Header documents the rebuild path and the measured failures.
+  A backend/migrations/000121_agent_reputation_grants.down.sql (12): drops the 3 triggers, 5 functions
+    and the table; agents.reputation keeps its value (the pre-121 API moves it itself again).
+  M backend/internal/db/agents_linking.go (126 lines, +43/-14): constants ReputationGrantHumanClaim,
+    ReputationGrantModelDeclared; AddReputation now inserts an 'adjustment:<uuid>' grant (each call
+    adds, as before; it no longer touches agents.updated_at); new GrantReputationOnce(agentID, key,
+    points) (bool, error) with ON CONFLICT DO NOTHING; reputationGrantError maps FK 23503 ->
+    ErrAgentNotFound (as before for a missing agent).
+  M backend/internal/db/claim_tokens.go: ClaimAgent no longer adds to agents.reputation; it inserts the
+    human_claim grant ON CONFLICT DO NOTHING inside the same transaction, after the agent link and
+    before the token is consumed (a spent token rolls the grant back). Signature unchanged.
+  M backend/internal/api/handlers/agents.go (+1 line, 1065): AgentRepositoryInterface gains
+    GrantReputationOnce; RegisterAgent and UpdateAgent grant model_declared via GrantReputationOnce
+    instead of AddReputation(10) (conditions unchanged). The mock-only claim fallback still calls
+    AddReputation (unchanged).
+  M backend/internal/api/handlers/agents_claim.go: const ReputationBonusOnModel = 10.
+  A backend/internal/db/agent_reputation_grants_test.go (395, scratch DBs, 6 tests):
+    _EachActivationIsGrantedOncePerAgent (model twice, claim / unclaim / claim by a second human,
+    two adjustments, ledger rows, drift empty, replay 0, missing agent -> ErrAgentNotFound for both
+    methods), _EveryGrantRowMovesTheReputationInItsOwnTransaction (direct insert/update/move/delete,
+    rolled-back insert, a claim with a spent token rolls its bonus back), _ConcurrentActivationsGrantOnce
+    (40 concurrent model grants -> exactly 1 true; 20 concurrent adjustments; 30),
+    _DriftNamesBrokenAgentsAndTheRebuildRepairsThem (old-style claim, inflated value, model set by SQL;
+    per-agent filter, one-agent rebuild, xmin unchanged on a consistent agent, second rebuild 0, replay 0),
+    _ARebuildAndAGrantNeverLoseEachOther (reuses waitForLockWait), _TheMigrationRecordsExistingActivations
+    WithoutMovingAScore (runs 000121 down, inserts legacy-shaped agents incl. a double-claimed 110, runs
+    up: no stored value moves, grants recorded, only the 110 agent drifts, rebuild -> 60).
+  A backend/internal/api/handlers/agents_model_bonus_test.go (67): MockAgentRepository.GrantReputationOnce
+    (keyed, once per agent) + TestUpdateAgent_ModelBonusIsGrantedOncePerAgentAcrossClearAndSetCycles.
+  M backend/internal/api/handlers/agents_test.go (+1): the mock gains a `grants` map field (the method
+    lives in agents_model_bonus_test.go to keep this oversized file from growing).
+  M backend/internal/api/handlers/agents_deletion_test.go, agents_name_uniqueness_test.go (+4 each): the
+    two other mocks implement GrantReputationOnce (same behavior as their AddReputation).
+  M backend/cmd/cutover/main.go: --expect-version default 120 -> 121; main_test.go: the same version in
+    TestParseOptions_GuardsTheProductionRun / TestCheckSchema_... (120 -> 121, same assertions).
+  M backend/internal/db/cutover_rollback_test.go: down-migration count 36 -> 37 ("000121..000085") and
+    the comment; the test still asserts every down step runs and archives what it cannot hold.
+  No test deleted, skipped or loosened; the edits to existing test files only add mock methods/field
+  or track the new latest migration. The knowledge cutover does not touch agents.reputation [REAL,
+  grep]; the UAT below runs the rebuild once.
+
+VERIFICATION [this session; DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test (local
+  docker solvr-postgres), migrated 120 -> 121 with `migrate up` this session (121 dirty=f,
+  agent_reputation_drift() 0 rows on it); new DB tests use scratch DBs migrated from the files; logs
+  under /tmp/solvr_idx77_s5/]:
+  [TEST] RED (red.log): the new DB tests do not build on HEAD (GrantReputationOnce /
+    ReputationGrantModelDeclared undefined); behavior RED is the spike above and mutA/mutA2 below.
+  [TEST] go build ./... ok; go vet ./internal/db/ ./internal/api/handlers/ ./cmd/cutover/ exit 0; gofmt
+    -l: agents.go, agents_test.go, agents_name_uniqueness_test.go are listed, with gofmt -d output
+    byte-identical to HEAD's (pre-existing, md5 compared); every new file is clean.
+  [TEST] GREEN (green_db.log, once): the 6 TestAgentReputation_*, TestAgentRepository_AddReputation_*,
+    TestAgentRepository_List_*, TestClaimTokenRepository_*, TestLegacyReputation_* -> ok, 37 PASS, 0
+    FAIL, 0 SKIP. green_handlers.log: internal/api/handlers ok, cmd/cutover ok. green_rollback.log:
+    TestCutoverRollback_*, TestKnowledgeCutover_* (internal/db) and TestAgentClaim_* (internal/api,
+    incl. RetriesAndRacesLinkTheAgentOnce "the claim bonus is granted once") all PASS. After moving the
+    mock method (handlers_after_move.log): internal/api/handlers ok; TestUpdateAgent_Model*,
+    TestRegisterAgent_ModelReputationBonus PASS.
+  MUTATIONS [TEST], each restored from /tmp/solvr_idx77_s5/mut/*.bak, shasum -c OK after:
+    mutA HEAD claim_tokens.go with 000121 applied (= deploy window "migration first, old API") ->
+      EachActivation FAIL :136 expected 60 actual 110; other 5 PASS;
+    mutA2 HEAD handlers/agents.go -> ModelBonusIsGrantedOnce FAIL "expected reputation 10 after five
+      clear-and-set cycles, got 60";
+    mutB rebuild without the agents FOR NO KEY UPDATE -> ARebuildAndAGrant FAIL :327 expected 13
+      actual 10 (the in-flight grant lost);
+    mutC no AFTER UPDATE trigger -> EveryGrantRow FAIL :169 expected 25 actual 35;
+    mutD GrantReputationOnce without ON CONFLICT -> EachActivation :126 and Concurrent :228 FAIL
+      (duplicate key error);
+    mutE backfill after the triggers -> TheMigrationRecords FAIL :382 expected 10 actual 20.
+  MIGRATION [REAL, migration.out] throwaway DB solvr_idx77_s5_mig: up -> 121 dirty=false, table, 3
+    triggers, 5 functions; down 1 -> 120 dirty=false, no table/triggers/functions, the 3
+    post_views_count_* triggers intact; up -> 121, rebuild 0, replay 0, drift 0. Dropped.
+  REHEARSAL [REAL, rehearsal.out] copy of solvr_cutover_rehearsal (TEMPLATE, at 113): migrate up 114..121
+    (8 applied), 121 dirty=false; sum(reputation) 2170 before and after, per-agent values identical
+    (md5 of id:reputation); grants human_claim 32 rows / 1600 + model_declared 57 rows / 570 = 2170;
+    agent_reputation_drift() 0 rows; rebuild_agent_reputation() 0; replay_agent_activations() 0
+    (view_count_drift() 1, slice 4's known post). Copy dropped; the rehearsal DB itself still at 113.
+  LIVE PROBE [REAL, /tmp/solvr_idx77_s5/probe/probe.sh + probe.out, same scenarios as the spike on this
+    code, fresh DB at 121]: register with model -> 10; 20 parallel PATCH model -> 20 x 200, 10; five
+    clear/set cycles -> 10 after every cycle (HEAD: 60); claim by h1 -> 50, h1 DELETE /v1/me -> 50,
+    claim by h2 -> 50 (HEAD: 100); GET /v1/agents/{id} reputation = stats.reputation = stored value;
+    ledger: model_declared=10 / model_declared=10 / human_claim=50; agent_reputation_drift() 0 rows.
+    api.log: 38 x 200, 7 x 201. :8099 free, probe DB dropped.
+  FULL BACKEND [TEST] (once) `go test ./... -count=1 -p 1 -v -timeout 45m` on solvr_test at 121 ->
+    full.log, exit 1: 18 ok, FAIL internal/api and internal/db; 3257 top-level PASS, 73 FAIL, 13 SKIP.
+    All 43 top-level AgentReputation/ModelBonus/AgentClaim/CutoverRollback/KnowledgeCutover/ViewCounts/
+    VoteScores/RoomActivity/ParseOptions/CheckSchema/ModelReputationBonus/LegacyReputation tests PASS
+    in it. SKIP set = slice 4's plus TestE2E_PostAppearsInList (environment-dependent, as in slice 3).
+    FAIL names vs slice 4's /tmp/solvr_idx77_s4/full.log (69): 2 gone (TestAgentClaim_RetriesAndRaces
+    LinkTheAgentOnce, TestCrossAuth_RemoveProvider_OthersStillWork), 6 new:
+    TestAgentRepository_AddReputation_Success, _List_FilterByStatus, _List_SortByNewest,
+    _List_SortByReputation, _List_WithAgents, _ListDeleted — every one "failed to create ...: agent ID
+    already exists" at fixture creation. Cause MEASURED [REAL, new6_fresh.sh + new6_fresh.out]: on a
+    fresh DB at 121 (this code) those 6 -> 6 PASS; the same 6 run again on that DB -> 6 FAIL with the
+    identical lines, because they insert constant display names (unique idx_agents_display_name_unique)
+    without cleanup and AgentRepository.Create reports any unique violation as "agent ID already
+    exists". My green_db.log run 7 minutes before the full run was that first pass on solvr_test.
+    Shared-data collision, not this slice's code (the create path is unchanged). Not fixed (not asked).
+  check-file-size.sh -> filesize2.log "Found 34 file(s) exceeding 800 lines", same count as slices 1-4;
+    two of this slice's files were already on it and grew by one line each (handlers/agents.go 1064 ->
+    1065: the interface method; handlers/agents_test.go 1380 -> 1381: the mock field). 0
+    solvr_scratch*/solvr_idx77* databases left [REAL, psql]. NOT RUN: frontend (no frontend file
+    touched); golangci-lint (config/version mismatch, slice 31).
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW (runtime, from this commit):
+  - The claim bonus (+50) is granted once per agent, ever: an agent re-claimed after its first owner
+    deleted their account keeps 50 (was 100).
+  - The model bonus (+10) is granted once per agent, ever: clearing and re-setting the model no longer
+    adds (was +10 per cycle); clearing it still keeps the bonus (as before).
+  - agents.reputation now follows agent_reputation_grants whoever writes them (API, fixture, operator);
+    AddReputation no longer bumps agents.updated_at.
+  - Deploy ordering: 000121 MUST be applied BEFORE the API carrying this commit [UNVERIFIED, reasoned:
+    ClaimAgent inserts into agent_reputation_grants inside the claim transaction, so without the
+    table every claim would roll back with an error]. The other window ("migration first, old API"
+    [TEST, mutA]) stores old-style bonuses with no grant (re-claims double-count again); the rebuild in
+    the UAT below repairs it.
+  - The cutover command now refuses a database not at 121 (--expect-version default).
+
+REMAINING for idx 77 (next slices, in order) [UNVERIFIED plan, from the task steps]:
+  step 2/3: public activity previews, search documents, overview aggregates (decide stored vs derived);
+    the room/briefing "activation milestone" replay if any stored milestone exists.
+  step 1: measured query plans on representative data for the listed lookups.
+  step 4: raw eligible search events vs time buckets + retention windows; no summed distincts.
+  step 5: reconcile counters/sampled search after migration and rebuilds; visibility/deletion removes
+    public projections promptly.
+  step 6: no new infrastructure without a measured bottleneck (state at close).
+
+git status at journal time [REAL, git status --porcelain]: M backend/cmd/cutover/main.go, M backend/
+  cmd/cutover/main_test.go, M backend/internal/api/handlers/agents.go, M backend/internal/api/handlers/
+  agents_claim.go, M backend/internal/api/handlers/agents_deletion_test.go, M backend/internal/api/
+  handlers/agents_name_uniqueness_test.go, M backend/internal/api/handlers/agents_test.go, M backend/
+  internal/db/agents_linking.go, M backend/internal/db/claim_tokens.go, M backend/internal/db/
+  cutover_rollback_test.go, ?? backend/internal/api/handlers/agents_model_bonus_test.go, ?? backend/
+  internal/db/agent_reputation_grants_test.go, ?? backend/migrations/000121_agent_reputation_grants.
+  {up,down}.sql, M progress.txt (this entry). spec.json unchanged, idx 77 passes stays false.
+
+UAT (for when idx 77 closes, not now): apply 000112, 000113, 000119, 000120 AND 000121 on production
+  BEFORE the API deploy carrying b9d7644c, 619b44b8, 1fce63ef, 7c6d5e7c and this commit; then
+  `SELECT * FROM agent_reputation_drift();` (read it first: the rehearsal predicts 0 rows),
+  `SELECT rebuild_agent_reputation();`, and confirm a second `SELECT * FROM agent_reputation_drift();`
+  returns 0 rows; plus the view_count / vote_score / room_activity drift and rebuild checks from slices
+  1-4. Run the cutover with the new default --expect-version 121.

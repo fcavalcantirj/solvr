@@ -18,6 +18,9 @@ import (
 // ReputationBonusOnClaim is the reputation bonus granted when a human claims an agent.
 const ReputationBonusOnClaim = 50
 
+// ReputationBonusOnModel is the reputation bonus granted once when an agent declares a model.
+const ReputationBonusOnModel = 10
+
 // AtomicAgentClaimer is implemented by the database claim-token repository. It keeps the
 // agent link, claim rewards, and token consumption in one transaction.
 type AtomicAgentClaimer interface {

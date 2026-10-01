@@ -2,8 +2,11 @@ package db
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"strings"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // ============================================================================
@@ -52,27 +55,51 @@ func (r *AgentRepository) LinkHuman(ctx context.Context, agentID, humanID string
 	return nil
 }
 
-// AddReputation adds reputation points to an agent.
-// Per AGENT-LINKING: +50 reputation on human claim.
+// Reputation grant keys (migration 000121). An agent's stored reputation is the sum of its
+// agent_reputation_grants rows, moved by a trigger in the grant's own transaction. A keyed
+// activation is granted at most once per agent, whatever repeats it: a second claim after the
+// first owner left, a model cleared and set again, a retry, a replayed worker.
+const (
+	// ReputationGrantHumanClaim is the claim bonus, granted by ClaimTokenRepository.ClaimAgent.
+	ReputationGrantHumanClaim = "human_claim"
+	// ReputationGrantModelDeclared is the bonus for declaring a model.
+	ReputationGrantModelDeclared = "model_declared"
+)
+
+// AddReputation adds reputation points to an agent as an adjustment: every call is its own
+// grant, so two calls add twice. Activations use GrantReputationOnce instead.
 func (r *AgentRepository) AddReputation(ctx context.Context, agentID string, amount int) error {
-	query := `
-		UPDATE agents
-		SET reputation = reputation + $2, updated_at = NOW()
-		WHERE id = $1
-	`
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO agent_reputation_grants (agent_id, grant_key, points)
+		VALUES ($1, 'adjustment:' || gen_random_uuid(), $2)`, agentID, amount)
+	return reputationGrantError(ctx, "AddReputation", agentID, err)
+}
 
-	result, err := r.pool.Exec(ctx, query, agentID, amount)
-	if err != nil {
-		LogQueryError(ctx, "AddReputation", "agents", err)
-		return err
+// GrantReputationOnce grants points under grantKey unless the agent already holds that grant,
+// and reports whether it did. Concurrent and repeated calls grant once.
+func (r *AgentRepository) GrantReputationOnce(ctx context.Context, agentID, grantKey string, points int) (bool, error) {
+	result, err := r.pool.Exec(ctx, `
+		INSERT INTO agent_reputation_grants (agent_id, grant_key, points)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (agent_id, grant_key) DO NOTHING`, agentID, grantKey, points)
+	if err := reputationGrantError(ctx, "GrantReputationOnce", agentID, err); err != nil {
+		return false, err
 	}
+	return result.RowsAffected() == 1, nil
+}
 
-	if result.RowsAffected() == 0 {
-		slog.Debug("agent not found", "op", "AddReputation", "table", "agents", "id", agentID)
+// reputationGrantError maps a grant for an agent that does not exist to ErrAgentNotFound.
+func reputationGrantError(ctx context.Context, op, agentID string, err error) error {
+	if err == nil {
+		return nil
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23503" {
+		slog.Debug("agent not found", "op", op, "table", "agent_reputation_grants", "id", agentID)
 		return ErrAgentNotFound
 	}
-
-	return nil
+	LogQueryError(ctx, op, "agent_reputation_grants", err)
+	return err
 }
 
 // GrantHumanBackedBadge grants the Human-Backed badge to an agent.

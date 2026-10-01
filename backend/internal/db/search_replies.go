@@ -54,7 +54,7 @@ func (r *SearchRepository) searchReplies(ctx context.Context, src replySearchSou
 				END,
 				r.author_id
 			) as author_name,
-			ts_rank(to_tsvector('english', r.body), to_tsquery('english', $1)) as score,
+			ts_rank(r.search_document, to_tsquery('english', $1)) as score,
 			(r.upvotes - r.downvotes) as vote_score,
 			0 as answers_count,
 			0 as approaches_count,
@@ -72,7 +72,7 @@ func (r *SearchRepository) searchReplies(ctx context.Context, src replySearchSou
 		AND p.deleted_at IS NULL
 		AND p.status NOT IN ('pending_review', 'rejected', 'draft')
 		AND ` + visibility + `
-		AND to_tsvector('english', r.body) @@ to_tsquery('english', $1)
+		AND r.search_document @@ to_tsquery('english', $1)
 		ORDER BY score DESC
 	`
 

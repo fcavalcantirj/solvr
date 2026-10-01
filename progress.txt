@@ -7035,3 +7035,151 @@ UAT (for when idx 77 closes, not now): as slice 16's list, plus migration 000129
   EXCLUSIVE lock on its table for milliseconds; room_entries is 3,629 entries in the 2026-09-29 dump.
   After the deploy, open a room on https://solvr.dev, scroll back through its history and reload, sign
   in with a refreshed session, and confirm that the transcript and the login still load.
+
+2026-10-01 11:05 — Task idx 77 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Make indexes, counters, search projections, and analytics rebuildable from authoritative records"
+SLICE 18 of N: step 1, search indexes from measured plans. Keyword search now matches and ranks
+stored keyword documents (posts.search_document, replies.search_document, STORED generated tsvector
+columns with GIN indexes, migration 000130) instead of parsing every matching post or reply again.
+Default hybrid search for a term in every post: 48.8 s -> 2.8 s at 200k posts / 1M replies.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 77-95, 97, 98; no open
+  URGENT. 24 and 67 are acceptance tasks (skipped as in every earlier entry); 68 waits on the owner
+  (step 1 ER-diagram home; steps 5-6 gated by owner decision 4). idx 77 is the first buildable task.
+  Tree clean at start; HEAD cdceffd5. Slice 17's REMAINING list put the full-text search fallback first.
+
+SPIKE [REAL, /tmp/solvr_idx77_s18/spike/]: throwaway DB solvr_idx77_s18_spike (migrated to 129).
+  seed.sql: 20k users, 2k agents, 200k posts (description avg 583 chars; the 2026-09-29 prod copy
+  solvr_rehearsal_pristine has median 606, p90 1,492, read locally), 1M replies (avg 216 chars). Every
+  post says "kubernetes", 10% "postgres", 0.1% "zeromq"; replies 20% / 2% / 0.05%. fixstate.sql then
+  published/approved the posts (seeded as draft/pending, so the first run had no reply matches; that
+  run is plans_head.txt and is superseded). A throwaway pgx-tracer test (copy in
+  zz_idx77_s18_spike_test.go.txt, deleted before commit) called the REAL SearchRepository.Search with
+  no embedder (fulltext_only) and with a fixed query embedder (hybrid_rrf), and EXPLAIN (ANALYZE,
+  BUFFERS)ed every statement (plans_head2.txt on HEAD, plans_new.txt with 000130 + this code).
+  Wall time per Search call, HEAD -> this change (times_head2.txt / times_new.txt):
+    hybrid (the production default), knowledge (no content_types):
+      kubernetes 48.8 s -> 2.8 s; postgres 21.4 s -> 2.5 s; zeromq 20.0 s -> 2.7 s
+    hybrid, content_types=posts: kubernetes 24.9 s -> 1.24 s; postgres 2.05 s -> 0.79 s
+    keyword fallback, knowledge: kubernetes 29.5 s -> 18.5 s (page 50: 18.2 -> 19.9); postgres 3.5 -> 2.4 s
+    keyword fallback, content_types=posts: kubernetes 17.3 -> 14.1 s (page 50: 14.7 -> 7.0)
+    content_types=answers (keyword only on both paths): kubernetes 5.97 -> 4.39 s; hybrid 5.75 -> 7.15 s
+  Totals are the same on both runs for every case (e.g. 191,941 / 73 / 61 / 60).
+  Causes on HEAD's plans:
+    - hybrid_search's full_text CTE: Seq Scan on posts recomputing to_tsvector(title || ' ' ||
+      description) for the filter and again for ts_rank_cd: 23.4 s of a 24.3 s statement
+      (191,941 matches). The GIN expression index finds rows, but every rank and recheck parses.
+    - hybrid_search_replies: the eligible CTE is read three times, so it is materialized (975k
+      rows) and full_text parses each eligible reply body: 19.4 s even for "zeromq".
+    - keyword fallback: searchPosts 13.3 s (parse to filter, parse to rank, ts_headline, the reply
+      count aggregate, sort of every match); searchReplyMatches 3.2 s.
+  stored.sql / rank.sql (same DB): ranking all 191,941 matches from a stored tsvector 141 ms vs 8.1 s
+  from the expression (3 parallel workers); a 10% term 131 vs 592 ms; top 20 by ts_rank 80 ms, exact
+  count 51 ms. Side observation: ADD COLUMN ... STORED on 200k posts failed once in local Docker with
+  "could not resize shared memory segment ... No space left on device" (64 MB /dev/shm, parallel
+  workers); it ran with max_parallel_maintenance_workers = 0. Production has 632 posts.
+  Both spike DBs (solvr_idx77_s18_spike, solvr_idx77_s18_fresh) were dropped at the end.
+
+WHAT CHANGED [REAL, git status --porcelain: 7 M + 3 ??; git diff --stat 21+/20- plus the new files]:
+  ?? backend/migrations/000130_stored_search_documents.up.sql: posts.search_document =
+    to_tsvector('english', title || ' ' || description) STORED + GIN idx_posts_search_document, drops
+    idx_posts_search; replies.search_document = to_tsvector('english', body) STORED + GIN
+    idx_replies_search_document WHERE deleted_at IS NULL, drops idx_replies_body_tsvector;
+    CREATE OR REPLACE hybrid_search and hybrid_search_replies reading the columns. [REAL, diff] the
+    function bodies equal 000080's / 000110's with only the document source replaced (one line-wrap
+    difference in hybrid_search). The header holds the measurements, why no rebuild path is needed
+    (Postgres computes the column in the row's own write, as it did the expression index), and the lock.
+  ?? ...000130_stored_search_documents.down.sql: 000080's and 000110's function definitions verbatim
+    (CREATE OR REPLACE), recreates the two expression indexes, drops the new indexes and columns.
+  M backend/internal/db/search.go (searchPosts), search_canonical.go (keyword branch of
+    searchReplyMatches), search_replies.go (searchReplies): the @@ filter and ts_rank read
+    p.search_document / r.search_document. ts_headline still reads the text (it highlights it).
+    No other Go code used to_tsvector [REAL, grep of non-test Go].
+  ?? backend/internal/db/search_document_column_test.go (183 lines, scratch DB):
+    TestSearch_KeywordMatchesReadStoredDocumentsAndKeepTheirRanks. Seeds 2,000 published posts and
+    6,000 replies, embeddings on a tenth of the posts, then edits titles and bodies; asserts every
+    stored document equals to_tsvector of its row's current text (0 drift). Then 10 subtests
+    (keyword and hybrid x knowledge, knowledge with a viewer on page 2, posts, answers, approaches)
+    call the real Search through a traced pool; under EXPLAIN (VERBOSE) no statement may contain
+    to_tsvector(. For keyword knowledge it also checks the definition written from the text
+    (referenceKnowledgeScores): total = every post matched by its own text or by an eligible reply,
+    and the page's scores = the best GREATEST(own rank, best reply rank) values, best first.
+  M backend/internal/db/search_test.go, TestSearchRepository_Search_PerformanceWithIndex (rule on
+    edited tests): (a) named here; (b) it asserted that `... WHERE to_tsvector('english', p.title ||
+    ' ' || p.description) @@ to_tsquery(...) ORDER BY ts_rank(to_tsvector(...)) LIMIT 20` runs in
+    under 100 ms on the shared test DB; with idx_posts_search dropped it seq-scanned (155.6 ms) and
+    failed; (c) its query now reads p.search_document, the shape search runs, and the 100 ms bound is
+    unchanged; the log-only index name became idx_posts_search_document; (d) PASS on the shared DB:
+    Bitmap Index Scan on idx_posts_search_document, 2.0 ms.
+  M backend/cmd/cutover/main.go (--expect-version 129 -> 130), main_test.go, cutover_rollback_test.go
+    (45 -> 46 down migrations "000130..000085"): the same version bumps as slices 13-17, only numbers.
+  No test deleted or skipped; no assertion loosened.
+
+VERIFICATION [this session; logs in /tmp/solvr_idx77_s18/]:
+  [TEST] RED (tdd/red.log): on HEAD schema the test fails at the drift query (column search_document
+    does not exist). tdd/red_nodrift.log (same test with the drift block removed, HEAD code and
+    schema): all 10 subtests FAIL, each "statement 0 parses documents instead of reading the stored
+    ones"; the keyword knowledge reference check passed on HEAD (same ranks, as intended). The
+    approaches subtest also failed on an empty page; the seed was fixed (kubernetes in 2 of 5 replies).
+  [TEST] GREEN (tdd/green.log, DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test,
+    local docker solvr-postgres, migrated 129 -> 130 this session): `go test ./internal/db -count=1
+    -p 1 -v -run 'TestSearch|TestCutover|TestMigrations|TestSchema_NoIndexDuplicates|TestHybrid|
+    TestReplies|TestReply'` -> 94 PASS, 8 FAIL, 5 SKIP. The new test PASSES (10/10), as do
+    TestCutoverRollback_DownPathKeepsOrArchivesEveryPostCutoverWrite (46 down steps, 000130 down
+    included) and TestSchema_NoIndexDuplicatesAnotherIndexOfItsTable. Of the 8 FAILs, 6 are in slice
+    13's baseline fail.now (GetTrending, GetZeroResults, MinSimilarity_HonestFilter,
+    SearchUnified_PostsAndAnswers, two SearchPulse). The other 2:
+      - TestSearchRepository_Search_PerformanceWithIndex: caused by this change, handled above.
+        tdd/perf_shared.log: PASS.
+      - TestSearch_Similarity_PopulatedAndTopSimilarity ("post A missing"): solvr_test holds 120
+        leftover "zebracorn" posts, all with embeddings (query run this session), so hybrid's top-N
+        ties decide. On a fresh DB it passes (next line).
+    The 5 SKIPs are the TestSearchHybrid_* / HybridSearch_* tests, in skip.now (their own skip).
+  [TEST] fresh DB solvr_idx77_s18_fresh (migrated to 130): `go test ./internal/db -count=1 -p 1 -v
+    -run 'TestSearch|TestHybrid'` (tdd/green_fresh.log) -> ok, 56 PASS, 0 FAIL, the same 5 SKIPs.
+    `go test ./internal/api/... ./internal/services/... -run Search` on it -> ok.
+  MUTATION [TEST] (mut/m12.log): M1 searchPosts filters by the expression again, M2 hybrid_search
+    ranks by the expression again -> FAIL knowledge, knowledge_viewer, posts (M1) and hybrid_knowledge,
+    hybrid_knowledge_viewer, hybrid_posts (M2); answers/approaches PASS as expected. Sources restored;
+    `shasum -c mut/orig.sha` OK.
+  [REAL] go build ./... ok; go vet ./internal/db ./cmd/cutover ok; gofmt -l clean on every touched Go
+    file; `go test ./cmd/cutover` ok; check-file-size.sh "Found 33 file(s) exceeding 800 lines"
+    (unchanged), the new file is not on it.
+  NOT RUN: the full serial backend run (still owed before idx 77 closes; compare against
+    /tmp/solvr_idx77_s13/fail.now). Frontend not run (no frontend file touched).
+  Leftovers [REAL]: solvr_idx77_s12b_clean, solvr_idx77_s12v_clean, solvr_scratch_1790853180756789000
+    existed at the start (left for the owner). No zz_* file in the tree.
+
+FINDINGS, NOT FIXED [REAL, plans_new.txt]:
+  - Hybrid knowledge search still costs ~2.8 s at 1M replies: hybrid_search_replies materializes its
+    eligible CTE (975k rows, 1.9 s statement); the post statements still join postReplyCountsJoin, an
+    aggregate of every live reply (HashAggregate ~670 ms in statement 0, 263 ms in loadSearchPosts),
+    although they return at most ~60 posts. postPageReplyCountsJoin would read only those posts'.
+  - Keyword fallback and content_types=answers/approaches still return every match: ts_headline per
+    match, the reply count aggregate, and a sort of all rows (kubernetes knowledge 18.5 s). A
+    two-phase query (rank and page from the stored documents, then headline/authors/counts for the
+    page only) is the fix; ordering must keep foldReplyMatches' stable score sort.
+  - TestSearch_Similarity_PopulatedAndTopSimilarity depends on shared-DB leftovers (above).
+
+REMAINING for idx 77 (next slices, in order) [UNVERIFIED plan]:
+  step 1: search reply counts for the returned posts only and the eligible-CTE materialization in
+    hybrid_search_replies; then the keyword two-phase page; then the exact post total.
+  step 4: raw eligible search events vs time buckets + retention windows; no summed distincts.
+  step 5: reconcile counters/sampled search after migration and rebuilds.
+  step 6: this slice added two columns and two GIN indexes and dropped two expression indexes; no
+    cache or service.
+  Before closing idx 77: one full serial backend run, compared against slice 13's fail.now.
+
+git status at journal time [REAL, git status --porcelain]: M backend/cmd/cutover/main.go, M backend/cmd/
+  cutover/main_test.go, M backend/internal/db/cutover_rollback_test.go, M backend/internal/db/search.go,
+  M backend/internal/db/search_canonical.go, M backend/internal/db/search_replies.go, M backend/internal/
+  db/search_test.go, ?? backend/internal/db/search_document_column_test.go, ?? backend/migrations/
+  000130_stored_search_documents.{up,down}.sql, plus M progress.txt (this entry). spec.json unchanged;
+  idx 77 passes stays false.
+
+UAT (for when idx 77 closes, not now): as slice 17's list, plus migration 000130 on production, before or
+  with the API deploy that carries this slice (the API's keyword queries read the new columns). It
+  rewrites posts and replies to add the stored columns (ACCESS EXCLUSIVE; 632 posts and 1,018 replies in
+  the post-purge rehearsal copy at 113) and replaces the two hybrid functions. After the deploy, search on
+  https://solvr.dev for a common word and a rare one, and confirm results and reply anchors appear.

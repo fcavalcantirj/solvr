@@ -178,13 +178,14 @@ func maxSimilarity(results []models.SearchResult) *float64 {
 	return top
 }
 
-// searchPosts searches posts using full-text search (existing logic).
+// searchPosts searches posts using full-text search. It matches and ranks the stored keyword
+// document (posts.search_document, migration 000130) rather than parsing each post's text.
 func (r *SearchRepository) searchPosts(ctx context.Context, tsquery string, opts models.SearchOptions) ([]models.SearchResult, error) {
-	baseQuery := searchPostSelect("$1", "ts_rank(to_tsvector('english', p.title || ' ' || p.description), to_tsquery('english', $1))",
+	baseQuery := searchPostSelect("$1", "ts_rank(p.search_document, to_tsquery('english', $1))",
 		"NULL::float8", "posts p") + `
 		WHERE p.deleted_at IS NULL
 		AND p.status NOT IN ('pending_review', 'rejected', 'draft')
-		AND to_tsvector('english', p.title || ' ' || p.description) @@ to_tsquery('english', $1)
+		AND p.search_document @@ to_tsquery('english', $1)
 	`
 
 	args := []any{tsquery}

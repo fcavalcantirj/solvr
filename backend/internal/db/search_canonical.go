@@ -79,9 +79,9 @@ func (r *SearchRepository) searchReplyMatches(ctx context.Context, embedding []f
 			" WHERE r.deleted_at IS NULL"
 	} else {
 		args = []any{tsquery}
-		query = replyMatchSelect("$1", "ts_rank(to_tsvector('english', r.body), to_tsquery('english', $1))",
+		query = replyMatchSelect("$1", "ts_rank(r.search_document, to_tsquery('english', $1))",
 			"NULL::float8", "replies r") +
-			" WHERE r.deleted_at IS NULL AND to_tsvector('english', r.body) @@ to_tsquery('english', $1)"
+			" WHERE r.deleted_at IS NULL AND r.search_document @@ to_tsquery('english', $1)"
 	}
 	argNum := len(args) + 1
 	query += " AND r.author_type <> 'system' AND " + replyMatchPostRule +

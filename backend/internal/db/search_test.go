@@ -680,8 +680,8 @@ func TestSearchRepository_Search_PerformanceWithIndex(t *testing.T) {
 		SELECT p.id, p.type, p.title
 		FROM posts p
 		WHERE p.deleted_at IS NULL
-		AND to_tsvector('english', p.title || ' ' || p.description) @@ to_tsquery('english', 'async:* & programming:*')
-		ORDER BY ts_rank(to_tsvector('english', p.title || ' ' || p.description), to_tsquery('english', 'async:* & programming:*')) DESC
+		AND p.search_document @@ to_tsquery('english', 'async:* & programming:*')
+		ORDER BY ts_rank(p.search_document, to_tsquery('english', 'async:* & programming:*')) DESC
 		LIMIT 20
 	`
 
@@ -706,13 +706,13 @@ func TestSearchRepository_Search_PerformanceWithIndex(t *testing.T) {
 		t.Log(line)
 	}
 
-	// Verify the index is being used (should see "Bitmap Index Scan" or "Index Scan" on idx_posts_search)
+	// Verify the index is being used (should see "Bitmap Index Scan" or "Index Scan" on idx_posts_search_document)
 	// Note: With small datasets the planner might choose sequential scan, which is acceptable
 	// The key metric is execution time
 	foundIndexUsage := false
 	var executionTime float64
 	for _, line := range explainOutput {
-		if containsAny(line, "Index Scan", "Bitmap Index Scan", "idx_posts_search") {
+		if containsAny(line, "Index Scan", "Bitmap Index Scan", "idx_posts_search_document") {
 			foundIndexUsage = true
 		}
 		// Parse execution time from the output

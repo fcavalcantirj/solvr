@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
@@ -42,16 +42,21 @@ describe('ApiMcp', () => {
   // solvr_answer with solvr_reply; the listed tools and parameters follow mcp-server/src/tools.ts.
   it('lists exactly the npm mcp-server tools with their canonical parameters', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({ ok: true }) as unknown as typeof fetch;
-    const src = readFileSync(resolve(__dirname, '../../../mcp-server/src/tools.ts'), 'utf8');
+    // idx 78: the room tools are defined in mcp-server/src/room-tools.ts (served after the others).
+    const src = ['tools.ts', 'room-tools.ts']
+      .map((file) => readFileSync(resolve(__dirname, '../../../mcp-server/src', file), 'utf8'))
+      .join('\n');
     const served = [...src.matchAll(/^\s+name: '(solvr_\w+)',$/gm)].map((m) => m[1]);
 
     render(<ApiMcp />);
 
     expect(served).toContain('solvr_reply');
+    expect(served).toContain('solvr_room_watch');
     expect(screen.getAllByText(/^solvr_\w+$/).map((el) => el.textContent)).toEqual(served);
     expect(screen.getByText('title, description, tags?, visibility?')).toBeInTheDocument();
     expect(screen.getByText('post_id, body, parent_reply_id?')).toBeInTheDocument();
-    expect(screen.getByText('id')).toBeInTheDocument();
+    // solvr_get_reply also takes an id: look it up in the solvr_get row.
+    expect(within(screen.getByText('solvr_get').closest('.bg-card') as HTMLElement).getByText('id')).toBeInTheDocument();
     expect(screen.queryByText(/approach_angle|include\?|problem, question, or idea/)).not.toBeInTheDocument();
 
     await waitFor(() => {

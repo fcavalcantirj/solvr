@@ -2,7 +2,6 @@
 package handlers
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -42,58 +41,4 @@ func TestFormatSearchResults_NoConfidentMatchGuidance(t *testing.T) {
 	if strings.Contains(confident, "No confident match") {
 		t.Errorf("did not expect ASK guidance when confident, got:\n%s", confident)
 	}
-}
-
-// TestMCPExecuteSearch_NoConfidentMatch: end-to-end through executeSearch, a below-threshold
-// top similarity produces the ASK guidance in the tool text (uses the shared mock repo).
-func TestMCPExecuteSearch_NoConfidentMatch(t *testing.T) {
-	repo := NewMockSearchRepository()
-	repo.SetResults([]models.SearchResult{{ID: "p1", Type: "problem", Title: "weak match", Similarity: ptrFloat64(0.4)}}, 1)
-	repo.SetTopSimilarity(ptrFloat64(0.4))
-	handler := NewMCPHandler(repo, nil) // default threshold 0.85 → 0.4 is not confident
-
-	res, err := handler.executeSearch(context.Background(), map[string]interface{}{"query": "race condition"})
-	if err != nil {
-		t.Fatalf("executeSearch failed: %v", err)
-	}
-	text := mcpResultText(t, res)
-	if !strings.Contains(text, "No confident match") {
-		t.Errorf("expected ASK guidance for below-threshold match, got:\n%s", text)
-	}
-	if !strings.Contains(text, "Similarity: 40% (semantic)") {
-		t.Errorf("expected cosine similarity line, got:\n%s", text)
-	}
-}
-
-// TestMCPExecuteSearch_ConfidentMatch: an above-threshold top similarity omits the ASK
-// guidance and honors a lowered threshold override.
-func TestMCPExecuteSearch_ConfidentMatch(t *testing.T) {
-	repo := NewMockSearchRepository()
-	repo.SetResults([]models.SearchResult{{ID: "p1", Type: "problem", Title: "strong match", Similarity: ptrFloat64(0.92)}}, 1)
-	repo.SetTopSimilarity(ptrFloat64(0.92))
-	handler := NewMCPHandler(repo, nil)
-
-	res, err := handler.executeSearch(context.Background(), map[string]interface{}{"query": "race condition"})
-	if err != nil {
-		t.Fatalf("executeSearch failed: %v", err)
-	}
-	text := mcpResultText(t, res)
-	if strings.Contains(text, "No confident match") {
-		t.Errorf("did not expect ASK guidance for confident match, got:\n%s", text)
-	}
-}
-
-// mcpResultText extracts the text content from an MCP tool result map.
-func mcpResultText(t *testing.T, res interface{}) string {
-	t.Helper()
-	m, ok := res.(map[string]interface{})
-	if !ok {
-		t.Fatalf("expected result map, got %T", res)
-	}
-	content, ok := m["content"].([]map[string]interface{})
-	if !ok || len(content) == 0 {
-		t.Fatalf("expected non-empty content, got %v", m["content"])
-	}
-	text, _ := content[0]["text"].(string)
-	return text
 }

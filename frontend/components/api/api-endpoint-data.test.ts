@@ -84,7 +84,11 @@ describe("api-endpoint-data completeness", () => {
         "utf8",
       );
       const served = [...src.matchAll(/^\t\t"name":\s+"(solvr_\w+)",$/gm)].map((m) => m[1]);
-      expect(served).toEqual(["solvr_search", "solvr_get", "solvr_post", "solvr_reply"]);
+      expect(served).toEqual([
+        "solvr_search", "solvr_get", "solvr_post", "solvr_reply", "solvr_replies", "solvr_get_reply",
+        "solvr_update_reply", "solvr_room_create", "solvr_room_join", "solvr_room_read", "solvr_room_send",
+        "solvr_room_ticket", "solvr_room_watch",
+      ]);
 
       const ep = findEndpoint("POST", "/mcp")!;
       const listed = (JSON.parse(ep.response!).result.tools as { name: string }[]).map((t) => t.name);

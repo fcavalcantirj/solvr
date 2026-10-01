@@ -11,7 +11,7 @@ import (
 
 func TestMCPHandler_Initialize(t *testing.T) {
 	// Create handler with nil repos (we're not testing search/get)
-	handler := NewMCPHandler(nil, nil)
+	handler := NewMCPHandler(nil)
 
 	// Create JSON-RPC request
 	reqBody := map[string]interface{}{
@@ -63,7 +63,7 @@ func TestMCPHandler_Initialize(t *testing.T) {
 }
 
 func TestMCPHandler_ToolsList(t *testing.T) {
-	handler := NewMCPHandler(nil, nil)
+	handler := NewMCPHandler(nil)
 
 	reqBody := map[string]interface{}{
 		"jsonrpc": "2.0",
@@ -101,8 +101,8 @@ func TestMCPHandler_ToolsList(t *testing.T) {
 		t.Fatalf("expected tools to be array, got %T", result["tools"])
 	}
 
-	if len(tools) != 4 {
-		t.Errorf("expected 4 tools, got %d", len(tools))
+	if len(tools) != 13 {
+		t.Errorf("expected 13 tools, got %d", len(tools))
 	}
 
 	// Check tool names
@@ -117,7 +117,7 @@ func TestMCPHandler_ToolsList(t *testing.T) {
 		}
 	}
 
-	expectedTools := []string{"solvr_search", "solvr_get", "solvr_post", "solvr_reply"}
+	expectedTools := []string{"solvr_search", "solvr_get", "solvr_post", "solvr_reply", "solvr_replies", "solvr_get_reply", "solvr_update_reply", "solvr_room_create", "solvr_room_join", "solvr_room_read", "solvr_room_send", "solvr_room_ticket", "solvr_room_watch"}
 	for _, name := range expectedTools {
 		if !toolNames[name] {
 			t.Errorf("expected tool %s not found", name)
@@ -126,7 +126,7 @@ func TestMCPHandler_ToolsList(t *testing.T) {
 }
 
 func TestMCPHandler_MethodNotAllowed(t *testing.T) {
-	handler := NewMCPHandler(nil, nil)
+	handler := NewMCPHandler(nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/mcp", nil)
 	rr := httptest.NewRecorder()
@@ -152,7 +152,7 @@ func TestMCPHandler_MethodNotAllowed(t *testing.T) {
 }
 
 func TestMCPHandler_InvalidJSON(t *testing.T) {
-	handler := NewMCPHandler(nil, nil)
+	handler := NewMCPHandler(nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/mcp", bytes.NewReader([]byte("not json")))
 	req.Header.Set("Content-Type", "application/json")
@@ -175,7 +175,7 @@ func TestMCPHandler_InvalidJSON(t *testing.T) {
 }
 
 func TestMCPHandler_UnknownMethod(t *testing.T) {
-	handler := NewMCPHandler(nil, nil)
+	handler := NewMCPHandler(nil)
 
 	reqBody := map[string]interface{}{
 		"jsonrpc": "2.0",
@@ -205,7 +205,7 @@ func TestMCPHandler_UnknownMethod(t *testing.T) {
 }
 
 func TestMCPHandler_Shutdown(t *testing.T) {
-	handler := NewMCPHandler(nil, nil)
+	handler := NewMCPHandler(nil)
 
 	reqBody := map[string]interface{}{
 		"jsonrpc": "2.0",

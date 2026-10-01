@@ -525,6 +525,8 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		userAPIKeyValidator = auth.NewUserAPIKeyValidator(userAPIKeyDB)
 	}
 
+	mcpHandler := handlers.NewMCPHandler(r) // dispatches tool calls through the whole router
+
 	// v1 API routes
 	r.Route("/v1", func(r chi.Router) {
 		// Agent self-registration (no auth required)
@@ -590,9 +592,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		})
 
 		// MCP endpoint (MCP-005: HTTP transport for MCP)
-		// POST /v1/mcp - Model Context Protocol over HTTP (no auth required for tools/list)
-		mcpHandler := handlers.NewMCPHandler(searchRepo, postsRepo)
-		mcpHandler.SetConfidenceThreshold(searchConfidenceThreshold)
+		// POST /v1/mcp - MCP over HTTP; each tool call runs through this router with the caller's credential.
 		r.Post("/mcp", mcpHandler.Handle)
 
 		// Agents list endpoint (API-001)

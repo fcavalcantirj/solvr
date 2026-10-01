@@ -9404,3 +9404,200 @@ REMAINING FOR idx 78 (next slices, in order):
 
 git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged
   (idx 78 passes stays false).
+
+================================================================================
+2026-10-01 19:55 — Task idx 78 (spec.json, category functional) — IN PROGRESS, passes STAYS false
+"Keep SDKs, CLI, MCP, skills, and webhooks consistent with the redesigned product"
+SLICE 10: backend POST /v1/mcp. It now serves a tool for each of the 13 contract operations, with the npm
+mcp-server's names, and runs every tool call in-process through the API router with the caller's credential,
+held to contract/openapi-examples.json. Also fixed 3 frontend tests that slices 7 and 9 left RED at HEAD.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 78-95, 97, 98; no open URGENT.
+  24/67 acceptance (skipped as in every earlier entry); 68 waits on the owner (as journaled). idx 78 first
+  buildable; continued from slice 9 (HEAD c89ed289), REMAINING item "10.. consumers: backend /v1/mcp".
+
+HEAD WAS RED, found this session [TEST, /tmp/solvr_idx78_s10/fe_baseline.log, before any change]:
+  frontend components/mcp/mcp-tools.test.tsx "lists exactly the tools the npm mcp-server serves" and
+  components/api/api-mcp.test.tsx "lists exactly the npm mcp-server tools ..." FAILED: slice 9 grew
+  mcp-server/src/tools.ts to 8 names (+6 room tools in room-tools.ts) and the two pages list 5. Slice 9 ran no
+  frontend test. A third, components/api/api-sdk-examples.test.tsx "CLI: every solvr command and flag exists
+  in @solvr/cli", failed in fe1.log on files this slice had not touched: slice 7 moved the commands from
+  packages/cli/src/index.ts to program.ts/room-commands.ts and the test reads index.ts only. All 3 fixed here.
+
+DESIGN (from a code read this session):
+  - Dispatch: NewMCPHandler(dispatcher http.Handler) (was NewMCPHandler(searchRepo, postsRepo)); router.go
+    passes the root chi mux. A tool call builds an http.Request (escaped path, query, headers, JSON body) and
+    calls dispatcher.ServeHTTP with an in-memory ResponseWriter (implements Flush). So every tool answers what
+    the REST operation answers: same route middleware, auth, validation, rate limits, error envelope.
+  - The dispatched request starts from a FRESH context (context.Background + AfterFunc(cancel) on the MCP
+    request's context): it inherits no value of the MCP request. First version inherited it and chi routed
+    the request as a sub-router call of /v1/mcp -> 404 NOT_FOUND on POST /v1/rooms (caught by the integration
+    test, it1.log); pinned by TestMCPTools_DispatchThroughTheRouterThatServesThem.
+  - It carries the MCP call's X-Request-ID (so the error's request id is the MCP call's), RemoteAddr,
+    User-Agent, and middleware.WithInProcessCall(ctx) (new, context-only, not settable by a header):
+    APIUsage skips such a request, so an MCP tool call is counted once (as POST /v1/mcp), not twice.
+  - Credentials: the caller's Authorization header is forwarded for search/get/replies/get_reply/
+    update_reply/post/reply/room_create/room_join; room read/send/ticket/watch present the room_token argument
+    ("Bearer <token>"), never the caller's header, and fail before any request without it ("No room token for
+    <slug>. Call solvr_room_join with slug "<slug>" and pass the room_token it returns."). The endpoint keeps
+    no state, so room_token is a required argument of read/send/ticket (the npm server keeps it per process).
+    A watch with a ticket presents nothing.
+  - Without an Authorization header solvr_post and solvr_reply keep the old behavior (create nothing, name the
+    canonical route; the existing tests pin it). With one they create through POST /v1/posts and
+    POST /v1/posts/{id}/replies; a legacy type is not sent.
+  - solvr_search: GET /v1/search, q only when non-empty, per_page = limit (default 5, kept), page, sort;
+    legacy type not sent; text = the existing formatSearchResults over the API's data, total and
+    meta.confident_match (MCPHandler.SetConfidenceThreshold removed: the search handler's own threshold now
+    drives it; router no longer calls it). solvr_get: GET /v1/posts/{id}, then GET .../replies?limit=20 (a
+    failed post read sends no replies read); text = the old post header + "## Replies (N)" like the npm server.
+  - Errors: "Error executing <tool>: API request failed: <status> <text>: CODE: message" + "\nrequest id: <id>"
+    (the npm server's form). Input errors: "Error executing <tool>: <name> is required".
+  - solvr_room_watch: max_events (default 1), wait_seconds (default 30, max 120); an SSE parser fed by the
+    writer cancels the dispatched request at max_events or on access_revoked/credential_rotated (-> isError
+    keeping the earlier events), Accept: text/event-stream, Last-Event-ID, type <- event_type, issue, ticket.
+  - Tool descriptions avoid the words the legacy guards forbid (problem/question/idea/approach/answer).
+
+WHAT CHANGED [REAL, git status --porcelain: 16 M + 10 ??; git diff --stat (tracked): 16 files, 426+/389-]:
+  PRODUCTION backend:
+  M handlers/mcp.go (496 -> 410): MCPHandler{dispatcher}, MCPOperationTools (operationId -> tool, = the npm
+    OPERATION_TOOLS), 13 tool definitions (schema helpers mcpArg/mcpEnumArg/mcpListArg/mcpSchema; solvr_search
+    gains page/sort; solvr_get/post/reply descriptions updated), handleToolsCall via mcpExecutors; execute*/
+    formatPostWithAuthorDetails removed (formatSearchResults moved to mcp_knowledge.go unchanged).
+  ?? handlers/mcp_dispatch.go (297): mcpCall, mcpResult, apiRequest/apiPath, mcpResponseWriter, serve/do,
+    mcpAPIError + mcpFailureText, argument readers.
+  ?? handlers/mcp_knowledge.go (345): mcpExecutors; search, get, post, reply, replies, get_reply,
+    update_reply; formatSearchResults.
+  ?? handlers/mcp_rooms.go (243): room create/join/read/send/ticket; entry line format (npm's).
+  ?? handlers/mcp_stream.go (227): solvr_room_watch + the SSE reader.
+  ?? middleware/in_process.go (18): WithInProcessCall / IsInProcessCall.
+  M middleware/api_usage.go: `if recorder == nil || IsInProcessCall(r.Context())` -> pass through, no record.
+  M router.go (1127 -> 1127): mcpHandler := handlers.NewMCPHandler(r) before r.Route("/v1"); the
+    SetConfidenceThreshold call removed.
+  DOCS: M SPEC.md 18.2 (13 tools with their parameters and routes; the credential/dispatch/error paragraph
+    replaces "POST /v1/mcp is unauthenticated: ... create nothing"), 18.3 discovery "tools" list (13).
+  PRODUCTION frontend: M components/mcp/mcp-tools.tsx (the /mcp page: the npm server's 14 tools with their
+    parameters, "Fourteen tools: knowledge and rooms"); M components/api/api-mcp.tsx (the /api-docs MCP table:
+    14 rows, search params + page?, sort?); M components/api/api-endpoint-data-core.ts (785 -> 794): POST
+    /mcp description + the 13 tools in its response example.
+  TESTS (new): ?? handlers/mcp_contract_test.go (439): HasAToolForEveryOperation; ToolNamesMatchTheNpmServer
+    (parses OPERATION_TOOLS out of mcp-server/src/tools.ts == MCPOperationTools); per operation (13
+    subtests): the example's values map to DECLARED arguments, the tool is called through Handle with the
+    credential's Authorization, the dispatched request is held (method, escaped path, Authorization incl.
+    room token over the key and none for a ticket watch, exact query (+ search's default per_page 5), If-Match
+    / Last-Event-ID iff the example sends them, body exactly the example's, marked in-process; getPost = 2
+    requests), result shows the answer's ids/titles/token/ticket/ETag/stream content + "(id N)"; per error
+    example (5 subtests): isError, request held, "Error executing <tool>", "CODE: message", "request id: <id>".
+    ?? handlers/mcp_harness_test.go (102): recording dispatcher, callMCP. ?? handlers/mcp_tools_test.go: 17
+    tests (search confidence/legacy type through the real SearchHandler, request id/address forwarded, nil
+    dispatcher, post/reply with a key, no room token -> no request, escaping "a b/c" and "rep/1", join body,
+    send replay + body, read filters + cursor, watch: max_events on an open stream < 5 s, quiet stream after
+    wait_seconds 1 < 4 s, stream end keeps earlier events / plain error, ticket anonymous, EOF; dispatch
+    through the router that serves /v1/mcp with no outer value leaked). ?? middleware/in_process_test.go (2).
+    ?? api/router_mcp_test.go (166): TestMCP_ThreeAgentsWorkARoomAndAPostThroughTheRealRouter (below).
+
+EXISTING TESTS CHANGED (no test skipped or loosened):
+  (1) handlers/mcp_test.go: NewMCPHandler(nil, nil) -> NewMCPHandler(nil) (6x, the constructor's arity);
+      TestMCPHandler_ToolsList asserted `len(tools) != 4` + the 4 names; now 13 + the 13 names. PASSES.
+  (2) handlers/mcp_canonical_test.go: NewMCPHandler(nil) (1x); TestMCPHandler_ToolsAreSearchGetPostAndReply
+      asserted the exact list [solvr_search solvr_get solvr_post solvr_reply] == served == MCPToolNames(); now
+      the exact 13 in served order. PASSES. All other tests in the file unchanged and passing (post/reply
+      without a key create nothing, no legacy word in any tool, solvr_answer retired).
+  (3) api/router_test.go TestMCPToolsListEndpoint asserted `len(tools) != 4`; now 13 (comments updated). PASSES.
+  (4) handlers/search_canonical_test.go TestMCPHandler_SearchToolTakesNoLegacyType asserted properties ==
+      "limit,query"; now "limit,page,query,sort" (still exact, still no type; the contract's search sends
+      sort). PASSES.
+  (5) REPLACED (they called the removed repository-backed executeSearch):
+      - handlers/mcp_search_confidence_test.go TestMCPExecuteSearch_NoConfidentMatch asserted, for a mock repo
+        result with similarity 0.4 and the default threshold, text contains "No confident match" and
+        "Similarity: 40% (semantic)" -> TestMCPSearch_NoConfidentMatchShowsTheAskGuidance (same mock repo, same
+        two assertions, through the real SearchHandler). PASSES.
+      - TestMCPExecuteSearch_ConfidentMatch asserted no "No confident match" at similarity 0.92 ->
+        TestMCPSearch_ConfidentMatchOmitsTheAskGuidance (same + the title shows). PASSES.
+      - search_canonical_test.go TestMCPExecuteSearch_IgnoresALegacyTypeArgument asserted repo.searchOpts.Type
+        and ContentTypes empty and text contains "Matched reply: /posts/post-1#reply-1 by Agent Two (approach,
+        failed)" -> TestMCPSearch_IgnoresALegacyTypeArgument (same three assertions + no `type` query
+        parameter dispatched). PASSES. The helper mcpResultText went with them (no other user).
+  (6) frontend mcp-tools.test.tsx + api-mcp.test.tsx: the served names are read from tools.ts AND room-tools.ts
+      (was tools.ts only), + toContain('solvr_room_watch'); the unique-text lookups that the new tools made
+      ambiguous are scoped to their tool's card: getByText('post_id'/'body'/'parent_reply_id') -> the same
+      getByText within the solvr_reply card; api-mcp getByText('id') -> within the solvr_get row. PASS.
+  (7) frontend api-endpoint-data.test.ts "documents exactly the tools POST /v1/mcp serves": the exact served
+      list [4 names] -> the exact 13 (still parsed from handlers/mcp.go). PASSES.
+  (8) frontend api-sdk-examples.test.tsx "CLI: every solvr command and flag exists": reads index.ts +
+      program.ts + room-commands.ts (was index.ts only), assertions unchanged. PASSES.
+
+VERIFICATION [this session; logs in /tmp/solvr_idx78_s10/; DATABASE_URL=postgres://solvr:solvr_dev@localhost:
+  5435/solvr_test (local docker solvr-postgres)]:
+  [TEST] RED: red.log `go vet ./internal/api/handlers/` -> undefined mcpExecutors/mcpCall/mcpResult/
+    mcpFailure/formatSearchResults (the new tests could not build before the executors existed). The
+    middleware marker's RED was the same kind (undefined WithInProcessCall), seen as compiler diagnostics only.
+  [TEST] green2.log handlers -run 'MCP|FormatSearchResults|Search' ok; mcp_v.log -run TestMCP -v: 53 PASS
+    lines, 0 SKIP, 0 FAIL; 13 operation subtests + 5 error subtests PASS.
+  [TEST] it4.log TestMCP_ThreeAgentsWorkARoomAndAPostThroughTheRealRouter PASS (1.81 s): httptest server on
+    NewRouter + hub + solvr_test; 3 registered agents, only POST /v1/mcp: room_create; 3 joins (3 tokens);
+    executor and reviewer solvr_room_watch in parallel both woke with the planner's addressed plan; identical
+    resend with the same client_entry_id -> "was already sent" (a different payload is 409
+    CLIENT_ENTRY_ID_REUSED, it2.log, the API's rule); executor reply_to; reviewer read shows "to <ids>" and
+    "(reply to N)"; ticket -> anonymous watch with last_event_id got the executor's message; dead room token ->
+    "API request failed: 401 Unauthorized: UNAUTHORIZED" + request id; quiet message watch -> "No events within
+    1 s." (an unfiltered watch got the API's room.activated typed event, it3.log); solvr_post (key) ->
+    solvr_reply (other key) -> get_reply ETag -> update_reply ok -> same ETag again PRECONDITION_FAILED;
+    solvr_get "## Replies (1)" with the edited body; solvr_replies; search "" -> VALIDATION_ERROR; search
+    sort newest. Rows cleaned by setupRoomTestServer's cleanup (test-% rooms, agent_roomtest_% agents).
+  [TEST] final_pkgs.log `go test ./internal/api/handlers/ ./internal/api/middleware/ -count=1` ok/ok;
+    final_api.log -run 'MCP|TestSpecMCPSections|TestWellKnownAIAgent' 10 PASS 0 FAIL 0 SKIP; go build ./... ok;
+    go vet ./internal/api/... ok; gofmt -l clean on every Go file this slice wrote or edited.
+  [TEST] FULL BACKEND (once, backend_full.log, `go test ./...`, parallel packages) -> exit 1: FAIL in
+    internal/api, internal/api/handlers, internal/db, internal/jobs; 75 failing names (fail.mine). Against
+    the union of the recorded idx 77 baselines (/tmp/solvr_idx77_s1*,s2*/fail*: 80 names) 7 are new:
+    TestLegacyDroppedDatabase_GetRoutesExposeOnlyLegacyRouteFamilies, TestSearchIntegration_ExactTitleMatch/
+    MultiWordQuery/PartialWordMatch ("failed to connect to database": parallel packages exhausting
+    connections), TestOverviewKnowledge_DefinedOnceByTheCanonicalList (3241 vs 3242, shared-DB count drift),
+    TestRoomRelay_ListenerInterruptionRecoversEveryEntryInOrder (timing): each run ALONE -> PASS
+    (alone_jobs.log, alone_api.log, alone_handlers.log; the jobs probe calls /v1/mcp solvr_search/solvr_get);
+    and TestLegacyDependencyRegistry_CoversThePostTypeReferences: "discovered legacy dependency without a
+    disposition: typeref:internal/api/openapi_post_schemas.go (idea,problem,question at lines 17,53)" -> a
+    file this slice did not touch; RED AT HEAD too (head_db.log, a throwaway `git worktree` of c89ed289,
+    removed): slice 2 (a01aa2a7) left it. NOT FIXED here (see REMAINING 1).
+  [TEST] FRONTEND: fe2.log components/mcp + components/api 9 files 96 tests passed; frontend_full.log
+    `npm test` 200 files, 1750 tests passed; fe_tsc.log `npm run typecheck` exit 0; eslint on the 7 touched
+    files exit 0.
+  MUTATIONS [TEST] (mut/mut.py; each applied alone, `go test ./internal/api/handlers/ ./internal/api/
+    middleware/ -run 'MCP|InProcess|...'`, source restored; mut/orig.sha: every production file OK): 24/24
+    FAILED as intended after one fix: m1 dispatch inherits the MCP context, m2 usage counts in-process calls,
+    m3 no Accept, m4 no default page size, m5 ticket watch presents a credential, m6 no Last-Event-ID, m7
+    max_events ignored, m8 stream end not an error, m9 no request id in the failure text, m10 path not
+    escaped, m11 no If-Match, m12 request id not forwarded, m13 not marked in-process, m14 post/reply without
+    a key dispatch, m16 send drops addressed_member_ids, m17 join always sends rotate, m18 wait_seconds
+    ignored, m19 confident_match ignored, m20 room tools present the caller's key, m21 get_reply drops the
+    ETag, m22 replay not reported, m23 ticket sends a body, m24 watch drops the type filter. m15 (read drops
+    kind) first SURVIVED (summary.log); TestMCPRoomRead_SendsItsFiltersAndShowsTheNextCursor was added and
+    m15 then FAILED (summary2.log).
+  NOT RUN: golangci-lint (the installed version cannot load .golangci config: "'output.formats' expected a
+    map, got 'slice'", an environment mismatch); mcp-server, packages/*, cli/ suites (untouched);
+    ./scripts/check-file-size.sh still lists the pre-existing oversize files (router.go 1127, unchanged
+    length); every file this slice wrote is < 800 (largest mcp_contract_test.go 439; api-endpoint-data-core.ts
+    794).
+
+FINDINGS, NOT FIXED:
+  - [REAL] TestLegacyDependencyRegistry_CoversThePostTypeReferences is RED at HEAD since slice 2
+    (openapi_post_schemas.go names idea/problem/question at lines 17, 53 with no registry disposition).
+  - [REAL] Slices 3-9 ran no full backend suite and slices 7/9 no frontend suite; that is how the 3 frontend
+    tests and the registry test went red unnoticed. Every remaining slice should run both once.
+  - [UNVERIFIED] solvr_room_watch holds the POST /v1/mcp response open up to wait_seconds (max 120); a proxy
+    with a shorter read timeout in front of the API would cut it. Not measured on the deployment.
+  - [REAL] The npm solvr_search still offers the legacy `type` (problem/question/idea) and the /mcp and
+    /api-docs pages document it as served; /v1/mcp's solvr_search has none (step 5).
+  - [REAL] /v1/mcp has no member listing tool (addressed_member_ids needs agent ids; step 7, as before).
+
+REMAINING FOR idx 78 (next slices, in order):
+  1. the RED registry test above (disposition for openapi_post_schemas.go or the schema text), then
+  11.. consumers: skill/scripts (solvr.sh + SKILL.md: room operations, the same names), then steps 3, 4
+    (webhooks: NewWebhooksHandler is mounted by no router; discovery still lists "webhooks"), 5 (migration
+    notes, deprecation errors, legacy choices out of first-party clients incl. both CLIs' --type and the npm
+    solvr_search type), 6 (external consumer vs clean + upgraded schema), 7 (participants as collections, a
+    members command/tool); findings of slices 6-10.
+
+git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged
+  (idx 78 passes stays false).

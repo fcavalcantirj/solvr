@@ -104,7 +104,8 @@ describe('/api-docs SDK samples use the canonical write shapes the SDKs export (
 
   it('CLI: every solvr command and flag exists in @solvr/cli; post takes no type', () => {
     const code = example('CLI');
-    const cli = read('cli/src/index.ts');
+    // idx 78 slice 7: the commands are registered in program.ts and room-commands.ts.
+    const cli = ['index.ts', 'program.ts', 'room-commands.ts'].map((f) => read(`cli/src/${f}`)).join('\n');
     const invocations = code
       .replace(/\\\n\s*/g, ' ')
       .split('\n')

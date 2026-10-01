@@ -148,7 +148,7 @@ var apiUsageFamilyPrefixes = []struct {
 func APIUsage(recorder APIUsageRecorder) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if recorder == nil {
+			if recorder == nil || IsInProcessCall(r.Context()) {
 				next.ServeHTTP(w, r)
 				return
 			}

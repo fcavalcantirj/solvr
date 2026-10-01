@@ -1081,8 +1081,8 @@ func TestMCPEndpointExists(t *testing.T) {
 	}
 }
 
-// TestMCPToolsListEndpoint verifies POST /v1/mcp tools/list returns 4 tools.
-// Per MCP-005: MCP over HTTP should expose all 4 tools
+// TestMCPToolsListEndpoint verifies POST /v1/mcp tools/list returns 13 tools.
+// Per MCP-005: MCP over HTTP exposes every tool
 func TestMCPToolsListEndpoint(t *testing.T) {
 	router := setupTestRouter(t)
 
@@ -1112,9 +1112,9 @@ func TestMCPToolsListEndpoint(t *testing.T) {
 		t.Fatalf("expected tools to be array, got %T", result["tools"])
 	}
 
-	// Should have 4 tools: solvr_search, solvr_get, solvr_post, solvr_reply
-	if len(tools) != 4 {
-		t.Errorf("expected 4 tools, got %d", len(tools))
+	// Should have 13 tools: one per contract operation (handlers.MCPOperationTools)
+	if len(tools) != 13 {
+		t.Errorf("expected 13 tools, got %d", len(tools))
 	}
 }
 

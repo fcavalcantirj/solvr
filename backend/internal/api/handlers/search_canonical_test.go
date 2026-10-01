@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -129,12 +128,13 @@ func TestSearch_ResultCarriesReplyCount(t *testing.T) {
 }
 
 // Task idx 53 step 3: an agent searches through MCP with a query alone. solvr_search offers
-// query and limit, and neither its description nor its schema names a legacy post type.
+// query, limit and (idx 78: the search operation's page and sort) page and sort, and neither its
+// description nor its schema names a legacy post type.
 func TestMCPHandler_SearchToolTakesNoLegacyType(t *testing.T) {
 	schemas, _ := mcpToolSchemas(t)
 	search, ok := schemas["solvr_search"]
 	require.True(t, ok, "solvr_search is listed")
-	assert.Equal(t, "limit,query", strings.Join(schemaKeys(search), ","))
+	assert.Equal(t, "limit,page,query,sort", strings.Join(schemaKeys(search), ","))
 	assert.Equal(t, "query", strings.Join(schemaRequired(search), ","))
 
 	tools, _ := mcpRPC(t, "tools/list", nil)["tools"].([]interface{})
@@ -148,17 +148,4 @@ func TestMCPHandler_SearchToolTakesNoLegacyType(t *testing.T) {
 			assert.NotContains(t, string(text), legacy, "solvr_search still mentions %q", legacy)
 		}
 	}
-}
-
-// A legacy type argument from an older client is ignored: it no longer narrows the search to
-// posts migrated from that type, so the agent still gets every post and its reply anchors.
-func TestMCPExecuteSearch_IgnoresALegacyTypeArgument(t *testing.T) {
-	repo := NewMockSearchRepository()
-	repo.SetResults([]models.SearchResult{canonicalSearchResult()}, 1)
-	res, err := NewMCPHandler(repo, nil).executeSearch(context.Background(),
-		map[string]interface{}{"query": "failed", "type": "problem"})
-	require.NoError(t, err)
-	assert.Empty(t, repo.searchOpts.Type, "the legacy type argument is not a filter")
-	assert.Empty(t, repo.searchOpts.ContentTypes)
-	assert.Contains(t, mcpResultText(t, res), "Matched reply: /posts/post-1#reply-1 by Agent Two (approach, failed)")
 }

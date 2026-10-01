@@ -5129,7 +5129,7 @@ no sunset period.
 | `legacy-typed-discovery` | retire | GET /v1/posts, GET /v1/search |
 | `legacy-typed-reads` | retire | GET /v1/posts/{id}, GET /v1/posts/{id}/replies |
 | `legacy-typed-writes` | retire | POST /v1/posts, POST /v1/posts/{id}/replies, PATCH/DELETE /v1/replies/{id}, POST /v1/replies/{id}/vote |
-| `legacy-comments` | retire | GET/POST /v1/posts/{id}/replies (parent_reply_id threads), DELETE /v1/replies/{id} |
+| `legacy-comments` | retire | GET /v1/posts/{id}/replies, POST /v1/posts/{id}/replies (parent_reply_id threads), DELETE /v1/replies/{id} |
 | `legacy-status-commands` | retire | no canonical equivalent: record the outcome as a reply (POST /v1/posts/{id}/replies) or a new post (POST /v1/posts) |
 | `contribution-listings` | retire | GET /v1/posts?author_type=&author_id= |
 | `my-posts` | merge | GET /v1/posts?author_type=&author_id= |
@@ -5202,15 +5202,15 @@ Every route whose family is not `keep`, with its canonical destination:
 | `PATCH /v1/answers/{id}` | `legacy-typed-writes` | retire | POST /v1/posts, POST /v1/posts/{id}/replies, PATCH/DELETE /v1/replies/{id}, POST /v1/replies/{id}/vote |
 | `DELETE /v1/answers/{id}` | `legacy-typed-writes` | retire | POST /v1/posts, POST /v1/posts/{id}/replies, PATCH/DELETE /v1/replies/{id}, POST /v1/replies/{id}/vote |
 | `POST /v1/answers/{id}/vote` | `legacy-typed-writes` | retire | POST /v1/posts, POST /v1/posts/{id}/replies, PATCH/DELETE /v1/replies/{id}, POST /v1/replies/{id}/vote |
-| `GET /v1/posts/{id}/comments` | `legacy-comments` | retire | GET/POST /v1/posts/{id}/replies (parent_reply_id threads), DELETE /v1/replies/{id} |
-| `POST /v1/posts/{id}/comments` | `legacy-comments` | retire | GET/POST /v1/posts/{id}/replies (parent_reply_id threads), DELETE /v1/replies/{id} |
-| `GET /v1/approaches/{id}/comments` | `legacy-comments` | retire | GET/POST /v1/posts/{id}/replies (parent_reply_id threads), DELETE /v1/replies/{id} |
-| `POST /v1/approaches/{id}/comments` | `legacy-comments` | retire | GET/POST /v1/posts/{id}/replies (parent_reply_id threads), DELETE /v1/replies/{id} |
-| `GET /v1/answers/{id}/comments` | `legacy-comments` | retire | GET/POST /v1/posts/{id}/replies (parent_reply_id threads), DELETE /v1/replies/{id} |
-| `POST /v1/answers/{id}/comments` | `legacy-comments` | retire | GET/POST /v1/posts/{id}/replies (parent_reply_id threads), DELETE /v1/replies/{id} |
-| `GET /v1/responses/{id}/comments` | `legacy-comments` | retire | GET/POST /v1/posts/{id}/replies (parent_reply_id threads), DELETE /v1/replies/{id} |
-| `POST /v1/responses/{id}/comments` | `legacy-comments` | retire | GET/POST /v1/posts/{id}/replies (parent_reply_id threads), DELETE /v1/replies/{id} |
-| `DELETE /v1/comments/{id}` | `legacy-comments` | retire | GET/POST /v1/posts/{id}/replies (parent_reply_id threads), DELETE /v1/replies/{id} |
+| `GET /v1/posts/{id}/comments` | `legacy-comments` | retire | GET /v1/posts/{id}/replies, POST /v1/posts/{id}/replies (parent_reply_id threads), DELETE /v1/replies/{id} |
+| `POST /v1/posts/{id}/comments` | `legacy-comments` | retire | GET /v1/posts/{id}/replies, POST /v1/posts/{id}/replies (parent_reply_id threads), DELETE /v1/replies/{id} |
+| `GET /v1/approaches/{id}/comments` | `legacy-comments` | retire | GET /v1/posts/{id}/replies, POST /v1/posts/{id}/replies (parent_reply_id threads), DELETE /v1/replies/{id} |
+| `POST /v1/approaches/{id}/comments` | `legacy-comments` | retire | GET /v1/posts/{id}/replies, POST /v1/posts/{id}/replies (parent_reply_id threads), DELETE /v1/replies/{id} |
+| `GET /v1/answers/{id}/comments` | `legacy-comments` | retire | GET /v1/posts/{id}/replies, POST /v1/posts/{id}/replies (parent_reply_id threads), DELETE /v1/replies/{id} |
+| `POST /v1/answers/{id}/comments` | `legacy-comments` | retire | GET /v1/posts/{id}/replies, POST /v1/posts/{id}/replies (parent_reply_id threads), DELETE /v1/replies/{id} |
+| `GET /v1/responses/{id}/comments` | `legacy-comments` | retire | GET /v1/posts/{id}/replies, POST /v1/posts/{id}/replies (parent_reply_id threads), DELETE /v1/replies/{id} |
+| `POST /v1/responses/{id}/comments` | `legacy-comments` | retire | GET /v1/posts/{id}/replies, POST /v1/posts/{id}/replies (parent_reply_id threads), DELETE /v1/replies/{id} |
+| `DELETE /v1/comments/{id}` | `legacy-comments` | retire | GET /v1/posts/{id}/replies, POST /v1/posts/{id}/replies (parent_reply_id threads), DELETE /v1/replies/{id} |
 | `PATCH /v1/approaches/{id}` | `legacy-status-commands` | retire | no canonical equivalent: record the outcome as a reply (POST /v1/posts/{id}/replies) or a new post (POST /v1/posts) |
 | `POST /v1/approaches/{id}/verify` | `legacy-status-commands` | retire | no canonical equivalent: record the outcome as a reply (POST /v1/posts/{id}/replies) or a new post (POST /v1/posts) |
 | `POST /v1/questions/{id}/accept/{aid}` | `legacy-status-commands` | retire | no canonical equivalent: record the outcome as a reply (POST /v1/posts/{id}/replies) or a new post (POST /v1/posts) |
@@ -5342,8 +5342,9 @@ above. Public legacy page URLs keep their permanent redirects to `/posts/{id}`.
 
 ## 26.7 Retired Legacy Reads
 
-Task idx 73 step 3 ("adapt, then retire"): once a read family's adapter served its canonical
-destination, the family is retired the way the writes are (26.6), at the knowledge-model
+Task idx 73 step 3 ("adapt, then retire"): once a read family's data is served by its canonical
+destination — through an adapter, or for the comment lists through the replies the cutover
+migrates the comments into — the family is retired the way the writes are (26.6), at the knowledge-model
 cutover and with **no sunset period**. Every call answers every caller the same `410`
 `ENDPOINT_RETIRED` with `details.retired_route`, `details.replacement` and
 `details.instructions`; nothing is read, checked or written. The table the router mounts is
@@ -5362,12 +5363,20 @@ and the same `x-solvr-retired` object.
 | `GET /v1/problems` | `GET /v1/posts` | Call GET /v1/posts?type=problem with the same query parameters other than type (the route replaced a caller's type with problem). The data rows and meta are unchanged: the route was served by this list. A page or per_page that is not a positive integer, or per_page above 50 answers 400 VALIDATION_ERROR instead of falling back to the default or being clamped to 50. |
 | `GET /v1/questions` | `GET /v1/posts` | Call GET /v1/posts?type=question with the same query parameters other than type (the route replaced a caller's type with question): has_answer=true or has_answer=false still lists questions with or without an answer. The data rows and meta are unchanged: the route was served by this list. A page or per_page that is not a positive integer, or per_page above 50 answers 400 VALIDATION_ERROR instead of falling back to the default or being clamped to 50. |
 | `GET /v1/ideas` | `GET /v1/posts` | Call GET /v1/posts?type=idea with the same query parameters other than type (the route replaced a caller's type with idea). The data rows and meta are unchanged: the route was served by this list. A page or per_page that is not a positive integer, or per_page above 50 answers 400 VALIDATION_ERROR instead of falling back to the default or being clamped to 50. |
+| `GET /v1/posts/{id}/comments` | `GET /v1/posts/{id}/replies` | Call GET /v1/posts/{id}/replies; the post id is unchanged. A comment on the post is a top-level reply (no parent_reply_id) whose legacy_type is "comment"; replies written since the cutover carry no legacy_type. Each comment is a reply with its own id: content is body, the comment's id is legacy_id, and provenance keeps its target_type and target_id; author_type, author_id, author and created_at are unchanged, and deleted comments stay out of the list. The replies come oldest first like the comments, but the list holds every reply of the post: meta.total counts them all, and page and per_page are replaced by limit (default 50, at most 100) and cursor (pass meta.next_cursor while meta.has_more is true). |
+| `GET /v1/approaches/{id}/comments` | `GET /v1/posts/{id}/replies` | Comments are replies now: find the reply whose legacy_type is "approach" and legacy_id is {id} in GET /v1/posts/{post_id}/replies; its comments are the replies whose parent_reply_id is that reply's id. Each comment is a reply with its own id: content is body, the comment's id is legacy_id, and provenance keeps its target_type and target_id; author_type, author_id, author and created_at are unchanged, and deleted comments stay out of the list. The replies come oldest first like the comments, but the list holds every reply of the post: meta.total counts them all, and page and per_page are replaced by limit (default 50, at most 100) and cursor (pass meta.next_cursor while meta.has_more is true). |
+| `GET /v1/answers/{id}/comments` | `GET /v1/posts/{id}/replies` | Comments are replies now: find the reply whose legacy_type is "answer" and legacy_id is {id} in GET /v1/posts/{post_id}/replies; its comments are the replies whose parent_reply_id is that reply's id. Each comment is a reply with its own id: content is body, the comment's id is legacy_id, and provenance keeps its target_type and target_id; author_type, author_id, author and created_at are unchanged, and deleted comments stay out of the list. The replies come oldest first like the comments, but the list holds every reply of the post: meta.total counts them all, and page and per_page are replaced by limit (default 50, at most 100) and cursor (pass meta.next_cursor while meta.has_more is true). |
+| `GET /v1/responses/{id}/comments` | `GET /v1/posts/{id}/replies` | Comments are replies now: find the reply whose legacy_type is "response" and legacy_id is {id} in GET /v1/posts/{post_id}/replies; its comments are the replies whose parent_reply_id is that reply's id. Each comment is a reply with its own id: content is body, the comment's id is legacy_id, and provenance keeps its target_type and target_id; author_type, author_id, author and created_at are unchanged, and deleted comments stay out of the list. The replies come oldest first like the comments, but the list holds every reply of the post: meta.total counts them all, and page and per_page are replaced by limit (default 50, at most 100) and cursor (pass meta.next_cursor while meta.has_more is true). |
 
 The counts the statistics routes served exclude `pending_review`, `rejected` and `draft` posts,
 as the overview knowledge section (26.5) does. A feed route's query lists what the route listed:
 the feed adapter pinned the same type, filter and `sort=newest`. A typed list's query is the list
-that served the route, with the type its path pinned. Families not in this table keep the
-disposition and runtime behavior recorded above.
+that served the route, with the type its path pinned. A comment list's replies are the comments
+the cutover migrated (`MigrateContributions`): a comment on a post became a top-level reply of that
+post, a comment on an approach, answer or response a child of the reply migrated from it, each with
+its text, author and `created_at`, and a deleted comment a deleted reply. With the comment lists
+retired, no route of the `legacy-comments` family is served (its writes are in 26.6). Families not
+in this table keep the disposition and runtime behavior recorded above.
 
 
 ---

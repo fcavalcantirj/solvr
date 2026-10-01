@@ -133,10 +133,10 @@ func TestStatusContract_UnknownResourceIDIsNotFound(t *testing.T) {
 	cases := []struct {
 		name, method, path, bearer, body string
 	}{
-		{"list comments on a post", "GET", "/v1/posts/{id}/comments", "", ""},
-		{"list comments on an answer", "GET", "/v1/answers/{id}/comments", "", ""},
-		{"list comments on an approach", "GET", "/v1/approaches/{id}/comments", "", ""},
-		{"list comments on a response", "GET", "/v1/responses/{id}/comments", "", ""},
+		// The legacy comment lists are retired (task idx 73 step 3: 410 for any id,
+		// TestLegacyReadRoutes_AnswerTheMigrationErrorToEveryCaller); their canonical
+		// replacement looks the post up.
+		{"list replies on a post", "GET", "/v1/posts/{id}/replies", "", ""},
 		// The legacy comment, answer and approach writes are retired (task idx 52: 410 for any
 		// id, TestLegacyWriteRoutes_AnswerTheMigrationErrorAndWriteNothing); their canonical
 		// replacements look the id up.

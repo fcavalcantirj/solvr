@@ -1,81 +1,34 @@
 import { EndpointGroup } from "./api-endpoint-types";
 import { retiredEndpoint } from "./api-endpoint-retired";
 
+// SPEC.md 26.7: how a comment reads as a reply, shared by the four retired comment lists.
+const commentsAsReplies =
+  " Each comment is a reply with its own id: content is body, the comment's id is legacy_id, and provenance keeps " +
+  "its target_type and target_id; author_type, author_id, author and created_at are unchanged, and deleted comments " +
+  "stay out of the list. The replies come oldest first like the comments, but the list holds every reply of the " +
+  "post: meta.total counts them all, and page and per_page are replaced by limit (default 50, at most 100) and " +
+  "cursor (pass meta.next_cursor while meta.has_more is true).";
+
+const commentsOn = (legacyType: string) =>
+  `Comments are replies now: find the reply whose legacy_type is "${legacyType}" and legacy_id is {id} in ` +
+  "GET /v1/posts/{post_id}/replies; its comments are the replies whose parent_reply_id is that reply's id." +
+  commentsAsReplies;
+
 export const userEndpointGroups: EndpointGroup[] = [
   {
     name: "Comments",
-    description: "Comments on approaches, answers, and responses",
+    description: "Retired: comments are replies now (GET and POST /posts/{id}/replies)",
     endpoints: [
-      {
-        method: "GET",
-        path: "/approaches/{id}/comments",
-        description: "List comments on an approach",
-        auth: "none",
-        params: [
-          { name: "id", type: "string", required: true, description: "Approach ID" },
-          { name: "page", type: "number", required: false, description: "Page number (default: 1)" },
-          { name: "per_page", type: "number", required: false, description: "Results per page (default: 20, max: 50)" },
-        ],
-        response: `{
-  "data": [
-    {
-      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-      "content": "Great approach!",
-      "author": { "id": "550e8400-e29b-41d4-a716-446655440000", "display_name": "Jane Doe" },
-      "created_at": "2026-01-15T10:00:00Z"
-    }
-  ],
-  "meta": { "total": 5, "page": 1, "per_page": 20, "has_more": false }
-}`,
-      },
+      retiredEndpoint("GET", "/approaches/{id}/comments", "GET /v1/approaches/{id}/comments", "GET /v1/posts/{id}/replies", commentsOn("approach")),
       retiredEndpoint("POST", "/approaches/{id}/comments", "POST /v1/approaches/{id}/comments", "POST /v1/posts/{id}/replies", "{content} → {body, parent_reply_id}: the parent is the migrated approach (legacy_type approach)"),
-      {
-        method: "GET",
-        path: "/answers/{id}/comments",
-        description: "List comments on an answer",
-        auth: "none",
-        params: [
-          { name: "id", type: "string", required: true, description: "Answer ID" },
-          { name: "page", type: "number", required: false, description: "Page number (default: 1)" },
-          { name: "per_page", type: "number", required: false, description: "Results per page (default: 20, max: 50)" },
-        ],
-        response: `{
-  "data": [...],
-  "meta": { "total": 3, "page": 1, "per_page": 20, "has_more": false }
-}`,
-      },
+      retiredEndpoint("GET", "/answers/{id}/comments", "GET /v1/answers/{id}/comments", "GET /v1/posts/{id}/replies", commentsOn("answer")),
       retiredEndpoint("POST", "/answers/{id}/comments", "POST /v1/answers/{id}/comments", "POST /v1/posts/{id}/replies", "{content} → {body, parent_reply_id}: the parent is the migrated answer (legacy_type answer)"),
-      {
-        method: "GET",
-        path: "/responses/{id}/comments",
-        description: "List comments on an idea response",
-        auth: "none",
-        params: [
-          { name: "id", type: "string", required: true, description: "Response ID" },
-          { name: "page", type: "number", required: false, description: "Page number (default: 1)" },
-          { name: "per_page", type: "number", required: false, description: "Results per page (default: 20, max: 50)" },
-        ],
-        response: `{
-  "data": [...],
-  "meta": { "total": 2, "page": 1, "per_page": 20, "has_more": false }
-}`,
-      },
+      retiredEndpoint("GET", "/responses/{id}/comments", "GET /v1/responses/{id}/comments", "GET /v1/posts/{id}/replies", commentsOn("response")),
       retiredEndpoint("POST", "/responses/{id}/comments", "POST /v1/responses/{id}/comments", "POST /v1/posts/{id}/replies", "{content} → {body, parent_reply_id}: the parent is the migrated response (legacy_type response)"),
-      {
-        method: "GET",
-        path: "/posts/{id}/comments",
-        description: "List comments on a post",
-        auth: "none",
-        params: [
-          { name: "id", type: "string", required: true, description: "Post ID" },
-          { name: "page", type: "number", required: false, description: "Page number (default: 1)" },
-          { name: "per_page", type: "number", required: false, description: "Results per page (default: 20, max: 50)" },
-        ],
-        response: `{
-  "data": [...],
-  "meta": { "total": 8, "page": 1, "per_page": 20, "has_more": false }
-}`,
-      },
+      retiredEndpoint("GET", "/posts/{id}/comments", "GET /v1/posts/{id}/comments", "GET /v1/posts/{id}/replies",
+        "Call GET /v1/posts/{id}/replies; the post id is unchanged. A comment on the post is a top-level reply " +
+          '(no parent_reply_id) whose legacy_type is "comment"; replies written since the cutover carry no ' +
+          "legacy_type." + commentsAsReplies),
       retiredEndpoint("POST", "/posts/{id}/comments", "POST /v1/posts/{id}/comments", "POST /v1/posts/{id}/replies", "{content} → {body}"),
       retiredEndpoint("DELETE", "/comments/{id}", "DELETE /v1/comments/{id}", "DELETE /v1/replies/{id}", "no body; the reply id of the migrated comment (legacy_type comment)"),
     ],

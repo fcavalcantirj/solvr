@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -74,14 +73,16 @@ func commentVisibilityFixture(t *testing.T, pool *db.Pool, agentID, visibility, 
 	return commentTargets{ids: ids, views: question}
 }
 
-// Comments and view counts live under a post, so they answer what GET /v1/posts/{id}
-// answers: a family-only post's comments (on the post or on any of its contributions) and
-// its view routes are 404 to anyone outside the family, a deleted post's are 404 to
-// everyone, and nobody who may not read the post can count a view. Family members read
-// (with a total that matches what they see) and count views. The comment create routes are
-// retired (task idx 52): every caller gets the same migration error on every parent and no
-// comment is written; canonical reply writes are pinned by
-// TestReplySurfaces_FollowTheParentPostVisibility.
+// View counts live under a post, so they answer what GET /v1/posts/{id} answers: a
+// family-only post's view routes are 404 to anyone outside the family, a deleted post's are
+// 404 to everyone, and nobody who may not read the post can count a view. Family members
+// count views. The comment routes are retired: every caller, member or not, gets the same
+// migration error on every parent and never a comment's text — the creates since task idx 52
+// (and no comment is written), the lists since idx 73 step 3. A post's comments are its
+// replies now; their visibility (404 outside the family and on a deleted post, members read
+// them) is pinned by TestReplySurfaces_FollowTheParentPostVisibility and
+// TestStatusContract_ChildListsAnswerLikeTheirParent, and that the replies are the
+// comments by TestRetiredCommentLists_RepliesListWhatTheRouteListed.
 func TestCommentAndViewSurfaces_FollowTheParentPostVisibility(t *testing.T) {
 	liftCreateLimits(t) // many creates by one identity; the hourly limit is not this test's subject
 	ts, _, pool := newStatusContractServer(t)
@@ -130,6 +131,14 @@ func TestCommentAndViewSurfaces_FollowTheParentPostVisibility(t *testing.T) {
 		require.NoError(t, err)
 		return got
 	}
+	retiredList := func(t *testing.T, route, id, bearer string) {
+		t.Helper()
+		got := call(t, "GET", "/v1/"+route+"/"+id+"/comments", bearer, "")
+		require.Equal(t, http.StatusGone, got.status, "%s: %s", route, got.body)
+		require.Equal(t, ErrCodeEndpointRetired, got.code, got.body)
+		require.Equal(t, got.headerID, got.requestID, "the envelope carries the response's request id")
+		require.NotContains(t, got.body, secret)
+	}
 	retiredComment := func(t *testing.T, route, id, bearer, body string) {
 		t.Helper()
 		before := comments(id)
@@ -143,7 +152,7 @@ func TestCommentAndViewSurfaces_FollowTheParentPostVisibility(t *testing.T) {
 	refused := func(t *testing.T, set commentTargets, bearer string, write bool) {
 		t.Helper()
 		for route, id := range set.ids {
-			notFound(t, call(t, "GET", "/v1/"+route+"/"+id+"/comments", bearer, ""))
+			retiredList(t, route, id, bearer)
 			if write {
 				retiredComment(t, route, id, bearer, newComment)
 			}
@@ -168,17 +177,7 @@ func TestCommentAndViewSurfaces_FollowTheParentPostVisibility(t *testing.T) {
 	for who, bearer := range members {
 		t.Run("family post, member/"+who, func(t *testing.T) {
 			for route, id := range family.ids {
-				got := call(t, "GET", "/v1/"+route+"/"+id+"/comments", bearer, "")
-				require.Equal(t, http.StatusOK, got.status, "%s: %s", route, got.body)
-				require.Contains(t, got.body, secret, route)
-				var list struct {
-					Data []json.RawMessage `json:"data"`
-					Meta struct {
-						Total int `json:"total"`
-					} `json:"meta"`
-				}
-				require.NoError(t, json.Unmarshal([]byte(got.body), &list))
-				require.Equal(t, len(list.Data), list.Meta.Total, "%s: the total counts what the caller sees", route)
+				retiredList(t, route, id, bearer)
 				retiredComment(t, route, id, bearer, newComment)
 			}
 			got := call(t, "GET", "/v1/posts/"+family.views+"/views", bearer, "")
@@ -192,9 +191,7 @@ func TestCommentAndViewSurfaces_FollowTheParentPostVisibility(t *testing.T) {
 	}
 	t.Run("public post, anyone", func(t *testing.T) {
 		for route, id := range public.ids {
-			got := call(t, "GET", "/v1/"+route+"/"+id+"/comments", "", "")
-			require.Equal(t, http.StatusOK, got.status, "%s: %s", route, got.body)
-			require.Contains(t, got.body, secret, route)
+			retiredList(t, route, id, "")
 			retiredComment(t, route, id, foreignKey, newComment)
 		}
 		got := call(t, "GET", "/v1/posts/"+public.views+"/views", "", "")

@@ -237,18 +237,16 @@ func createCommentTarget(t *testing.T, router http.Handler, apiKey, path, body s
 func TestCommentsEndpoints(t *testing.T) {
 	router := setupTestRouter(t)
 
-	t.Run("GET /v1/approaches/:id/comments returns list", func(t *testing.T) {
-		// An approach that exists: a missing one is 404 (TestStatusContract_UnknownResourceIDIsNotFound).
+	t.Run("GET /v1/approaches/:id/comments is retired (410 ENDPOINT_RETIRED)", func(t *testing.T) {
+		// An approach that exists still gets the migration error (idx 73 step 3): its comments
+		// are replies, listed by TestRetiredCommentLists_RepliesListWhatTheRouteListed.
 		apiKey := testCommentsSetup(t, router)
 		approachID := createCommentTargetApproach(t, createCommentTargetProblem(t, router, apiKey))
 		req := httptest.NewRequest(http.MethodGet, "/v1/approaches/"+approachID+"/comments", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		// Should return 200 with empty list
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected status 200, got %d: %s", w.Code, w.Body.String())
-		}
+		requireRetiredRecorder(t, w, "GET /v1/approaches/{id}/comments")
 	})
 
 	t.Run("POST /v1/approaches/:id/comments is retired (410 ENDPOINT_RETIRED)", func(t *testing.T) {
@@ -468,23 +466,26 @@ func TestTypeSpecificListEndpoints(t *testing.T) {
 func TestPostCommentsEndpoints(t *testing.T) {
 	router := setupTestRouter(t)
 
-	t.Run("GET /v1/posts/:id/comments returns list (no auth required)", func(t *testing.T) {
-		// A post that exists: a missing one is 404 (TestStatusContract_UnknownResourceIDIsNotFound).
+	t.Run("GET /v1/posts/:id/comments is retired (410 ENDPOINT_RETIRED)", func(t *testing.T) {
+		// A post that exists still gets the migration error (idx 73 step 3); its replies list
+		// (GET /v1/posts/{id}/replies) answers 200 with a data field.
 		postID := createCommentTargetProblem(t, router, testCommentsSetup(t, router))
 		req := httptest.NewRequest(http.MethodGet, "/v1/posts/"+postID+"/comments", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		// Should return 200 with empty list or valid response
+		requireRetiredRecorder(t, w, "GET /v1/posts/{id}/comments")
+
+		req = httptest.NewRequest(http.MethodGet, "/v1/posts/"+postID+"/replies", nil)
+		w = httptest.NewRecorder()
+		router.ServeHTTP(w, req)
 		if w.Code != http.StatusOK {
 			t.Errorf("Expected status 200, got %d: %s", w.Code, w.Body.String())
 		}
-
 		var resp map[string]interface{}
 		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 			t.Fatalf("Failed to decode response: %v", err)
 		}
-
 		if _, ok := resp["data"]; !ok {
 			t.Error("Expected 'data' field in response")
 		}

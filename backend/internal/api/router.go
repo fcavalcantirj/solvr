@@ -784,14 +784,9 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			// Per FIX-024: Allow viewing responses before responding
 			r.Get("/ideas/{id}/responses", ideasHandler.ListResponses)
 
-			// Comments endpoints (API-CRITICAL per PRD-v2); FIX-019 added posts. GET
-			// /v1/{target_type}/{id}/comments follows the target's post visibility.
-			// Note: Routes use singular form (approach, answer, response) to match handler expectations
-			r.Get("/approaches/{id}/comments", wrapCommentsListWithType(commentsHandler, "approach"))
-			r.Get("/answers/{id}/comments", wrapCommentsListWithType(commentsHandler, "answer"))
-			r.Get("/responses/{id}/comments", wrapCommentsListWithType(commentsHandler, "response"))
-			r.Get("/posts/{id}/comments", wrapCommentsListWithType(commentsHandler, "post"))
-		}) // end BART-151 OptionalAuth group for problems/questions/ideas/comments GETs
+			// The comment lists, GET /v1/{posts,approaches,answers,responses}/{id}/comments, are
+			// retired (idx 73 step 3): comments are replies, GET /v1/posts/{id}/replies.
+		}) // end BART-151 OptionalAuth group for problems/questions/ideas GETs
 
 		// The legacy WRITE routes (typed creates, approaches, answers, responses, progress
 		// notes, comments and the status commands) are retired: 410 ENDPOINT_RETIRED naming
@@ -1054,18 +1049,6 @@ func jsonContentTypeMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		next.ServeHTTP(w, r)
 	})
-}
-
-// wrapCommentsListWithType wraps the CommentsHandler.List with a target_type param set.
-// This is needed because the routes use /approaches/{id}/comments but the handler
-// expects a "target_type" URL param with value "approach" (singular).
-func wrapCommentsListWithType(h *handlers.CommentsHandler, targetType string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// Add target_type to chi context so it can be retrieved by chi.URLParam
-		rctx := chi.RouteContext(r.Context())
-		rctx.URLParams.Add("target_type", targetType)
-		h.List(w, r)
-	}
 }
 
 // ipfsHealthAdapter wraps KuboIPFSService to satisfy handlers.IPFSHealthChecker.

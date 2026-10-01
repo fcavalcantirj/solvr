@@ -3820,3 +3820,196 @@ UAT (for when idx 73 closes, not now): the retirements ship with the cutover dep
 
 git status at journal time [REAL]: the 12 M + 1 D listed above, plus this entry. spec.json
   unchanged; idx 73 passes stays false.
+
+================================================================================
+2026-09-30 23:40 — Task idx 73 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Define concrete canonical knowledge endpoints and retire overlapping discovery and statistics APIs"
+SLICE 4: step 3's RETIRE half, fourth family. The legacy comment lists, GET /v1/posts/{id}/comments,
+/v1/approaches/{id}/comments, /v1/answers/{id}/comments and /v1/responses/{id}/comments (family
+legacy-comments; its writes were retired by idx 52), now answer every caller 410 ENDPOINT_RETIRED
+naming GET /v1/posts/{id}/replies and where each comment is in it, published in the served OpenAPI
+document, SPEC.md 26.7, the /api-docs page and the published API reference (step 5). No route of
+the legacy-comments family is served any more.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 73, 74, 77-95, 97,
+  98; no open URGENT. idx 24 and 67 stay skipped (acceptance tasks). idx 68: step 1 waits for an
+  owner call, steps 5-6 gated by owner decision 4 (slice 4 entry). idx 73 continues. Of slice 3's
+  STEP MAP leftovers, contribution-listings still needs a canonical way to list a user's replies;
+  the comment lists did not need anything new, so this slice takes them. Tree clean at start;
+  HEAD 28149f8f.
+
+WHY STEP 3 COVERS THE COMMENT LISTS [INFERRED from code read, stated for the owner]: step 3 names
+  "contribution-specific endpoints" and "independent query stacks". The 4 GETs were never adapted:
+  they read the comments table (db/comments.go), which no route writes since idx 52, while the
+  cutover turns every comment into a reply (db/contribution_migration.go migrateComments: a
+  comment on a post -> a top-level reply of that post, a comment on an approach/answer/response ->
+  a child of the reply migrated from it; text, author, created_at and deleted_at kept, provenance
+  {legacy_table, target_type, target_id}). So after the cutover the lists would serve a frozen
+  copy while GET /v1/posts/{id}/replies serves the same comments live. The "adapt" half is the
+  cutover's migration, not a runtime adapter; SPEC 26.7's intro now says so. RouteFamilies already
+  recorded "retire" for the family. If the owner wants read adapters instead, revert the 4
+  LegacyReadRetirements entries and the router hunk.
+
+CONSUMERS [REAL, grep excluding node_modules/.next/coverage/journal]:
+  - frontend lib api-base.ts getComments -> hooks/use-comments.ts -> components/shared/comments-list
+    .tsx, imported only by the problems/questions/ideas detail clients; and edit-post-form.tsx,
+    imported only by app/{problems,ideas,questions}/[id]/edit. All on paths frontend/middleware.ts
+    308-redirects to /posts. Dead; left untouched like the earlier slices' dead callers (idx 83).
+  - /api-docs page (components/api/api-endpoint-data-user.ts "Comments" group) documented the 4 as
+    live: now retired entries (below).
+  - skill/references/api.md line 426 (and its identical copy frontend/public/references/api.md)
+    called "the .../comments lists" deprecated: updated (below). No call in mcp-server/src,
+    packages/*/src or cli/ (only coverage/ HTML artifacts and READMEs).
+
+WHAT CHANGED [REAL, git status --porcelain: 13 M + 1 ??; git diff --stat 184+/171- on tracked files]:
+  PRODUCTION:
+  M backend/internal/api/legacy_read_retirement.go (96): 4 LegacyReadRetirements entries,
+    replacement GET /v1/posts/{id}/replies. GET /v1/posts/{id}/comments: "Call GET
+    /v1/posts/{id}/replies; the post id is unchanged. A comment on the post is a top-level reply (no
+    parent_reply_id) whose legacy_type is "comment"; replies written since the cutover carry no
+    legacy_type." The 3 contribution lists (commentsOnContribution(type)): find the reply whose
+    legacy_type is "<type>" and legacy_id is {id} in GET /v1/posts/{post_id}/replies; its comments
+    are the replies whose parent_reply_id is that reply's id. Shared tail legacyCommentsAsReplies:
+    content is body, the comment's id is legacy_id, provenance keeps target_type and target_id;
+    author_type, author_id, author and created_at unchanged; deleted comments stay out; oldest
+    first, but the list holds every reply of the post (meta.total counts them all) and page/per_page
+    become limit (default 50, at most 100) and cursor (meta.next_cursor while meta.has_more).
+  M backend/internal/api/router.go (1176 -> 1159): the 4 r.Get comment mounts removed from the
+    BART-151 OptionalAuth group (a comment says where they went); wrapCommentsListWithType deleted
+    (unexported, no caller left; slice 3 precedent). commentsHandler stays constructed: the content
+    gate and moderation wiring still use it.
+  M backend/internal/api/route_families.go: legacy-comments Canonical "GET/POST
+    /v1/posts/{id}/replies (parent_reply_id threads), DELETE /v1/replies/{id}" -> "GET
+    /v1/posts/{id}/replies, POST /v1/posts/{id}/replies (parent_reply_id threads), DELETE
+    /v1/replies/{id}". Same destinations, spelled out: CoverEvery requires the family's Canonical
+    to contain each retirement's replacement literally, and "GET/POST ..." did not contain
+    "GET /v1/posts/{id}/replies".
+  M backend/internal/api/handlers/comments.go: List's doc comment says it is unmounted since idx 73
+    step 3 and goes with the legacy tables. Code unchanged (kept, unmounted: idx 52 precedent,
+    owner decision 4); its handler tests still run and pass.
+  M SPEC.md Part 26: the legacy-comments Canonical string in 26.2 (1 row) and 26.3 (9 rows);
+    26.7 intro (data served by the canonical destination through an adapter, or for the comment
+    lists through the replies the cutover migrates them into); 4 new 26.7 rows, generated from the
+    Go table by a throwaway printer test (deleted after use) so the text is identical; closing
+    paragraph on what a comment list's replies are and that no legacy-comments route is served.
+  M frontend/components/api/api-endpoint-data-user.ts (401 -> 354): the 4 live GET entries replaced
+    by retiredEndpoint(...) with replacement GET /v1/posts/{id}/replies and the 26.7 instructions
+    (consts commentsAsReplies, commentsOn); group description says comments are replies now.
+  M skill/references/api.md + frontend/public/references/api.md (still byte-identical, cmp): line
+    426 now lists the typed reads as deprecated (unchanged) and the 4 comment lists as retired, 410
+    ENDPOINT_RETIRED, with where a comment is in GET /v1/posts/{id}/replies.
+  NEW TESTS:
+  A backend/internal/api/router_legacy_comment_lists_test.go (213):
+    TestRetiredCommentLists_RepliesListWhatTheRouteListed: legacy problem/question/idea, an
+    approach/answer/response, 2 live comments on each of the 4 targets (human then agent, fixed
+    timestamps) and 1 deleted one each; runs the cutover's db.MigrateContributions (precedent:
+    router_badges_history_test.go); for each route: 410, replacement GET /v1/posts/{id}/replies;
+    following the instructions on GET /v1/posts/{post}/replies?limit=100 finds exactly the 2 live
+    comments, oldest first, with legacy_id = comment id, its own reply id, body = content, post_id,
+    author_type/author_id/author.id/author.type/display_name, created_at equal, provenance
+    target_type/target_id; meta.total = rows and > the comments; ?limit=1 has_more + next_cursor,
+    and the cursor returns the second row. 4 subtests.
+  CHANGED EXISTING TESTS:
+  - router_legacy_read_retirement_test.go: retiredReadFamilies adds legacy-comments; want-count
+    9 -> 13; retiredReadDestinations and retiredReadFields (legacyCommentListFields: id,
+    target_type, target_id, author_type, author_id, content, author, created_at, total, page,
+    per_page, has_more) for the 4 routes. The check `require.True(HasPrefix(route, "GET "), "this
+    table retires reads only")` over every route of a retired read family became: GET routes go to
+    the read table as before; every other route of such a family must be a retired write
+    (LegacyWriteRetirements), else fail. The read table still holds only GETs (every entry must be
+    in the GET set). PASS.
+  - router_content_test.go: TestCommentsEndpoints "GET /v1/approaches/:id/comments returns list"
+    asserted 200 on an existing approach; now "... is retired (410 ENDPOINT_RETIRED)" with
+    requireRetiredRecorder (the POST subtest beside it already did so). TestPostCommentsEndpoints
+    "GET /v1/posts/:id/comments returns list (no auth required)" asserted 200 with a data field;
+    now the route is 410 and the same 200 + data assertion runs on GET /v1/posts/{id}/replies for
+    that post. PASS.
+  - router_status_contract_test.go TestStatusContract_UnknownResourceIDIsNotFound: the 4 rows "list
+    comments on a post/answer/approach/response" asserted 404 NOT_FOUND for a malformed and an
+    absent id. Replaced by one row "list replies on a post" (GET /v1/posts/{id}/replies), same 404
+    assertions: PASS (it already passed at RED). The retired lists answer 410 for any id:
+    TestLegacyReadRoutes_AnswerTheMigrationErrorToEveryCaller (PASS).
+  - router_comment_view_visibility_test.go TestCommentAndViewSurfaces_FollowTheParentPostVisibility
+    asserted for the GET comment routes: 404 NOT_FOUND without the secret to outsiders of a family
+    post and to everyone on a deleted post; 200 containing the secret with meta.total ==
+    len(data) to family members; 200 with the secret on a public post. Now every caller in every
+    one of those cases gets 410 ENDPOINT_RETIRED, request_id = X-Request-ID, and never the secret
+    (retiredList). The view-route and retired-comment-create assertions are unchanged. Where the
+    replaced behavior is guarded now (doc comment says so): replies of a family post 404 to
+    outsiders without leaking and readable by members, replies of a deleted post 404 —
+    TestReplySurfaces_FollowTheParentPostVisibility and
+    TestStatusContract_ChildListsAnswerLikeTheirParent (both PASS); that those replies are the
+    comments — TestRetiredCommentLists_RepliesListWhatTheRouteListed (PASS). Unused encoding/json
+    import removed.
+  - frontend/components/api/api-endpoint-retired.test.ts: 26.7 has 13 rows (was 9); the 4 comment
+    lists must stay on the page and be marked retired with the SPEC replacement and instructions
+    (same checks as feed and typed lists); new it(): GET /posts/{id}/replies is documented live
+    with id, cursor and limit, and every comment-list row names it and "limit (default 50, at most
+    100) and cursor".
+
+VERIFICATION (DATABASE_URL = local DBs only; never production):
+  RED [TEST, /tmp/solvr_idx73_s4/red.log, solvr_test at 118]: comment GETs "expected: 410 actual:
+    200" / "actual: 404" (visibility, content, new test), CoverEvery "GET /v1/responses/{id}/
+    comments has no retirement entry". 0 SKIP. Frontend RED [TEST, fe_red.log]: "GET
+    /v1/posts/{id}/comments is not marked retired".
+  GREEN targeted [TEST, green1.log, solvr_test]: internal/api ok; 39 top-level tests PASS, 0 FAIL,
+    0 SKIP (new/changed tests, read and write retirements, OpenAPI, route families, published
+    references, status contract, reply visibility, feed, typed discovery).
+  FULL BACKEND [TEST, /tmp/solvr_idx73_s4/full1.log, go test ./... -count=1 -p 1 -v, on a FRESH
+    local DB solvr_idx73_s4_fresh built with `migrate up` to 118 (clean); dropped after]: 18
+    packages ok; internal/api and internal/db FAIL with 47 failing tests. Against slice 3's set
+    (/tmp/solvr_idx73_s3/fails.txt): 1 new, TestAgentClaim_RetriesAndRacesLinkTheAgentOnce
+    ("duplicate key value violates unique constraint users_username_key" at router_rooms_test.go:72,
+    createRoomTestUser: the recorded fixture-collision class, also in slice 1's set); 1 gone,
+    TestSearchAnalyticsRepository_GetTrending (idx 98's time-window test). One targeted run of the
+    claim test on the same DB: PASS (claim_rerun.log). 13 SKIPs, the pre-existing set (VOYAGE,
+    OAuth, Kubo unpin, legacy answers list, E2E list); none mine. PASS in the full run: every test
+    named above plus TestLegacyDroppedDatabase_{GetRoutes,WriteRoutes,StaticQueries,ScheduledJobs}*,
+    TestDiscoverLegacySchemaDependencies_EveryCatalogObjectHasADisposition.
+  FRONTEND [TEST, fe_full.log]: npm test 188 files, 1697 tests PASS. typecheck exit 0. eslint on
+    the 2 touched TS files exit 0.
+  gofmt -l clean on every touched Go file (handlers/comments.go was already unformatted at HEAD;
+    my change is a comment). go vet ./internal/api ./internal/api/handlers clean.
+    check-file-size.sh: 34 violations, the same set (router.go still over, 1159).
+  solvr_test side effect [REAL]: the new test runs MigrateContributions on the shared DB; replies
+    4082 and comments 4987 before and after this session's runs (fixture rows cleaned up).
+  LIVE PROBE [REAL, /tmp/solvr_idx73_s4/probe/probe.sh + probe.out]: fresh local DB at 118
+    (migrate up), go build ./cmd/api and ./cmd/cutover, API on :8097 under env -i
+    (IPFS_API_URL=http://127.0.0.1:9, fake JWT_SECRET, probe ADMIN_API_KEY). Agent registered 201;
+    API stopped; legacy problem/question/idea + approach/answer/response + 6 comments (2 on the
+    question, 1 live + 1 deleted on the approach, 1 on the answer, 1 on the response) seeded by SQL;
+    the REAL cutover runner (cutover --database-url <probe DB> --confirm-prod) exit 0,
+    replies_created 9, pending_after 0: post comments top-level, contribution comments children,
+    the deleted one a deleted reply. API restarted. GET of the 4 comment lists: 410
+    ENDPOINT_RETIRED, retired_route, replacement GET /v1/posts/{id}/replies, instructions,
+    request_id set; with an agent key and ?page=2&per_page=5: 410. GET /v1/posts/{id}/replies 200
+    on each post: problem total 2 (approach + its live comment as a child; the deleted comment
+    absent), question total 4 (2 top-level post comments, answer + its child comment), idea total
+    2; provenance.target_type post/approach/answer/response; ?limit=1 has_more true, cursor gives
+    the next comment. Neighbors: POST /v1/posts/{id}/comments 410, DELETE /v1/comments/{id} 410,
+    GET /v1/posts/{id} 200, GET /v1/problems/{id} 200 and GET /v1/questions/{id}/answers 200 (not
+    retired), /v1/feed 410, /v1/problems 410. /v1/openapi.json: the 4 GET operations deprecated,
+    only "410", x-solvr-retired.replacement GET /v1/posts/{id}/replies (POSTs unchanged: 410).
+    api.log: 11x200, 1x201, 12x410, 0 5xx. Server stopped (:8097 free); probe DB dropped.
+
+STEP MAP (idx 73):
+  1, 2, 4 DONE (earlier slices). 5 DONE for every mapping published so far (SPEC 26.3, 26.5, 26.6,
+    26.7; OpenAPI x-solvr-retired; /api-docs page; the published API reference for the comment
+    lists).
+  3 RETIRE half OPEN, family by family:
+    - type-specific-statistics (slice 1), legacy-feed (slice 2), legacy-typed-discovery (slice 3),
+      legacy-comments (this slice: reads; writes were idx 52) DONE.
+    - legacy-typed-reads (8 GETs: /v1/{problems,questions,ideas}/{id}, /problems/{id}/approaches,
+      /approaches/{approachId}/history, /problems/{id}/export, /questions/{id}/answers,
+      /ideas/{id}/responses): the contribution lists read the legacy tables like the comment lists
+      did (same reasoning applies); the single-post GETs and /export may need their own mapping
+      (export has no canonical equivalent [UNVERIFIED]). Router tests using them as probes:
+      router_optional_auth_contract_test (/v1/problems/{id} as the OptionalAuth representative),
+      router_status_contract_test ("approach history" row), others [grep first]. skill/references/
+      api.md line 426 still calls them deprecated.
+    - contribution-listings (2): needs a canonical way to list a user's replies first.
+UAT (for when idx 73 closes, not now): the retirements ship with the cutover deploy (idx 93).
+
+git status at journal time [REAL]: the 13 M + 1 ?? listed above, plus this entry. spec.json
+  unchanged; idx 73 passes stays false.

@@ -423,7 +423,7 @@ The typed problem/question/idea creates and the answer, approach, response, comm
 | `POST /v1/questions/{id}/accept/{aid}` | no canonical equivalent | Accepting an answer has no canonical command. Record the outcome as a reply (POST /v1/posts/{id}/replies) or a new post (POST /v1/posts). |
 | `POST /v1/ideas/{id}/evolve` | no canonical equivalent | Idea evolution has no canonical command. Record the outcome as a reply (POST /v1/posts/{id}/replies) or a new post (POST /v1/posts). |
 
-The legacy reads (`GET /v1/problems/{id}`, `GET /v1/questions/{id}`, `GET /v1/ideas/{id}`, `GET /v1/problems/{id}/approaches`, `GET /v1/questions/{id}/answers`, `GET /v1/ideas/{id}/responses` and the `.../comments` lists) are deprecated: read `GET /v1/posts/{id}` and `GET /v1/posts/{id}/replies` instead.
+The legacy reads (`GET /v1/problems/{id}`, `GET /v1/questions/{id}`, `GET /v1/ideas/{id}`, `GET /v1/problems/{id}/approaches`, `GET /v1/questions/{id}/answers`, `GET /v1/ideas/{id}/responses`) are deprecated: read `GET /v1/posts/{id}` and `GET /v1/posts/{id}/replies` instead. The legacy comment lists (`GET /v1/posts/{id}/comments`, `GET /v1/approaches/{id}/comments`, `GET /v1/answers/{id}/comments`, `GET /v1/responses/{id}/comments`) are retired and answer `410 ENDPOINT_RETIRED`: comments are replies now, listed by `GET /v1/posts/{id}/replies` with `legacy_type` `comment` and the old comment id as `legacy_id`; a comment on an approach, answer or response is a child (`parent_reply_id`) of the reply migrated from it.
 
 ---
 

@@ -73,7 +73,9 @@ type CommentsListMeta struct {
 	HasMore bool `json:"has_more"`
 }
 
-// List handles GET /v1/{target_type}/{id}/comments - list comments for a target.
+// List handles GET /v1/{target_type}/{id}/comments - list comments for a target. Unmounted since
+// idx 73 step 3: the comment lists answer 410 (api/legacy_read_retirement.go) and comments are
+// replies; it goes with the legacy tables.
 func (h *CommentsHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Get target type and ID from URL
 	targetTypeStr := chi.URLParam(r, "target_type")

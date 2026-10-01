@@ -107,20 +107,26 @@ describe("retired legacy writes on the API docs page", () => {
 describe("retired legacy reads on the API docs page", () => {
   const feed = ["GET /v1/feed", "GET /v1/feed/stuck", "GET /v1/feed/unanswered"];
   const typedLists = ["GET /v1/problems", "GET /v1/questions", "GET /v1/ideas"];
+  const commentLists = [
+    "GET /v1/posts/{id}/comments",
+    "GET /v1/approaches/{id}/comments",
+    "GET /v1/answers/{id}/comments",
+    "GET /v1/responses/{id}/comments",
+  ];
 
-  it("reads all 9 retired reads from SPEC.md 26.7", () => {
-    expect(specRows(READS)).toHaveLength(9);
+  it("reads all 13 retired reads from SPEC.md 26.7", () => {
+    expect(specRows(READS)).toHaveLength(13);
   });
 
-  it("still documents the retired feed routes and typed lists, so old callers find the migration", () => {
-    for (const route of [...feed, ...typedLists]) {
+  it("still documents the retired feed routes, typed lists and comment lists, so old callers find the migration", () => {
+    for (const route of [...feed, ...typedLists, ...commentLists]) {
       expect(pageEndpoint(route), `${route} is not on the page`).toBeDefined();
     }
   });
 
   it("marks every retired read on the page as retired with the SPEC replacement and instructions", () => {
     const onPage = specRows(READS).filter((row) => pageEndpoint(row.route));
-    expect(onPage.map((row) => row.route)).toEqual(expect.arrayContaining([...feed, ...typedLists]));
+    expect(onPage.map((row) => row.route)).toEqual(expect.arrayContaining([...feed, ...typedLists, ...commentLists]));
     for (const row of onPage) {
       const ep = pageEndpoint(row.route)!;
       expect(ep.retired, `${row.route} is not marked retired`).toEqual({
@@ -134,6 +140,17 @@ describe("retired legacy reads on the API docs page", () => {
       expect(ep.response).toContain(
         `${row.route} was retired with the canonical knowledge model; use ${row.replacement} instead.`,
       );
+    }
+  });
+
+  it("documents GET /posts/{id}/replies, the comment lists' replacement, with the paging the instructions name", () => {
+    const list = pageEndpoint("GET /v1/posts/{id}/replies");
+    expect(list, "GET /posts/{id}/replies is not documented").toBeDefined();
+    expect(list!.retired).toBeUndefined();
+    expect(list!.params!.map((p) => p.name)).toEqual(expect.arrayContaining(["id", "cursor", "limit"]));
+    for (const row of specRows(READS).filter((r) => commentLists.includes(r.route))) {
+      expect(row.replacement).toBe("GET /v1/posts/{id}/replies");
+      expect(row.migration).toContain("limit (default 50, at most 100) and cursor");
     }
   });
 

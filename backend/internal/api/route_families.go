@@ -256,7 +256,7 @@ var RouteFamilies = []RouteFamily{
 	{
 		Name:        "legacy-comments",
 		Disposition: DispositionRetire,
-		Canonical:   "GET/POST /v1/posts/{id}/replies (parent_reply_id threads), DELETE /v1/replies/{id}",
+		Canonical:   "GET /v1/posts/{id}/replies, POST /v1/posts/{id}/replies (parent_reply_id threads), DELETE /v1/replies/{id}",
 		Routes: []string{
 			"GET /v1/posts/{id}/comments",
 			"POST /v1/posts/{id}/comments",

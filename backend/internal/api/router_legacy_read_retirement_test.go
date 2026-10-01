@@ -17,31 +17,42 @@ import (
 // /v1/stats/problems|questions|ideas) were adapters over the overview knowledge aggregate
 // (idx 72), and the legacy feed (GET /v1/feed, /v1/feed/stuck, /v1/feed/unanswered) and the
 // legacy typed lists (GET /v1/problems, /v1/questions, /v1/ideas) adapters over the canonical
-// GET /v1/posts list (idx 71). They are now retired the way the legacy writes
+// GET /v1/posts list (idx 71). The legacy comment lists (GET /v1/{posts,approaches,answers,
+// responses}/{id}/comments) read the comments the cutover turns into replies (MigrateContributions),
+// so GET /v1/posts/{id}/replies serves them. They are now retired the way the legacy writes
 // were (idx 52): every caller gets the same 410 ENDPOINT_RETIRED naming the canonical
 // replacement, where the data is there and where each legacy field went, and the API document
 // and SPEC.md Part 26 publish that exact answer (step 5).
 
-// retiredReadFamilies are the RouteFamilies whose GET routes answer the migration error.
+// retiredReadFamilies are the RouteFamilies whose GET routes answer the migration error. Their
+// other routes, if any, are retired writes (legacy-comments: TestLegacyWriteRetirements_*).
 var retiredReadFamilies = map[string]bool{
 	"type-specific-statistics": true,
 	"legacy-feed":              true,
 	"legacy-typed-discovery":   true,
+	"legacy-comments":          true,
 }
 
 // retiredReadDestinations is where each retired read's data is served now; its instructions
 // must name it exactly. A feed route or typed list names the GET /v1/posts query its adapter
 // served.
 var retiredReadDestinations = map[string]string{
-	"GET /v1/stats/problems":  "data.knowledge.types",
-	"GET /v1/stats/questions": "data.knowledge.types",
-	"GET /v1/stats/ideas":     "data.knowledge.types",
-	"GET /v1/feed":            "GET /v1/posts?sort=newest",
-	"GET /v1/feed/stuck":      "GET /v1/posts?type=problem&needs_help=true&sort=newest",
-	"GET /v1/feed/unanswered": "GET /v1/posts?type=question&has_answer=false&sort=newest",
-	"GET /v1/problems":        "GET /v1/posts?type=problem ",
-	"GET /v1/questions":       "GET /v1/posts?type=question ",
-	"GET /v1/ideas":           "GET /v1/posts?type=idea ",
+	"GET /v1/stats/problems":      "data.knowledge.types",
+	"GET /v1/stats/questions":     "data.knowledge.types",
+	"GET /v1/stats/ideas":         "data.knowledge.types",
+	"GET /v1/feed":                "GET /v1/posts?sort=newest",
+	"GET /v1/feed/stuck":          "GET /v1/posts?type=problem&needs_help=true&sort=newest",
+	"GET /v1/feed/unanswered":     "GET /v1/posts?type=question&has_answer=false&sort=newest",
+	"GET /v1/problems":            "GET /v1/posts?type=problem ",
+	"GET /v1/questions":           "GET /v1/posts?type=question ",
+	"GET /v1/ideas":               "GET /v1/posts?type=idea ",
+	"GET /v1/posts/{id}/comments": "Call GET /v1/posts/{id}/replies",
+	"GET /v1/approaches/{id}/comments": `legacy_type is "approach" and legacy_id is {id} in ` +
+		"GET /v1/posts/{post_id}/replies",
+	"GET /v1/answers/{id}/comments": `legacy_type is "answer" and legacy_id is {id} in ` +
+		"GET /v1/posts/{post_id}/replies",
+	"GET /v1/responses/{id}/comments": `legacy_type is "response" and legacy_id is {id} in ` +
+		"GET /v1/posts/{post_id}/replies",
 }
 
 // retiredReadFields are the top-level data fields each retired read used to return; its
@@ -54,13 +65,22 @@ var retiredReadFields = map[string][]string{
 		"recently_answered", "top_answerers"},
 	"GET /v1/stats/ideas": {"counts_by_status", "fresh_sparks", "ready_to_develop", "top_sparklers",
 		"trending_tags", "pipeline_stats", "recently_realized"},
-	"GET /v1/feed":            legacyFeedItemFields,
-	"GET /v1/feed/stuck":      legacyFeedItemFields,
-	"GET /v1/feed/unanswered": legacyFeedItemFields,
-	"GET /v1/problems":        {"data", "meta"},
-	"GET /v1/questions":       {"data", "meta"},
-	"GET /v1/ideas":           {"data", "meta"},
+	"GET /v1/feed":                     legacyFeedItemFields,
+	"GET /v1/feed/stuck":               legacyFeedItemFields,
+	"GET /v1/feed/unanswered":          legacyFeedItemFields,
+	"GET /v1/problems":                 {"data", "meta"},
+	"GET /v1/questions":                {"data", "meta"},
+	"GET /v1/ideas":                    {"data", "meta"},
+	"GET /v1/posts/{id}/comments":      legacyCommentListFields,
+	"GET /v1/approaches/{id}/comments": legacyCommentListFields,
+	"GET /v1/answers/{id}/comments":    legacyCommentListFields,
+	"GET /v1/responses/{id}/comments":  legacyCommentListFields,
 }
+
+// legacyCommentListFields are the fields of a legacy comment (models.CommentWithAuthor; the list
+// left deleted comments out, so deleted_at never appeared) and of the list's meta.
+var legacyCommentListFields = []string{"id", "target_type", "target_id", "author_type", "author_id", "content",
+	"author", "created_at", "total", "page", "per_page", "has_more"}
 
 // legacyFeedItemFields are the fields of a legacy feed item (models.FeedItem).
 var legacyFeedItemFields = []string{"id", "type", "title", "snippet", "tags", "status", "author", "vote_score",
@@ -69,6 +89,7 @@ var legacyFeedItemFields = []string{"id", "type", "title", "snippet", "tags", "s
 func TestLegacyReadRetirements_CoverEveryRetiredReadFamilyAndNameAServedReplacement(t *testing.T) {
 	want := map[string]RouteFamily{}
 	keep := map[string]bool{}
+	var others []string
 	for _, f := range RouteFamilies {
 		for _, route := range f.Routes {
 			if f.Disposition == DispositionKeep {
@@ -76,16 +97,22 @@ func TestLegacyReadRetirements_CoverEveryRetiredReadFamilyAndNameAServedReplacem
 			}
 			if retiredReadFamilies[f.Name] {
 				require.Equal(t, DispositionRetire, f.Disposition, "%s must be a retire family", f.Name)
-				require.True(t, strings.HasPrefix(route, "GET "), "%s: this table retires reads only", route)
+				if !strings.HasPrefix(route, "GET ") {
+					others = append(others, route) // this table retires reads only; see below
+					continue
+				}
 				want[route] = f
 			}
 		}
 	}
-	require.Len(t, want, 9, "the GET routes of %v", retiredReadFamilies)
+	require.Len(t, want, 13, "the GET routes of %v", retiredReadFamilies)
 
 	writes := map[string]bool{}
 	for _, w := range LegacyWriteRetirements {
 		writes[w.Route] = true
+	}
+	for _, route := range others {
+		require.True(t, writes[route], "%s: a retired read family's other routes are retired writes (26.6)", route)
 	}
 	seen := map[string]bool{}
 	for _, ret := range LegacyReadRetirements {

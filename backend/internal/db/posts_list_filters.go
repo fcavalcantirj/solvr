@@ -16,3 +16,20 @@ func appendNeedsHelpFilter(conditions *[]string, needsHelp bool) {
 		*conditions = append(*conditions, needsHelpCondition)
 	}
 }
+
+// appendHasAnswerFilter adds the has_answer filter: a post has an answer when one of its live
+// replies is in the answer bucket (posts_reply_counts.go), i.e. exactly when its answers_count is
+// above zero. As EXISTS it is probed per candidate through idx_replies_post, so a page stops at
+// its rows and the total semi-joins the replies once, where reading answers_count needed every
+// post's reply counts in both (idx 77 slice 13: unanswered page 278 ms -> 0.7 ms, total 333 ->
+// 169 ms, same 128,290 posts, at 200k posts and 1M replies).
+func appendHasAnswerFilter(conditions *[]string, hasAnswer *bool) {
+	if hasAnswer == nil {
+		return
+	}
+	exists := "EXISTS (SELECT 1 FROM replies r WHERE r.post_id = p.id AND r.deleted_at IS NULL AND " + replyAnswerBucket + ")"
+	if !*hasAnswer {
+		exists = "NOT " + exists
+	}
+	*conditions = append(*conditions, exists)
+}

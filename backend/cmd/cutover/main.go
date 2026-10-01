@@ -38,7 +38,7 @@ func parseOptions(args []string) (options, error) {
 	fs.StringVar(&o.databaseURL, "database-url", "", "database to convert (required; DATABASE_URL is ignored)")
 	fs.BoolVar(&o.dryRun, "dry-run", false, "only read: report what the cutover would change")
 	fs.BoolVar(&o.confirmProd, "confirm-prod", false, "required to apply (not needed with --dry-run)")
-	fs.Int64Var(&o.expectVersion, "expect-version", 124, "schema_migrations version the database must be at, clean")
+	fs.Int64Var(&o.expectVersion, "expect-version", 125, "schema_migrations version the database must be at, clean")
 	fs.StringVar(&o.reportPath, "report", "", "write the JSON report to this file (default: stdout)")
 	if err := fs.Parse(args); err != nil {
 		return o, err

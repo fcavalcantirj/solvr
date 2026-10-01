@@ -6329,3 +6329,169 @@ WHAT THIS COMMIT CARRIES [REAL, git status --porcelain before commit]: M backend
   A backend/internal/db/homepage_search_scale_test.go, M progress.txt (07:50 entry, timeout line, this
   entry). spec.json unchanged; idx 77 passes stays false. REMAINING list and UAT: as the 07:50 entry
   (next: step 1 public post listing reply counts + users join, reply pagination, room activity).
+
+2026-10-01 08:46 — Task idx 77 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Make indexes, counters, search projections, and analytics rebuildable from authoritative records"
+SLICE 13 of N: step 1, public post listing (GET /v1/posts). Each page now picks its rows from posts
+first and only then joins authors, reply counts and the viewer's vote. Before, it aggregated every live
+reply and scanned users once per listed post. Migration 000125 adds an index on users ((id::text)).
+sort=hot computes its score in float8 instead of numeric. has_answer becomes an EXISTS filter.
+On a 200k-post / 1M-reply copy, the newest page's statement went from 586 ms to 0.4 ms. Same results.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 77-95, 97, 98; no open
+  URGENT. 24 and 67 are acceptance tasks (skipped as in every earlier entry); 68 waits on the owner
+  (08:15 entry). idx 77 is the first buildable task; slice 12's REMAINING list puts "step 1: public post
+  listing (reply counts for the page only, users join)" next. Tree clean at start; HEAD de718368.
+
+SPIKE [REAL, /tmp/solvr_idx77_s13/spike/ + variants/]: throwaway DB solvr_idx77_s13_spike (all 124 up
+  migrations, then 125). seed.sql with triggers off: 20k users, 20k agents, and 200k posts, 60% by humans.
+  The 2026-09-29 production dump has 1,667 human and 558 agent posts; slice 12's seed had only agent posts,
+  so it could not show the users join. 1M replies: 40% human, 50% agent, 10% system, 10% migrated
+  approaches, 5% migrated comments; half of them on 2,000 hot posts. A throwaway pgx-tracer harness
+  (zz_idx77_s13_spike_test.go, deleted before commit, copy in spike/zz_idx77_s13_spike_test.go.txt)
+  called the REAL repository methods and ran EXPLAIN (ANALYZE, BUFFERS) on each captured SELECT. The plans
+  are in plans_head.txt (HEAD) and plans_new.txt (this change). Wall time per Go call, HEAD -> this change:
+    List newest 441 -> 58 ms; page 200 914 -> 69; votes 731 -> 73; hot 2,896 -> 597; answers 694 -> 408;
+    approaches 700 -> 431; has_answer=true 623 -> 125; has_answer=false 926 -> 173; type 411 -> 39;
+    tag 282 -> 9; week 272 -> 6; agent author 232 -> 2; viewer vote 400 -> 26; FindByID 8.5 -> 4.8;
+    replies.ListPageByPost hot 7.6 -> 3.3, cold 5.4 -> 1.1. Keyword search 298 -> 343 ms and 4.4 -> 4.8 s
+    (search was not changed; these are run-to-run differences).
+  Causes measured on HEAD's plans:
+    (a) every page LEFT JOINed the GROUP BY of all live replies (Parallel Seq Scan of 975k rows plus a
+        HashAggregate of 101k groups, ~300 ms), even when neither the order nor a filter used the counts;
+    (b) `LEFT JOIN users u ON p.posted_by_id = u.id::text` cannot use users_pkey. On a newest page it ran a
+        Materialize plus Seq Scan of users, rescanned for each listed post (19,252 rows x 20). On FindByID
+        and a reply page it ran one users scan per call;
+    (c) sort=hot computed LOG(...) and the decay in numeric arithmetic for every candidate post (whole
+        statement 3.1 s; 1.0 s in float8 with authors still joined first; top 200 identical, checked in SQL);
+    (d) has_answer read answers_count, so both the total and the page needed every post's counts.
+  Variants measured in psql (variants/*.log, with results compared):
+    page in a derived table plus LATERAL counts: newest 498 -> 7.4 ms, page 200 26.8 ms;
+    the same without the derived table: 1,031 ms (it counted replies for all 4,000 OFFSET rows);
+    with an index on users((id::text)): 0.72 ms, with the users lookup by Index Scan;
+    LATERAL counts over every candidate for hot: 5.2 s, slower than the aggregate, so count-dependent sorts keep it;
+    has_answer as [NOT] EXISTS on the answer bucket: unanswered page 278 -> 0.75 ms; answered page 5 6.6 ms;
+      totals 333 -> 169 ms and 261 -> 131 ms; both versions return the same 128,290 posts.
+  Users join decision: an expression index rather than a rewrite to `u.id = p.author_human_id`. The index
+    keeps every join's meaning byte for byte. posts_resolve_author matches the uuid case-insensitively
+    (~*) and sets author_human_id to the lowercased uuid, so the two joins could differ on an upper-case
+    posted_by_id. The index also serves the ~40 other `= u.id::text` joins and lookups (replies,
+    FindByID, search, leaderboards, account_bans, create_counts) with no code change.
+
+WHAT CHANGED [REAL, git status --porcelain: 6 M + 4 ??; git diff --stat 40+/214-, plus the new files]:
+  M backend/internal/db/posts.go (825 -> 621 lines): PostRepository.List was MOVED out, unchanged at that
+    point (only its now-unused "strings" import dropped). posts.go is no longer on the >800 list.
+  ?? backend/internal/db/posts_list.go (207): List, changed from the moved original as follows (diffed
+    against the cut copy /tmp/solvr_idx77_s13/list_head.go.txt):
+    - The main query is `SELECT ... FROM (SELECT p.* FROM posts p [counts] WHERE ... ORDER BY ... LIMIT
+      OFFSET) p LEFT JOIN users/agents ... postPageReplyCountsJoin [viewer vote] ORDER BY <same order>`.
+      [counts] is the old all-replies aggregate (postReplyCountsJoin), used only when the order reads
+      reply counts (byCounts: hot, answers, approaches).
+    - hot: the same formula, with 0.01::float8, 1::float8, EXTRACT(...)::float8 and 45000.0::float8.
+    - has_answer: the answerCountFilter (COALESCE(rc.ans,0) > 0 / = 0, applied after the join) is
+      replaced by appendHasAnswerFilter in the WHERE conditions. The total is now always
+      `SELECT COUNT(*) FROM posts p WHERE ...`.
+  M backend/internal/db/posts_reply_counts.go (+13): new postPageReplyCountsJoin. It is a LEFT JOIN
+    LATERAL with the same three bucket COUNT FILTERs over `r.post_id = p.id AND r.deleted_at IS NULL`.
+    postReplyCountsJoin is unchanged; FindByID and search still use it. On FindByID the planner already
+    pushes p.id into it (GroupAggregate over idx_replies_post).
+  M backend/internal/db/posts_list_filters.go (+17): appendHasAnswerFilter adds `[NOT] EXISTS (SELECT 1
+    FROM replies r WHERE r.post_id = p.id AND r.deleted_at IS NULL AND <replyAnswerBucket>)`. This holds
+    exactly when answers_count > 0 / = 0, because every live reply lands in one bucket.
+  ?? backend/migrations/000125_users_id_text_index.{up,down}.sql: CREATE INDEX IF NOT EXISTS
+    idx_users_id_text ON users ((id::text)) / DROP INDEX IF EXISTS. The header gives the measurements and
+    the reason for not rewriting to the uuid columns.
+  M backend/cmd/cutover/main.go: --expect-version default 124 -> 125.
+  M backend/cmd/cutover/main_test.go: the same version bump in the expectations (124 -> 125), as slice 11
+    did for 124. M backend/internal/db/cutover_rollback_test.go: 40 -> 41 down migrations
+    "000125..000085". These change only the version numbers; nothing in them was weakened.
+  ?? backend/internal/db/posts_list_scale_test.go (328, package db, scratch DB):
+    TestPostList_AtGrowthVolumeEveryPageMatchesItsDefinitionAndReadsOnlyWhatItNeeds. It seeds 20k users,
+    2k agents (a third owned by humans) and 60k posts one minute apart (60% human, 5% family scoped to
+    the viewer, 3% deleted, 1% pending). It then seeds 300k replies (half on every 100th post; human,
+    agent and system authors; approaches and comments), child replies, deleted replies, and votes by the
+    viewer. Ten cases: newest, newest page 40, votes, type+tag, viewer with family and votes, hot,
+    answers, approaches, unanswered, answered. Each page must EQUAL referencePostList, which is the old
+    query written out plainly: all-replies aggregate, u.id::text join, numeric hot. The comparison
+    covers the full PostWithAuthor, every field. The test then EXPLAINs (ANALYZE, BUFFERS, FORMAT JSON)
+    every captured statement. No statement may Seq Scan users. A statement whose order or total does not
+    need reply counts may not Seq Scan replies, and must read under a quarter of the replies table's
+    pages. Cases that sort or filter by counts must cost <= 4 three-bucket reply-count aggregates.
+  No test deleted, skipped or loosened. Existing tests edited: only the three cutover version numbers above.
+
+VERIFICATION [this session; DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test (local
+  docker solvr-postgres). solvr_test was migrated 124 -> 125 this session (125|f). The scale test makes
+  its own scratch DB. Logs are in /tmp/solvr_idx77_s13/]:
+  [TEST] RED (tdd/red.log, HEAD code): all 10 cases FAIL :306 "statement 1 scans users". Every
+    equality check before that line PASSED, so the reference definition equals HEAD's output on every
+    case. HEAD statement 1 read replies 6,335 buffers (the whole table) and users 399 on every case; hot
+    took 906 ms against a 48 ms aggregate.
+  [TEST] GREEN (tdd/green2.log): 10/10 PASS, 0 SKIP. The newest page reads replies 70, users 72,
+    agents 47 buffers. The hot, answers and approaches pages still aggregate replies (by design) and
+    look users up by index. Unanswered / answered: the total semi-joins replies once; the page reads
+    162 / 1,190 reply buffers. Times against a 49 ms aggregate: newest 25 ms, page 40 16, votes 37,
+    hot 134, answers 132, approaches 102, unanswered 38, answered 53. The first GREEN run (tdd/green.log)
+    failed unanswered/answered on the timing bound (218 / 189 ms, still two full aggregates). That
+    led to the EXISTS rewrite, measured in the spike first (above).
+  MUTATIONS [TEST] (mut/mut.py, M*.log; sources restored, `shasum -c mut/orig.sha` OK on all 4 files):
+    M1 hot in numeric arithmetic again -> :322 765 ms > 192 ms bound;
+    M3 page counts include deleted replies -> :306 not equal (newest, page 40, votes...);
+    M4 has_answer EXISTS on the approach bucket -> :306 not equal (unanswered, answered);
+    M5 users joined inside the page subquery -> :313 "scans users" (votes, hot, answers);
+    M6 migration 000125 held out -> :313 "scans users" (newest, page 40, votes...);
+    M2b page counts from postReplyCountsJoin outside the subquery -> "scans replies it does not need";
+    M2 (always put postReplyCountsJoin inside the page subquery) PASSED. It is an equivalent mutant:
+      M2.log shows newest at 69 reply buffers with no Seq Scan, because Postgres removes an
+      unreferenced LEFT JOIN to a subquery grouped by the join key. The byCounts switch stays anyway,
+      so the code does not depend on that planner rule.
+  [TEST] FULL BACKEND (once): `go test ./... -count=1 -p 1 -v -timeout 45m` on solvr_test at 125 ->
+    full.log, exit 1. Only internal/api and internal/db FAIL, as in the baseline. 3290 top-level PASS,
+    68 FAIL, 13 SKIP. Against slice 12's full.log (/tmp/solvr_idx77_s12/full.log): 67 of the 68 FAILs
+    are the same tests; 0 are gone. 1 is new: TestAgentClaim_RetriesAndRacesLinkTheAgentOnce/several_
+    humans_race_one_token at router_agent_claim_retry_test.go:129 "failed to create test user":
+    duplicate key "users_username_key". createRoomTestUser (router_rooms_test.go:63) names users
+    roomtest_<UnixNano % 1,000,000>. solvr_test held 0 roomtest_ users after the run, so the clash was
+    between users created in the same run [INFERRED: on macOS the wall clock has microsecond resolution,
+    so that suffix takes ~1,000 values]. Re-ran that one test alone (agentclaim_rerun.log): PASS, both
+    subtests. A unique-username clash cannot come from a non-unique users index, so this is fixture
+    flakiness, not this change. SKIP set = baseline minus TestCommentsCount_FeedShowsCommentCount (its
+    GROQ-timeout t.Skip did not fire this time). The new scale test PASSES in full.log (39.97 s).
+    cmd/cutover ok (TestParseOptions_*, TestCheckSchema_* PASS); TestCutoverRollback_DownPathKeepsOr
+    ArchivesEveryPostCutoverWrite PASS (41 down steps).
+  [REAL] gofmt -l clean on every touched Go file; go build ./... ok; go vet ./internal/db ok.
+    check-file-size.sh "Found 33 file(s) exceeding 800 lines" (was 34: posts.go left the list); none of
+    the touched or new files is listed.
+  NOT RUN: frontend (no frontend file touched; GET /v1/posts response shape unchanged); golangci-lint
+    (config/version mismatch, slice 31).
+  Leftovers [REAL]: I dropped solvr_idx77_s13_spike. The scale test's scratch DBs drop themselves.
+    solvr_idx77_s12b_clean, solvr_idx77_s12v_clean and solvr_scratch_1790853180756789000 already
+    existed at this session's start (left alone for the owner). No zz_* file in the tree.
+
+FINDINGS, NOT FIXED [REAL, spike plans_new.txt]:
+  - The exact total of GET /v1/posts (`SELECT COUNT(*) FROM posts p WHERE ...`) is now most of a
+    newest page's cost: 25-40 ms Parallel Seq Scan at 200k posts (the page statement is 0.4 ms).
+  - Count-dependent sorts (hot 597 ms, answers 408, approaches 431 at 1M replies) and the has_answer
+    totals (125-173 ms) still read every post's replies. Only stored counts would bound them: that is
+    step 2/3 territory (reply counts as a maintained projection with a rebuild path).
+  - Keyword search (searchPosts) has no LIMIT. It ts_ranks, sorts and returns every match (4.4 s and an
+    external-merge sort for a term in all 184k posts), then pages in Go. It also joins
+    postReplyCountsJoin over all replies.
+  - votes/top sort: 73 ms top-N over every post. No index added: votes rewrite posts.upvotes, and an
+    expression index on upvotes - downvotes would make each vote a non-HOT update.
+
+REMAINING for idx 77 (next slices, in order) [UNVERIFIED plan]:
+  step 1: room activity (ListFiltered participants, ListPublicRoomFeed, GetRoomPulse; measured in slice
+    12), and the post-listing findings above (exact total, search LIMIT).
+  step 4: raw eligible search events vs time buckets + retention windows; no summed distincts.
+  step 5: reconcile counters/sampled search after migration and rebuilds.
+  step 6: no new infrastructure without a measured bottleneck. This slice added one index, for a
+    measured bottleneck, and no cache or service.
+
+git status at journal time [REAL, git status --porcelain]: the 6 M + 4 ?? files listed above, plus
+  M progress.txt (this entry). spec.json unchanged; idx 77 passes stays false.
+
+UAT (for when idx 77 closes, not now): as slice 11's list, plus migration 000125 on production, before
+  or with the API deploy that carries this slice. It is a plain CREATE INDEX on users (358 rows in the
+  2026-09-29 dump; ShareLock for milliseconds). After the deploy, open https://solvr.dev/posts (newest
+  and top) and a post with replies, and confirm both load and show authors and reply counts.

@@ -26,6 +26,19 @@ const (
 			GROUP BY r.post_id
 		) rc ON rc.post_id = p.id`
 
+	// postPageReplyCountsJoin joins the same rc onto each row of p from that post's own replies
+	// (idx_replies_post), for a page whose rows are already chosen: its cost follows the page,
+	// not the replies table. A post without replies gets zeros.
+	postPageReplyCountsJoin = `
+		LEFT JOIN LATERAL (
+			SELECT
+				COUNT(*) FILTER (WHERE ` + replyAnswerBucket + `) AS ans,
+				COUNT(*) FILTER (WHERE ` + replyApproachBucket + `) AS app,
+				COUNT(*) FILTER (WHERE NOT ` + replyAnswerBucket + ` AND NOT (` + replyApproachBucket + `)) AS cmt
+			FROM replies r
+			WHERE r.post_id = p.id AND r.deleted_at IS NULL
+		) rc ON true`
+
 	// postReplyCountColumns selects the buckets in the scan order of scanPostWithAuthorRows.
 	postReplyCountColumns = `COALESCE(rc.ans, 0) as answers_count,
 			COALESCE(rc.app, 0) as approaches_count,

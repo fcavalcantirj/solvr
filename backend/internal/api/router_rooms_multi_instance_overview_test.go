@@ -73,7 +73,7 @@ func TestRoomOverview_VisibilityChangeOnOneInstanceClearsEveryInstanceSnapshot(t
 	require.True(t, overviewShows(t, a, slug), "A previews the public room")
 	require.True(t, overviewShows(t, b, slug), "B previews the public room (now cached on B)")
 
-	status, out := doJSON(t, "PATCH", a.ts.URL+"/v1/rooms/"+slug, ownerJWT, `{"is_private":true}`)
+	status, out := doJSONAtCurrentVersion(t, "PATCH", a.ts.URL+"/v1/rooms/"+slug, ownerJWT, `{"is_private":true}`)
 	require.Equal(t, http.StatusOK, status, "make private through A: %v", out)
 
 	require.False(t, overviewShows(t, a, slug), "A drops the room at once")
@@ -98,7 +98,7 @@ func TestRoomOverview_InvalidationLostDuringListenerGapIsCaughtUpOnReconnect(t *
 	require.GreaterOrEqual(t, killed, 2, "both instances' listeners were interrupted")
 
 	// Made private while no instance listens: B never hears this notice.
-	status, out := doJSON(t, "PATCH", a.ts.URL+"/v1/rooms/"+slug, ownerJWT, `{"is_private":true}`)
+	status, out := doJSONAtCurrentVersion(t, "PATCH", a.ts.URL+"/v1/rooms/"+slug, ownerJWT, `{"is_private":true}`)
 	require.Equal(t, http.StatusOK, status, "make private through A: %v", out)
 
 	require.True(t, waitOverviewHides(t, b, slug, 6*time.Second),

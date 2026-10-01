@@ -250,12 +250,16 @@ func TestOpenAPIOperations_CreatesAreRetrySafe(t *testing.T) {
 
 func TestOpenAPIOperations_EditsAreConditionalAndReadsHandBackTheValidator(t *testing.T) {
 	spec := servedSpec(t)
+	assert.Equal(t, true, at(t, spec, "components", "parameters", "IfMatch", "required"),
+		"If-Match is a required parameter of every edit that takes it (idx 74 step 5)")
 
 	for _, path := range []string{"/posts/{id}", "/rooms/{slug}", "/replies/{id}"} {
 		patch := operation(t, spec, "patch", path)
 		assert.True(t, hasParamRef(patch, "IfMatch"), "PATCH %s must accept If-Match", path)
 		assert.Equal(t, "#/components/responses/PreconditionFailed", refName(at(t, patch, "responses", "412")),
 			"PATCH %s: a stale If-Match is 412", path)
+		assert.Equal(t, "#/components/responses/PreconditionRequired", refName(at(t, patch, "responses", "428")),
+			"PATCH %s: an edit without If-Match is 428", path)
 		assert.Equal(t, "#/components/headers/ETag", refName(at(t, patch, "responses", "200", "headers", "ETag")),
 			"PATCH %s: the edit returns the new validator", path)
 
@@ -293,12 +297,13 @@ func TestOpenAPIOperations_EveryOperationNamesItsErrorRows(t *testing.T) {
 	spec := servedSpec(t)
 	names := map[string]string{
 		"400": "BadRequest", "401": "Unauthorized", "403": "Forbidden", "404": "NotFound", "409": "Conflict",
-		"412": "PreconditionFailed", "413": "PayloadTooLarge", "429": "RateLimited", "503": "ServiceUnavailable",
+		"412": "PreconditionFailed", "413": "PayloadTooLarge", "428": "PreconditionRequired", "429": "RateLimited",
+		"503": "ServiceUnavailable",
 	}
 	want := map[string][]string{
 		"post /rooms":                          {"400", "401", "409", "413", "503"},
 		"get /rooms/{slug}":                    {"401", "403", "404"},
-		"patch /rooms/{slug}":                  {"400", "401", "403", "404", "412", "413"},
+		"patch /rooms/{slug}":                  {"400", "401", "403", "404", "412", "413", "428"},
 		"delete /rooms/{slug}":                 {"401", "403", "404"},
 		"get /rooms/{slug}/entries":            {"400", "401", "403", "404"},
 		"post /rooms/{slug}/entries":           {"400", "401", "403", "404", "409", "413", "429"},
@@ -308,10 +313,10 @@ func TestOpenAPIOperations_EveryOperationNamesItsErrorRows(t *testing.T) {
 		"get /replies":                         {"400"},
 		"post /posts/{id}/replies":             {"400", "401", "404", "409", "413", "503"},
 		"get /replies/{id}":                    {"404"},
-		"patch /replies/{id}":                  {"400", "401", "403", "404", "412", "413"},
+		"patch /replies/{id}":                  {"400", "401", "403", "404", "412", "413", "428"},
 		"delete /replies/{id}":                 {"401", "403", "404"},
 		"post /posts":                          {"400", "401", "409", "413", "503"},
-		"patch /posts/{id}":                    {"400", "401", "403", "404", "412", "413"},
+		"patch /posts/{id}":                    {"400", "401", "403", "404", "412", "413", "428"},
 	}
 	for key, statuses := range want {
 		parts := strings.SplitN(key, " ", 2)

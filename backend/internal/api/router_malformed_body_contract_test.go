@@ -21,8 +21,8 @@ import (
 // without a path parameter as they are, and routes under /v1/posts, /v1/replies, /v1/rooms
 // and /r with a live post, reply or room so the handler reaches its body. Anonymous callers,
 // an agent key, a human JWT, the room owner's agent key and its per-agent room token each
-// make every call. A route
-// that never reads a body answers 2xx/401/403/404 and is not judged here.
+// make every call; a PATCH carries the If-Match of the caller's own read. A route
+// that never reads a body answers 2xx/401/403/404/428 and is not judged here.
 func TestStatusContract_MalformedJSONBodyIsOneValidationError(t *testing.T) {
 	ts, router, pool := newStatusContractServer(t)
 	roomPreCleanup(t, pool)
@@ -85,7 +85,13 @@ func TestStatusContract_MalformedJSONBodyIsOneValidationError(t *testing.T) {
 			return uuid.NewString()
 		})
 		for who, bearer := range callers {
-			got, err := callStatusContract(client, r.method, ts.URL+path, bearer, `{"broken":`)
+			// An edit carries the If-Match of the caller's own read, as a client's does
+			// since idx 74 step 5; without one it stops at 428 before reading its body.
+			ifMatch := ""
+			if r.method == "PATCH" {
+				ifMatch = currentETag(t, ts.URL+path, bearer)
+			}
+			got, err := callStatusContractIfMatch(client, r.method, ts.URL+path, bearer, `{"broken":`, ifMatch)
 			require.NoError(t, err, "%s %s (%s)", r.method, r.pattern, who)
 			if got.status != http.StatusBadRequest {
 				continue

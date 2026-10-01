@@ -69,6 +69,16 @@ describe('PostEditor', () => {
     await waitFor(() => expect(push).toHaveBeenCalledWith('/posts/p1'));
   });
 
+  it('sends the version it loaded as If-Match, so a newer edit is never overwritten', async () => {
+    getPost.mockResolvedValue({ data: makePost(), etag: '"1790000000000001"' });
+    updatePost.mockResolvedValue({ data: makePost() });
+    render(<PostEditor postId="p1" />);
+    await waitFor(() => expect(screen.getByLabelText(/title/i)).toHaveValue('Original title here'));
+    fireEvent.click(screen.getByRole('button', { name: /save/i }));
+    await waitFor(() => expect(updatePost).toHaveBeenCalled());
+    expect(updatePost.mock.calls[0][2]).toBe('"1790000000000001"');
+  });
+
   it('displays the API error message on a failed save', async () => {
     updatePost.mockRejectedValue(new Error('You are not the author'));
     render(<PostEditor postId="p1" />);

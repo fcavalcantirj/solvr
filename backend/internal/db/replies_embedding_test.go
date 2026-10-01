@@ -85,15 +85,15 @@ func TestReplyRepository_UpdateReplacesOrClearsTheEmbedding(t *testing.T) {
 	require.NoError(t, err)
 
 	// A non-author edit changes nothing, the vector included.
-	_, err = repo.Update(ctx, created.ID, models.AuthorTypeAgent, "intruder", "hacked", &second)
+	_, err = repo.Update(ctx, created.ID, models.AuthorTypeAgent, "intruder", "hacked", &second, nil)
 	require.ErrorIs(t, err, ErrReplyForbidden)
 	require.Equal(t, first, replyEmbedding(t, pool, ctx, created.ID))
 
-	_, err = repo.Update(ctx, created.ID, models.AuthorTypeAgent, author, "edited body", &second)
+	_, err = repo.Update(ctx, created.ID, models.AuthorTypeAgent, author, "edited body", &second, nil)
 	require.NoError(t, err)
 	require.Equal(t, second, replyEmbedding(t, pool, ctx, created.ID), "an edit with a fresh vector replaces the old one")
 
-	_, err = repo.Update(ctx, created.ID, models.AuthorTypeAgent, author, "edited again", nil)
+	_, err = repo.Update(ctx, created.ID, models.AuthorTypeAgent, author, "edited again", nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, "", replyEmbedding(t, pool, ctx, created.ID), "an edit without a fresh vector must clear the stale one")
 }

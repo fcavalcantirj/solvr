@@ -31,7 +31,7 @@ func TestRoomManageAuthority_FamilyAgentManagesUntilUnlinked(t *testing.T) {
 	siblingID, siblingKey := registerRoomTestAgent(t, ts)
 	claimAgentToUser(t, pool, siblingID, userID)
 
-	resp := doRoomRequest(t, "PATCH", ts.URL+"/v1/rooms/"+slug, `{"display_name":"Renamed by Sibling"}`, siblingKey)
+	resp := doRoomRequestAtCurrentVersion(t, "PATCH", ts.URL+"/v1/rooms/"+slug, `{"display_name":"Renamed by Sibling"}`, siblingKey)
 	resp.Body.Close()
 	require.Equal(t, http.StatusOK, resp.StatusCode, "family agent must manage the room")
 
@@ -111,7 +111,7 @@ func TestRoomManageAuthority_HumanOwnerFollowsMembership(t *testing.T) {
 	resp.Body.Close()
 	assert.Equal(t, http.StatusForbidden, resp.StatusCode, "a demoted former owner must not manage")
 
-	resp = doRoomRequest(t, "PATCH", ts.URL+"/v1/rooms/"+slug, `{"display_name":"New Owner"}`, newOwnerJWT)
+	resp = doRoomRequestAtCurrentVersion(t, "PATCH", ts.URL+"/v1/rooms/"+slug, `{"display_name":"New Owner"}`, newOwnerJWT)
 	resp.Body.Close()
 	assert.Equal(t, http.StatusOK, resp.StatusCode, "the new owner manages")
 }

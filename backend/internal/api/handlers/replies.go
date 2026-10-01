@@ -26,7 +26,9 @@ type RepliesRepositoryInterface interface {
 	// ListPageByAuthor pages one author's replies across the posts the viewer may read.
 	ListPageByAuthor(ctx context.Context, params models.ReplyAuthorPageParams) ([]models.ReplyWithPost, int, error)
 	// Update writes the new body with its embedding; a nil embedding clears the stored vector.
-	Update(ctx context.Context, id string, authorType models.AuthorType, authorID, body string, embedding *string) (*models.Reply, error)
+	// The write lands only while the reply is still at expected (its updated_at); nil writes
+	// unconditionally. A reply that moved is a *models.VersionConflictError.
+	Update(ctx context.Context, id string, authorType models.AuthorType, authorID, body string, embedding *string, expected *time.Time) (*models.Reply, error)
 	Delete(ctx context.Context, id string, authorType models.AuthorType, authorID string) error
 	Vote(ctx context.Context, replyID, voterType, voterID, direction string) error
 	GetUserVote(ctx context.Context, replyID, voterType, voterID string) (*string, error)
@@ -222,9 +224,9 @@ func (h *RepliesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Read the reply's current version before writing so an opt-in If-Match
-	// precondition can reject a stale edit (idx 73 step 5). The author-only
-	// write check stays authoritative inside repo.Update below.
+	// Read the reply's current version before writing so the required If-Match
+	// precondition can refuse a missing or stale one (idx 74 step 5). The
+	// author-only write check stays authoritative inside repo.Update below.
 	existing, err := h.repo.GetByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, models.ErrReplyNotFound) {
@@ -235,17 +237,27 @@ func (h *RepliesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeRepliesError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get reply")
 		return
 	}
-	if existing != nil && enforceReplyIfMatch(w, r, existing.UpdatedAt) {
+	if existing == nil {
+		writeRepliesError(w, http.StatusNotFound, "NOT_FOUND", "reply not found")
 		return
 	}
 	// Refuse a non-author before paying for an embedding; repo.Update re-checks.
-	if existing != nil && (existing.AuthorType != authInfo.AuthorType || existing.AuthorID != authInfo.AuthorID) {
+	if existing.AuthorType != authInfo.AuthorType || existing.AuthorID != authInfo.AuthorID {
 		writeRepliesError(w, http.StatusForbidden, "FORBIDDEN", "you can only modify your own replies")
+		return
+	}
+	expected, ok := enforceReplyIfMatch(w, r, existing.UpdatedAt)
+	if !ok {
 		return
 	}
 
 	embedding := h.embedBody(r.Context(), req.Body, id)
-	updated, err := h.repo.Update(r.Context(), id, authInfo.AuthorType, authInfo.AuthorID, req.Body, embedding)
+	// The write lands only at the version the precondition checked, so an
+	// edit that lost a race to another writer is 412, not a lost update.
+	updated, err := h.repo.Update(r.Context(), id, authInfo.AuthorType, authInfo.AuthorID, req.Body, embedding, expected)
+	if answerVersionConflict(w, err, "reply", writeRepliesError) {
+		return
+	}
 	if err != nil {
 		h.writeMutationError(w, err, "update", id)
 		return

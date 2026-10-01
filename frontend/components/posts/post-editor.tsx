@@ -17,6 +17,9 @@ export function PostEditor({ postId }: { postId: string }) {
   const [body, setBody] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
+  // The version this form loaded: the edit sends it back as If-Match, so it can never
+  // overwrite a newer edit (the API answers 412 with its own message instead).
+  const [version, setVersion] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -30,6 +33,7 @@ export function PostEditor({ postId }: { postId: string }) {
       setTitle(res.data.title);
       setBody(res.data.description);
       setTags(res.data.tags ?? []);
+      setVersion(res.etag ?? null);
     } catch {
       setLoadError(true);
     } finally {
@@ -63,7 +67,7 @@ export function PostEditor({ postId }: { postId: string }) {
     setError(null);
     setSaving(true);
     try {
-      await api.updatePost(postId, { title, description: body, tags });
+      await api.updatePost(postId, { title, description: body, tags }, version);
       router.push(`/posts/${postId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save your changes. Please try again.");

@@ -281,8 +281,12 @@ func (r *ReplyRepository) CountByPost(ctx context.Context, postID string) (int, 
 // Update edits a reply's body. Only the author may edit; author identity,
 // creation time, votes, and provenance are never reset. embedding is the vector
 // literal of the new body; nil clears the stored vector so a stale one never
-// describes edited text (the backfill re-embeds it).
-func (r *ReplyRepository) Update(ctx context.Context, id string, authorType models.AuthorType, authorID, body string, embedding *string) (*models.Reply, error) {
+// describes edited text (the backfill re-embeds it). expected is the version
+// (updated_at) the caller read: the write lands only while the reply is still at
+// it, in the same statement, so two edits that read one version cannot both land
+// (spec.json idx 74 step 5); it returns a *models.VersionConflictError with the
+// current version otherwise. A nil expected writes unconditionally.
+func (r *ReplyRepository) Update(ctx context.Context, id string, authorType models.AuthorType, authorID, body string, embedding *string, expected *time.Time) (*models.Reply, error) {
 	owner, err := r.loadOwner(ctx, id)
 	if err != nil {
 		return nil, err
@@ -294,17 +298,37 @@ func (r *ReplyRepository) Update(ctx context.Context, id string, authorType mode
 	row := r.pool.QueryRow(ctx, `
 		UPDATE replies SET body = $2, embedding = $3::vector, updated_at = NOW()
 		WHERE id = $1 AND deleted_at IS NULL
+		  AND ($4::timestamptz IS NULL OR updated_at = $4::timestamptz)
 		RETURNING id, post_id, parent_reply_id, author_type, author_id, body, upvotes, downvotes,
-		          legacy_type, legacy_id, provenance, created_at, updated_at, deleted_at`, id, body, embedding)
+		          legacy_type, legacy_id, provenance, created_at, updated_at, deleted_at`, id, body, embedding, expected)
 	updated, err := scanReply(row)
 	if err != nil {
 		if err.Error() == "no rows in result set" {
+			if expected != nil {
+				return nil, r.versionConflictOrNotFound(ctx, id)
+			}
 			return nil, models.ErrReplyNotFound
 		}
 		LogQueryError(ctx, "Reply.Update", "replies", err)
 		return nil, fmt.Errorf("update reply: %w", err)
 	}
 	return updated, nil
+}
+
+// versionConflictOrNotFound explains a conditional reply write that matched no
+// row: a live reply that moved is a version conflict, anything else not found.
+func (r *ReplyRepository) versionConflictOrNotFound(ctx context.Context, id string) error {
+	var current time.Time
+	err := r.pool.QueryRow(ctx,
+		"SELECT updated_at FROM replies WHERE id = $1 AND deleted_at IS NULL", id).Scan(&current)
+	if err == nil {
+		return &models.VersionConflictError{Current: current}
+	}
+	if err.Error() == "no rows in result set" {
+		return models.ErrReplyNotFound
+	}
+	LogQueryError(ctx, "Reply.Update.version", "replies", err)
+	return fmt.Errorf("read reply version: %w", err)
 }
 
 // Delete soft-deletes a reply. Only the author may delete it.

@@ -28,7 +28,8 @@ func TestModeration_PatchStatusCannotPublishAnUnapprovedPost(t *testing.T) {
 
 		calls := mod.GetCalls()
 		mod.QueueResults(approved())
-		answer, err := callStatusContract(http.DefaultClient, http.MethodPatch, ts.URL+"/v1/posts/"+postID, key, `{"status":"open"}`)
+		postURL := ts.URL + "/v1/posts/" + postID
+		answer, err := callStatusContractIfMatch(http.DefaultClient, http.MethodPatch, postURL, key, `{"status":"open"}`, currentETag(t, postURL, key))
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, answer.status, answer.body)
 		var out struct {

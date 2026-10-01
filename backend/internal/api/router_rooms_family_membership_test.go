@@ -67,7 +67,7 @@ func TestRoomOwnership_HumanOwnerMembershipIsAuthoritative(t *testing.T) {
 	require.Equal(t, http.StatusForbidden, getStatus(t, ts.URL+"/v1/rooms/"+slug, ownerJWT),
 		"former human owner can no longer read the closed room")
 
-	patch = doRoomRequest(t, "PATCH", ts.URL+"/v1/rooms/"+slug, `{"display_name":"Heir Renamed"}`, heirKey)
+	patch = doRoomRequestAtCurrentVersion(t, "PATCH", ts.URL+"/v1/rooms/"+slug, `{"display_name":"Heir Renamed"}`, heirKey)
 	patch.Body.Close()
 	require.Equal(t, http.StatusOK, patch.StatusCode, "heir owner manages the room")
 }

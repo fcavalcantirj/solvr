@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/fcavalcantirj/solvr/internal/db"
@@ -135,9 +137,10 @@ func TestUpdateRoom_MatchingIfMatchThenReplayRejected(t *testing.T) {
 	}
 }
 
-// TestUpdateRoom_NoIfMatchStillApplies verifies If-Match is opt-in: an edit
-// without the header is applied as before.
-func TestUpdateRoom_NoIfMatchStillApplies(t *testing.T) {
+// TestUpdateRoom_MissingIfMatchIs428 verifies If-Match is required (spec.json
+// idx 74 step 5, owner decision 8 of 2026-09-30): an edit without it is 428
+// PRECONDITION_REQUIRED, persists nothing, and hands out no ETag.
+func TestUpdateRoom_MissingIfMatchIs428(t *testing.T) {
 	pool := getTestPool(t)
 	if pool == nil {
 		t.Skip("DATABASE_URL not set, skipping integration test")
@@ -147,11 +150,78 @@ func TestUpdateRoom_NoIfMatchStillApplies(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	handler.UpdateRoom(w, roomPatchRequest(room.Slug, `{"description":"unconditional"}`, ""))
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusPreconditionRequired {
+		t.Fatalf("expected 428, got %d: %s", w.Code, w.Body.String())
 	}
-	if w.Header().Get("ETag") == "" {
-		t.Error("a successful edit must echo the new ETag")
+	if code := errorCode(t, w); code != "PRECONDITION_REQUIRED" {
+		t.Errorf("error.code = %q, want PRECONDITION_REQUIRED", code)
+	}
+	if got := w.Header().Get("ETag"); got != "" {
+		t.Errorf("a 428 must not hand out the current ETag, got %q", got)
+	}
+	stored, err := db.NewRoomRepository(pool).GetBySlug(context.Background(), room.Slug)
+	if err != nil {
+		t.Fatalf("GetBySlug: %v", err)
+	}
+	if !stored.UpdatedAt.Equal(room.UpdatedAt) || (stored.Description != nil && *stored.Description == "unconditional") {
+		t.Errorf("an edit without If-Match changed the room: %v %v", stored.UpdatedAt, stored.Description)
+	}
+}
+
+// TestUpdateRoom_NonManagerWithoutIfMatchGetsForbidden verifies the manage
+// check runs before the precondition is required: 403, not 428.
+func TestUpdateRoom_NonManagerWithoutIfMatchGetsForbidden(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	room := newDeliveryRoom(t, pool)
+	handler := newArchiveRoomHandler(pool)
+
+	req := httptest.NewRequest(http.MethodPatch, "/v1/rooms/"+room.Slug, strings.NewReader(`{"description":"x"}`))
+	w := httptest.NewRecorder()
+	handler.UpdateRoom(w, userCtx(withSlug(req, room.Slug)))
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestUpdateRoom_ConcurrentEditsAtOneVersionHaveOneWinner verifies the check
+// and the write are one decision: edits racing with the same current If-Match
+// cannot all pass the check and then overwrite each other. Exactly one is
+// applied; every other one is 412.
+func TestUpdateRoom_ConcurrentEditsAtOneVersionHaveOneWinner(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	room := newDeliveryRoom(t, pool)
+	handler := newArchiveRoomHandler(pool)
+	version := roomETag(room.UpdatedAt)
+
+	const writers = 12
+	codes := make(chan int, writers)
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for i := 0; i < writers; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			<-start
+			w := httptest.NewRecorder()
+			handler.UpdateRoom(w, roomPatchRequest(room.Slug, `{"description":"writer `+strconv.Itoa(i)+`"}`, version))
+			codes <- w.Code
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+	close(codes)
+	counts := map[int]int{}
+	for c := range codes {
+		counts[c]++
+	}
+	if counts[http.StatusOK] != 1 || counts[http.StatusPreconditionFailed] != writers-1 {
+		t.Errorf("%d concurrent edits at one version: %v; want exactly one 200 and %d x 412", writers, counts, writers-1)
 	}
 }
 

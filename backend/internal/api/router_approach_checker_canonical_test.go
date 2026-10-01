@@ -57,9 +57,15 @@ func TestPostsPatchSolved_ChecksTheCanonicalSucceededApproach(t *testing.T) {
 
 	router := NewRouter(pool, nil, nil, nil)
 	patchSolved := func(postID string) *httptest.ResponseRecorder {
+		// Read first: the edit sends the ETag back as If-Match (required since idx 74 step 5).
+		read := httptest.NewRecorder()
+		get := httptest.NewRequest(http.MethodGet, "/v1/posts/"+postID, nil)
+		get.Header.Set("Authorization", "Bearer "+jwt)
+		router.ServeHTTP(read, get)
 		req := httptest.NewRequest(http.MethodPatch, "/v1/posts/"+postID, strings.NewReader(`{"status":"solved"}`))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+jwt)
+		req.Header.Set("If-Match", read.Header().Get("ETag"))
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 		return rec

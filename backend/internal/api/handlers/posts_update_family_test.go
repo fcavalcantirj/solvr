@@ -31,6 +31,7 @@ func TestUpdatePost_FamilyContentChange_NoReModeration(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]any{"title": "Edited Family Title That Is Long Enough"})
 	req := httptest.NewRequest(http.MethodPatch, "/v1/posts/post-fam", bytes.NewReader(body))
+	req.Header.Set("If-Match", postETag(post.UpdatedAt)) // required since idx 74 step 5
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "post-fam")
@@ -72,6 +73,7 @@ func TestUpdatePost_PublicContentChange_ReModerates(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]any{"title": "Edited Public Title That Is Long Enough"})
 	req := httptest.NewRequest(http.MethodPatch, "/v1/posts/post-pub", bytes.NewReader(body))
+	req.Header.Set("If-Match", postETag(post.UpdatedAt)) // required since idx 74 step 5
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "post-pub")

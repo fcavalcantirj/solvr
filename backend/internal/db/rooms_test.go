@@ -221,7 +221,7 @@ func TestRoomRepository_Update(t *testing.T) {
 		newName := "Updated Name"
 		updated, err := repo.Update(ctx, room.ID, models.UpdateRoomParams{
 			DisplayName: &newName,
-		})
+		}, nil)
 		if err != nil {
 			t.Fatalf("Update() error = %v", err)
 		}

@@ -340,3 +340,13 @@ describe("api-endpoint-data completeness", () => {
     });
   });
 });
+
+describe("conditional edits (idx 74 step 5)", () => {
+  it("tells a reader of PATCH /replies/{id} that If-Match is required", () => {
+    const ep = findEndpoint("PATCH", "/replies/{id}");
+    expect(ep).toBeDefined();
+    expect(ep!.description).toMatch(/If-Match required/);
+    expect(ep!.response).toMatch(/428/);
+    expect(ep!.response).toMatch(/412/);
+  });
+});

@@ -200,8 +200,18 @@ func TestOpenAPIConventions_RetryAndConditionalEditContracts(t *testing.T) {
 	if at(t, cond, "stale_status") != float64(http.StatusPreconditionFailed) || at(t, cond, "stale_code") != "PRECONDITION_FAILED" {
 		t.Error("a stale If-Match is 412 PRECONDITION_FAILED")
 	}
-	if at(t, cond, "required") != false {
-		t.Error("If-Match is optional in the running API; the contract must not claim otherwise")
+	// Required since idx 74 step 5 (owner decision 8 of 2026-09-30): an edit without
+	// If-Match is 428 PRECONDITION_REQUIRED in the running API.
+	if at(t, cond, "required") != true {
+		t.Error("If-Match is required on edits in the running API; the contract must say so")
+	}
+	if at(t, cond, "missing_status") != float64(http.StatusPreconditionRequired) || at(t, cond, "missing_code") != "PRECONDITION_REQUIRED" {
+		t.Error("an edit without If-Match is 428 PRECONDITION_REQUIRED")
+	}
+	sameSet(t, "conditional_requests.applies_to", strings_(t, at(t, cond, "applies_to")),
+		[]string{"PATCH /v1/posts/{id}", "PATCH /v1/replies/{id}", "PATCH /v1/rooms/{slug}"})
+	if note, _ := at(t, cond, "note").(string); !strings.Contains(note, "428") || !strings.Contains(note, "same version") {
+		t.Errorf("the note must explain the 428 and that one of several edits at the same version wins: %q", note)
 	}
 }
 
@@ -222,7 +232,7 @@ func TestOpenAPIConventions_ReusableComponentsAndErrorEnvelope(t *testing.T) {
 		at(t, spec, "components", "headers", h, "schema")
 	}
 	for _, r := range []string{"BadRequest", "Unauthorized", "Forbidden", "NotFound", "Conflict",
-		"PreconditionFailed", "PayloadTooLarge", "RateLimited", "ServiceUnavailable"} {
+		"PreconditionFailed", "PreconditionRequired", "PayloadTooLarge", "RateLimited", "ServiceUnavailable"} {
 		at(t, spec, "components", "responses", r, "content", "application/json", "schema", "$ref")
 	}
 }

@@ -4421,3 +4421,227 @@ UAT: the retirements (idx 73 slices 1-6) ship with the cutover deploy (idx 93) �
 
 git status at journal time [REAL]: the 29 M + 4 ?? listed above, plus this entry and spec.json idx 73
   passes -> true.
+
+================================================================================
+2026-10-01 02:05 — Task idx 74 (spec.json, category api) — PASSES (set true this iteration)
+"Standardize errors, pagination, concurrency, and retry behavior across the public API"
+SLICE 25 (last): step 5 "Require version or If-Match on conflicting edits and reject stale updates",
+now buildable under OWNER DECISION 8 (2026-09-30): If-Match is REQUIRED on conflicting edits, 428 without it.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 74, 77-95, 97, 98; no open
+  URGENT. idx 24 and 67 are acceptance tasks (skipped as in every earlier entry). idx 68 still waits for
+  the owner call on step 1 and owner decision 4 (steps 5-6), per its 2026-09-30 21:50 STEP MAP. idx 74's
+  archived REMAINING list (progress-archive.txt, slice 24 and the idx 75 slice-1 entry) had left only
+  step 5's "require" as an owner call; decision 8 made it buildable. Tree clean at start; HEAD cbd57d25.
+
+SPIKE FIRST (throwaway script /tmp/solvr_idx74_s25/spike/spike.sh, deleted DB, never production)
+  [REAL, MEASURED on HEAD]: fresh DB at 118, API built from HEAD on :8099. 12 concurrent curl PATCHes
+  with one fresh If-Match: 1 x 200 / 11 x 412 on posts, replies and rooms. But 50 PATCHes fired at
+  once (curl --parallel) with one fresh If-Match: posts 15/16 x 200, replies 18/10/11 x 200, rooms
+  30/11/14 x 200 over three runs (spike_z1-3.out). Cause [REAL, code read]: the handlers read the row,
+  compared If-Match, then ran an UPDATE with no version in its WHERE, so every request that read before
+  the first commit passed the check and overwrote the previous winner: lost updates, the exact thing
+  step 5 says to reject. So this slice makes the check and the write one statement as well as making
+  the header required. (Run 3 of posts showed 50 x 200; the script did not print that run's ETag, so I
+  do not know whether it was empty there [UNVERIFIED]; runs 1-2 and every other resource are enough.)
+
+DESIGN (mine, within step 5 and decision 8):
+  - Conditional write: each repository takes an expected version (the updated_at the handler checked)
+    and adds `AND ($n::timestamptz IS NULL OR updated_at = $n::timestamptz)` to its UPDATE. No row
+    matched + expected set -> it reads the live row's updated_at: present = *models.VersionConflictError
+    {Current}, absent = the usual not-found. Handler answers that conflict 412 PRECONDITION_FAILED with
+    the winner's ETag. nil expected = unconditional (If-Match: *).
+  - Required header: no If-Match (absent or blank) = 428 PRECONDITION_REQUIRED, nothing written, NO ETag
+    in the answer (so a client cannot blindly echo it; it must read first). Stale = 412 + current ETag
+    (unchanged). "If-Match: *" stays the explicit unconditional edit (RFC 9110 semantics; documented).
+  - Order for all three resources: 401, 404, 403, then 428/412, then the body. Replies used to check the
+    precondition BEFORE the author check; I moved it after, like posts and rooms, so a non-author is told
+    403 instead of being sent to fetch an ETag. Consequence: a non-author with a stale If-Match now gets
+    403 (was 412). No test pinned the old order (TestReplies_UpdateByNonAuthorEmbedsNothing asserts 403
+    without If-Match and passes unchanged).
+  - Scope: the three resources that already expose ETags: PATCH /v1/posts/{id}, /v1/replies/{id},
+    /v1/rooms/{slug} (the same 3 routes the archived blast-radius note measured). PATCH /v1/blog/{slug},
+    /v1/agents/{id}, /v1/agents/me/identity and /v1/me stay unconditional (see OBSERVATIONS).
+
+WHAT CHANGED [REAL, git status --porcelain: 62 M + 5 ??; git diff --stat 828+/253- on tracked files]:
+  PRODUCTION (backend):
+  A internal/models/version_conflict.go (24): ErrVersionConflict + VersionConflictError{Current} (Is()).
+  A internal/db/posts_conditional.go (88): PostRepository.UpdateIfUnmodified(ctx, post, expected). The
+    UPDATE of Update was moved here byte-identical plus the version clause and the expected argument
+    (diffed: only those lines differ); versionConflictOrNotFound.
+  M internal/db/posts.go: Update now `return r.UpdateIfUnmodified(ctx, post, nil)` (868 -> 825 lines).
+  M internal/db/replies.go: Update(..., embedding, expected *time.Time) with the version clause;
+    versionConflictOrNotFound (author check stays first).
+  M internal/db/rooms.go: Update(ctx, roomID, params, expected *time.Time) with the version clause and
+    the conflict read; +"time" import.
+  M handlers/posts_concurrency.go: ifMatchCandidates, requireIfMatch (428 / 412 / expected version, nil
+    for *), answerVersionConflict (412 + winner's ETag); ifMatchIsStale keeps its contract (TestIfMatchIsStale
+    unchanged and PASS); enforceIfMatch now returns (expected, ok).
+  M handlers/replies_concurrency.go, rooms_concurrency.go: enforce*IfMatch -> requireIfMatch, comments.
+  M handlers/posts.go (786 -> 795): PostsRepositoryInterface + UpdateIfUnmodified; Update uses the
+    expected version and answerVersionConflict.
+  M handlers/replies.go: interface Update signature; GetByID returning nil now 404 (only a mock can do
+    that; the real repo returns ErrReplyNotFound); author check before the precondition; expected passed.
+  M handlers/rooms.go: expected passed to roomRepo.Update; answerVersionConflict.
+  M internal/api/openapi_conventions.go: conditional_requests required true, applies_to (3 routes),
+    missing_status 428, missing_code PRECONDITION_REQUIRED, note rewritten (428, one winner per version,
+    refetch-reapply-retry, * semantics, 401/404/403 first); components.parameters.IfMatch required true;
+    components.responses.PreconditionRequired; PreconditionFailed text names the lost race.
+  M openapi_operations.go: errorRows "428"; post PATCH rows + 428. openapi_room_paths.go: room and reply
+    PATCH rows + 428, descriptions say required. openapi_paths.go: one description line on updatePost.
+  M SPEC.md: 5.4 rows PRECONDITION_FAILED 412 / PRECONDITION_REQUIRED 428 + "Conditional edits" paragraph;
+    Posts block PATCH line; reply API family PATCH line.
+  M skill/references/api.md + examples.md, and frontend/public/references/{api,examples}.md (copied, cmp
+    identical): PATCH /posts/:id, /replies/:id, /rooms/:slug require If-Match (428 / 412); the room
+    example reads first and sends If-Match.
+  PRODUCTION (frontend):
+  M lib/api-base.ts (800 -> 793): fetch() split into protected send() (returns the Response, same error
+    handling) + fetch() = send().json(); FetchOptions exported; getPost/updatePost moved to lib/api.ts;
+    APIPost/UpdatePostData imports dropped (now unused there).
+  M lib/api.ts (557 -> 578): protected fetchVersioned (body + ETag header, null when absent); getPost now
+    returns {data, etag}; updatePost(id, data, ifMatch: string | null) sends If-Match when given.
+    Every getPost caller reads .data only [REAL, grep: post-editor, post-detail, edit-post-form,
+    use-question, use-problem, use-idea].
+  M components/posts/post-editor.tsx, components/shared/edit-post-form.tsx: keep the loaded etag, send it.
+    A 412 shows the API's own message (both already render err.message).
+  M components/api/api-endpoint-data-content.ts: PATCH /replies/{id} says "If-Match required", 428/412.
+    (The /api-docs data has no PATCH /posts/{id} or /rooms/{slug} entry.)
+  CORS needed nothing [REAL, transport_policy.go + probe]: If-Match allowed, ETag exposed.
+
+  TESTS NEW (all PASS, none SKIP):
+  A internal/db/conditional_edits_test.go: TestConditionalEdits_{PostWritesOnlyAtTheExpectedVersion,
+    PostConcurrentWritersAtOneVersionHaveOneWinner (16 goroutines: 1 won / 15 conflicted),
+    ReplyWritesOnlyAtTheExpectedVersion (incl. non-author first, 16-writer race), RoomWritesOnlyAtTheExpectedVersion
+    (incl. absent room = ErrRoomNotFound, 16-writer race)}.
+  handlers/posts_concurrency_test.go: TestUpdatePost_{MissingIfMatchIs428, NonOwnerWithoutIfMatchStillForbidden,
+    WritesAtTheVersionItChecked, WildcardWritesUnconditionally, EditLostToAConcurrentWriterIs412} +
+    conditionalPostsRepo wrapper + errorCode helper. A handlers/posts_conditional_mocks_test.go: the 4 posts
+    mocks get UpdateIfUnmodified (delegates to their Update).
+  handlers/replies_concurrency_test.go: TestReplies_{UpdateWithoutIfMatchIs428, UpdateWritesAtTheVersionItChecked
+    (current tag -> expected, * -> nil), UpdateLostToAConcurrentWriterIs412}; MockRepliesRepository records
+    updateCalls/lastExpected.
+  handlers/rooms_concurrency_test.go (DB): TestUpdateRoom_{MissingIfMatchIs428, NonManagerWithoutIfMatchGetsForbidden,
+    ConcurrentEditsAtOneVersionHaveOneWinner (12 goroutines through the handler: one 200, 11 x 412)}.
+  openapi tests: required/missing_status/missing_code/applies_to/note; PreconditionRequired component;
+    IfMatch component required; 428 row on the 3 PATCHes.
+  frontend: lib/api.test.ts "SolvrAPI conditional post edit (idx 74 step 5)" (4 its: etag returned, null
+    without header, If-Match sent, 412 message surfaced); post-editor.test.tsx + edit-post-form.test.tsx
+    "sends the version it loaded as If-Match"; api-endpoint-data.test.ts "conditional edits (idx 74 step 5)".
+  MUTATION CHECKS [TEST, /tmp/solvr_idx74_s25/mutation*.log, code restored and grep-verified after]:
+    version clause replaced by TRUE in posts_conditional.go -> both post db tests FAIL ("16 won, 0
+    conflicted"); room handler writing with nil expected -> TestUpdateRoom_ConcurrentEditsAtOneVersionHaveOneWinner
+    FAIL (map[200:5 412:7]). The race tests bite.
+
+  CHANGED/REPLACED EXISTING TESTS (each named with its replacement):
+  - handlers/posts_concurrency_test.go TestUpdatePost_NoIfMatchStillSucceeds asserted "the precondition is
+    optional: a client that omits If-Match keeps the prior edit behavior": status 200 and "an edit without
+    If-Match must persist". Replaced by TestUpdatePost_MissingIfMatchIs428 (428 PRECONDITION_REQUIRED, not
+    persisted, no ETag). PASS.
+  - handlers/replies_concurrency_test.go TestReplies_UpdateWithoutIfMatchStillSucceeds asserted "If-Match is
+    opt-in: an edit with no precondition keeps the prior behavior" (200). Replaced by
+    TestReplies_UpdateWithoutIfMatchIs428 (428, write never reached, no ETag). PASS.
+  - handlers/rooms_concurrency_test.go TestUpdateRoom_NoIfMatchStillApplies asserted 200 without If-Match and
+    "a successful edit must echo the new ETag". Replaced by TestUpdateRoom_MissingIfMatchIs428 (428, nothing
+    persisted, updated_at unchanged, no ETag); the echo of the new ETag on success stays guarded by the
+    unchanged TestUpdateRoom_MatchingIfMatchThenReplayRejected ("response ETag ... want new validator"). PASS.
+  - openapi_conventions_test.go TestOpenAPIConventions_RetryAndConditionalEditContracts asserted
+    `required != false` -> error "If-Match is optional in the running API; the contract must not claim
+    otherwise". Now asserts required true, missing 428 PRECONDITION_REQUIRED, applies_to, note. PASS.
+  - Only FIXTURE/REQUEST changes, assertions untouched (they edit the way a client now must):
+    17 handler tests get `req.Header.Set("If-Match", postETag(post.UpdatedAt))` after their PATCH request:
+    posts_update_test.go (TestUpdatePost_Success, DescriptionTooLong, TooManyTags, CannotEditSolved,
+    CannotEditAnswered, RejectedTriggersReModeration, OpenContentChangeTriggersReModeration,
+    OpenTagsOnlyNoReModeration, SolvedBlockedWithoutSucceededApproach, SolvedAllowedWithSucceededApproach,
+    SolvedAllowedWhenCheckerNil), posts_embedding_test.go (Title/DescriptionChangeRegeneratesEmbedding,
+    StatusOnlyNoEmbeddingRegeneration), posts_update_family_test.go (2), posts_agent_auth_test.go
+    (AgentCanUpdateOwnPost); posts_integration_test.go: the 2 PATCH subtests read the post from the mock
+    and send its ETag. Reply tests that relied on a nil GetByID result reaching repo.Update
+    (TestReplies_UpdateAuthorSucceeds, UpdateNonAuthorForbidden, UpdateReembedsTheEditedBody,
+    UpdateClearsTheVectorWhenEmbeddingFails) now get the author's reply (replyAtVersion) + its ETag.
+    internal/api: new helpers router_conditional_edit_helpers_test.go (currentETag, doJSONAtCurrentVersion,
+    doRoomRequestAtCurrentVersion: GET as the same caller, then PATCH with that ETag); 20 PATCH call sites
+    that expect success or a post-precondition 403 (ROOM_OWNER_APPROVAL_REQUIRED) use them, in
+    router_homepage_cache_privacy, rooms_agent_owned (3), rooms_family_membership (heir), rooms_manage_authority
+    (2), rooms_manage (4), rooms_membership_authority (heir), rooms_multi_instance_overview (2),
+    rooms_permission_matrix (2), rooms_retry_safety, rooms_save_post (2), rooms_stream_revocation. PATCH calls
+    that expect 403 before the precondition are unchanged. router_approach_checker_canonical, router_replies_embedding:
+    inline GET then PATCH with If-Match. router_moderation_patch: callStatusContractIfMatch (new variant in
+    router_status_contract_test.go; callStatusContract delegates with ""). router_malformed_body_contract:
+    the walk's PATCH calls send the caller's own read ETag (comment now says a route that never reads its
+    body answers 2xx/401/403/404/428); its must-list (incl. PATCH /v1/rooms/{slug}, PATCH /v1/replies/{id})
+    and the VALIDATION_ERROR rule are unchanged. internal/jobs legacy_dropped_write_routes_test.go:
+    serveWriteProbe reads the path as the caller and sends that ETag on PATCH (otherwise PATCH /v1/posts/{id},
+    /v1/replies/{id}, /v1/rooms/{slug} never complete: the full run listed them as "no call completed"
+    [428 ...]); all its clauses unchanged.
+  - Signature-only: `, nil` (unconditional, the old behavior they test) appended in db/replies_embedding_test.go
+    (3), db/replies_test.go (2), db/rooms_test.go (1), router_homepage_{consolidated,overview,example}_test.go.
+  - frontend edit-post-form.test.tsx "submit calls PATCH API with only changed fields":
+    toHaveBeenCalledWith('post-123', {title}) -> toHaveBeenCalledWith('post-123', {title}, null) (the third
+    argument is the loaded version; this fixture's read has no ETag). Still asserts only the changed field.
+
+VERIFICATION (DATABASE_URL = local scratch DBs only: solvr_idx74_s25_fresh and _full built with
+  `migrate up` to 118, both dropped after; never production):
+  RED [TEST]: red.log — db/handlers "build failed" (undefined models.ErrVersionConflict, UpdateIfUnmodified,
+    Update arity); openapi_red.log 4 FAIL; fe_red.log 5 failed / 25 passed; fe_docs_red.log 1 failed.
+  GREEN targeted [TEST]: green1.log 37 PASS (all new + pre-existing If-Match tests incl. TestIfMatchIsStale,
+    TestUpdateRoom_MatchingIfMatchThenReplayRejected), 0 SKIP. api1.log (internal/api/... before fixture
+    updates) measured the blast radius: 46 tests failing on 428 + TestCrossAuth_RemoveProvider_OthersStillWork
+    (auth_methods "g_remove", not PATCH; PASS in the next handlers run). refix.log: those 46 by name, 46 PASS.
+    handlers2.log: internal/api/handlers fully ok. openapi_green.log ok.
+  FULL BACKEND [TEST, /tmp/solvr_idx74_s25/full.log, go test ./... -count=1 -p 1 -v]: 17 packages ok;
+    internal/api, internal/db, internal/jobs FAIL, 49 failing top-level tests. Against slice 6's 47
+    (/tmp/solvr_idx73_s6/full2.log): 0 gone, 2 new:
+    (a) TestLegacyDroppedDatabase_WriteRoutesExposeOnlyLegacyRouteFamilies (jobs): mine, the probe sent no
+        If-Match; fixed as above; jobs.log re-run of internal/jobs: ok, that test PASS, 0 FAIL/SKIP.
+    (b) TestAgentClaim_RetriesAndRacesLinkTheAgentOnce: `duplicate key value violates unique constraint
+        "users_username_key"` from createRoomTestUser's roomtest_%d username (the known fixture collision; it
+        also failed in slice 5's run). Not touched by this diff. claim.log: run alone, PASS.
+    Every new/changed test is PASS in full.log (20 of the named ones grep-counted); SKIP set identical to
+    slice 6 (13, diffed).
+  FRONTEND [TEST]: npm test 188 files, 1704 tests PASS (fe_full.log; slice 6 had 1697, +7 new); typecheck
+    exit 0; eslint on the 9 touched files: 0 errors, 87 warnings, 0 of them on a changed line (JSON
+    report mapped to git diff -U0 hunks).
+  gofmt: every touched/new Go file clean except internal/api/openapi_paths.go and internal/db/rooms_test.go,
+    both already unformatted at HEAD (`git show HEAD:<f> | gofmt -l`); my one-line openapi_paths edit adds
+    no gofmt diff. go vet ./internal/api/... ./internal/db ./internal/models ./internal/jobs ./cmd/... clean.
+    check-file-size.sh: 34 violations, the same files as slice 6 (posts.go 868 -> 825, router.go 1127,
+    openapi_paths.go 888); new files under 800; api-base.ts 793, handlers/posts.go 795.
+  LIVE PROBE [REAL, /tmp/solvr_idx74_s25/probe/probe.sh + probe.out]: fresh DB at 118, go build ./cmd/api,
+    API on :8099 under env -i (fake secrets, IPFS_API_URL=:9). Two agents; one post, reply, room. For each
+    of PATCH /v1/posts/{id}, /v1/replies/{id}, /v1/rooms/{slug}: no If-Match -> 428 PRECONDITION_REQUIRED
+    (no ETag); other agent without If-Match -> 403 FORBIDDEN; current ETag -> 200 + new ETag; same ETag
+    again -> 412 PRECONDITION_FAILED + current ETag; If-Match * -> 200; malformed body with a current ETag
+    -> 400 VALIDATION_ERROR; three races of 50 parallel PATCHes at one ETag -> 1 x 200 / 49 x 412 every
+    time (9 of 9; HEAD's spike gave 10-30 winners). openapi.json: conditional_requests {required true,
+    missing_status 428, missing_code PRECONDITION_REQUIRED, stale_status 412, applies_to the 3 routes},
+    IfMatch required true, 428 -> PreconditionRequired on the 3 PATCHes. CORS preflight from
+    http://localhost:3000 allows If-Match + PATCH; a GET exposes Etag. api.log: 33x200, 5x201, 3x400,
+    3x403, 444x412, 3x428, 0 5xx. Server stopped (:8099 free); probe DB dropped.
+
+STEP MAP (idx 74), all DONE: 1-4 and 6 in slices 1-24 (archive); step 6's contract keys verified again in
+  this probe (cors, credential_transport, request_limits, streams, timeouts, pagination, idempotency,
+  conditional_requests). Step 5: retries cannot change ownership or duplicate a publication (slices 11,
+  12, 18); edits now REQUIRE If-Match and the stale check is atomic with the write (this slice).
+
+OBSERVATIONS FOR THE OWNER (not changed) [REAL, code read]:
+  - PATCH /v1/blog/{slug}, /v1/agents/{id}, /v1/agents/me/identity and /v1/me stay unconditional and expose
+    no ETag. If you want blog edits conditional too, it is the same pattern (ETag on GET, version clause in
+    BlogPostRepository.Update, frontend blog editor sends it).
+  - "If-Match: *" still applies an edit at any version (documented). Forbidding it is one branch in
+    requireIfMatch if you prefer that agents can never opt out.
+  - A room's updated_at advances with every message (migration 000112), so an owner editing a busy room
+    will see 412 more often and must refetch; documented in api.md.
+  - Still open from the archive, outside idx 74's steps: handlers/flags.go is unmounted dead code (keep or
+    delete); the general/search per-minute limiter never fires (idx 79 step 5).
+UAT: idx 74 ships with a deploy the owner runs. ORDER MATTERS: deploy the FRONTEND FIRST (the new editor
+  sends If-Match, which today's API already accepts), then the API — the other order leaves solvr.dev's
+  post editor answering 428 until the frontend lands. This slice has no migration; the archived idx 74 UAT
+  (slices 6/10) still applies: confirm migrations 000101_idempotency_keys and 000102_supersede_latest_revision
+  are on production before that API deploy. After it: `curl -X PATCH https://api.solvr.dev/v1/posts/<id>`
+  with a valid key and no If-Match answers 428 PRECONDITION_REQUIRED; edit a post at solvr.dev/posts/<id>/edit
+  and confirm Save works. External agents that PATCH posts, replies or rooms without If-Match will get 428
+  from that deploy on (intended, owner decision 8; the published api.md says so).
+
+git status at journal time [REAL]: the 62 M + 5 ?? listed above, plus this entry and spec.json idx 74
+  passes -> true.

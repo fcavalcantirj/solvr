@@ -625,56 +625,13 @@ func (r *PostRepository) findByIDInternal(ctx context.Context, id string, viewer
 	return &post, nil
 }
 
-// Update updates an existing post in the database.
+// Update updates an existing post in the database unconditionally.
 // Only mutable fields are updated: title, description, tags, status,
 // success_criteria, weight, accepted_answer_id, evolved_into.
 // Returns ErrPostNotFound if the post doesn't exist or is soft-deleted.
+// The write itself lives in posts_conditional.go (UpdateIfUnmodified).
 func (r *PostRepository) Update(ctx context.Context, post *models.Post) (*models.Post, error) {
-	query := `
-		UPDATE posts
-		SET
-			title = $2,
-			description = $3,
-			tags = $4,
-			status = $5,
-			success_criteria = $6,
-			weight = $7,
-			accepted_answer_id = $8,
-			evolved_into = $9,
-			embedding = COALESCE($10::vector, embedding),
-			publication_state = $11,
-			moderation_state = $12,
-			updated_at = NOW()
-		WHERE id = $1 AND deleted_at IS NULL
-		RETURNING id, type, title, description, tags,
-			posted_by_type, posted_by_id, status,
-			upvotes, downvotes, view_count, success_criteria, weight,
-			accepted_answer_id, evolved_into,
-			created_at, updated_at, deleted_at,
-			crystallization_cid, crystallized_at, visibility,
-			publication_state, moderation_state, source_room_id
-	`
-
-	// Keep the canonical states consistent with the new status (BART-583). The Update
-	// request never carries moderation_state, so an author edit cannot self-approve.
-	pub, mod := models.DeriveStates(post.Status)
-
-	row := r.pool.QueryRow(ctx, query,
-		post.ID,
-		post.Title,
-		post.Description,
-		post.Tags,
-		post.Status,
-		post.SuccessCriteria,
-		post.Weight,
-		post.AcceptedAnswerID,
-		post.EvolvedInto,
-		post.EmbeddingStr,
-		pub,
-		mod,
-	)
-
-	return r.scanPost(row)
+	return r.UpdateIfUnmodified(ctx, post, nil)
 }
 
 // Delete performs a soft delete on a post by setting deleted_at.

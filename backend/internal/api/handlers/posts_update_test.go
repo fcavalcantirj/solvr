@@ -32,6 +32,7 @@ func TestUpdatePost_Success(t *testing.T) {
 	jsonBody, _ := json.Marshal(body)
 
 	req := httptest.NewRequest(http.MethodPatch, "/v1/posts/post-123", bytes.NewReader(jsonBody))
+	req.Header.Set("If-Match", postETag(post.UpdatedAt)) // required since idx 74 step 5
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "post-123")
@@ -66,6 +67,7 @@ func TestUpdatePost_DescriptionTooLong(t *testing.T) {
 	jsonBody, _ := json.Marshal(body)
 
 	req := httptest.NewRequest(http.MethodPatch, "/v1/posts/post-123", bytes.NewReader(jsonBody))
+	req.Header.Set("If-Match", postETag(post.UpdatedAt)) // required since idx 74 step 5
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "post-123")
@@ -201,6 +203,7 @@ func TestUpdatePost_TooManyTags(t *testing.T) {
 	jsonBody, _ := json.Marshal(body)
 
 	req := httptest.NewRequest(http.MethodPatch, "/v1/posts/post-123", bytes.NewReader(jsonBody))
+	req.Header.Set("If-Match", postETag(post.UpdatedAt)) // required since idx 74 step 5
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "post-123")
@@ -274,6 +277,7 @@ func TestUpdatePost_CannotEditSolved(t *testing.T) {
 	jsonBody, _ := json.Marshal(body)
 
 	req := httptest.NewRequest(http.MethodPatch, "/v1/posts/post-123", bytes.NewReader(jsonBody))
+	req.Header.Set("If-Match", postETag(post.UpdatedAt)) // required since idx 74 step 5
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "post-123")
@@ -312,6 +316,7 @@ func TestUpdatePost_CannotEditAnswered(t *testing.T) {
 	jsonBody, _ := json.Marshal(body)
 
 	req := httptest.NewRequest(http.MethodPatch, "/v1/posts/post-123", bytes.NewReader(jsonBody))
+	req.Header.Set("If-Match", postETag(post.UpdatedAt)) // required since idx 74 step 5
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "post-123")
@@ -358,6 +363,7 @@ func TestUpdatePost_RejectedTriggersReModeration(t *testing.T) {
 	jsonBody, _ := json.Marshal(body)
 
 	req := httptest.NewRequest(http.MethodPatch, "/v1/posts/post-123", bytes.NewReader(jsonBody))
+	req.Header.Set("If-Match", postETag(post.UpdatedAt)) // required since idx 74 step 5
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "post-123")
@@ -410,6 +416,7 @@ func TestUpdatePost_OpenContentChangeTriggersReModeration(t *testing.T) {
 	jsonBody, _ := json.Marshal(body)
 
 	req := httptest.NewRequest(http.MethodPatch, "/v1/posts/post-123", bytes.NewReader(jsonBody))
+	req.Header.Set("If-Match", postETag(post.UpdatedAt)) // required since idx 74 step 5
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "post-123")
@@ -460,6 +467,7 @@ func TestUpdatePost_OpenTagsOnlyNoReModeration(t *testing.T) {
 	jsonBody, _ := json.Marshal(body)
 
 	req := httptest.NewRequest(http.MethodPatch, "/v1/posts/post-123", bytes.NewReader(jsonBody))
+	req.Header.Set("If-Match", postETag(post.UpdatedAt)) // required since idx 74 step 5
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "post-123")
@@ -520,6 +528,7 @@ func TestUpdatePost_SolvedBlockedWithoutSucceededApproach(t *testing.T) {
 	jsonBody, _ := json.Marshal(body)
 
 	req := httptest.NewRequest(http.MethodPatch, "/v1/posts/post-123", bytes.NewReader(jsonBody))
+	req.Header.Set("If-Match", postETag(post.UpdatedAt)) // required since idx 74 step 5
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "post-123")
@@ -560,6 +569,7 @@ func TestUpdatePost_SolvedAllowedWithSucceededApproach(t *testing.T) {
 	jsonBody, _ := json.Marshal(body)
 
 	req := httptest.NewRequest(http.MethodPatch, "/v1/posts/post-123", bytes.NewReader(jsonBody))
+	req.Header.Set("If-Match", postETag(post.UpdatedAt)) // required since idx 74 step 5
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "post-123")
@@ -597,6 +607,7 @@ func TestUpdatePost_SolvedAllowedWhenCheckerNil(t *testing.T) {
 	jsonBody, _ := json.Marshal(body)
 
 	req := httptest.NewRequest(http.MethodPatch, "/v1/posts/post-123", bytes.NewReader(jsonBody))
+	req.Header.Set("If-Match", postETag(post.UpdatedAt)) // required since idx 74 step 5
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "post-123")

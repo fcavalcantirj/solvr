@@ -133,6 +133,9 @@ func TestPostsCRUD_Integration(t *testing.T) {
 		rctx.URLParams.Add("id", createdPostID)
 		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 		req = addAuthContext(req, userID, "user")
+		// The client sends the version of its last read: If-Match is required (idx 74 step 5).
+		current, _ := repo.FindByID(context.Background(), createdPostID)
+		req.Header.Set("If-Match", postETag(current.UpdatedAt))
 		w := httptest.NewRecorder()
 
 		handler.Update(w, req)
@@ -332,6 +335,9 @@ func TestPostsCRUD_OwnershipEnforcement(t *testing.T) {
 		rctx.URLParams.Add("id", createdPostID)
 		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 		req = addAuthContext(req, ownerID, "user")
+		// The client sends the version of its last read: If-Match is required (idx 74 step 5).
+		current, _ := repo.FindByID(context.Background(), createdPostID)
+		req.Header.Set("If-Match", postETag(current.UpdatedAt))
 		w := httptest.NewRecorder()
 
 		handler.Update(w, req)

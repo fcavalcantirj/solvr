@@ -79,6 +79,13 @@ type statusContractAnswer struct {
 // callStatusContract sends one request with a deadline, so a route that never answers
 // fails the test instead of wedging the run.
 func callStatusContract(client *http.Client, method, url, bearer, body string) (statusContractAnswer, error) {
+	return callStatusContractIfMatch(client, method, url, bearer, body, "")
+}
+
+// callStatusContractIfMatch is callStatusContract with an If-Match precondition (none
+// when ifMatch is empty): edits of posts, replies and rooms require one since spec.json
+// idx 74 step 5.
+func callStatusContractIfMatch(client *http.Client, method, url, bearer, body, ifMatch string) (statusContractAnswer, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	var reader io.Reader
@@ -94,6 +101,9 @@ func callStatusContract(client *http.Client, method, url, bearer, body string) (
 	}
 	if bearer != "" {
 		req.Header.Set("Authorization", "Bearer "+bearer)
+	}
+	if ifMatch != "" {
+		req.Header.Set("If-Match", ifMatch)
 	}
 	resp, err := client.Do(req)
 	if err != nil {

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
 )
@@ -22,10 +23,10 @@ type embeddingRecordingRepo struct {
 	updateEmbedding *string
 }
 
-func (m *embeddingRecordingRepo) Update(ctx context.Context, id string, authorType models.AuthorType, authorID, body string, embedding *string) (*models.Reply, error) {
+func (m *embeddingRecordingRepo) Update(ctx context.Context, id string, authorType models.AuthorType, authorID, body string, embedding *string, expected *time.Time) (*models.Reply, error) {
 	m.updateCalls++
 	m.updateEmbedding = embedding
-	return m.MockRepliesRepository.Update(ctx, id, authorType, authorID, body, embedding)
+	return m.MockRepliesRepository.Update(ctx, id, authorType, authorID, body, embedding, expected)
 }
 
 func TestReplies_CreateEmbedsTheBody(t *testing.T) {
@@ -82,13 +83,16 @@ func TestReplies_CreateOnHiddenPostEmbedsNothing(t *testing.T) {
 }
 
 func TestReplies_UpdateReembedsTheEditedBody(t *testing.T) {
-	mock := &embeddingRecordingRepo{}
+	read := replyAtVersion(time.Now())
+	mock := &embeddingRecordingRepo{MockRepliesRepository: MockRepliesRepository{getResult: read}}
 	embed := &MockEmbeddingService{embedding: []float32{0.75}}
 	h := NewRepliesHandler(mock)
 	h.SetEmbeddingService(embed)
 
 	rec := httptest.NewRecorder()
-	h.Update(rec, agentReq(http.MethodPatch, "/v1/replies/r1", map[string]any{"body": "edited body"}, map[string]string{"id": "r1"}))
+	req := agentReq(http.MethodPatch, "/v1/replies/r1", map[string]any{"body": "edited body"}, map[string]string{"id": "r1"})
+	req.Header.Set("If-Match", replyETag(read.UpdatedAt)) // required since idx 74 step 5
+	h.Update(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
@@ -102,12 +106,15 @@ func TestReplies_UpdateReembedsTheEditedBody(t *testing.T) {
 }
 
 func TestReplies_UpdateClearsTheVectorWhenEmbeddingFails(t *testing.T) {
-	mock := &embeddingRecordingRepo{}
+	read := replyAtVersion(time.Now())
+	mock := &embeddingRecordingRepo{MockRepliesRepository: MockRepliesRepository{getResult: read}}
 	h := NewRepliesHandler(mock)
 	h.SetEmbeddingService(&MockEmbeddingService{err: errors.New("voyage unavailable")})
 
 	rec := httptest.NewRecorder()
-	h.Update(rec, agentReq(http.MethodPatch, "/v1/replies/r1", map[string]any{"body": "edited body"}, map[string]string{"id": "r1"}))
+	req := agentReq(http.MethodPatch, "/v1/replies/r1", map[string]any{"body": "edited body"}, map[string]string{"id": "r1"})
+	req.Header.Set("If-Match", replyETag(read.UpdatedAt)) // required since idx 74 step 5
+	h.Update(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200 even when embedding fails; body=%s", rec.Code, rec.Body.String())

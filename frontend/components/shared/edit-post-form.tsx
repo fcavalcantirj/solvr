@@ -35,6 +35,8 @@ export function EditPostForm({ postId, postType }: EditPostFormProps) {
   const [tagInput, setTagInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+  // The version this form loaded, sent back as If-Match so the edit never overwrites a newer one.
+  const [version, setVersion] = useState<string | null>(null);
 
   // Store original values to compute diff
   const originalRef = useRef<{ title: string; description: string; tags: string[] }>({
@@ -58,6 +60,7 @@ export function EditPostForm({ postId, postType }: EditPostFormProps) {
 
         const postData = postResponse.data;
         setPost(postData);
+        setVersion(postResponse.etag ?? null);
         setTitle(postData.title);
         setDescription(postData.description);
         setTags(postData.tags || []);
@@ -151,7 +154,7 @@ export function EditPostForm({ postId, postType }: EditPostFormProps) {
 
     setIsSubmitting(true);
     try {
-      await api.updatePost(postId, changes);
+      await api.updatePost(postId, changes, version);
       const isRejected = post?.status === 'rejected';
       toast({
         title: 'Post updated',

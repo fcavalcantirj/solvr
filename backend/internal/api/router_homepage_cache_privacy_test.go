@@ -52,7 +52,7 @@ func TestHomepageRoomSurfaces_AreRevalidatedAndDropARoomTheMomentItTurnsPrivate(
 		require.True(t, strings.Contains(body, slug), "precondition: %s shows the public room", path)
 	}
 
-	status, out := doJSON(t, "PATCH", a.ts.URL+"/v1/rooms/"+slug, ownerJWT, `{"is_private":true}`)
+	status, out := doJSONAtCurrentVersion(t, "PATCH", a.ts.URL+"/v1/rooms/"+slug, ownerJWT, `{"is_private":true}`)
 	require.Equal(t, http.StatusOK, status, "make private: %v", out)
 
 	for _, path := range homepageRoomPaths {

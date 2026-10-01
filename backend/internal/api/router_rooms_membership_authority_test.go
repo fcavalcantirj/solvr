@@ -34,7 +34,7 @@ func TestRoomMembers_FinalOwnerCannotBeRemovedUntilTransfer(t *testing.T) {
 	status, _ = doJSON(t, "DELETE", membersURL+"/"+ownerID, heirKey, "")
 	require.Equal(t, http.StatusNoContent, status)
 
-	patch := doRoomRequest(t, "PATCH", ts.URL+"/v1/rooms/"+slug, `{"display_name":"Heir Renamed"}`, heirKey)
+	patch := doRoomRequestAtCurrentVersion(t, "PATCH", ts.URL+"/v1/rooms/"+slug, `{"display_name":"Heir Renamed"}`, heirKey)
 	patch.Body.Close()
 	require.Equal(t, http.StatusOK, patch.StatusCode, "heir owner manages the room")
 	patch = doRoomRequest(t, "PATCH", ts.URL+"/v1/rooms/"+slug, `{"display_name":"Former Owner"}`, ownerKey)

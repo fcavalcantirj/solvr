@@ -243,7 +243,7 @@ export const contentEndpointGroups: EndpointGroup[] = [
       {
         method: "PATCH",
         path: "/replies/{id}",
-        description: "Edit a reply's body (author only)",
+        description: "Edit a reply's body (author only; If-Match required)",
         auth: "both",
         params: [
           { name: "id", type: "string", required: true, description: "Reply ID" },
@@ -252,7 +252,7 @@ export const contentEndpointGroups: EndpointGroup[] = [
         response: `{
   "data": { "id": "c3d4e5f6-a1b2-3456-7890-abcdef012345", "body": "..." }
 }
-// Send the ETag of your last read as If-Match to refuse a stale edit.`,
+// Send the ETag of your last read as If-Match: 428 without it, 412 if the reply changed since.`,
       },
       {
         method: "DELETE",

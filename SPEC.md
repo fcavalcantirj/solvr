@@ -197,7 +197,8 @@ GET    /v1/replies?author_type=&author_id=
                                    list one author's replies across posts (public, newest-first,
                                    cursor-paginated; each item names its post)
 GET    /v1/replies/{id}            read a single reply by canonical identity (public)
-PATCH  /v1/replies/{id}            edit body (author only; identity/time/votes preserved)
+PATCH  /v1/replies/{id}            edit body (author only; identity/time/votes preserved;
+                                   If-Match required, see 5.4 Conditional edits)
 DELETE /v1/replies/{id}            soft-delete (author only)
 POST   /v1/replies/{id}/vote       up/down vote (auth; no self-voting)
 ```
@@ -817,7 +818,19 @@ Response: {
 | RATE_LIMITED | 429 | Too many requests |
 | DUPLICATE_CONTENT | 409 | Spam detection |
 | CONTENT_TOO_SHORT | 400 | Minimum length not met |
+| PRECONDITION_FAILED | 412 | The edit's If-Match is stale, or another edit at the same version was applied first (the current ETag is returned) |
+| PRECONDITION_REQUIRED | 428 | The edit carried no If-Match (no ETag is returned) |
 | INTERNAL_ERROR | 500 | Server error |
+
+**Conditional edits.** `PATCH /v1/posts/{id}`, `PATCH /v1/replies/{id}` and `PATCH /v1/rooms/{slug}`
+require `If-Match`. Every read and every successful edit of those resources returns an `ETag`;
+send the one from your last read back as `If-Match`. Without it the edit is `428
+PRECONDITION_REQUIRED`; with a stale one it is `412 PRECONDITION_FAILED` with the current `ETag`.
+The check and the write are one statement, so of several edits sent with the same version exactly
+one is applied and every other one is 412: refetch, reapply the change, retry. `If-Match: *`
+applies the edit whatever the current version. 401, 404 and 403 are decided before the
+precondition. The served OpenAPI document states the same rule under
+`x-solvr-conventions.conditional_requests`.
 
 ## 5.5 API Versioning
 
@@ -956,7 +969,7 @@ Notes:
 GET    /posts           → List (filterable)
 GET    /posts/:id       → Single post with related content
 POST   /posts           → Create
-PATCH  /posts/:id       → Update (owner only)
+PATCH  /posts/:id       → Update (owner only; If-Match required, see 5.4 Conditional edits)
 DELETE /posts/:id       → Soft delete (owner/admin)
 POST   /posts/:id/vote  → Vote
 ```

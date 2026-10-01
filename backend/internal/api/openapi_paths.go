@@ -105,6 +105,7 @@ func postByIDPath() map[string]interface{} {
 		},
 		"patch": map[string]interface{}{
 			"summary": "Update post", "operationId": "updatePost", "tags": []string{"Posts"}, "security": securityRequired(),
+			"description": "Author only. If-Match is required: send the ETag of your last read (428 without it, 412 when the post changed since).",
 			"parameters":  []map[string]interface{}{idParam("Post ID")},
 			"requestBody": reqBody("UpdatePostRequest"),
 			"responses":   map[string]interface{}{"200": ref200("PostResponse"), "401": ref401(), "404": ref404()},

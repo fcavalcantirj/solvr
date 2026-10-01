@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
@@ -105,10 +106,12 @@ func TestUpdatePost_WildcardIfMatchSucceeds(t *testing.T) {
 	}
 }
 
-// TestUpdatePost_NoIfMatchStillSucceeds verifies the precondition is optional:
-// a client that omits If-Match keeps the prior edit behavior (back-compat).
-func TestUpdatePost_NoIfMatchStillSucceeds(t *testing.T) {
-	repo := NewMockPostsRepository()
+// TestUpdatePost_MissingIfMatchIs428 verifies If-Match is required (spec.json
+// idx 74 step 5, owner decision 8 of 2026-09-30): an edit without it is refused
+// with 428 PRECONDITION_REQUIRED, persists nothing, and carries no ETag, so a
+// client has to read the post before it can overwrite it.
+func TestUpdatePost_MissingIfMatchIs428(t *testing.T) {
+	repo := &conditionalPostsRepo{MockPostsRepository: NewMockPostsRepository()}
 	post := createTestPost("post-123", "Original Title", models.PostTypeProblem)
 	repo.SetPost(&post)
 	handler := NewPostsHandler(repo)
@@ -117,11 +120,102 @@ func TestUpdatePost_NoIfMatchStillSucceeds(t *testing.T) {
 	w := httptest.NewRecorder()
 	handler.Update(w, req)
 
+	if w.Code != http.StatusPreconditionRequired {
+		t.Fatalf("expected status 428, got %d: %s", w.Code, w.Body.String())
+	}
+	if code := errorCode(t, w); code != "PRECONDITION_REQUIRED" {
+		t.Errorf("expected code PRECONDITION_REQUIRED, got %q", code)
+	}
+	if repo.updatedPost != nil || repo.conditionalCalls != 0 {
+		t.Error("an edit without If-Match must not be persisted")
+	}
+	if got := w.Header().Get("ETag"); got != "" {
+		t.Errorf("a 428 must not hand out the current ETag, got %q", got)
+	}
+}
+
+// TestUpdatePost_NonOwnerWithoutIfMatchStillForbidden verifies ownership is
+// checked before the precondition is required: a non-owner gets 403, not 428.
+func TestUpdatePost_NonOwnerWithoutIfMatchStillForbidden(t *testing.T) {
+	repo := &conditionalPostsRepo{MockPostsRepository: NewMockPostsRepository()}
+	post := createTestPost("post-123", "Original Title", models.PostTypeProblem)
+	repo.SetPost(&post)
+	handler := NewPostsHandler(repo)
+
+	jsonBody, _ := json.Marshal(map[string]interface{}{"title": "Updated Title That Is Long Enough"})
+	req := httptest.NewRequest(http.MethodPatch, "/v1/posts/post-123", bytes.NewReader(jsonBody))
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "post-123")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	req = addAuthContext(req, "other-user", "user")
+	w := httptest.NewRecorder()
+	handler.Update(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected status 403, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestUpdatePost_WritesAtTheVersionItChecked verifies the matching If-Match is
+// handed to the repository as the expected version, so the write itself
+// refuses a row another writer changed after the check.
+func TestUpdatePost_WritesAtTheVersionItChecked(t *testing.T) {
+	repo := &conditionalPostsRepo{MockPostsRepository: NewMockPostsRepository()}
+	post := createTestPost("post-123", "Original Title", models.PostTypeProblem)
+	repo.SetPost(&post)
+	handler := NewPostsHandler(repo)
+
+	w := httptest.NewRecorder()
+	handler.Update(w, ownerPatchRequest(map[string]interface{}{"title": "Updated Title That Is Long Enough"}, postETag(post.UpdatedAt)))
+
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
 	}
-	if repo.updatedPost == nil {
-		t.Error("an edit without If-Match must persist")
+	if repo.conditionalCalls != 1 || repo.lastExpected == nil || !repo.lastExpected.Equal(post.UpdatedAt) {
+		t.Errorf("expected one conditional write at %v, got %d calls at %v", post.UpdatedAt, repo.conditionalCalls, repo.lastExpected)
+	}
+}
+
+// TestUpdatePost_WildcardWritesUnconditionally verifies "If-Match: *" is the
+// explicit unconditional edit: the repository gets no expected version.
+func TestUpdatePost_WildcardWritesUnconditionally(t *testing.T) {
+	repo := &conditionalPostsRepo{MockPostsRepository: NewMockPostsRepository()}
+	post := createTestPost("post-123", "Original Title", models.PostTypeProblem)
+	repo.SetPost(&post)
+	handler := NewPostsHandler(repo)
+
+	w := httptest.NewRecorder()
+	handler.Update(w, ownerPatchRequest(map[string]interface{}{"title": "Updated Title That Is Long Enough"}, "*"))
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if repo.conditionalCalls != 1 || repo.lastExpected != nil {
+		t.Errorf("expected one unconditional write, got %d calls at %v", repo.conditionalCalls, repo.lastExpected)
+	}
+}
+
+// TestUpdatePost_EditLostToAConcurrentWriterIs412 verifies an edit whose
+// precondition matched but whose write found the row already changed (another
+// writer won the race) is 412 PRECONDITION_FAILED with the winner's ETag.
+func TestUpdatePost_EditLostToAConcurrentWriterIs412(t *testing.T) {
+	post := createTestPost("post-123", "Original Title", models.PostTypeProblem)
+	winner := post.UpdatedAt.Add(time.Second)
+	repo := &conditionalPostsRepo{MockPostsRepository: NewMockPostsRepository(), conflictAt: &winner}
+	repo.SetPost(&post)
+	handler := NewPostsHandler(repo)
+
+	w := httptest.NewRecorder()
+	handler.Update(w, ownerPatchRequest(map[string]interface{}{"title": "Updated Title That Is Long Enough"}, postETag(post.UpdatedAt)))
+
+	if w.Code != http.StatusPreconditionFailed {
+		t.Fatalf("expected status 412, got %d: %s", w.Code, w.Body.String())
+	}
+	if code := errorCode(t, w); code != "PRECONDITION_FAILED" {
+		t.Errorf("expected code PRECONDITION_FAILED, got %q", code)
+	}
+	if got := w.Header().Get("ETag"); got != postETag(winner) {
+		t.Errorf("expected the winner's ETag %q, got %q", postETag(winner), got)
 	}
 }
 
@@ -202,4 +296,37 @@ func TestIfMatchIsStale(t *testing.T) {
 			}
 		})
 	}
+}
+
+// conditionalPostsRepo wraps the posts mock to record the expected version the
+// handler hands to the conditional write, and to simulate losing the write to
+// a concurrent writer (conflictAt is that writer's version).
+type conditionalPostsRepo struct {
+	*MockPostsRepository
+	conditionalCalls int
+	lastExpected     *time.Time
+	conflictAt       *time.Time
+}
+
+func (m *conditionalPostsRepo) UpdateIfUnmodified(ctx context.Context, post *models.Post, expected *time.Time) (*models.Post, error) {
+	m.conditionalCalls++
+	m.lastExpected = expected
+	if m.conflictAt != nil {
+		return nil, &models.VersionConflictError{Current: *m.conflictAt}
+	}
+	return m.MockPostsRepository.UpdateIfUnmodified(ctx, post, expected)
+}
+
+// errorCode decodes error.code from an error envelope response.
+func errorCode(t *testing.T, w *httptest.ResponseRecorder) string {
+	t.Helper()
+	var resp struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode error envelope: %v (%s)", err, w.Body.String())
+	}
+	return resp.Error.Code
 }

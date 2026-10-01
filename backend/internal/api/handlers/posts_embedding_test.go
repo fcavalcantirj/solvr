@@ -150,6 +150,7 @@ func TestUpdatePost_TitleChangeRegeneratesEmbedding(t *testing.T) {
 
 	body := `{"title":"Updated Title for Semantic Search"}`
 	req := httptest.NewRequest(http.MethodPatch, "/v1/posts/post-123", strings.NewReader(body))
+	req.Header.Set("If-Match", postETag(post.UpdatedAt)) // required since idx 74 step 5
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "post-123")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
@@ -185,6 +186,7 @@ func TestUpdatePost_DescriptionChangeRegeneratesEmbedding(t *testing.T) {
 
 	body := `{"description":"This is a completely new and updated description that should trigger embedding regeneration for semantic search."}`
 	req := httptest.NewRequest(http.MethodPatch, "/v1/posts/post-123", strings.NewReader(body))
+	req.Header.Set("If-Match", postETag(post.UpdatedAt)) // required since idx 74 step 5
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "post-123")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
@@ -216,6 +218,7 @@ func TestUpdatePost_StatusOnlyNoEmbeddingRegeneration(t *testing.T) {
 
 	body := `{"status":"answered"}`
 	req := httptest.NewRequest(http.MethodPatch, "/v1/posts/post-123", strings.NewReader(body))
+	req.Header.Set("If-Match", postETag(post.UpdatedAt)) // required since idx 74 step 5
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "post-123")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))

@@ -127,7 +127,7 @@ func TestRoomPermissionMatrix_EverySurfaceFollowsVisibilityMembershipOwnershipAn
 				status, out := doJSON(t, "POST", r+"/posts/"+postID+"/publish", room.ownerJWT, "")
 				require.Equal(t, http.StatusOK, status, "owner approves: %v", out)
 			} else {
-				status, out := doJSON(t, "PATCH", base+"/v1/posts/"+postID, room.executorKey, `{"status":"open"}`)
+				status, out := doJSONAtCurrentVersion(t, "PATCH", base+"/v1/posts/"+postID, room.executorKey, `{"status":"open"}`)
 				require.Equal(t, http.StatusOK, status, "author publishes: %v", out)
 			}
 			waitForValue(t, inst.pool, "published", `SELECT publication_state FROM posts WHERE id = $1::uuid`, postID)
@@ -238,7 +238,7 @@ func TestRoomPermissionMatrix_PrivateOutcomeStaysOwnerOnlyAfterTheRoomIsGone(t *
 				require.Equal(t, http.StatusNoContent, status, "owner deletes: %v", out)
 			}
 
-			status, out := doJSON(t, "PATCH", base+"/v1/posts/"+postID, room.executorKey, `{"status":"open"}`)
+			status, out := doJSONAtCurrentVersion(t, "PATCH", base+"/v1/posts/"+postID, room.executorKey, `{"status":"open"}`)
 			require.Equal(t, tc.wantPublish, status, "author publishes by a plain edit: %v", out)
 			if tc.wantPublish == http.StatusOK {
 				waitForValue(t, inst.pool, "published", `SELECT publication_state FROM posts WHERE id = $1::uuid`, postID)

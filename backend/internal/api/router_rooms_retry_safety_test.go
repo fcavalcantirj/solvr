@@ -148,7 +148,7 @@ func TestApprovePublication_RetryCannotRepublish(t *testing.T) {
 	require.True(t, after.Equal(approvedAt), "a retried approval must not write again")
 
 	// The author archives the published outcome; a late approval must not reopen it.
-	st, out = doJSON(t, "PATCH", ts.URL+"/v1/posts/"+postID, ownerKey, `{"status":"closed"}`)
+	st, out = doJSONAtCurrentVersion(t, "PATCH", ts.URL+"/v1/posts/"+postID, ownerKey, `{"status":"closed"}`)
 	require.Equal(t, http.StatusOK, st, "%v", out)
 	st, out = doJSON(t, "POST", approveURL(postID), ownerKey, "")
 	require.Equal(t, http.StatusConflict, st, "%v", out)

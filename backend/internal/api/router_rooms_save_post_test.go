@@ -150,7 +150,7 @@ func TestSaveAsPost_PublicRoomPublishThenListed(t *testing.T) {
 	require.NotEmpty(t, postID)
 
 	// Author publishes via the ordinary post-update flow (public room: no owner gate).
-	pub := doRoomRequest(t, "PATCH", ts.URL+"/v1/posts/"+postID, `{"status":"open"}`, apiKey)
+	pub := doRoomRequestAtCurrentVersion(t, "PATCH", ts.URL+"/v1/posts/"+postID, `{"status":"open"}`, apiKey)
 	defer pub.Body.Close()
 	require.Equal(t, http.StatusOK, pub.StatusCode, "public-room author must publish through the normal flow")
 	assert.Equal(t, "pending_review", dataObj(t, pub)["status"], "the edit submits the outcome to moderation")
@@ -186,7 +186,7 @@ func TestSaveAsPost_PrivateRoomOwnerApprovalRequired(t *testing.T) {
 	require.NotEmpty(t, postID)
 
 	// Ordinary author publish is refused for a private-room outcome.
-	blocked := doRoomRequest(t, "PATCH", ts.URL+"/v1/posts/"+postID, `{"status":"open"}`, ownerKey)
+	blocked := doRoomRequestAtCurrentVersion(t, "PATCH", ts.URL+"/v1/posts/"+postID, `{"status":"open"}`, ownerKey)
 	defer blocked.Body.Close()
 	assert.Equal(t, http.StatusForbidden, blocked.StatusCode, "private-room outcome must not publish via a plain edit")
 

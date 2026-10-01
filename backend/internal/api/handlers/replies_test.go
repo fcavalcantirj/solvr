@@ -18,17 +18,21 @@ import (
 
 // MockRepliesRepository implements RepliesRepositoryInterface for handler tests.
 type MockRepliesRepository struct {
-	createErr   error
-	created     *models.Reply
-	getResult   *models.ReplyWithAuthor
-	getErr      error
-	listResult  []models.ReplyWithAuthor
-	listTotal   int
-	updateErr   error
-	updated     *models.Reply
-	deleteErr   error
-	voteErr     error
-	lastCreated *models.Reply
+	createErr  error
+	created    *models.Reply
+	getResult  *models.ReplyWithAuthor
+	getErr     error
+	listResult []models.ReplyWithAuthor
+	listTotal  int
+	updateErr  error
+	updated    *models.Reply
+	// updateCalls/lastExpected record the conditional write: how many times
+	// Update ran and the expected version the handler handed it (nil = If-Match: *).
+	updateCalls  int
+	lastExpected *time.Time
+	deleteErr    error
+	voteErr      error
+	lastCreated  *models.Reply
 	// pagePage/pageTotal drive ListPageByPost; lastPageParams records what the
 	// handler passed so a test can assert cursor/limit clamping.
 	pageResult     []models.ReplyWithAuthor
@@ -85,7 +89,9 @@ func (m *MockRepliesRepository) ListPageByPost(_ context.Context, params models.
 	return m.pageResult, m.pageTotal, nil
 }
 
-func (m *MockRepliesRepository) Update(_ context.Context, id string, _ models.AuthorType, _, body string, _ *string) (*models.Reply, error) {
+func (m *MockRepliesRepository) Update(_ context.Context, id string, _ models.AuthorType, _, body string, _ *string, expected *time.Time) (*models.Reply, error) {
+	m.updateCalls++
+	m.lastExpected = expected
 	if m.updateErr != nil {
 		return nil, m.updateErr
 	}
@@ -358,8 +364,11 @@ func TestReplies_GetNotFound(t *testing.T) {
 }
 
 func TestReplies_UpdateNonAuthorForbidden(t *testing.T) {
-	h := NewRepliesHandler(&MockRepliesRepository{updateErr: db.ErrReplyForbidden})
+	// The repository's author check is authoritative: its ErrReplyForbidden is 403.
+	read := replyAtVersion(time.Now())
+	h := NewRepliesHandler(&MockRepliesRepository{getResult: read, updateErr: db.ErrReplyForbidden})
 	req := agentReq(http.MethodPatch, "/v1/replies/r1", map[string]any{"body": "edited"}, map[string]string{"id": "r1"})
+	req.Header.Set("If-Match", replyETag(read.UpdatedAt)) // required since idx 74 step 5
 	rec := httptest.NewRecorder()
 	h.Update(rec, req)
 	if rec.Code != http.StatusForbidden {
@@ -368,8 +377,10 @@ func TestReplies_UpdateNonAuthorForbidden(t *testing.T) {
 }
 
 func TestReplies_UpdateAuthorSucceeds(t *testing.T) {
-	h := NewRepliesHandler(&MockRepliesRepository{})
+	read := replyAtVersion(time.Now())
+	h := NewRepliesHandler(&MockRepliesRepository{getResult: read})
 	req := agentReq(http.MethodPatch, "/v1/replies/r1", map[string]any{"body": "edited"}, map[string]string{"id": "r1"})
+	req.Header.Set("If-Match", replyETag(read.UpdatedAt)) // required since idx 74 step 5
 	rec := httptest.NewRecorder()
 	h.Update(rec, req)
 	if rec.Code != http.StatusOK {

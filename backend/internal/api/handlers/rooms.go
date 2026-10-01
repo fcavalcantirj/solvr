@@ -352,8 +352,10 @@ func (h *RoomHandler) UpdateRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Reject a stale If-Match so a retry cannot overwrite a newer revision.
-	if enforceRoomIfMatch(w, r, room.UpdatedAt) {
+	// Required If-Match (idx 74 step 5): 428 without it, 412 when stale, so a
+	// retry cannot overwrite a newer revision.
+	expected, ok := enforceRoomIfMatch(w, r, room.UpdatedAt)
+	if !ok {
 		return
 	}
 
@@ -363,7 +365,12 @@ func (h *RoomHandler) UpdateRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updated, err := h.roomRepo.Update(r.Context(), room.ID, params)
+	// The write lands only at the version the precondition checked, so an
+	// edit that lost a race to another writer is 412, not a lost update.
+	updated, err := h.roomRepo.Update(r.Context(), room.ID, params, expected)
+	if answerVersionConflict(w, err, "room", roomWriteError) {
+		return
+	}
 	if err != nil {
 		slog.Error("failed to update room", "error", err, "room_id", room.ID)
 		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to update room")

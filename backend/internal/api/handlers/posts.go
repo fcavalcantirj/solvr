@@ -81,6 +81,10 @@ type PostsRepositoryInterface interface {
 
 	// Update updates an existing post and returns it.
 	Update(ctx context.Context, post *models.Post) (*models.Post, error)
+	// UpdateIfUnmodified writes like Update only while the post is still at
+	// expected (its updated_at); nil writes unconditionally. A post that moved
+	// is a *models.VersionConflictError.
+	UpdateIfUnmodified(ctx context.Context, post *models.Post, expected *time.Time) (*models.Post, error)
 
 	// Delete soft-deletes a post by ID.
 	Delete(ctx context.Context, id string) error
@@ -632,11 +636,11 @@ func (h *PostsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Optimistic concurrency (idx 73 step 5): reject a stale edit whose
-	// If-Match precondition no longer matches the current version so a retry
-	// cannot silently overwrite a newer revision. Checked after ownership so a
-	// non-owner never learns the version. Absent header keeps prior behavior.
-	if enforceIfMatch(w, r, existingPost.UpdatedAt) {
+	// Required If-Match (idx 74 step 5): 428 without it, 412 when stale, so a
+	// retry cannot overwrite a newer revision. Checked after ownership so a
+	// non-owner never learns the version.
+	expected, ok := enforceIfMatch(w, r, existingPost.UpdatedAt)
+	if !ok {
 		return
 	}
 
@@ -761,7 +765,12 @@ func (h *PostsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	result, err := h.repo.Update(r.Context(), &updatedPost)
+	// The write lands only at the version the precondition checked, so an
+	// edit that lost a race to another writer is 412, not a lost update.
+	result, err := h.repo.UpdateIfUnmodified(r.Context(), &updatedPost, expected)
+	if answerVersionConflict(w, err, "post", writePostsError) {
+		return
+	}
 	if err != nil {
 		ctx := response.LogContext{
 			Operation: "Update",

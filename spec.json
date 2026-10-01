@@ -950,7 +950,7 @@
       "Require version or If-Match on conflicting edits and reject stale updates; ensure retries cannot overwrite a newer directive, change ownership, or duplicate a publication.",
       "Document supported CORS origins, credential transport, request-size limits, stream resume semantics, and timeout guidance in the same OpenAPI contract."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "api",

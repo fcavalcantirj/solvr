@@ -12,24 +12,12 @@ func replyETag(updatedAt time.Time) string {
 	return entityETag(updatedAt)
 }
 
-// enforceReplyIfMatch writes a 412 response and returns true when the request
-// carries a stale If-Match precondition for a reply whose current version is
-// derived from updatedAt; it echoes the current validator so the client can
-// refetch and retry. It returns false when the edit may proceed.
-//
-// If-Match is opt-in (an absent header never blocks), so a retry that carries
-// the version it last read cannot silently overwrite a newer revision of the
-// reply (idx 73 step 5). The precondition is checked before repo ownership
-// enforcement: a reply's version is not secret (the public GET already exposes
-// updated_at), so returning 412 to a non-owner leaks nothing, while the actual
-// write remains blocked by the author-only check inside the repository.
-func enforceReplyIfMatch(w http.ResponseWriter, r *http.Request, updatedAt time.Time) bool {
-	current := replyETag(updatedAt)
-	if ifMatchIsStale(r, current) {
-		w.Header().Set("ETag", current)
-		writeRepliesError(w, http.StatusPreconditionFailed, "PRECONDITION_FAILED",
-			"reply was modified since you last read it; refetch and retry")
-		return true
-	}
-	return false
+// enforceReplyIfMatch applies the required If-Match precondition of a reply
+// edit (see requireIfMatch): 428 without it, 412 with the current ETag when it
+// is stale, else the version the conditional write must still find (nil for
+// "If-Match: *"), so a retry carrying the version it last read cannot overwrite
+// a newer revision of the reply. Callers run it AFTER the author check, like
+// posts and rooms, so a non-author is told 403 rather than to fetch an ETag.
+func enforceReplyIfMatch(w http.ResponseWriter, r *http.Request, updatedAt time.Time) (*time.Time, bool) {
+	return requireIfMatch(w, r, updatedAt, "reply", writeRepliesError)
 }

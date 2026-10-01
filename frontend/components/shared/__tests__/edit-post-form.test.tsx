@@ -141,9 +141,10 @@ describe('EditPostForm', () => {
     fireEvent.click(submitButton);
 
     await waitFor(() => {
+      // Third argument: the version the form loaded (this read carried no ETag).
       expect(mockUpdatePost).toHaveBeenCalledWith('post-123', {
         title: 'Updated Problem Title Long Enough',
-      });
+      }, null);
     });
   });
 
@@ -214,6 +215,23 @@ describe('EditPostForm', () => {
     await waitFor(() => {
       expect(mockPush).toHaveBeenCalledWith('/problems/post-123');
     });
+  });
+
+  it('sends the version it loaded as If-Match (idx 74 step 5)', async () => {
+    mockGetPost.mockResolvedValue({ data: baseProblemPost, etag: '"1790000000000002"' });
+    render(<EditPostForm postId="post-123" postType="problems" />);
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Test Problem Title That Is Long Enough')).toBeInTheDocument();
+    });
+    fireEvent.change(screen.getByDisplayValue('Test Problem Title That Is Long Enough'), {
+      target: { value: 'Updated Problem Title Long Enough' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /save/i }));
+
+    await waitFor(() => expect(mockUpdatePost).toHaveBeenCalled());
+    expect(mockUpdatePost.mock.calls[0][0]).toBe('post-123');
+    expect(mockUpdatePost.mock.calls[0][2]).toBe('"1790000000000002"');
   });
 
   it('shows loading state while fetching post', () => {

@@ -86,7 +86,15 @@ func TestRepliesRoute_EmbedsTheBodyOnCreateAndEdit(t *testing.T) {
 
 	// Swap the service's vector by editing through a router built with another axis.
 	router = NewRouter(pool, nil, nil, axisEmbedding{axis: 9})
-	rec = send(http.MethodPatch, "/v1/replies/"+created.Data.ID, `{"body":"the route re-embeds this edit"}`)
+	// The edit sends the ETag of a read back as If-Match (required since idx 74 step 5).
+	etag := send(http.MethodGet, "/v1/replies/"+created.Data.ID, "").Header().Get("ETag")
+	require.NotEmpty(t, etag, "GET /v1/replies/{id} hands out the reply's ETag")
+	edit := httptest.NewRequest(http.MethodPatch, "/v1/replies/"+created.Data.ID, strings.NewReader(`{"body":"the route re-embeds this edit"}`))
+	edit.Header.Set("Content-Type", "application/json")
+	edit.Header.Set("Authorization", "Bearer "+jwt)
+	edit.Header.Set("If-Match", etag)
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, edit)
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	require.Equal(t, 9, storedAxis(created.Data.ID), "an edit must replace the vector with the new body's")
 }

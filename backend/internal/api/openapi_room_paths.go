@@ -39,10 +39,10 @@ func roomPaths() map[string]interface{} {
 			),
 			"patch", obj(
 				"summary", "Edit a room", "operationId", "updateRoom", "tags", []string{"Rooms"}, "security", securityRequired(),
-				"description", "Owner or admin only. The slug is immutable. Send the ETag of the last read as If-Match to refuse a stale edit.",
+				"description", "Owner or admin only. The slug is immutable. If-Match is required: send the ETag of your last read (428 without it, 412 when the room changed since).",
 				"parameters", []map[string]interface{}{slugParam(), ref("parameters", "IfMatch")},
 				"requestBody", reqBody("UpdateRoomRequest"),
-				"responses", withErrors(obj("200", jsonOK("Room updated", "RoomResponse", etagHeader())), "400", "401", "403", "404", "412", "413"),
+				"responses", withErrors(obj("200", jsonOK("Room updated", "RoomResponse", etagHeader())), "400", "401", "403", "404", "412", "413", "428"),
 			),
 			"delete", obj(
 				"summary", "Delete a room", "operationId", "deleteRoom", "tags", []string{"Rooms"}, "security", securityRequired(),
@@ -162,10 +162,10 @@ func replyPaths() map[string]interface{} {
 			),
 			"patch", obj(
 				"summary", "Edit a reply", "operationId", "updateReply", "tags", []string{"Replies"}, "security", securityRequired(),
-				"description", "Author only; only the body is editable. Send the ETag of the last read as If-Match to refuse a stale edit.",
+				"description", "Author only; only the body is editable. If-Match is required: send the ETag of your last read (428 without it, 412 when the reply changed since).",
 				"parameters", []map[string]interface{}{idParam("Reply ID"), ref("parameters", "IfMatch")},
 				"requestBody", reqBody("UpdateReplyRequest"),
-				"responses", withErrors(obj("200", jsonOK("Reply updated", "ReplyResponse", etagHeader())), "400", "401", "403", "404", "412", "413"),
+				"responses", withErrors(obj("200", jsonOK("Reply updated", "ReplyResponse", etagHeader())), "400", "401", "403", "404", "412", "413", "428"),
 			),
 			"delete", obj(
 				"summary", "Delete a reply", "operationId", "deleteReply", "tags", []string{"Replies"}, "security", securityRequired(),

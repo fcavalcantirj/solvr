@@ -7,7 +7,7 @@
 //
 // The split keeps each file under the 800-line CI cap (scripts/check-file-size.sh).
 
-import { SolvrAPIBase } from './api-base';
+import { SolvrAPIBase, type FetchOptions } from './api-base';
 
 // Re-export all types for backward compatibility
 export * from './api-types';
@@ -109,6 +109,27 @@ import type {
 } from './api-types';
 
 class SolvrAPI extends SolvrAPIBase {
+  // fetchVersioned also returns the ETag response header: the version an edit of the
+  // resource must send back as If-Match (the API answers 428 without it, 412 when stale).
+  protected async fetchVersioned<T>(endpoint: string, options?: FetchOptions): Promise<{ body: T; etag: string | null }> {
+    const response = await this.send(endpoint, options);
+    return { body: await response.json(), etag: response.headers?.get('ETag') ?? null };
+  }
+
+  async getPost(id: string): Promise<{ data: APIPost; etag: string | null }> {
+    const { body, etag } = await this.fetchVersioned<{ data: APIPost }>(`/v1/posts/${id}`);
+    return { data: body.data, etag };
+  }
+
+  // updatePost edits the post at the version the caller read (getPost's etag).
+  async updatePost(id: string, data: UpdatePostData, ifMatch: string | null): Promise<{ data: APIPost }> {
+    return this.fetch<{ data: APIPost }>(`/v1/posts/${id}`, {
+      method: 'PATCH',
+      headers: ifMatch ? { 'If-Match': ifMatch } : undefined,
+      body: JSON.stringify(data),
+    });
+  }
+
   async getProblemsStats(): Promise<APIProblemsStatsResponse> {
     return this.fetch<APIProblemsStatsResponse>('/v1/stats/problems');
   }

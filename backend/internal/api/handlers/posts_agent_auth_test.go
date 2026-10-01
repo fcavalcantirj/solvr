@@ -263,6 +263,7 @@ func TestUpdatePost_AgentCanUpdateOwnPost(t *testing.T) {
 	jsonBody, _ := json.Marshal(body)
 
 	req := httptest.NewRequest(http.MethodPatch, "/v1/posts/agent-post-456", bytes.NewReader(jsonBody))
+	req.Header.Set("If-Match", postETag(post.UpdatedAt)) // required since idx 74 step 5
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "agent-post-456")

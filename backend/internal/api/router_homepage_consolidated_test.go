@@ -291,7 +291,7 @@ func TestOverviewConsolidated_CacheInvalidatedOnVisibilityChange(t *testing.T) {
 	private := true
 	_, err := db.NewRoomRepository(pool).Update(context.Background(), room.ID, models.UpdateRoomParams{
 		IsPrivate: &private,
-	})
+	}, nil)
 	require.NoError(t, err)
 	// In production, UpdateRoom handler calls InvalidateOverviewCache() after
 	// a visibility change. The test updates the repository directly, so it

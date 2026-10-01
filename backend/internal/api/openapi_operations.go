@@ -29,7 +29,8 @@ func addOperations(spec map[string]interface{}) {
 // errorRows maps a status to the shared response (components.responses) that describes it.
 var errorRows = map[string]string{
 	"400": "BadRequest", "401": "Unauthorized", "403": "Forbidden", "404": "NotFound", "409": "Conflict",
-	"412": "PreconditionFailed", "413": "PayloadTooLarge", "429": "RateLimited", "503": "ServiceUnavailable",
+	"412": "PreconditionFailed", "413": "PayloadTooLarge", "428": "PreconditionRequired", "429": "RateLimited",
+	"503": "ServiceUnavailable",
 }
 
 // withErrors adds a reference to the shared error response of each status.
@@ -105,5 +106,5 @@ func wirePostConventions(paths map[string]interface{}) {
 	patch := byID["patch"].(map[string]interface{})
 	appendParam(patch, ref("parameters", "IfMatch"))
 	patch["responses"].(map[string]interface{})["200"].(map[string]interface{})["headers"] = etagHeader()
-	withErrors(patch["responses"].(map[string]interface{}), "400", "401", "403", "404", "412", "413")
+	withErrors(patch["responses"].(map[string]interface{}), "400", "401", "403", "404", "412", "413", "428")
 }

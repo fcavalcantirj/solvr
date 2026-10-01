@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/google/uuid"
@@ -385,8 +386,12 @@ func (r *RoomRepository) ListByOwner(ctx context.Context, ownerID uuid.UUID) ([]
 }
 
 // Update applies partial updates to a room, only modifying non-nil fields.
-// Always sets updated_at = NOW().
-func (r *RoomRepository) Update(ctx context.Context, roomID uuid.UUID, params models.UpdateRoomParams) (*models.Room, error) {
+// Always sets updated_at = NOW(). expected is the version (updated_at) the
+// caller read: the write lands only while the room is still at it, in the same
+// statement, so two edits that read one version cannot both land (spec.json
+// idx 74 step 5); it returns a *models.VersionConflictError with the current
+// version otherwise. A nil expected writes unconditionally.
+func (r *RoomRepository) Update(ctx context.Context, roomID uuid.UUID, params models.UpdateRoomParams, expected *time.Time) (*models.Room, error) {
 	// Build dynamic SET clause
 	setClauses := []string{"updated_at = NOW()"}
 	args := []any{}
@@ -421,11 +426,24 @@ func (r *RoomRepository) Update(ctx context.Context, roomID uuid.UUID, params mo
 	query := fmt.Sprintf(`
 		UPDATE rooms SET %s
 		WHERE id = $%d AND deleted_at IS NULL
+		  AND ($%d::timestamptz IS NULL OR updated_at = $%d::timestamptz)
 		RETURNING `+roomColumns+`
-	`, strings.Join(setClauses, ", "), argIdx)
-	args = append(args, roomID)
+	`, strings.Join(setClauses, ", "), argIdx, argIdx+1, argIdx+1)
+	args = append(args, roomID, expected)
 
-	return r.scanRoomFromRow(ctx, "Update", query, args...)
+	room, err := r.scanRoomFromRow(ctx, "Update", query, args...)
+	if errors.Is(err, ErrRoomNotFound) && expected != nil {
+		var current time.Time
+		verr := r.pool.QueryRow(ctx,
+			"SELECT updated_at FROM rooms WHERE id = $1 AND deleted_at IS NULL", roomID).Scan(&current)
+		if verr == nil {
+			return nil, &models.VersionConflictError{Current: current}
+		}
+		if !errors.Is(verr, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("read room version: %w", verr)
+		}
+	}
+	return room, err
 }
 
 // BackfillOwnerFromMembership makes the given human an active owner of every live room

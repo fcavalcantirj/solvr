@@ -7,7 +7,6 @@ export * from './api-types';
 
 // Import types for internal use
 import type {
-  APIPost,
   APIPostsResponse,
   APISearchResponse,
   APIAnswersResponse,
@@ -23,7 +22,6 @@ import type {
   APICreateReportResponse,
   APICheckReportedResponse,
   CreatePostData,
-  UpdatePostData,
   APICreatePostResponse,
   APIRepliesResponse,
   APIRoom,
@@ -108,7 +106,7 @@ import type {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 
-interface FetchOptions extends RequestInit {
+export interface FetchOptions extends RequestInit {
   skipAuthEvent?: boolean;
 }
 
@@ -141,6 +139,12 @@ export class SolvrAPIBase {
   }
 
   protected async fetch<T>(endpoint: string, options?: FetchOptions): Promise<T> {
+    return (await this.send(endpoint, options)).json();
+  }
+
+  // send issues the request and throws APIError on a non-2xx answer. lib/api.ts reads the
+  // ETag of a response through it (the version an edit must send back as If-Match).
+  protected async send(endpoint: string, options?: FetchOptions): Promise<Response> {
     const url = `${this.baseUrl}${endpoint}`;
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -167,7 +171,7 @@ export class SolvrAPIBase {
       throw error;
     }
 
-    return response.json();
+    return response;
   }
 
   async getPosts(params?: FetchPostsParams): Promise<APIPostsResponse> {
@@ -208,10 +212,6 @@ export class SolvrAPIBase {
       console.error('[api.search] Request failed:', endpoint, err);
       throw err;
     }
-  }
-
-  async getPost(id: string): Promise<{ data: APIPost }> {
-    return this.fetch<{ data: APIPost }>(`/v1/posts/${id}`);
   }
 
   async getPostReplies(id: string): Promise<APIRepliesResponse> {
@@ -513,13 +513,6 @@ export class SolvrAPIBase {
   async createPost(data: CreatePostData): Promise<APICreatePostResponse> {
     return this.fetch<APICreatePostResponse>('/v1/posts', {
       method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async updatePost(id: string, data: UpdatePostData): Promise<{ data: APIPost }> {
-    return this.fetch<{ data: APIPost }>(`/v1/posts/${id}`, {
-      method: 'PATCH',
       body: JSON.stringify(data),
     });
   }

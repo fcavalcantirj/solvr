@@ -250,3 +250,62 @@ describe('SolvrAPI replies by author (idx 73 step 3)', () => {
     });
   });
 });
+
+describe('SolvrAPI conditional post edit (idx 74 step 5)', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('returns the post with the ETag of the read, the version an edit sends back', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      headers: new Headers({ ETag: '"1790000000000001"' }),
+      json: async () => ({ data: { id: 'p1', title: 'A post' } }),
+    });
+
+    const res = await api.getPost('p1');
+
+    expect(res.data).toEqual({ id: 'p1', title: 'A post' });
+    expect(res.etag).toBe('"1790000000000001"');
+  });
+
+  it('reads a post without an ETag as no version', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ data: { id: 'p1' } }) });
+
+    const res = await api.getPost('p1');
+
+    expect(res.etag).toBeNull();
+  });
+
+  it('sends the version it was given as If-Match on PATCH /v1/posts/{id}', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ data: { id: 'p1' } }) });
+
+    await api.updatePost('p1', { title: 'Edited title here' }, '"1790000000000001"');
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(new URL(url).pathname).toBe('/v1/posts/p1');
+    expect(init.method).toBe('PATCH');
+    expect(init.headers['If-Match']).toBe('"1790000000000001"');
+    expect(JSON.parse(init.body)).toEqual({ title: 'Edited title here' });
+  });
+
+  it('surfaces the API message when the post changed since it was read', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 412,
+      json: async () => ({ error: { code: 'PRECONDITION_FAILED', message: 'post was modified since you last read it; refetch and retry' } }),
+    });
+
+    await expect(api.updatePost('p1', { title: 'Edited title here' }, '"1"')).rejects.toMatchObject({
+      statusCode: 412,
+      message: 'post was modified since you last read it; refetch and retry',
+    });
+  });
+});

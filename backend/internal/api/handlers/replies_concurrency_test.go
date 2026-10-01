@@ -88,8 +88,10 @@ func TestReplies_UpdateStarIfMatchSucceeds(t *testing.T) {
 	}
 }
 
-// If-Match is opt-in: an edit with no precondition keeps the prior behavior.
-func TestReplies_UpdateWithoutIfMatchStillSucceeds(t *testing.T) {
+// If-Match is required (spec.json idx 74 step 5, owner decision 8 of
+// 2026-09-30): an edit with no precondition is 428 PRECONDITION_REQUIRED, never
+// reaches the write, and hands out no ETag to blindly echo back.
+func TestReplies_UpdateWithoutIfMatchIs428(t *testing.T) {
 	mock := &MockRepliesRepository{getResult: replyAtVersion(time.Now())}
 	h := NewRepliesHandler(mock)
 
@@ -97,8 +99,70 @@ func TestReplies_UpdateWithoutIfMatchStillSucceeds(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.Update(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusPreconditionRequired {
+		t.Fatalf("status = %d, want 428; body=%s", rec.Code, rec.Body.String())
+	}
+	if code := errorCode(t, rec); code != "PRECONDITION_REQUIRED" {
+		t.Errorf("error.code = %q, want PRECONDITION_REQUIRED", code)
+	}
+	if mock.updateCalls != 0 {
+		t.Error("an edit without If-Match must not reach the write")
+	}
+	if got := rec.Header().Get("ETag"); got != "" {
+		t.Errorf("a 428 must not hand out the current ETag, got %q", got)
+	}
+}
+
+// The matching If-Match becomes the write's expected version, so the write
+// refuses a reply another writer changed after the check; "*" writes
+// unconditionally (no expected version).
+func TestReplies_UpdateWritesAtTheVersionItChecked(t *testing.T) {
+	current := time.Date(2026, 9, 24, 10, 0, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		ifMatch string
+		want    *time.Time
+	}{{replyETag(current), &current}, {"*", nil}} {
+		mock := &MockRepliesRepository{getResult: replyAtVersion(current)}
+		h := NewRepliesHandler(mock)
+		req := agentReq(http.MethodPatch, "/v1/replies/r1", map[string]any{"body": "edited"}, map[string]string{"id": "r1"})
+		req.Header.Set("If-Match", tc.ifMatch)
+		rec := httptest.NewRecorder()
+		h.Update(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("If-Match %s: status = %d, want 200; body=%s", tc.ifMatch, rec.Code, rec.Body.String())
+		}
+		got := mock.lastExpected
+		if mock.updateCalls != 1 || (tc.want == nil) != (got == nil) || (got != nil && !got.Equal(*tc.want)) {
+			t.Errorf("If-Match %s: %d writes at %v, want one at %v", tc.ifMatch, mock.updateCalls, got, tc.want)
+		}
+	}
+}
+
+// A precondition that matched at the check but lost the write to a concurrent
+// writer is 412 PRECONDITION_FAILED with the winner's ETag.
+func TestReplies_UpdateLostToAConcurrentWriterIs412(t *testing.T) {
+	current := time.Date(2026, 9, 24, 10, 0, 0, 0, time.UTC)
+	winner := current.Add(time.Second)
+	mock := &MockRepliesRepository{
+		getResult: replyAtVersion(current),
+		updateErr: &models.VersionConflictError{Current: winner},
+	}
+	h := NewRepliesHandler(mock)
+
+	req := agentReq(http.MethodPatch, "/v1/replies/r1", map[string]any{"body": "edited"}, map[string]string{"id": "r1"})
+	req.Header.Set("If-Match", replyETag(current))
+	rec := httptest.NewRecorder()
+	h.Update(rec, req)
+
+	if rec.Code != http.StatusPreconditionFailed {
+		t.Fatalf("status = %d, want 412; body=%s", rec.Code, rec.Body.String())
+	}
+	if code := errorCode(t, rec); code != "PRECONDITION_FAILED" {
+		t.Errorf("error.code = %q, want PRECONDITION_FAILED", code)
+	}
+	if got, want := rec.Header().Get("ETag"), replyETag(winner); got != want {
+		t.Errorf("ETag = %q, want the winner's %q", got, want)
 	}
 }
 

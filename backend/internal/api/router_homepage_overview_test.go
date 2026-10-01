@@ -574,7 +574,7 @@ func TestHomepageOverview_PreviewDisappearsWhenTheRoomGoesPrivate(t *testing.T) 
 	private := true
 	_, err := db.NewRoomRepository(pool).Update(context.Background(), room.ID, models.UpdateRoomParams{
 		IsPrivate: &private,
-	})
+	}, nil)
 	require.NoError(t, err)
 
 	after, raw := getHomepageOverview(t, ts.URL)

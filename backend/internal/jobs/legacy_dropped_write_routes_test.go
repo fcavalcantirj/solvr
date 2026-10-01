@@ -111,21 +111,36 @@ func writeProbeFamilies() map[string]string {
 // while it ran and shortly after (handlers finish some writes in the background).
 func serveWriteProbe(t *testing.T, router http.Handler, tracer *dbErrorTracer, s *writeProbeState, c writeProbeCall) (int, []tracedError, []byte) {
 	t.Helper()
-	tracer.take()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	method := strings.SplitN(c.route, " ", 2)[0]
+	bearer := map[string]string{
+		"human": s.jwt, "agent": s.agentKey, "human2": s.human2JWT, "agent2": s.agent2Key, "room": s.roomToken,
+	}[c.caller]
+	// An edit sends the ETag of the caller's own read as If-Match, as a client does: edits of
+	// posts, replies and rooms require it since spec.json idx 74 step 5 (428 without it).
+	ifMatch := ""
+	if method == http.MethodPatch {
+		read := httptest.NewRequest(http.MethodGet, c.path, nil).WithContext(ctx)
+		if bearer != "" {
+			read.Header.Set("Authorization", "Bearer "+bearer)
+		}
+		readRec := httptest.NewRecorder()
+		router.ServeHTTP(readRec, read)
+		ifMatch = readRec.Header().Get("ETag")
+	}
+	tracer.take()
 	req := httptest.NewRequest(method, c.path, strings.NewReader(c.body)).WithContext(ctx)
 	contentType := c.contentType
 	if contentType == "" {
 		contentType = "application/json"
 	}
 	req.Header.Set("Content-Type", contentType)
-	bearer := map[string]string{
-		"human": s.jwt, "agent": s.agentKey, "human2": s.human2JWT, "agent2": s.agent2Key, "room": s.roomToken,
-	}[c.caller]
 	if bearer != "" {
 		req.Header.Set("Authorization", "Bearer "+bearer)
+	}
+	if ifMatch != "" {
+		req.Header.Set("If-Match", ifMatch)
 	}
 	if c.caller == "admin" {
 		req.Header.Set("X-Admin-API-Key", routeProbeAdminKey)

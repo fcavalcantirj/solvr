@@ -94,9 +94,9 @@ func TestAgentOwnedRoom_UnclaimedAgentManagesRoomAndSurvivesLaterClaim(t *testin
 	status, _ = doJSON(t, "DELETE", membersURL+"/"+tempID, ownerKey, "")
 	require.Equal(t, http.StatusNoContent, status, "owner removes a member")
 
-	status, out = doJSON(t, "PATCH", ts.URL+"/v1/rooms/"+slug, ownerKey, `{"display_name":"Agent Owned Renamed"}`)
+	status, out = doJSONAtCurrentVersion(t, "PATCH", ts.URL+"/v1/rooms/"+slug, ownerKey, `{"display_name":"Agent Owned Renamed"}`)
 	require.Equal(t, http.StatusOK, status, "owner edits the room: %v", out)
-	status, out = doJSON(t, "PATCH", ts.URL+"/v1/rooms/"+slug, ownerKey, `{"is_private":true}`)
+	status, out = doJSONAtCurrentVersion(t, "PATCH", ts.URL+"/v1/rooms/"+slug, ownerKey, `{"is_private":true}`)
 	require.Equal(t, http.StatusOK, status, "owner changes visibility: %v", out)
 	data, _ = out["data"].(map[string]any)
 	assert.Equal(t, true, data["is_private"])
@@ -153,7 +153,7 @@ func TestAgentOwnedRoom_UnclaimedAgentManagesRoomAndSurvivesLaterClaim(t *testin
 	assert.ElementsMatch(t, append(membersBefore, "user:"+userID+":owner"), agentOwnedRoomMembers(t, pool, slug),
 		"agent memberships intact; the claiming human joins as owner")
 
-	status, out = doJSON(t, "PATCH", ts.URL+"/v1/rooms/"+slug, ownerKey, `{"display_name":"Still Agent Managed"}`)
+	status, out = doJSONAtCurrentVersion(t, "PATCH", ts.URL+"/v1/rooms/"+slug, ownerKey, `{"display_name":"Still Agent Managed"}`)
 	assert.Equal(t, http.StatusOK, status, "the owner agent keeps managing after the claim: %v", out)
 	agentOwnedRoomPostMessage(t, ts.URL, slug, ownerTok, ownerID, "after claim")
 }

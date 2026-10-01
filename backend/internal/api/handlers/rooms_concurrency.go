@@ -15,21 +15,12 @@ func roomETag(updatedAt time.Time) string {
 	return entityETag(updatedAt)
 }
 
-// enforceRoomIfMatch writes a 412 response and returns true when the request
-// carries a stale If-Match precondition for a room whose current version is
-// derived from updatedAt; it echoes the current validator so the client can
-// refetch and retry. It returns false when the edit may proceed.
-//
-// If-Match is opt-in (an absent header never blocks). Callers run it AFTER the
-// manage-permission check, so a non-manager of a private room gets 403 and
-// learns nothing about the room's version (idx 73 step 5).
-func enforceRoomIfMatch(w http.ResponseWriter, r *http.Request, updatedAt time.Time) bool {
-	current := roomETag(updatedAt)
-	if ifMatchIsStale(r, current) {
-		w.Header().Set("ETag", current)
-		roomWriteError(w, http.StatusPreconditionFailed, "PRECONDITION_FAILED",
-			"room was modified since you last read it; refetch and retry")
-		return true
-	}
-	return false
+// enforceRoomIfMatch applies the required If-Match precondition of a room
+// edit (see requireIfMatch): 428 without it, 412 with the current ETag when it
+// is stale, else the version the conditional write must still find (nil for
+// "If-Match: *"). Callers run it AFTER the manage-permission check, so a
+// non-manager of a private room gets 403 and learns nothing about the room's
+// version.
+func enforceRoomIfMatch(w http.ResponseWriter, r *http.Request, updatedAt time.Time) (*time.Time, bool) {
+	return requireIfMatch(w, r, updatedAt, "room", roomWriteError)
 }

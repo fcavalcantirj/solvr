@@ -156,7 +156,7 @@ func TestRoomStream_VisibilityChangeAndDeletionEndStreamsOfCallersWhoLostAccess(
 	outsider := openAccessStream(t, room.streamURL(b), outsiderKey)
 	member := openAccessStream(t, room.streamURL(b), room.plannerTok)
 
-	status, out := doJSON(t, "PATCH", a.ts.URL+"/v1/rooms/"+room.slug, room.ownerJWT, `{"is_private":true}`)
+	status, out := doJSONAtCurrentVersion(t, "PATCH", a.ts.URL+"/v1/rooms/"+room.slug, room.ownerJWT, `{"is_private":true}`)
 	require.Equal(t, http.StatusOK, status, "make private through A: %v", out)
 
 	require.True(t, anonymous.endedWithin(3*time.Second), "the anonymous viewer loses the now-private room")

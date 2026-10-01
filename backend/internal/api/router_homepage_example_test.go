@@ -257,7 +257,7 @@ func TestHomepageExample_RemovesPreviewContentWhenTheRoomGoesAway(t *testing.T) 
 
 	// 1. The room goes private.
 	private := true
-	_, err := roomRepo.Update(ctx, room.ID, models.UpdateRoomParams{IsPrivate: &private})
+	_, err := roomRepo.Update(ctx, room.ID, models.UpdateRoomParams{IsPrivate: &private}, nil)
 	require.NoError(t, err)
 	assertIllustrative(t, "a private room must not be previewed publicly")
 

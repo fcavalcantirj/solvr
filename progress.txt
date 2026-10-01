@@ -4645,3 +4645,138 @@ UAT: idx 74 ships with a deploy the owner runs. ORDER MATTERS: deploy the FRONTE
 
 git status at journal time [REAL]: the 62 M + 5 ?? listed above, plus this entry and spec.json idx 74
   passes -> true.
+
+================================================================================
+2026-10-01 02:27 — Task idx 77 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Make indexes, counters, search projections, and analytics rebuildable from authoritative records"
+SLICE 3 of N: verify and journal the host-auto-committed blog post vote score projection (HEAD
+1fce63ef, migration 000119, never journaled). No code change in this slice.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 77-95, 97, 98; no open
+  URGENT (96 is true). idx 24 and 67 are acceptance tasks (skipped as in every earlier entry). idx 68
+  still waits for the owner call on step 1 and owner decision 4 (keep legacy tables, drop later all at
+  once) for steps 5-6. idx 77 is the first buildable task (slices 1-2 on 2026-09-29). Tree clean at
+  start; HEAD 1fce63ef.
+
+WHAT 1fce63ef IS [REAL, git show / git log]: committed 01:59:47 with the idx 74 journal header as its
+  message ("2026-10-01 02:05 — Task idx 74 ... PASSES (s"), but its content is idx 77 work, the
+  "blog_posts scores (same pattern)" item slice 2's REMAINING list named. The session that wrote it left
+  /tmp/solvr_idx77_s3/ (spike.log, red.log, green1/2.log, mut1-3.log, full.log); its full.log stops
+  mid-run at 01:59:45 (TestTypeSpecificListEndpoints), two seconds before the commit, so that session
+  was stopped during its full run and never wrote a journal entry. Its spike.log [REAL, read]: old
+  BlogPostRepository.Vote, 8 concurrent first votes from one voter -> 1 failed with
+  votes_unique_per_target (SQLSTATE 23505); 5 rounds of "up, then 8 concurrent downs" -> stored
+  up=-34 down=36 while confirmed votes said up=1 down=1. git show --stat: 8 files, 613+/92-:
+  A backend/migrations/000119_blog_vote_score_projection.up.sql (199): redefines 000113's
+    votes_score_projection() (adds a blog_posts branch, COALESCE for NULL, clamped at 0), recreates the
+    3 vote triggers with target_type IN ('post','reply','blog_post'), and extends vote_score_drift()
+    and rebuild_vote_scores() to blog posts (the rebuild locks posts, then replies, then blog_posts FOR
+    NO KEY UPDATE before recounting; 'answer' etc. still refused). Header documents the rebuild path.
+  A backend/migrations/000119_blog_vote_score_projection.down.sql (147): 000113's definitions; [REAL]
+    `diff` of the down file against 000113.up from the first CREATE OR REPLACE FUNCTION to EOF:
+    identical. Blog counters are left as they are (the pre-119 API moves them itself again).
+  M backend/internal/db/blog_posts.go (621 lines): Vote keeps validation + existence check; the
+    out-of-transaction pre-read and the WithTx counter UPDATEs are replaced by one upsert
+    (INSERT ... ON CONFLICT ON CONSTRAINT votes_unique_per_target DO UPDATE SET direction WHERE
+    direction IS DISTINCT FROM), as posts.go/replies.go got in slice 2. Error text "failed to insert
+    vote" -> "failed to record vote" (no caller matches on it [REAL, grep internal/]; the handler
+    blog.go:526 wraps any error as "failed to vote on blog post").
+  A backend/internal/db/blog_vote_scores_test.go (239, scratch DBs, 4 tests): EveryVoteEvent...,
+    ConcurrentVotesByOneVoterCountOnce, DriftNamesBrokenBlogScoresAndTheRebuildRepairsThem (incl. a
+    NULL downvotes with a right upvotes, type/target filters, xmin unchanged on consistent rows,
+    replay = 0), ARebuildAndAVoteNeverLoseEachOther.
+  M backend/internal/db/vote_scores_test.go: scoreTable gains "blog_post": "blog_posts" (helper map,
+    no assertion changed).
+  M backend/cmd/cutover/main.go: --expect-version default 118 -> 119; main_test.go: the same version
+    in TestParseOptions_GuardsTheProductionRun / TestCheckSchema_... (118 -> 119, same assertions).
+  M backend/internal/db/cutover_rollback_test.go: down-migration count 34 -> 35 ("000119..000085")
+    and the comment; the test still asserts every down step runs and archives what it cannot hold.
+  No test deleted, skipped or loosened; the three test edits track the new latest migration.
+  Callers [REAL, grep non-test Go]: blog vote writer is only blog_posts.go Vote; no other code writes
+  blog_posts.upvotes/downvotes. db/knowledge_cutover.go:247 calls vote_score_drift() /
+  rebuild_vote_scores() with no arguments, so the cutover's vote step now repairs blog posts too.
+
+VERIFICATION [this session; DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test (local
+  docker solvr-postgres, schema 119 dirty=f) for the targeted/full runs, scratch DBs migrate from the
+  files; logs under /tmp/solvr_idx77_s3v/]:
+  [TEST] go build ./... ok; go vet ./internal/db/ ./cmd/cutover/ clean; gofmt -l clean on the 6 Go
+    files of the commit.
+  [TEST] green.log (once): TestBlogVoteScores|TestVoteScores|TestBlogPostRepository|TestCutoverRollback|
+    TestKnowledgeCutover|TestSchemaVersion|TestParseOptions|TestCheckSchema in internal/db + cmd/cutover:
+    both ok, 28 top-level PASS, 0 FAIL, 0 SKIP.
+  RED ON THE PARENT [TEST] red_parent.log: blog_posts.go from 1fce63ef^ and 000119 moved out of
+    migrations/ -> all 4 TestBlogVoteScores FAIL: :57 expected {1 0} actual {1 1} (an unconfirmed vote
+    still counted); :115 "failed to insert vote: ... duplicate key ... votes_unique_per_target (SQLSTATE
+    23505)"; :149 drift lists 1 item, want 3; :219 "vote scores are projected for post and reply
+    targets, not blog_post". Sources restored, shasum-verified.
+  MUTATIONS [TEST], each restored from /tmp/solvr_idx77_s3v/*.bak and shasum-verified after:
+    mutB old Vote code with 000119 applied (= the deploy window "migration first, old API") -> 4 FAIL,
+      e.g. :49 expected {2 0} actual {4 0} (double count), :237 expected {5 0} actual {6 0};
+    mutC rebuild without the blog_posts FOR NO KEY UPDATE -> ARebuildAndAVote FAIL :222 expected {4 0}
+      actual {3 0} (the in-flight vote lost); the other 3 PASS;
+    mutE blog drift with <> instead of IS DISTINCT FROM -> Drift FAIL :149 (2 items, want 3: the NULL
+      counter missed); the other 3 PASS.
+  MIGRATION [REAL] throwaway DB solvr_idx77_s3_mig: migrate up -> 119 dirty=f, 3 votes_score_*
+    triggers; down 1 -> 118 dirty=f, 3 triggers, rebuild_vote_scores('blog_post') raises the 000113
+    refusal; up 1 -> 119, rebuild_vote_scores('blog_post') = 0. Dropped.
+  FULL BACKEND [TEST] (once) `go test ./... -count=1 -p 1 -v -timeout 45m` -> full.log, exit 1: 18 ok,
+    FAIL internal/api and internal/db; 3249 top-level PASS, 69 FAIL, 13 SKIP. Every vote/blog/cutover/
+    room-activity test above PASS in it (29 top-level). SKIP set identical to idx 74's full run (13,
+    diffed). FAIL names vs idx 74's /tmp/solvr_idx74_s25/full_fails.txt (49): 2 gone
+    (TestAgentClaim_RetriesAndRacesLinkTheAgentOnce, TestLegacyDroppedDatabase_WriteRoutesExpose...),
+    22 new. idx 74 ran on a FRESH scratch DB (solvr_idx74_s25_full); this run used the shared
+    solvr_test, so the 22 were checked the same way: new22_fresh.log = exactly those 22 (-run
+    '^(...)$') on a fresh DB solvr_idx77_s3_full migrated to 119 (this commit included): 22 PASS,
+    0 FAIL, 0 SKIP. Their messages in full.log are shared-data/fixture collisions [REAL, extracted]:
+    service_checks averages ("~20ms, got 2350.73ms"), claim tokens ("expected 2 deleted, got 5"),
+    "room slug already exists" (4 TestRoomRepository_*), the create rate-limit counter ("1" vs "499"),
+    homepage/search pulse top terms from other tests' searches, unified search total 2283, a leaderboard
+    agent outside the top 50 (rank 0), search latency 114-128ms > 100ms. None involves votes or blog
+    posts. Not caused by 1fce63ef.
+  LIVE PROBE [REAL, /tmp/solvr_idx77_s3v/probe/probe.sh + probe.out]: fresh DB at 119, go build
+    ./cmd/api, API on :8099 under env -i (fake secrets, IPFS_API_URL=:9). 5 agents; the author
+    publishes one blog post. POST /v1/blog/{slug}/vote: voter 1 sends 50 parallel "up" -> 50 x 200,
+    stored up=1 down=0 = confirmed votes; 50 parallel "down" -> 50 x 200, up=0 down=1; 20 parallel
+    "down" replays -> 20 x 200, unchanged; voters 2/3/4 send 30 parallel each at once (90 in flight,
+    up/up/down) -> 90 x 200, stored up=2 down=2 = votes up=2 down=2. GET /v1/blog/{slug} ->
+    {"upvotes":2,"downvotes":2,"user_vote":"down"}; vote_score_drift() 0 rows. api.log: 212 x 200,
+    6 x 201, no 4xx/5xx, 0 vote errors. :8099 free, probe DB dropped. (First attempt hung: my
+    script's bare `wait` also waited on the API process; timeout 124 after the bursts, whose numbers
+    matched the rerun; fixed to wait on the 3 burst PIDs, saved as probe_hung.out.)
+  check-file-size.sh -> filesize.log "Found 34 file(s) exceeding 800 lines", same count as slices 1-2
+    and idx 74; none of this commit's files is on it. 0 solvr_scratch*/solvr_idx77*/solvr_legacy*
+    databases left [REAL, psql]. NOT RUN: frontend (no frontend file in 1fce63ef); golangci-lint
+    (config/version mismatch, slice 31).
+
+MEASURED ON THE SHARED LOCAL solvr_test (read-only) [REAL]: 2185 blog_posts; vote_score_drift(
+  'blog_post') lists rows (e.g. stored downvotes 1 with no confirmed vote), fixture writes from before
+  000119 / direct UPDATEs. Not repaired (shared test data left as is).
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW (runtime, from 1fce63ef):
+  - Double clicks / retries on POST /v1/blog/{slug}/vote no longer 500 on the unique key and no longer
+    move the score more than once (probe above).
+  - Blog scores count CONFIRMED votes only, whatever writes the vote row; un-confirming uncounts.
+  - Deploy ordering [TEST, mutB shows the double count]: 000119 before the new API = old code AND the
+    trigger both count; new API before 000119 = nothing counts. Either window is repaired by the
+    rebuild in the UAT below.
+  - The cutover command now refuses a database not at 119 (--expect-version default).
+
+REMAINING for idx 77 (next slices, in order) [UNVERIFIED plan, from the task steps]:
+  step 2/3: tags.usage_count, posts.view_count, agents.reputation — decide stored vs derived, give each
+    stored one drift + rebuild; public activity previews, search documents, overview aggregates; the
+    activation milestone replay ("replaying a worker cannot double-count an entry or activation").
+  step 1: measured query plans on representative data for the listed lookups.
+  step 4: raw eligible search events vs time buckets + retention windows; no summed distincts.
+  step 5: reconcile counters/sampled search after migration and rebuilds; visibility/deletion removes
+    public projections promptly.
+  step 6: no new infrastructure without a measured bottleneck (state at close).
+
+git status at journal time [REAL, git status --porcelain / git diff --stat]: empty before this entry;
+  this commit changes only progress.txt (this entry). spec.json unchanged, idx 77 passes stays false.
+
+UAT (for when idx 77 closes, not now): apply 000112, 000113 AND 000119 on production together with the
+  API deploy carrying b9d7644c, 619b44b8 and 1fce63ef; then `SELECT * FROM vote_score_drift();` (read it
+  first; it now includes blog posts), `SELECT rebuild_vote_scores();`, and confirm a second
+  `SELECT * FROM vote_score_drift();` returns 0 rows; plus slice 1's room_activity_drift() /
+  rebuild_room_activity() check. Run the cutover with the new default --expect-version 119.

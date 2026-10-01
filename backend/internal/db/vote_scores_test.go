@@ -18,7 +18,7 @@ import (
 type voteScore struct{ up, down int }
 
 // scoreTable maps a vote target type to the table holding its projected score.
-var scoreTable = map[string]string{"post": "posts", "reply": "replies"}
+var scoreTable = map[string]string{"post": "posts", "reply": "replies", "blog_post": "blog_posts"}
 
 func readVoteScore(ctx context.Context, t *testing.T, pool *Pool, targetType, id string) voteScore {
 	t.Helper()

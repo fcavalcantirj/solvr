@@ -454,6 +454,8 @@ func (r *BlogPostRepository) List(ctx context.Context, opts models.BlogPostListO
 }
 
 // Vote adds or updates a vote on a blog post.
+// The blog post's upvotes/downvotes follow the vote row inside the same statement (migration
+// 000119 triggers), so concurrent or replayed requests from one voter count once.
 func (r *BlogPostRepository) Vote(ctx context.Context, blogPostID, voterType, voterID, direction string) error {
 	// Validate direction
 	if direction != "up" && direction != "down" {
@@ -483,87 +485,21 @@ func (r *BlogPostRepository) Vote(ctx context.Context, blogPostID, voterType, vo
 		return ErrBlogPostNotFound
 	}
 
-	// Check for existing vote
-	var existingDirection string
-	err = r.pool.QueryRow(ctx,
-		`SELECT direction FROM votes
-		 WHERE target_type = 'blog_post' AND target_id = $1
-		 AND voter_type = $2 AND voter_id = $3`,
-		blogPostID, voterType, voterID,
-	).Scan(&existingDirection)
-
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		LogQueryError(ctx, "Vote.CheckExisting", "votes", err)
-		return fmt.Errorf("failed to check existing vote: %w", err)
+	// One statement: a concurrent first vote from the same voter becomes an update instead
+	// of a unique-key failure, and repeating the current direction writes nothing.
+	_, err = r.pool.Exec(ctx,
+		`INSERT INTO votes (target_type, target_id, voter_type, voter_id, direction, confirmed)
+		 VALUES ('blog_post', $1, $2, $3, $4, true)
+		 ON CONFLICT ON CONSTRAINT votes_unique_per_target
+		 DO UPDATE SET direction = EXCLUDED.direction
+		 WHERE votes.direction IS DISTINCT FROM EXCLUDED.direction`,
+		blogPostID, voterType, voterID, direction,
+	)
+	if err != nil {
+		LogQueryError(ctx, "Vote.Upsert", "votes", err)
+		return fmt.Errorf("failed to record vote: %w", err)
 	}
-
-	// Same vote exists, nothing to do
-	if existingDirection == direction {
-		return nil
-	}
-
-	// Use WithTx for atomicity
-	return r.pool.WithTx(ctx, func(tx Tx) error {
-		if existingDirection == "" {
-			// Insert new vote
-			_, err = tx.Exec(ctx,
-				`INSERT INTO votes (target_type, target_id, voter_type, voter_id, direction, confirmed)
-				 VALUES ('blog_post', $1, $2, $3, $4, true)`,
-				blogPostID, voterType, voterID, direction,
-			)
-			if err != nil {
-				LogQueryError(ctx, "Vote.InsertVote", "votes", err)
-				return fmt.Errorf("failed to insert vote: %w", err)
-			}
-
-			// Update blog post vote counts
-			if direction == "up" {
-				_, err = tx.Exec(ctx,
-					"UPDATE blog_posts SET upvotes = upvotes + 1 WHERE id = $1",
-					blogPostID,
-				)
-			} else {
-				_, err = tx.Exec(ctx,
-					"UPDATE blog_posts SET downvotes = downvotes + 1 WHERE id = $1",
-					blogPostID,
-				)
-			}
-			if err != nil {
-				LogQueryError(ctx, "Vote.UpdateCounts", "blog_posts", err)
-				return fmt.Errorf("failed to update blog post vote counts: %w", err)
-			}
-		} else {
-			// Update existing vote direction
-			_, err = tx.Exec(ctx,
-				`UPDATE votes SET direction = $4
-				 WHERE target_type = 'blog_post' AND target_id = $1
-				 AND voter_type = $2 AND voter_id = $3`,
-				blogPostID, voterType, voterID, direction,
-			)
-			if err != nil {
-				LogQueryError(ctx, "Vote.UpdateDirection", "votes", err)
-				return fmt.Errorf("failed to update vote: %w", err)
-			}
-
-			// Adjust counts
-			if direction == "up" {
-				_, err = tx.Exec(ctx,
-					"UPDATE blog_posts SET upvotes = upvotes + 1, downvotes = downvotes - 1 WHERE id = $1",
-					blogPostID,
-				)
-			} else {
-				_, err = tx.Exec(ctx,
-					"UPDATE blog_posts SET upvotes = upvotes - 1, downvotes = downvotes + 1 WHERE id = $1",
-					blogPostID,
-				)
-			}
-			if err != nil {
-				LogQueryError(ctx, "Vote.AdjustCounts", "blog_posts", err)
-				return fmt.Errorf("failed to adjust blog post vote counts: %w", err)
-			}
-		}
-		return nil
-	})
+	return nil
 }
 
 // IncrementViewCount increments the view count for a blog post by slug.

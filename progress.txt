@@ -7634,3 +7634,107 @@ git status at journal time [REAL]: ?? backend/internal/db/metric_retention.go, ?
 
 UAT (for when idx 77 closes, not now): as slice 21's list. This slice changes no runtime behaviour, so it
   adds nothing to UAT.
+
+2026-10-01 13:05 — Task idx 77 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Make indexes, counters, search projections, and analytics rebuildable from authoritative records"
+SLICE 23 of N: step 5 "reconcile counters ... after migration". The cutover now reconciles EVERY stored
+counter, not only the two the 2026-09-29 rehearsal named: view counts (000120) and agent reputation
+(000121) got drift/rebuild functions after the cutover sequence was written, and the cutover never ran
+them. It also reports the search documents still without a vector (it cannot rebuild those).
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 77-95, 97, 98; no open
+  URGENT. 24/67 acceptance (skipped as before); 68 waits on the owner. idx 77 first buildable. Tree clean
+  at start, HEAD 070ee9b6. Followed slice 22's REMAINING order (step 5 next).
+
+SURVEY [REAL, code read + grep]: schema drift functions = vote_score_drift, room_activity_drift,
+  view_count_drift, agent_reputation_drift, search_document_drift. db.RunKnowledgeCutover (cmd/cutover)
+  ran only rebuild_vote_scores() and rebuild_room_activity(). Nothing periodic reconciles counters (the
+  only periodic rebuild is SearchDocumentJob for vectors). Sampled search after migration already has a
+  fixture test from idx 53: TestCanonicalSearch_RepresentativeQueriesBeforeAndAfterCutover.
+
+SPIKE [REAL, /tmp/solvr_idx77_s23/spike/]: DB cloned from solvr_rehearsal_purge113 (post-purge prod copy,
+  632 posts, 199 agents, 957 post_views, 78 rooms), `migrate up` 113 -> 131 clean. Drift at 131 before the
+  cutover: vote 0, room 0, view 0, reputation 0, search documents 251. The OLD cutover (HEAD) ran exit 0
+  (replies_created 0: 000109 had already converted this copy); drift after it: the same 0/0/0/0/251. So on
+  this real data the gap changes nothing. It matters in the deploy windows earlier slices measured (old API
+  + new trigger double-counts views/bonuses, slices 4/5 mutA) and after any direct SQL write.
+
+WHAT CHANGED [REAL, git status --porcelain: M backend/cmd/cutover/main.go, M backend/internal/db/
+  knowledge_cutover.go, ?? backend/internal/db/knowledge_cutover_counters_test.go; git diff --stat: 2 files,
+  90+/36-]:
+  M internal/db/knowledge_cutover.go (294 -> 347 lines): report gains ViewDriftBefore/ViewCountsRebuilt/
+    ViewDriftAfter, ReputationDriftBefore/ReputationRebuilt/ReputationDriftAfter, SearchDocumentsPending
+    (JSON view_*, reputation_*, search_documents_pending). New unexported registry cutoverCounters (step,
+    drift fn, rebuild fn, report fields): vote_scores, room_activity, view_counts, agent_reputation. The
+    sequence appends one ledgered step per registry entry after remap_legacy_relations, then a read-only
+    "search_documents" step (counts search_document_drift(), never fails), then verify_contributions_after.
+    voteScores()/roomActivity() are replaced by the generic rebuild(ctx, counter), which does the same:
+    count drift, return it on a dry run, otherwise rebuild, recount, fail when drift remains. Step names
+    for votes and rooms are unchanged. Behaviour change: a cutover run now also rewrites drifted
+    posts.view_count and agents.reputation (and records missing claim/model activation grants through
+    rebuild_agent_reputation -> replay_agent_activations).
+  M cmd/cutover/main.go: header comment only (lists the new steps). No flag or version change.
+  ?? internal/db/knowledge_cutover_counters_test.go (114 lines, scratch DBs, 3 tests):
+    - TestKnowledgeCutover_ReconcilesEveryStoredCounter: legacy seed + 2 view rows with view_count set to 7
+      and kc-agent reputation set to 999. A dry run reports view/reputation drift 1/1 and changes nothing (7,
+      999 stay). The real run rebuilt 1/1, drift after 0/0, view_count 2, reputation 0. Every registry step
+      is in the run and every registry drift fn returns 0 rows. A second run is all zeros.
+    - TestKnowledgeCutover_ReportsSearchDocumentsWithoutAVector: pending = 6 (3 posts + answer, approach,
+      progress note; the moderator comment becomes a system reply, never embedded), both real and dry.
+    - TestCutoverCounters_CoverEveryDriftFunctionInTheSchema: the public *_drift functions in pg_proc are
+      exactly the registry's plus search_document_drift, and each registry rebuild returns integer.
+  No migration, index, cache, job or service. No existing test deleted, skipped or loosened.
+
+VERIFICATION [this session; DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test (local docker
+  solvr-postgres); the cutover tests run in their own scratch DBs; logs in /tmp/solvr_idx77_s23/]:
+  [TEST] RED (tdd/red.log): `go vet ./internal/db` with only the test file -> undefined ViewDriftBefore,
+    ReputationDriftBefore, ..., cutoverCounters.
+  [TEST] GREEN (tdd/green.log): `go test ./internal/db ./cmd/cutover -count=1 -p 1 -v -run 'TestKnowledgeCutover|
+    TestCutoverCounters|TestSchemaVersion|TestParseOptions|TestCheckSchema'` -> both ok, 9 top-level PASS,
+    0 FAIL, 0 SKIP.
+  MUTATIONS [TEST] (mut/m1..m3.log), all FAIL as intended; source restored, `shasum -c mut/orig.sha` OK:
+    m1 registry with only vote_scores + room_activity (= the old cutover) -> ReconcilesEveryStoredCounter
+       :32 expected 1 actual 0; CoverEveryDriftFunction :113 (view_count_drift, agent_reputation_drift
+       uncovered).
+    m2 search_documents step removed -> ReportsSearchDocuments :80 expected 6 actual 0.
+    m3 rebuild ignores dry run -> ReconcilesEveryStoredCounter :34 "a dry run repairs nothing" expected 7
+       actual 2.
+  [REAL] probe on the spike DB (real post-purge data at 131, built ./cmd/cutover binary): run 2 exit 0,
+    10 steps in order (post_states, verify_contributions, migrate_contributions, remap_legacy_relations,
+    vote_scores, room_activity, view_counts, agent_reputation, search_documents, verify_contributions_after),
+    all drift 0, search_documents_pending 251. Injected deploy-window drift: view_count+1 on 5 posts,
+    reputation+50 on 3 agents -> --dry-run reports 5 / 3 / 251 and writes nothing; --confirm-prod run 3:
+    view 5 -> rebuilt 5 -> 0, reputation 3 -> rebuilt 3 -> 0; run 4 all zeros; view_count_drift() and
+    agent_reputation_drift() 0 rows; cutover_ledger 0 rows with an error. Spike DB dropped.
+  [TEST] package run (pkg.log, once): `go test ./internal/db ./cmd/cutover -count=1 -p 1 -v -timeout 40m` on
+    shared solvr_test -> cmd/cutover ok; internal/db FAIL: 813 PASS, 64 FAIL, 6 SKIP. Every cutover, counter,
+    rollback and canonical-search test PASS in it (incl. TestCanonicalSearch_RepresentativeQueriesBefore
+    AndAfterCutover, TestCutoverRollback_DownPath...). The 6 SKIPs are hybrid/embedding tests and
+    TestListAnswersWithHumanAuthor, none of mine. FAIL names vs slice 13's /tmp/solvr_idx77_s13/fail.now:
+    59 in that baseline (9 baseline names pass now), 5 outside it: TestInferSpecialties_AgentNoActivity/
+    _AgentWithActivity/_UserWithActivity ("agent ID already exists"), TestSearch_Similarity_Populated
+    AndTopSimilarity ("post A missing"), TestSearchPulse_SeriesCoversTheWindowAndExcludesMonitoring
+    (expected 728 actual 649). new5_fresh.log: exactly those 5 on a fresh DB solvr_idx77_s23_fresh migrated
+    to 131 -> 5 PASS, 0 FAIL, 0 SKIP (DB dropped). They are shared-data collisions, not caused by this slice.
+  [REAL] go build ./... ok; go vet ./internal/db ./cmd/cutover ok; gofmt -l clean on the 3 files;
+    ./scripts/check-file-size.sh -> the same 33 oversize files as slice 22; none of this slice's files
+    (347 / 114 / cmd main.go) is listed. solvr_scratch_1790853180756789000 predates this session (left).
+  NOT RUN: the full serial backend run (still owed before idx 77 closes); frontend (no frontend file).
+
+REMAINING for idx 77 (next slices, in order) [UNVERIFIED plan]:
+  step 5: "periodic rebuilds": decide whether a scheduled counter reconcile is needed. Triggers keep the
+    counters in the write's own transaction, so drift comes only from deploy windows and direct SQL. Before
+    adding a job, measure the drift functions at scale (they scan every post/agent/room/vote).
+    Sampled search on real data: run idx 53's representative queries against a real-data copy before and
+    after the cutover.
+  step 6: this slice added no index, cache or service.
+  Before closing idx 77: one full serial backend run, compared against slice 13's fail.now.
+
+git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged;
+  idx 77 stays false.
+
+UAT (for when idx 77 closes, not now): as slice 21's list. In addition, the production cutover report now
+  carries view_* / reputation_* / search_documents_pending. Read them, and expect search_documents_pending > 0
+  until SearchDocumentJob has embedded those rows (251 on the post-purge copy). A non-zero view/reputation
+  drift_after fails the run, as vote/room drift already did.

@@ -45,12 +45,22 @@ type KnowledgeCutoverReport struct {
 	Relations              map[string]int64 `json:"relations"`
 	UnresolvedRelations    int              `json:"unresolved_relations"`
 
-	VoteDriftBefore     int64 `json:"vote_drift_before"`
-	VoteScoresRebuilt   int64 `json:"vote_scores_rebuilt"`
-	VoteDriftAfter      int64 `json:"vote_drift_after"`
-	RoomDriftBefore     int64 `json:"room_drift_before"`
-	RoomActivityRebuilt int64 `json:"room_activity_rebuilt"`
-	RoomDriftAfter      int64 `json:"room_drift_after"`
+	VoteDriftBefore       int64 `json:"vote_drift_before"`
+	VoteScoresRebuilt     int64 `json:"vote_scores_rebuilt"`
+	VoteDriftAfter        int64 `json:"vote_drift_after"`
+	RoomDriftBefore       int64 `json:"room_drift_before"`
+	RoomActivityRebuilt   int64 `json:"room_activity_rebuilt"`
+	RoomDriftAfter        int64 `json:"room_drift_after"`
+	ViewDriftBefore       int64 `json:"view_drift_before"`
+	ViewCountsRebuilt     int64 `json:"view_counts_rebuilt"`
+	ViewDriftAfter        int64 `json:"view_drift_after"`
+	ReputationDriftBefore int64 `json:"reputation_drift_before"`
+	ReputationRebuilt     int64 `json:"reputation_rebuilt"`
+	ReputationDriftAfter  int64 `json:"reputation_drift_after"`
+
+	// SearchDocumentsPending counts the live rows search_document_drift() lists: a vector needs
+	// the embedding service, so the cutover reports them and SearchDocumentJob embeds them.
+	SearchDocumentsPending int64 `json:"search_documents_pending"`
 
 	Steps []KnowledgeCutoverStep `json:"steps"`
 
@@ -90,16 +100,57 @@ const pendingContributionsSQL = `SELECT
 			WHEN 'response' THEN EXISTS (SELECT 1 FROM responses t WHERE t.id = c.target_id)
 			ELSE false END)`
 
+// cutoverCounter is a counter stored on a row and kept by trigger from the records it counts:
+// drift lists the rows whose stored value disagrees with those records (read-only), rebuild
+// recomputes them and returns how many it repaired (a consistent row is not rewritten).
+type cutoverCounter struct {
+	step, drift, rebuild string
+	fields               func(*KnowledgeCutoverReport) (before, rebuilt, after *int64)
+}
+
+// cutoverCounters are every stored counter of the schema, each reconciled with its records
+// once the records are converted (idx 77 step 5). Every *_drift() function in the schema is
+// here except searchDocumentDrift, whose rebuild needs the embedding service.
+var cutoverCounters = []cutoverCounter{
+	{"vote_scores", "vote_score_drift", "rebuild_vote_scores", // 000113, 000119
+		func(r *KnowledgeCutoverReport) (*int64, *int64, *int64) {
+			return &r.VoteDriftBefore, &r.VoteScoresRebuilt, &r.VoteDriftAfter
+		}},
+	{"room_activity", "room_activity_drift", "rebuild_room_activity", // 000112
+		func(r *KnowledgeCutoverReport) (*int64, *int64, *int64) {
+			return &r.RoomDriftBefore, &r.RoomActivityRebuilt, &r.RoomDriftAfter
+		}},
+	{"view_counts", "view_count_drift", "rebuild_view_counts", // 000120
+		func(r *KnowledgeCutoverReport) (*int64, *int64, *int64) {
+			return &r.ViewDriftBefore, &r.ViewCountsRebuilt, &r.ViewDriftAfter
+		}},
+	{"agent_reputation", "agent_reputation_drift", "rebuild_agent_reputation", // 000121
+		func(r *KnowledgeCutoverReport) (*int64, *int64, *int64) {
+			return &r.ReputationDriftBefore, &r.ReputationRebuilt, &r.ReputationDriftAfter
+		}},
+}
+
+// searchDocumentDrift lists the live posts and replies without a vector (000122).
+const searchDocumentDrift = "search_document_drift"
+
 type knowledgeCutoverRun struct {
 	pool   *Pool
 	dryRun bool
 	rep    *KnowledgeCutoverReport
 }
 
+// cutoverStep is one step of RunKnowledgeCutover's sequence.
+type cutoverStep struct {
+	name  string
+	apply bool // runs only when not a dry run
+	fn    func(context.Context) (any, error)
+}
+
 // RunKnowledgeCutover converts the legacy knowledge model to posts and replies in the order
 // the rehearsal on the restored production dump proved (task idx 93): post states, then
-// contributions, then the relations that name them, then the vote-score and room-activity
-// projections rebuilt from their authoritative records. Every step is idempotent, so a run
+// contributions, then the relations that name them, then every stored counter rebuilt from its
+// authoritative records (cutoverCounters) and the search documents still without a vector
+// counted. Every step is idempotent, so a run
 // interrupted anywhere is finished by running again, and each step is recorded in
 // cutover_ledger under the run's id. It stops before converting anything when a post fails
 // verification, and fails when a rebuilt projection still drifts. The schema must already be
@@ -114,19 +165,22 @@ func RunKnowledgeCutover(ctx context.Context, pool *Pool, opts KnowledgeCutoverO
 		}
 	}
 
-	for _, s := range []struct {
-		name  string
-		apply bool // runs only when not a dry run
-		fn    func(context.Context) (any, error)
-	}{
+	steps := []cutoverStep{
 		{"post_states", false, run.postStates},
 		{"verify_contributions", false, run.verifyContributions},
 		{"migrate_contributions", true, run.migrateContributions},
 		{"remap_legacy_relations", true, run.remapLegacyRelations},
-		{"vote_scores", false, run.voteScores},
-		{"room_activity", false, run.roomActivity},
-		{"verify_contributions_after", true, run.verifyContributionsAfter},
-	} {
+	}
+	for _, c := range cutoverCounters {
+		steps = append(steps, cutoverStep{c.step, false, func(ctx context.Context) (any, error) {
+			return run.rebuild(ctx, c)
+		}})
+	}
+	steps = append(steps,
+		cutoverStep{"search_documents", false, run.searchDocuments},
+		cutoverStep{"verify_contributions_after", true, run.verifyContributionsAfter},
+	)
+	for _, s := range steps {
 		if s.apply && opts.DryRun {
 			continue
 		}
@@ -243,38 +297,37 @@ func (r *knowledgeCutoverRun) remapLegacyRelations(ctx context.Context) (any, er
 	return map[string]any{"relations": r.rep.Relations, "unresolved": r.rep.UnresolvedRelations}, err
 }
 
-func (r *knowledgeCutoverRun) voteScores(ctx context.Context) (any, error) {
-	return r.rebuild(ctx, "vote_score_drift()", "rebuild_vote_scores()",
-		&r.rep.VoteDriftBefore, &r.rep.VoteScoresRebuilt, &r.rep.VoteDriftAfter)
-}
-
-func (r *knowledgeCutoverRun) roomActivity(ctx context.Context) (any, error) {
-	return r.rebuild(ctx, "room_activity_drift()", "rebuild_room_activity()",
-		&r.rep.RoomDriftBefore, &r.rep.RoomActivityRebuilt, &r.rep.RoomDriftAfter)
-}
-
-// rebuild measures a projection's drift, repairs it from its authoritative records unless
-// dry, and requires no drift afterwards.
-func (r *knowledgeCutoverRun) rebuild(ctx context.Context, drift, rebuildFn string, before, rebuilt, after *int64) (any, error) {
-	if err := r.pool.QueryRow(ctx, `SELECT count(*) FROM `+drift).Scan(before); err != nil {
+// rebuild measures a counter's drift, repairs it from its authoritative records unless dry,
+// and requires no drift afterwards.
+func (r *knowledgeCutoverRun) rebuild(ctx context.Context, c cutoverCounter) (any, error) {
+	before, rebuilt, after := c.fields(r.rep)
+	if err := r.pool.QueryRow(ctx, `SELECT count(*) FROM `+c.drift+`()`).Scan(before); err != nil {
 		return nil, err
 	}
 	if r.dryRun {
 		return map[string]int64{"drift": *before}, nil
 	}
 	var n int32
-	if err := r.pool.QueryRow(ctx, `SELECT `+rebuildFn).Scan(&n); err != nil {
+	if err := r.pool.QueryRow(ctx, `SELECT `+c.rebuild+`()`).Scan(&n); err != nil {
 		return nil, err
 	}
 	*rebuilt = int64(n)
-	if err := r.pool.QueryRow(ctx, `SELECT count(*) FROM `+drift).Scan(after); err != nil {
+	if err := r.pool.QueryRow(ctx, `SELECT count(*) FROM `+c.drift+`()`).Scan(after); err != nil {
 		return nil, err
 	}
 	result := map[string]int64{"drift_before": *before, "rebuilt": *rebuilt, "drift_after": *after}
 	if *after != 0 {
-		return result, fmt.Errorf("%s still reports %d row(s) after %s", drift, *after, rebuildFn)
+		return result, fmt.Errorf("%s() still reports %d row(s) after %s()", c.drift, *after, c.rebuild)
 	}
 	return result, nil
+}
+
+// searchDocuments counts the live rows without a vector; it never fails on them.
+func (r *knowledgeCutoverRun) searchDocuments(ctx context.Context) (any, error) {
+	if err := r.pool.QueryRow(ctx, `SELECT count(*) FROM `+searchDocumentDrift+`()`).Scan(&r.rep.SearchDocumentsPending); err != nil {
+		return nil, err
+	}
+	return map[string]int64{"pending": r.rep.SearchDocumentsPending}, nil
 }
 
 // SchemaVersion reads golang-migrate's schema_migrations row. It fails when the table is

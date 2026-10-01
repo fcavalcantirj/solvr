@@ -1,6 +1,7 @@
 // Command cutover runs the knowledge-model cutover (task idx 93) against one database:
-// post states, legacy contributions to replies, the relations that name them, and the
-// vote-score and room-activity rebuilds, recorded in cutover_ledger. Run it only after
+// post states, legacy contributions to replies, the relations that name them, the rebuild of
+// every stored counter (vote scores, room activity, view counts, agent reputation) and a count
+// of the search documents still without a vector, recorded in cutover_ledger. Run it only after
 // `migrate up` has brought the schema to --expect-version and with the API stopped.
 //
 //	cutover --database-url <url> --dry-run            # read-only: what would change

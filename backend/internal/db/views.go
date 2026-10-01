@@ -21,6 +21,8 @@ func NewViewsRepository(pool *Pool) *ViewsRepository {
 
 // RecordView records a view for a post and returns the updated view count.
 // If the user has already viewed the post, it returns the current count without incrementing.
+// The count is moved by the view row's own insert (migration 000120's trigger), so a view
+// that is stored is counted even when the caller leaves before reading the count.
 func (r *ViewsRepository) RecordView(ctx context.Context, postID, viewerType, viewerID string) (int, error) {
 	// Use ON CONFLICT DO NOTHING to handle duplicate views
 	insertQuery := `
@@ -29,7 +31,7 @@ func (r *ViewsRepository) RecordView(ctx context.Context, postID, viewerType, vi
 		ON CONFLICT (post_id, viewer_type, viewer_id) DO NOTHING
 	`
 
-	result, err := r.pool.Exec(ctx, insertQuery, postID, viewerType, viewerID)
+	_, err := r.pool.Exec(ctx, insertQuery, postID, viewerType, viewerID)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
@@ -42,22 +44,6 @@ func (r *ViewsRepository) RecordView(ctx context.Context, postID, viewerType, vi
 		return 0, err
 	}
 
-	// If a row was inserted, update the view_count
-	if result.RowsAffected() > 0 {
-		updateQuery := `
-			UPDATE posts SET view_count = view_count + 1
-			WHERE id = $1
-			RETURNING view_count
-		`
-		var viewCount int
-		err = r.pool.QueryRow(ctx, updateQuery, postID).Scan(&viewCount)
-		if err != nil {
-			return 0, err
-		}
-		return viewCount, nil
-	}
-
-	// Return current view count if duplicate view
 	return r.GetViewCount(ctx, postID)
 }
 

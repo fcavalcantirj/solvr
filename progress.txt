@@ -4780,3 +4780,166 @@ UAT (for when idx 77 closes, not now): apply 000112, 000113 AND 000119 on produc
   first; it now includes blog posts), `SELECT rebuild_vote_scores();`, and confirm a second
   `SELECT * FROM vote_score_drift();` returns 0 rows; plus slice 1's room_activity_drift() /
   rebuild_room_activity() check. Run the cutover with the new default --expect-version 119.
+
+2026-10-01 02:52 — Task idx 77 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Make indexes, counters, search projections, and analytics rebuildable from authoritative records"
+SLICE 4 of N: posts.view_count becomes a projection of its post_views rows, moved by triggers in the
+view row's own transaction, with a documented drift check and rebuild (steps 2/3/5); plus the
+stored-vs-derived decision for tags.usage_count (an inventory finding, no code).
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 77-95, 97, 98; no open
+  URGENT (96 is true). idx 24 and 67 are acceptance tasks (skipped as in every earlier entry). idx 68
+  still waits for the owner call on step 1 and owner decision 4 for steps 5-6. idx 77 is the first
+  buildable task; slice 3's REMAINING list puts tags.usage_count, posts.view_count, agents.reputation
+  next. Tree clean at start; HEAD f8c75bb2.
+
+tags.usage_count — DECIDED: derived at read, nothing to rebuild [REAL]:
+  - grep of non-test Go: TagsRepository (db/tags.go: AddTagsToPost/RemoveTagsFromPost move
+    usage_count) has NO production caller; NewTagsRepository appears only in db/tags_test.go.
+  - The restored production dump (solvr_cutover_rehearsal, read-only) has NO tags and NO post_tags
+    tables (to_regclass both NULL): migration 000024 was never applied there. Tags live in posts.tags
+    (2201 posts carry tags) and StatsRepository.GetTrendingTags (db/stats.go:265) counts them from
+    posts.tags at read time.
+  - So tags.usage_count is not a served projection. Retiring db/tags.go + 000024 is a cleanup
+    nobody asked for; left as is (owner decision 4: legacy drops go all at once, later).
+  - blog_posts.view_count (BlogPostRepository.IncrementViewCount) has no per-view record to derive it
+    from, so that counter is its own record; noted in the 000120 header, not changed.
+
+SPIKE FIRST [TEST, throwaway internal/db/zz_spike_view_count_test.go on a scratch DB, deleted
+  before commit, /tmp/solvr_idx77_s4/spike.log] — MEASURED on HEAD: RecordView inserted the
+  post_views row, then ran `UPDATE posts SET view_count = view_count + 1` as a second statement with
+  no transaction. A pgx query tracer cancelling the caller's context right after the INSERT ->
+  returned "context canceled", stored view_count=0 with 1 view row; the same viewer's retry returned
+  n=0 err=nil (unique key, nothing counted, forever). 30 distinct + 30 same-viewer concurrent views
+  then: stored=31 rows=32 (only the earlier loss). Deleting a view row: count unchanged.
+  Production-shaped data [REAL, read-only on solvr_cutover_rehearsal and solvr_rehearsal_pristine]:
+  2225 posts, 2224 consistent, 1 post (6f69e3b0-..., idea, public) at view_count 0 with 1 view row =
+  exactly that lost increment; 0 posts stored above their rows; all 1298 view rows anonymous.
+
+WHAT THIS SLICE CHANGED [REAL, git status --porcelain / git diff --stat before this append]:
+  A backend/migrations/000120_view_count_projection.up.sql (101): post_views_count_projection()
+    + 3 triggers on post_views: AFTER INSERT (+1 on NEW.post_id), AFTER UPDATE OF post_id WHEN it
+    changes (-1 old, +1 new), AFTER DELETE (-1, clamped at 0). view_count_drift(p_post_id uuid)
+    read-only (IS DISTINCT FROM); rebuild_view_counts(p_post_id uuid) locks posts FOR NO KEY UPDATE
+    first, rewrites only drifted rows, returns the count. Header documents the rebuild path, the
+    measured failure, and why blog_posts.view_count is not covered.
+  A backend/migrations/000120_view_count_projection.down.sql (8): drops the 3 triggers + 3
+    functions (no data touched; post_views and view_count stay).
+  M backend/internal/db/views.go (70 lines, -20/+3): RecordView keeps the INSERT ... ON CONFLICT DO
+    NOTHING and its 22P02/23503 -> ErrPostNotFound mapping; the RowsAffected branch with the second
+    UPDATE ... RETURNING view_count is removed; it always returns GetViewCount after the insert.
+    Doc comment names 000120.
+  A backend/internal/db/view_count_projection_test.go (294, scratch DBs, 5 tests):
+    TestViewCounts_EveryViewRowMovesTheCountInItsOwnTransaction (API repeat counts once, other viewer
+    type counts, direct insert/delete/move by a fixture or operator, an update that keeps the post,
+    rolled-back insert, drift empty), _ACallerThatLeavesRightAfterTheInsertIsStillCounted (pgx tracer
+    cancel, as slice 1's room test), _ConcurrentViewsCountEachViewerOnce (30 distinct + 30 repeated
+    -> 31), _DriftNamesEveryBrokenCountAndTheRebuildRepairsIt (lost and inflated counts, per-post
+    filter, one-post rebuild, xmin unchanged on a consistent post, replay = 0),
+    _ARebuildAndAViewNeverLoseEachOther (in-flight view counted; late view lands on rebuilt value;
+    reuses waitForLockWait from vote_scores_test.go).
+  M backend/cmd/cutover/main.go: --expect-version default 119 -> 120; main_test.go: the same version
+    in TestParseOptions_GuardsTheProductionRun / TestCheckSchema_... (119 -> 120, same assertions).
+  M backend/internal/db/cutover_rollback_test.go: down-migration count 35 -> 36 ("000120..000085")
+    and the comment; the test still asserts every down step runs and archives what it cannot hold.
+  No test deleted, skipped or loosened; the three test edits track the new latest migration. The
+  cutover command does NOT gain a view-count rebuild step: the knowledge cutover does not touch
+  post_views [REAL, grep: only db/views.go and two briefing reads use post_views]; the UAT below runs
+  the rebuild once.
+
+VERIFICATION [this session; DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test (local
+  docker solvr-postgres), migrated 119 -> 120 with `migrate up` this session (120 dirty=f, 3
+  post_views_count_* triggers, view_count_drift() 0 rows on it); new tests use scratch DBs migrated
+  from the files; logs under /tmp/solvr_idx77_s4/]:
+  [TEST] go build ./... ok; go vet ./internal/db/ ./cmd/cutover/ exit 0; gofmt -l lists none of this
+    slice's files (its pre-existing list is unchanged).
+  [TEST] RED on HEAD code (red.log, before 000120 and the views.go change): 4 FAIL, 1 PASS —
+    :99 expected {4 4} actual {3 4} (a directly inserted view row not counted); :165 expected {1 1}
+    actual {0 1} (the caller that left); drift and rebuild tests: function rebuild_view_counts(uuid)
+    does not exist (SQLSTATE 42883). ConcurrentViewsCountEachViewerOnce PASSes on HEAD too (the old
+    increment was atomic; it pins the trigger path, see mutA).
+  [TEST] GREEN (green.log, once): TestViewCounts_*, TestViewsRepository_* (the 4 existing, on
+    solvr_test at 120), TestCutoverRollback, TestKnowledgeCutover_*, TestVoteScores_*,
+    TestBlogVoteScores_*, TestRoomActivity_*, TestParseOptions, TestCheckSchema, handlers TestViews_*:
+    internal/db, cmd/cutover, internal/api/handlers all ok; 32 top-level PASS, 0 FAIL, 0 SKIP.
+  MUTATIONS [TEST], each restored from /tmp/solvr_idx77_s4/*.bak, shasum-verified after:
+    mutA old views.go (HEAD) with 000120 applied (= deploy window "migration first, old API") -> 4 FAIL:
+      expected 1 actual 2, {31 31} vs {62 31}, {5 5} vs {6 5} (double count); the cancel test PASSes
+      (the trigger alone counts the stored view);
+    mutB rebuild without the posts FOR NO KEY UPDATE -> ARebuildAndAView FAIL, expected {4 4} actual
+      {3 4} (the in-flight view lost); other 4 PASS;
+    mutC no AFTER UPDATE OF post_id trigger -> EveryViewRow FAIL, expected {1 1} actual {2 1}; other 4
+      PASS.
+  MIGRATION [REAL, migration.out] throwaway DB solvr_idx77_s4_mig: up -> 120 dirty=false, 3 triggers,
+    3 functions; down 1 -> 119 dirty=false, 0 triggers, 0 functions, the 3 votes_score_* triggers
+    intact; up -> 120, rebuild_view_counts() = 0, drift 0. Dropped.
+  REHEARSAL [REAL, rehearsal.out] copy of solvr_cutover_rehearsal (TEMPLATE, at 113): migrate up
+    114..120 all applied, 120 dirty=false; view_count_drift() = exactly 6f69e3b0-...|0|1;
+    rebuild_view_counts() = 1; drift after 0; replay 0; sum(view_count) 1298 = 1298 view rows.
+    Copy dropped; the rehearsal DB itself untouched.
+  LIVE PROBE [REAL, /tmp/solvr_idx77_s4/probe/probe.sh + probe.out]: fresh DB at 120, go build
+    ./cmd/api, API on :8099 under env -i (fake secrets, IPFS_API_URL=:9). Author agent creates a post
+    (201, draft/pending_review, public). POST /v1/posts/{id}/view: 50 parallel anonymous views with 50
+    distinct X-Session-IDs -> 50 x 200, stored 50 = rows 50; 50 parallel from one session -> 50 x 200,
+    51 = 51; 40 parallel from agent 1 and 40 from agent 2 at once -> 80 x 200, 53 = 53. GET
+    /v1/posts/{id}/views -> {"view_count":53}; agent 1 again -> 53; view_count_drift() 0 rows.
+    api.log: 183 x 200, 4 x 201, 0 "failed to record view"/"failed to get view count". :8099 free,
+    probe DB dropped. (First run, probe_header_bug.out: my script passed every X-Session-ID with curl
+    -H in one invocation, so all 50 "distinct" requests carried the same first session -> 1 row,
+    correctly counted once; fixed with xargs -P 50, one curl per session.)
+  FULL BACKEND [TEST] (once) `go test ./... -count=1 -p 1 -v -timeout 45m` on solvr_test at 120 ->
+    full.log, exit 1: 17 ok, FAIL internal/api, internal/api/handlers, internal/db; 3255 top-level
+    PASS, 69 FAIL, 12 SKIP. All 27 TestViewCounts/TestViewsRepository/TestVoteScores/
+    TestBlogVoteScores/TestRoomActivity/TestCutoverRollback/TestKnowledgeCutover top-level tests PASS
+    in it. SKIP set = slice 3's minus TestE2E_PostAppearsInList (it RAN and PASSED here). FAIL names vs
+    slice 3's /tmp/solvr_idx77_s3v/full.log (69): 2 gone (TestClaimTokenRepository_DeleteExpiredTokens,
+    TestLeaderboard_RankingOrderAllTime), 2 new:
+      - TestCrossAuth_RemoveProvider_OthersStillWork (handlers, :651 "Email auth should still work",
+        which is why handlers FAILs this run): new2_fresh.log on a fresh DB solvr_idx77_s4_full at 120
+        -> PASS. Shared-data collision.
+      - TestAgentClaim_RetriesAndRacesLinkTheAgentOnce (:129 "failed to create test user ... duplicate
+        key value violates unique constraint users_username_key"): FAILs on the fresh DB too
+        (subtest several_humans_race_one_token). Pre-existing fixture flake, not this slice [REAL]:
+        it is in idx 74's pre-change list /tmp/solvr_idx74_s25/full_fails.txt (grep: 1), and
+        createRoomTestUser (router_rooms_test.go:63) names users "roomtest_" + UnixNano()%1000000,
+        about 1000 distinct values at the macOS microsecond clock while this test creates ~20 users.
+        No view code is on its path. Not fixed (not asked; flagged for the owner).
+  check-file-size.sh -> filesize.log "Found 34 file(s) exceeding 800 lines", same count as slices
+    1-3; none of this slice's files is on it. 0 solvr_scratch*/solvr_idx77* databases left [REAL,
+    psql]. NOT RUN: frontend (no frontend file touched); golangci-lint (config/version mismatch,
+    slice 31).
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW (runtime, from this commit):
+  - A view the API stored is counted even when the caller leaves right after the insert; a viewer's
+    retry no longer answers a count that misses its own view.
+  - posts.view_count now follows post_views whoever writes them: a deleted view row (or a cleanup
+    of view rows) lowers the count; moving a view row to another post moves the count.
+  - Deploy ordering [TEST, mutA shows the double count]: 000120 before the new API = old code AND the
+    trigger both count each new view; new API before 000120 = new views not counted. Either window is
+    repaired by the rebuild in the UAT below.
+  - The cutover command now refuses a database not at 120 (--expect-version default).
+
+REMAINING for idx 77 (next slices, in order) [UNVERIFIED plan, from the task steps]:
+  step 2/3: agents.reputation (claim_tokens.go, agents_linking.go) — decide stored vs derived, give
+    it drift + rebuild if stored; public activity previews, search documents, overview aggregates;
+    the activation milestone replay ("replaying a worker cannot double-count an entry or activation").
+  step 1: measured query plans on representative data for the listed lookups.
+  step 4: raw eligible search events vs time buckets + retention windows; no summed distincts.
+  step 5: reconcile counters/sampled search after migration and rebuilds; visibility/deletion removes
+    public projections promptly.
+  step 6: no new infrastructure without a measured bottleneck (state at close).
+
+git status at journal time [REAL, git status --porcelain]: M backend/cmd/cutover/main.go, M backend/
+  cmd/cutover/main_test.go, M backend/internal/db/cutover_rollback_test.go, M backend/internal/db/
+  views.go, ?? backend/internal/db/view_count_projection_test.go, ?? backend/migrations/000120_view_
+  count_projection.{up,down}.sql, M progress.txt (this entry). spec.json unchanged, idx 77 passes
+  stays false.
+
+UAT (for when idx 77 closes, not now): apply 000112, 000113, 000119 AND 000120 on production together
+  with the API deploy carrying b9d7644c, 619b44b8, 1fce63ef and this commit; then `SELECT * FROM
+  view_count_drift();` (read it first: the rehearsal predicts 1 post, 6f69e3b0-..., 0 vs 1),
+  `SELECT rebuild_view_counts();`, and confirm a second `SELECT * FROM view_count_drift();` returns 0
+  rows; plus the vote_score_drift()/rebuild_vote_scores() and room_activity_drift()/
+  rebuild_room_activity() checks from slices 1-3. Run the cutover with the new default
+  --expect-version 120.

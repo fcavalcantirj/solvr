@@ -28,8 +28,8 @@ func TestParseOptions_GuardsTheProductionRun(t *testing.T) {
 				if opts.databaseURL != "postgres://x/db" {
 					t.Fatalf("database url %q, want the flag's value", opts.databaseURL)
 				}
-				if opts.expectVersion != 119 {
-					t.Fatalf("expect version %d, want the default 119", opts.expectVersion)
+				if opts.expectVersion != 120 {
+					t.Fatalf("expect version %d, want the default 120", opts.expectVersion)
 				}
 				return
 			}
@@ -41,13 +41,13 @@ func TestParseOptions_GuardsTheProductionRun(t *testing.T) {
 }
 
 func TestCheckSchema_RefusesAnythingButTheExpectedCleanVersion(t *testing.T) {
-	if err := checkSchema(119, false, 119); err != nil {
-		t.Fatalf("clean 119: %v", err)
+	if err := checkSchema(120, false, 120); err != nil {
+		t.Fatalf("clean 120: %v", err)
 	}
-	if err := checkSchema(119, true, 119); err == nil || !strings.Contains(err.Error(), "dirty") {
-		t.Fatalf("dirty 119 accepted: %v", err)
+	if err := checkSchema(120, true, 120); err == nil || !strings.Contains(err.Error(), "dirty") {
+		t.Fatalf("dirty 120 accepted: %v", err)
 	}
-	if err := checkSchema(84, false, 119); err == nil || !strings.Contains(err.Error(), "84") {
+	if err := checkSchema(84, false, 120); err == nil || !strings.Contains(err.Error(), "84") {
 		t.Fatalf("version 84 accepted: %v", err)
 	}
 }

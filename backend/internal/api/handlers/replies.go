@@ -132,6 +132,15 @@ func (h *RepliesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.contribModerator.Moderate("reply", created.ID, req.Body, string(authInfo.AuthorType), authInfo.AuthorID)
+	// Answer the same Reply the reads return, author included (the published ReplyResponse
+	// requires it). The reply is stored either way: a failed read-back still answers it,
+	// so the client does not retry and post it twice.
+	if stored, err := h.repo.GetByID(r.Context(), created.ID); err == nil && stored != nil {
+		writeRepliesJSON(w, http.StatusCreated, map[string]any{"data": stored})
+		return
+	} else if err != nil {
+		h.logger.Warn("read back created reply failed", "error", err, "replyID", created.ID)
+	}
 	writeRepliesJSON(w, http.StatusCreated, map[string]any{"data": created})
 }
 

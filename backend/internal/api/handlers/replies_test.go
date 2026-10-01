@@ -22,6 +22,7 @@ type MockRepliesRepository struct {
 	created    *models.Reply
 	getResult  *models.ReplyWithAuthor
 	getErr     error
+	lastGetID  string // the id GetByID was last asked for
 	listResult []models.ReplyWithAuthor
 	listTotal  int
 	updateErr  error
@@ -72,7 +73,8 @@ func (m *MockRepliesRepository) Create(_ context.Context, reply *models.Reply) (
 	return reply, nil
 }
 
-func (m *MockRepliesRepository) GetByID(_ context.Context, _ string) (*models.ReplyWithAuthor, error) {
+func (m *MockRepliesRepository) GetByID(_ context.Context, id string) (*models.ReplyWithAuthor, error) {
+	m.lastGetID = id
 	if m.getErr != nil {
 		return nil, m.getErr
 	}

@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -62,38 +63,55 @@ type PublicRoomFeedEntry struct {
 	CreatedAt      time.Time
 }
 
-// publicRoomFeedCTE is the one definition of "eligible public room activity".
-// Both the page read and the new-activity count use it, so they can never
-// disagree about what counts.
-const publicRoomFeedCTE = `
-	WITH feed AS (
-		SELECT 'message' AS kind, m.id AS entry_id, m.sequence_num,
-		       r.slug, r.display_name, m.author_type,
-		       CASE WHEN m.author_type = 'human'
-		            THEN COALESCE(u.username, '')
-		            ELSE m.agent_name END AS author_name,
-		       (m.author_id IS NOT NULL) AS verified,
-		       m.content, m.metadata, '' AS event_type, '' AS issue, m.created_at
-		  FROM messages m JOIN rooms r ON r.id = m.room_id
-		  LEFT JOIN users u ON m.author_type = 'human'
-		                   AND u.id::text = m.author_id
-		                   AND u.deleted_at IS NULL
-		 WHERE m.deleted_at IS NULL AND ` + liveRoomPredicate + `
-		   AND m.author_type <> 'system'
+// publicFeedEventTypesSQL is PublicFeedEventTypes as SQL constants. The feed
+// names the allow-list as constants, not as a parameter, so the planner can
+// prove the predicate of idx_room_entries_feed_events (migration 000127) and
+// walk only allow-listed events. The list is fixed Go constants, never input.
+var publicFeedEventTypesSQL = "'" + strings.Join(PublicFeedEventTypes, "', '") + "'"
+
+// publicRoomFeedEntries is the one definition of "eligible public room
+// activity". Both the page read and the new-activity count use it, so they can
+// never disagree about what counts.
+//
+// Each branch walks one index of migration 000127 newest first and stops after
+// `limit` rows; `after`, when not empty, keeps only entries created after it.
+// The order and the limit sit INSIDE each branch because a branch is a join:
+// Postgres plans it as its own subquery, so an ORDER BY outside the UNION ALL
+// reached neither index and every request read and sorted every room's history.
+// The newest N of the union are always among the newest N of each branch.
+func publicRoomFeedEntries(after, limit string) string {
+	since := func(alias string) string {
+		if after == "" {
+			return ""
+		}
+		return " AND " + alias + ".created_at > " + after
+	}
+	return `
+		(SELECT 'message' AS kind, m.id AS entry_id, m.sequence_num, m.room_id,
+		        m.author_type, m.author_id, m.agent_name AS actor,
+		        (m.author_id IS NOT NULL) AS verified,
+		        m.content, m.metadata, '' AS event_type, '' AS issue, m.created_at
+		   FROM messages m JOIN rooms r ON r.id = m.room_id
+		  WHERE m.deleted_at IS NULL AND m.author_type <> 'system'
+		    AND ` + liveRoomPredicate + since("m") + `
+		  ORDER BY m.created_at DESC, m.id DESC
+		  LIMIT ` + limit + `)
 		UNION ALL
-		SELECT 'event', e.id, NULL::int,
-		       r.slug, r.display_name, 'agent', e.actor,
-		       FALSE,
-		       '', '{}'::jsonb, e.event_type, e.issue, e.created_at
-		  FROM room_events e JOIN rooms r ON r.id = e.room_id
-		 WHERE ` + liveRoomPredicate + `
-		   AND upper(e.event_type) = ANY($1::text[])
-	)
-`
+		(SELECT 'event', e.id, NULL::int, e.room_id,
+		        'agent', NULL, e.actor,
+		        FALSE,
+		        '', '{}'::jsonb, e.event_type, e.issue, e.created_at
+		   FROM room_events e JOIN rooms r ON r.id = e.room_id
+		  WHERE upper(e.event_type) IN (` + publicFeedEventTypesSQL + `)
+		    AND ` + liveRoomPredicate + since("e") + `
+		  ORDER BY e.created_at DESC, e.id DESC
+		  LIMIT ` + limit + `)`
+}
 
 // ListPublicRoomFeed returns the newest eligible public room activity, newest
 // first. Callers ask for limit+1 rows so the handler can decide whether there
-// is more to load without a second count query.
+// is more to load without a second count query. The page is picked first; only
+// its rows are then joined to their room and, for humans, their public name.
 func (r *HomepageRepository) ListPublicRoomFeed(ctx context.Context, limit, offset int) ([]PublicRoomFeedEntry, error) {
 	if limit <= 0 {
 		limit = 6
@@ -102,14 +120,24 @@ func (r *HomepageRepository) ListPublicRoomFeed(ctx context.Context, limit, offs
 		offset = 0
 	}
 
-	rows, err := r.pool.Query(ctx, publicRoomFeedCTE+`
-		SELECT kind, entry_id, sequence_num, slug, display_name,
-		       author_type, author_name, verified, content, metadata,
-		       event_type, issue, created_at
-		  FROM feed
-		 ORDER BY created_at DESC, entry_id DESC
-		 LIMIT $2 OFFSET $3
-	`, PublicFeedEventTypes, limit, offset)
+	rows, err := r.pool.Query(ctx, `
+		WITH page AS (
+			SELECT * FROM (`+publicRoomFeedEntries("", "$3")+`) feed
+			 ORDER BY created_at DESC, entry_id DESC
+			 LIMIT $1 OFFSET $2
+		)
+		SELECT p.kind, p.entry_id, p.sequence_num, r.slug, r.display_name,
+		       p.author_type,
+		       CASE WHEN p.author_type = 'human'
+		            THEN COALESCE(u.username, '')
+		            ELSE p.actor END,
+		       p.verified, p.content, p.metadata, p.event_type, p.issue, p.created_at
+		  FROM page p JOIN rooms r ON r.id = p.room_id
+		  LEFT JOIN users u ON p.author_type = 'human'
+		                   AND u.id::text = p.author_id
+		                   AND u.deleted_at IS NULL
+		 ORDER BY p.created_at DESC, p.entry_id DESC
+	`, limit, offset, limit+offset)
 	if err != nil {
 		LogQueryError(ctx, "ListPublicRoomFeed", "messages", err)
 		return nil, fmt.Errorf("list public room feed: %w", err)
@@ -141,11 +169,11 @@ func (r *HomepageRepository) CountPublicRoomFeedSince(ctx context.Context, since
 	}
 
 	var count int
-	err := r.pool.QueryRow(ctx, publicRoomFeedCTE+`
+	err := r.pool.QueryRow(ctx, `
 		SELECT COUNT(*) FROM (
-			SELECT 1 FROM feed WHERE created_at > $2 LIMIT $3
+			SELECT 1 FROM (`+publicRoomFeedEntries("$1", "$2")+`) feed LIMIT $2
 		) capped
-	`, PublicFeedEventTypes, since, cap).Scan(&count)
+	`, since, cap).Scan(&count)
 	if err != nil {
 		LogQueryError(ctx, "CountPublicRoomFeedSince", "messages", err)
 		return 0, fmt.Errorf("count public room feed since: %w", err)

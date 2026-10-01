@@ -6634,3 +6634,142 @@ UAT (for when idx 77 closes, not now): as slice 13's list, plus migration 000126
   in the 2026-09-29 dump; ShareLock for milliseconds). After the deploy, open https://solvr.dev/rooms
   (default and "active" sort, plus a search) and confirm the cards load with their participant counts
   and last-message previews.
+
+2026-10-01 09:35 — Task idx 77 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Make indexes, counters, search projections, and analytics rebuildable from authoritative records"
+SLICE 15 of N: step 1, room activity, part 2: the public room activity feed behind the homepage stream
+(HomepageRepository.ListPublicRoomFeed and CountPublicRoomFeedSince; GET /v1/homepage/activity and the
+overview's activity section). A page now walks two newest-first partial indexes (migration 000127) and
+stops after the rows it returns. Same rows, same order. At 600k room entries: room_entries buffers
+19,501 + Seq Scan -> 8 / 14 / 63 per page; the New activity count 4,856-10,036 buffers -> 5-9.
+GetRoomPulse is NOT changed (next slice).
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 77-95, 97, 98; no open
+  URGENT. 24 and 67 are acceptance tasks (skipped as in every earlier entry); 68 waits on the owner
+  (08:15 entry). idx 77 is the first buildable task; slice 14's REMAINING list puts ListPublicRoomFeed +
+  CountPublicRoomFeedSince next. Tree clean at start; HEAD 0df3359f.
+
+MEASURED FIRST [REAL]:
+  - Real event mix, local copy of the 2026-09-29 production dump (solvr_cutover_rehearsal, read only):
+    2,452 messages; events led by ENGINE_TICK 483, ACK 105, REVIEW_REQUESTED 103, then BUILDING 78,
+    TASK_CLAIMED 77, PR 58, MERGED 52... Most events are types the feed never shows. So the event index
+    carries the allow-list in its predicate; an index of every event would make a newest-first walk
+    step over every tick.
+  - HEAD plan (EXPLAIN ANALYZE logged once from the new test with a temporary debug block, then removed;
+    /tmp/solvr_idx77_s15/plan1.log is the run with the indexes but the OLD query shape): even with the
+    indexes, Postgres planned each UNION ALL branch as its own subquery, because each branch is a join
+    (room_entries JOIN rooms) and a join cannot be pulled up into an append. The outer ORDER BY reached
+    neither index: Hash Join over a Seq Scan of room_entries (475k rows), then a top-N sort of 416k
+    rows, 305 ms. That is why the order and the limit now sit INSIDE each branch.
+
+WHAT CHANGED [REAL, git status --porcelain: 4 M + 3 ??; git diff --stat 77+/49-, plus new files]:
+  M backend/internal/db/homepage_activity.go (154 -> 182 lines):
+    - publicRoomFeedCTE (a WITH over the UNION ALL, allow-list as parameter $1) is replaced by
+      publicRoomFeedEntries(after, limit): the same two branches (eligible live messages; allow-listed
+      events) with the same WHERE conditions. Each branch is now ORDER BY created_at DESC, id DESC
+      LIMIT <limit>, plus "created_at > <after>" when after is set. The newest N of the union are always
+      among the newest N of each branch, so the rows are the same.
+    - The allow-list is now written into the SQL as constants (publicFeedEventTypesSQL, built from
+      PublicFeedEventTypes; fixed Go constants, never input) so the planner can prove the event index
+      predicate. PublicFeedEventTypes itself is unchanged.
+    - ListPublicRoomFeed: picks the page first (WITH page: both branches limited to limit+offset, then
+      ORDER BY created_at DESC, entry_id DESC LIMIT/OFFSET). Then it joins only those rows to rooms
+      (slug, display_name) and users (human public name, the same COALESCE(username, '') rule and
+      u.id::text = author_id join). Same columns, same Scan order, same signature.
+    - CountPublicRoomFeedSince: each branch is limited to the cap and filtered by created_at > since,
+      then COUNT(*) over at most cap rows. Same signature and cap rule.
+  ?? backend/migrations/000127_room_entries_feed_indexes.{up,down}.sql:
+    idx_room_entries_feed_messages ON room_entries (created_at, id) WHERE kind = 'message' AND
+    deleted_at IS NULL AND author_type <> 'system';
+    idx_room_entries_feed_events ON room_entries (created_at, id) WHERE kind = 'event' AND
+    upper(event_type) IN (<the 11 allow-listed types>). Down drops both. The header states the rebuild
+    path (REINDEX; derived from room_entries alone) and what happens if the Go list grows without a
+    migration: still correct, just without this index.
+  M backend/cmd/cutover/main.go: --expect-version default 126 -> 127.
+  M backend/cmd/cutover/main_test.go and backend/internal/db/cutover_rollback_test.go: the same
+    version-number bumps slices 13 and 14 made (126 -> 127; 42 -> 43 down migrations "000127..000085").
+    Only those numbers changed; nothing was weakened.
+  ?? backend/internal/db/homepage_activity_scale_test.go (222 lines, package db, scratch DB via
+    newMigratedScratchDatabase): TestRoomFeed_AtGrowthVolumeEveryReadMatchesTheDefinitionAndReadsOnly
+    TheNewestEntries. Seed: 2,000 rooms (10% private, some deleted, some expired, some expiring later),
+    50 users, 600k entries 5 s apart (half in 20 hot rooms). The kind is a HASH of the entry (hashint4),
+    so every page mixes kinds: heartbeats, allow-listed events in mixed case (CLAIM, building, Done, PR)
+    plus a non-listed token.rotated, system messages, human messages (some by unknown accounts), agent
+    messages, 1% deleted. Cases: pages (7,0), (25,0), (25,200) must EQUAL the definition query (HEAD's
+    query written out plainly, roomFeedByDefinition); counts since 1 min / 10 min / a week (capped at 50)
+    must equal the definition. Each statement: no Seq Scan of room_entries, fewer than relpages/10
+    buffers. Then the same statement is PREPAREd on a one-connection pool, EXECUTEd 6 times, and the
+    7th EXECUTE is EXPLAINed under the same bounds. pgx runs these as cached prepared statements, and
+    after 5 runs Postgres may keep a generic plan that does not know the limit.
+    First seed defect, fixed before any number was kept: kind was (g/40 + g/2000) % 20, a block of 40
+    consecutive entries per kind, so the newest page held messages only. Now (hashint4(g) & 1048575) % 20.
+  No test deleted, skipped or loosened. Existing tests edited: only the three cutover version numbers.
+
+VERIFICATION [this session; DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test (local
+  docker solvr-postgres), migrated 126 -> 127 this session (127|f). The scale test makes its own scratch
+  DB. Logs in /tmp/solvr_idx77_s15/]:
+  [TEST] RED (tdd/red.log, HEAD code + new test, mixed seed): all 6 cases FAIL. Pages: Seq Scan of
+    room_entries, 19,976 buffers (table 9,650 pages), 276-312 ms. Counts: 10,036 and 4,856 buffers; the
+    week count Seq Scans.
+  [TEST] GREEN (tdd/green.log): 6/6 PASS, 0 SKIP, 0 FAIL. room_entries buffers: overview 8, load more 14,
+    offset 200 63; counts 7 / 9 / 5. No Seq Scan of room_entries. The 7th prepared EXECUTE reads the same
+    buffers as the first (the plan stays bounded once cached). Wall: 2-6 ms per page, 1-2 ms per count.
+  MUTATIONS [TEST] (mut/; sources restored, `shasum -c mut/orig.sha` OK; both migration files back, ls
+    confirms):
+    M1 migration 000127 held out -> all 6 FAIL: pages 20,033 buffers + Seq Scan; count 10,036.
+    M2 'PR' removed from the event index's allow-list -> 4 FAIL (the 3 pages ~10,344 buffers, since a
+    minute 5,023). The planner can no longer prove the predicate, so the event index goes unused. The
+    10-minute and week counts still pass under M2 (their cap is reached from the message branch first).
+  [TEST] TARGETED SUITES (no full backend run this iteration):
+    `go test ./internal/db -count=1 -p 1 -v -run 'Homepage|Activity|RoomFeed|Feed|Cutover|Room'` -> db.log:
+      133 top-level PASS, 4 FAIL, 0 SKIP. The 4 (TestRoomRepository_GetBySlug/_List/_Update/_SoftDelete,
+      "Create() error = room slug already exists", ambient solvr_test fixture data) are all in
+      /tmp/solvr_idx77_s13/fail.base. TestPublicRoomFeed_MessagesAndTypedEventsShareOneTimeline,
+      TestCutoverRollback_DownPathKeepsOrArchivesEveryPostCutoverWrite and the new test are among the
+      passes.
+    `go test ./internal/api/... -count=1 -p 1 -v -run 'Homepage|Activity|Overview|PublicPrivacy|Privacy|
+      Expiry'` -> api.log: 160 top-level PASS, 4 FAIL, 0 SKIP. The 4 (TestHomepageOverview_ServesEvery
+      SectionToALoggedOutVisitor and three TestHomepageSearch_*; all "does not contain <search term>",
+      ambient search data) are all in slice 13's fail.base. Every TestHomepageActivity_* passes
+      (ShowsWorkAndHidesTransport, GroupsABurstFromOneRoom, ReportsFreshEntriesWithoutMovingTheStream,
+      IneligibleEntriesLeaveOnTheNextRequest, HumanCommentsNeverPublishAnAccountID, BoundsWhatACaller
+      MayAskFor), and so does TestHomepageStatistics_PrivateActivityIsCountedButNeverListed.
+    `go test ./cmd/cutover -count=1` -> cutover.log: ok.
+    NOT RUN: the full `go test ./...` serial run (~40 min; it does not fit the 45-minute iteration). It
+      is still owed before idx 77 closes, compared against /tmp/solvr_idx77_s13/fail.now.
+  [REAL] gofmt -l clean on every touched Go file; go build ./... ok; go vet ./internal/db ./cmd/cutover ok;
+    check-file-size.sh "Found 33 file(s) exceeding 800 lines" (unchanged); none of the touched files is
+    on it (homepage_activity.go 182, test 222).
+  NOT RUN: frontend (no frontend file touched; the /v1/homepage/activity response shape is unchanged).
+  Leftovers [REAL]: no zz_* file and no debug block in the tree (grep -c PLAN in the test = 0). Scratch
+    DBs are dropped by the test. solvr_idx77_s12b_clean, solvr_idx77_s12v_clean and
+    solvr_scratch_1790853180756789000 were already there before this session (left for the owner).
+
+FINDINGS, NOT FIXED [REAL, slice 14 spike plans_head.txt]:
+  - GetRoomPulse: the 13-figure statement takes 4.1-4.9 s at 2M entries whatever the window; the message
+    series 187-736 ms. Not yet analysed per figure.
+  - ListFiltered sort=active: 116 ms, from live_agent_count over every candidate room (slice 14).
+  - The feed's offset is unbounded in the handler (as before this change); a page at offset N reads
+    about N entries per branch. Not a regression; noted only.
+
+REMAINING for idx 77 (next slices, in order) [UNVERIFIED plan]:
+  step 1: GetRoomPulse (+ messageSeries), then the slice 13 post-listing findings (exact total, search
+    LIMIT).
+  step 4: raw eligible search events vs time buckets + retention windows; no summed distincts.
+  step 5: reconcile counters/sampled search after migration and rebuilds.
+  step 6: no new infrastructure without a measured bottleneck. This slice added two partial indexes for
+    a measured bottleneck, and no cache or service.
+  Before closing idx 77: one full serial backend run, compared against slice 13's fail.now.
+
+git status at journal time [REAL, git status --porcelain]: M backend/cmd/cutover/main.go, M backend/cmd/
+  cutover/main_test.go, M backend/internal/db/cutover_rollback_test.go, M backend/internal/db/
+  homepage_activity.go, ?? backend/internal/db/homepage_activity_scale_test.go, ?? backend/migrations/
+  000127_room_entries_feed_indexes.{up,down}.sql, plus M progress.txt (this entry). spec.json unchanged;
+  idx 77 passes stays false.
+
+UAT (for when idx 77 closes, not now): as slice 14's list, plus migration 000127 on production, before or
+  with the API deploy that carries this slice. Two plain CREATE INDEX on room_entries (3,629 entries in
+  the 2026-09-29 dump; ShareLock for milliseconds). After the deploy, open https://solvr.dev and confirm
+  the activity stream shows the newest room messages and work events, "Load more" adds older ones, and
+  the "new updates" control still appears when a room gets a new message.

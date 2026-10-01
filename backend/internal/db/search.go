@@ -182,7 +182,7 @@ func maxSimilarity(results []models.SearchResult) *float64 {
 // document (posts.search_document, migration 000130) rather than parsing each post's text.
 func (r *SearchRepository) searchPosts(ctx context.Context, tsquery string, opts models.SearchOptions) ([]models.SearchResult, error) {
 	baseQuery := searchPostSelect("$1", "ts_rank(p.search_document, to_tsquery('english', $1))",
-		"NULL::float8", "posts p") + `
+		"NULL::float8", "posts p", postReplyCountsJoin) + `
 		WHERE p.deleted_at IS NULL
 		AND p.status NOT IN ('pending_review', 'rejected', 'draft')
 		AND p.search_document @@ to_tsquery('english', $1)
@@ -239,7 +239,8 @@ func (r *SearchRepository) searchPostsHybrid(ctx context.Context, embedding []fl
 	// when the post has no embedding. Ranking still uses hs.rrf_score below.
 	baseQuery := searchPostSelect("$4", "hs.rrf_score",
 		"CASE WHEN p.embedding IS NOT NULL THEN 1 - (p.embedding <=> $2::vector) END",
-		"hybrid_search($1, $2, $3, 2.0, 1.0, 60, $5::uuid) hs JOIN posts p ON p.id = hs.post_id") + `
+		"hybrid_search($1, $2, $3, 2.0, 1.0, 60, $5::uuid) hs JOIN posts p ON p.id = hs.post_id",
+		postPageReplyCountsJoin) + `
 		WHERE p.status NOT IN ('pending_review', 'rejected', 'draft')
 	`
 
@@ -307,7 +308,11 @@ func containsContentType(types []string, target string) bool {
 // searchPostSelect is the SELECT list and joins every post search query shares, in the scan
 // order of scanSearchResults. tsArg is the placeholder of the tsquery the snippet highlights,
 // score and similarity are the SQL of those columns, and from names the posts row as p.
-func searchPostSelect(tsArg, score, similarity, from string) string {
+// counts is the reply counts join: postPageReplyCountsJoin when the query returns at most
+// hybridMatchCount posts (it reads those posts' replies), postReplyCountsJoin when it returns
+// every match (one aggregate of the live replies is cheaper than a lookup per post: idx 77
+// slice 19 spike, a term in all 192k of 200k posts, 7.9 s with the aggregate, 16.8 s per post).
+func searchPostSelect(tsArg, score, similarity, from, counts string) string {
 	return `
 		SELECT
 			p.id,
@@ -335,7 +340,7 @@ func searchPostSelect(tsArg, score, similarity, from string) string {
 			` + similarity + ` as similarity
 		FROM ` + from + `
 		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
-		LEFT JOIN agents a ON p.posted_by_type = 'agent' AND p.posted_by_id = a.id` + postReplyCountsJoin
+		LEFT JOIN agents a ON p.posted_by_type = 'agent' AND p.posted_by_id = a.id` + counts
 }
 
 // buildTsQuery converts a search query to PostgreSQL's websearch-compatible tsquery format.

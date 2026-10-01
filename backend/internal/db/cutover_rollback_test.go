@@ -107,7 +107,7 @@ func TestCutoverRollback_DownPathKeepsOrArchivesEveryPostCutoverWrite(t *testing
 		require.NoError(t, err, "apply %s", filepath.Base(f))
 		applied++
 	}
-	require.Equal(t, 46, applied, "down migrations 000130..000085")
+	require.Equal(t, 47, applied, "down migrations 000131..000085")
 
 	var replies *string
 	require.NoError(t, pool.QueryRow(ctx, `SELECT to_regclass('replies')::text`).Scan(&replies))

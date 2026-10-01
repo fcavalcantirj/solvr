@@ -149,11 +149,17 @@ func scanReplyMatches(rows pgx.Rows) ([]models.SearchReplyMatch, error) {
 
 // loadSearchPosts loads the posts found only through their replies, as post results with score
 // 0 and no similarity (foldReplyMatches gives them their best reply's). The post rule, the
-// viewer's visibility and the post filters are applied again.
+// viewer's visibility and the post filters are applied again. The hybrid reply search returns
+// at most hybridMatchCount matches, so their posts' reply counts are read per post; the keyword
+// fallback's every match keeps the one aggregate (searchPostSelect).
 func (r *SearchRepository) loadSearchPosts(ctx context.Context, ids []string, tsquery string, opts models.SearchOptions) ([]models.SearchResult, error) {
 	args := []any{tsquery, ids}
 	argNum := 3
-	query := searchPostSelect("$1", "0::float8", "NULL::float8", "posts p") +
+	counts := postReplyCountsJoin
+	if len(ids) <= hybridMatchCount(opts) {
+		counts = postPageReplyCountsJoin
+	}
+	query := searchPostSelect("$1", "0::float8", "NULL::float8", "posts p", counts) +
 		" WHERE p.id = ANY($2::uuid[]) AND " + searchablePostRule +
 		" AND " + searchVisibilityClause("p", opts.ViewerHuman, &args, &argNum)
 	filters, args, _ := buildSearchFilters(opts, args, argNum)

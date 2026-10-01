@@ -7183,3 +7183,154 @@ UAT (for when idx 77 closes, not now): as slice 17's list, plus migration 000130
   rewrites posts and replies to add the stored columns (ACCESS EXCLUSIVE; 632 posts and 1,018 replies in
   the post-purge rehearsal copy at 113) and replaces the two hybrid functions. After the deploy, search on
   https://solvr.dev for a common word and a rare one, and confirm results and reply anchors appear.
+
+2026-10-01 11:55 — Task idx 77 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Make indexes, counters, search projections, and analytics rebuildable from authoritative records"
+SLICE 19 of N: step 1, search indexes from measured plans. Hybrid search reads the replies its results
+need: the post statements read reply counts for their own (at most hybridMatchCount) posts, and
+hybrid_search_replies (migration 000131) reads its keyword and vector candidates through the indexes
+instead of materializing every eligible reply. Default hybrid search for a term in every post 7.0 s ->
+1.2 s at 200k posts / 1M replies with a tenth embedded; a rare term 4.9 s -> 91 ms.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 77-95, 97, 98; no open
+  URGENT. 24 and 67 are acceptance tasks (skipped as in every earlier entry); 68 waits on the owner
+  (step 1 ER-diagram home; steps 5-6 gated by owner decision 4). idx 77 is the first buildable task.
+  Tree clean at start; HEAD 64683130. Slice 18's REMAINING list put "search reply counts for the
+  returned posts only and the eligible-CTE materialization in hybrid_search_replies" first.
+
+SPIKE [REAL, /tmp/solvr_idx77_s19/spike/]: throwaway DB solvr_idx77_s19_spike migrated to 130, seeded
+  with slice 18's seed.sql (200k posts, 1M replies; this copy sets publication/moderation state in the
+  insert instead of the later UPDATE) plus embed.sql: random 1024-d embeddings on 10% of posts (19,925)
+  and of replies (100,423), half near the harness's fixed query vector, half centred; HNSW indexes
+  rebuilt after (posts 24 s, replies 2 min 24 s; maintenance_work_mem 2GB, no parallel workers).
+  Harness: a throwaway test (copy in zz_idx77_s19_spike_test.go.txt, deleted before commit) calls the
+  real SearchRepository.Search (keyword and with fixedQueryEmbedder) and EXPLAIN (ANALYZE, BUFFERS)es
+  every statement it ran. plans_head.txt = HEAD; plans_page.txt = page counts in every statement;
+  plans_new.txt = this commit.
+  Default hybrid search (knowledge), Search wall time HEAD -> new (run_head.log / run_new.log):
+    zeromq 4.88 s -> 91 ms; postgres 4.12 s -> 373 ms; kubernetes 6.95 s -> 1.23 s
+    content_types=posts: zeromq 807 -> 10 ms; postgres 1,567 -> 111 ms; kubernetes 1,127 -> 668 ms
+  Per statement, EXPLAIN ANALYZE ms (post statement / hybrid_search_replies / loadSearchPosts):
+    zeromq 868 / 3,219 / 365 -> 6 / 5 / 0.4; postgres 1,180 / 3,896 / 575 -> 224 / 95 / 10;
+    kubernetes 2,726 / 4,632 / 507 -> 260 / 917 / 15.
+  Causes on HEAD: each post statement joined postReplyCountsJoin, a HashAggregate of all 975k live
+  replies (1.98 s of statement 0's 2.73 s) to show 60 posts' counts; hybrid_search_replies' eligible
+  CTE (935k rows) was read three times so it was materialized (~1.0 s to build), then the vector side
+  computed the distance of every embedded eligible reply (3.8 s), and neither replies index was usable.
+  Reply counts per post are NOT better everywhere: with page counts in every statement (plans_page)
+  the keyword search for a term in all 192k posts went 7.9 -> 16.8 s (content_types=posts) and 10.3 ->
+  17.4 s (knowledge): a lookup per matched post costs more than one aggregate. So only the bounded
+  statements take the per-post join; the keyword path keeps the aggregate until its two-phase page.
+  The keyword posts statement is unchanged: same plan on HEAD and new, Execution Time 5,986 vs 5,776 ms;
+  its Search wall time read 7.9 s on HEAD and 15.5 s on the new run [REAL, the plans] — client-side
+  noise from shipping 191,941 rows, not a plan change.
+  Production copy [REAL]: solvr_idx77_s19_prod = a copy of solvr_rehearsal_purge113 (632 posts, 572
+  embedded; 1,018 replies, 285 embedded). 40 queries (a post's embedding + two words of a post title):
+  old function vs the new shape (at 113, to_tsvector(body) in place of the stored column): same 2,400
+  row count, 2,382 same reply ids, 33 of 40 same score sequences. The 4,800 vector candidates are
+  identical in ids and ranks (the planner scans replies there; plan read). Old shape and new shape both
+  with an id tie break: 2,400/2,400 same rows and scores, 40/40 same sequences — the differences were
+  keyword-rank ties only (3 tied rank groups for "error" alone on the copy).
+  At spike scale the planner reads the vector candidates from idx_replies_embedding (HNSW): 32
+  candidates, all among the exact scan's 120, 3 at the same rank (sem_v1.log). posts' hybrid_search
+  already does this on HEAD (Index Scan using idx_posts_embedding, 39 rows). See FINDINGS.
+  All three spike DBs (solvr_idx77_s19_spike, _prod, _fresh) were dropped at the end.
+
+WHAT CHANGED [REAL, git status --porcelain: 5 M + 3 ??; git diff --stat 26+/15- plus the new files]:
+  ?? backend/migrations/000131_hybrid_reply_candidates.up.sql: CREATE OR REPLACE hybrid_search_replies.
+    Each candidate CTE joins replies to posts itself with the same eligibility (live reply; post not
+    deleted, published, approved, public or the viewer's family), the shape of hybrid_search; the final
+    rows join replies by id. Ties broken by reply id in both ranks and the final order; the keyword CTE
+    orders by rank_ix before its LIMIT. Header: the measurements, the approximate HNSW note, the
+    production-copy equivalence. CREATE OR REPLACE FUNCTION only (no table rewrite, no index change).
+  ?? ...000131_hybrid_reply_candidates.down.sql: 000130's hybrid_search_replies definition verbatim.
+  M backend/internal/db/search.go: searchPostSelect takes the reply counts join as a 5th argument
+    (doc comment says which and why, with the numbers); searchPosts (keyword, every match) passes
+    postReplyCountsJoin as before; searchPostsHybrid passes postPageReplyCountsJoin.
+  M backend/internal/db/search_canonical.go: loadSearchPosts passes postPageReplyCountsJoin when it
+    loads at most hybridMatchCount(opts) posts (the hybrid reply search's maximum), else the aggregate.
+  ?? backend/internal/db/search_hybrid_page_reads_test.go (226 lines, scratch DBs):
+    - seedHybridReplyReads: seedSearchDocuments + 54,000 filler replies matching no query and with no
+      embedding, "zeromq" in 1/200 of the other replies, embeddings on a tenth of them (half near the
+      query vector, half centred), 1/40 of replies deleted.
+    - TestSearch_HybridTakesOnlyTheRepliesItsMatchesAndResultsNeed: 4 hybrid cases (knowledge,
+      knowledge with viewer page 2, knowledge rare at per_page 50, posts). Every result's three counts
+      equal its post's live replies bucketed as the listing does; and the rows the search's statements
+      take from replies (EXPLAIN ANALYZE JSON, Actual Rows x Loops of every replies scan) are at most
+      keyword matches + embedded + 5 x matchCount + 2 x matchCount x max replies per post (asserted
+      to be under half the live replies).
+    - TestHybridSearchReplies_EqualsItsDefinition: the function equals referenceHybridReplies (the old
+      materialized shape with id tie breaks) row for row and score for score, for 4 queries x match
+      counts 20/60/150 x anonymous/family viewer (posts made family), under SET LOCAL
+      enable_indexscan = off so both are exact.
+  M backend/cmd/cutover/main.go (--expect-version 130 -> 131), main_test.go, cutover_rollback_test.go
+    (46 -> 47 down migrations "000131..000085"): the same version bumps as slices 13-18, only numbers.
+  No test deleted or skipped; no assertion loosened.
+
+VERIFICATION [this session; logs in /tmp/solvr_idx77_s19/]:
+  [TEST] RED (tdd/red.log, HEAD code and migrations, DATABASE_URL=postgres://solvr:solvr_dev@localhost:
+    5435/solvr_test): both new tests FAIL. Reads: the search took 177,858 replies of 59,266 live
+    (knowledge, bound 6,859), 177,948 (rare, bound 10,339), 59,266 (posts, bound 6,859). Definition:
+    first row differs (HEAD picks among tied keyword ranks by scan order).
+  [TEST] GREEN (tdd/green2.log, same DB; solvr_test migrated 130 -> 131 this session): both PASS.
+    Taken vs bound: knowledge 6,736 / 6,859 (2,368 keyword matches, 591 embedded, the rest the result
+    posts' replies), viewer 4,217 / 4,504, rare 9,257 / 10,354, posts 1,800 / 6,859; 59,250 live.
+  MUTATIONS [TEST] (mut/m1-m4.log): M1 searchPostsHybrid back to the aggregate -> all 4 read cases FAIL;
+    M2 loadSearchPosts always the aggregate -> the 3 knowledge cases FAIL (64,297 / 61,832 / 64,802
+    taken), posts PASS as expected; M3 000131 as the old materialized shape WITH the tie breaks -> the
+    3 knowledge cases FAIL (62,781 taken), the definition test PASSES as expected; M4 000131 without
+    the tie breaks -> the definition test FAILS. Sources restored; `shasum -c mut/orig.sha` OK.
+  [TEST] shared DB (tdd/shared.log): `go test ./internal/db -count=1 -p 1 -v -run 'TestSearch|
+    TestCutover|TestMigrations|TestSchema_NoIndexDuplicates|TestHybrid|TestReplies|TestReply'` -> 97
+    PASS, 7 FAIL, 5 SKIP. PASS includes both new tests, TestCutoverRollback_DownPathKeepsOrArchivesEvery
+    PostCutoverWrite (47 down steps, 000131 down included), TestSchema_NoIndexDuplicatesAnotherIndexOf
+    ItsTable and slice 18's TestSearch_KeywordMatchesReadStoredDocumentsAndKeepTheirRanks. 6 of the 7
+    FAILs are in /tmp/solvr_idx77_s13/fail.now (GetTrending, GetZeroResults, MinSimilarity_HonestFilter,
+    SearchUnified_PostsAndAnswers, two SearchPulse); the 7th, TestSearch_Similarity_PopulatedAndTop
+    Similarity ("post A missing or similarity nil"), is slice 18's shared-DB leftover; it passes fresh.
+    The 5 SKIPs are the TestSearchHybrid_* / HybridSearch_* tests, all 5 in skip.now (their own skip).
+  [TEST] fresh DB solvr_idx77_s19_fresh (migrated 0 -> 131): `go test ./internal/db -count=1 -p 1 -v
+    -run 'TestSearch|TestHybrid'` (tdd/green_fresh.log) -> ok, 58 PASS, 0 FAIL, the same 5 SKIPs.
+    `go test ./internal/api/... ./internal/services/... -count=1 -run Search` on it -> ok.
+    `go test ./cmd/cutover -count=1` -> ok.
+  [REAL] go build ./... ok; go vet ./internal/db ./cmd/cutover ok; gofmt -l clean on every touched Go
+    file; check-file-size.sh "Found 33 file(s) exceeding 800 lines" (unchanged, search_test.go 1002 is
+    pre-existing); new test file 226 lines, search.go 494, search_canonical.go 237.
+  NOT RUN: the full serial backend run (still owed before idx 77 closes; compare against
+    /tmp/solvr_idx77_s13/fail.now). Frontend not run (no frontend file touched).
+  Leftovers [REAL]: solvr_idx77_s12b_clean, solvr_idx77_s12v_clean, solvr_scratch_1790853180756789000
+    existed at the start and still do (left for the owner). No zz_* file in the tree.
+
+FINDINGS, NOT FIXED [REAL unless labelled]:
+  - Vector candidates through HNSW are approximate and capped by hnsw.ef_search (default 40): at spike
+    scale 32 reply candidates where the exact scan has 120 (the query asks for 2 x match_count), and
+    hybrid_search does the same for posts on HEAD (39 rows). Production-size tables are scanned exactly
+    (copy at 113: plan read, 4,800/4,800 identical). pgvector here is 0.8.6, which has
+    hnsw.iterative_scan; whether production's pgvector has it is [UNVERIFIED]. Raising ef_search or
+    enabling iterative scan for both functions is a recall decision to measure, not done here.
+  - Hybrid knowledge for a term in 1 in 5 replies still costs ~0.9 s in hybrid_search_replies: the
+    195k keyword matches are read (Seq Scan) and ranked to keep 120. A top-N keyword index cannot rank
+    by ts_rank_cd; this is the inherent cost of ranking every match (as in the post function).
+  - The keyword fallback and content_types=answers/approaches still return every match (unchanged):
+    kubernetes knowledge 9.1 s, posts 5.8 s statement (both measured this session).
+
+REMAINING for idx 77 (next slices, in order) [UNVERIFIED plan]:
+  step 1: the keyword two-phase page (rank and page from the stored documents, then headline/authors/
+    counts for the page only; keep foldReplyMatches' stable score sort), which then lets searchPosts and
+    loadSearchPosts take the per-post counts join everywhere; then the exact post total.
+  step 4: raw eligible search events vs time buckets + retention windows; no summed distincts.
+  step 5: reconcile counters/sampled search after migration and rebuilds.
+  step 6: this slice added no index, cache or service (one function replaced).
+  Before closing idx 77: one full serial backend run, compared against slice 13's fail.now.
+
+git status at journal time [REAL, git status --porcelain]: M backend/cmd/cutover/main.go, M backend/cmd/
+  cutover/main_test.go, M backend/internal/db/cutover_rollback_test.go, M backend/internal/db/search.go,
+  M backend/internal/db/search_canonical.go, ?? backend/internal/db/search_hybrid_page_reads_test.go,
+  ?? backend/migrations/000131_hybrid_reply_candidates.{up,down}.sql, plus M progress.txt (this entry).
+  spec.json unchanged; idx 77 passes stays false.
+
+UAT (for when idx 77 closes, not now): as slice 18's list, plus migration 000131 on production, before
+  or with the API deploy that carries this slice (CREATE OR REPLACE FUNCTION only, no table lock beyond
+  the function's). After the deploy, search on https://solvr.dev for a common word and a rare one and
+  confirm results, reply anchors and each result's answer/approach/comment counts appear.

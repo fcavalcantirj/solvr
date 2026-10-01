@@ -204,13 +204,60 @@ const verifiedPresence = `EXISTS (
 	   AND rt.rotated_at IS NULL
 	   AND (rt.expires_at IS NULL OR rt.expires_at > NOW()))`
 
+// offered reports whether w is one of RoomStatsWindows. The window's interval and bucket unit are
+// written into the room section's SQL as constants, so only the offered set may reach it.
+func (w RoomStatsWindow) offered() bool {
+	for _, o := range RoomStatsWindows {
+		if o == w {
+			return true
+		}
+	}
+	return false
+}
+
 // GetRoomPulse reads the whole room section for one selected window. Every
 // figure counts every non-deleted room, private ones included, except the two
 // public-only figures reported beside them (PublicAgentsOnline, PublicRooms).
+//
+// The message figures are one pass over the window's messages (idx 77: five
+// figures that each scanned room_entries took 4.4-5.2 s at 2M entries), grouped
+// per room before the rooms join: a COUNT(DISTINCT room_id) over the join led
+// the planner to read the month in room order, one heap page per message. The
+// window is written as a constant so a cached plan still knows how much of the
+// table it covers. The activation figures read migration 000128's index.
 func (r *HomepageRepository) GetRoomPulse(ctx context.Context, window RoomStatsWindow) (RoomPulse, error) {
 	pulse := RoomPulse{Window: window}
+	if !window.offered() {
+		return pulse, fmt.Errorf("get room pulse: window %q is not offered", window.Value)
+	}
+
+	inWindow := `m.created_at > NOW() - INTERVAL '` + window.interval() + `'`
+	scanned := window
+	if scanned.Duration < 24*time.Hour {
+		scanned.Duration = 24 * time.Hour
+	}
 
 	query := `
+		WITH per_room AS (
+			SELECT m.room_id,
+			       COUNT(*) FILTER (WHERE ` + inWindow + `) AS in_window,
+			       COUNT(*) FILTER (WHERE m.author_type = 'agent' AND ` + inWindow + `) AS agent,
+			       COUNT(*) FILTER (WHERE m.author_type = 'agent' AND m.author_id IS NULL AND ` + inWindow + `) AS unverified,
+			       COUNT(*) FILTER (WHERE m.author_type = 'human' AND ` + inWindow + `) AS human,
+			       COUNT(*) FILTER (WHERE m.created_at > NOW() - INTERVAL '24 hours') AS last_day
+			  FROM messages m
+			 WHERE m.deleted_at IS NULL AND m.author_type <> 'system'
+			   AND m.created_at > NOW() - INTERVAL '` + scanned.interval() + `'
+			 GROUP BY m.room_id
+		), windowed AS (
+			SELECT COUNT(*) FILTER (WHERE p.in_window > 0) AS rooms,
+			       COALESCE(SUM(p.agent), 0)::bigint AS agent,
+			       COALESCE(SUM(p.unverified), 0)::bigint AS unverified,
+			       COALESCE(SUM(p.human), 0)::bigint AS human,
+			       COALESCE(SUM(p.last_day), 0)::bigint AS last_day
+			  FROM per_room p JOIN rooms r ON r.id = p.room_id
+			 WHERE ` + countedRoomPredicate + `
+		)
 		SELECT
 			(SELECT COUNT(DISTINCT ap.agent_id)
 			   FROM agent_presence ap JOIN rooms r ON r.id = ap.room_id
@@ -225,43 +272,21 @@ func (r *HomepageRepository) GetRoomPulse(ctx context.Context, window RoomStatsW
 			(SELECT COUNT(DISTINCT ap.room_id)
 			   FROM agent_presence ap JOIN rooms r ON r.id = ap.room_id
 			  WHERE ` + countedLiveRoomPredicate + ` AND ` + unexpiredPresence + `),
-			(SELECT COUNT(DISTINCT m.room_id)
-			   FROM messages m JOIN rooms r ON r.id = m.room_id
-			  WHERE ` + countedRoomPredicate + ` AND m.deleted_at IS NULL
-			    AND m.author_type <> 'system'
-			    AND m.created_at > NOW() - $1::interval),
-			(SELECT COUNT(*)
-			   FROM messages m JOIN rooms r ON r.id = m.room_id
-			  WHERE ` + countedRoomPredicate + ` AND m.deleted_at IS NULL
-			    AND m.author_type = 'agent'
-			    AND m.created_at > NOW() - $1::interval),
-			(SELECT COUNT(*)
-			   FROM messages m JOIN rooms r ON r.id = m.room_id
-			  WHERE ` + countedRoomPredicate + ` AND m.deleted_at IS NULL
-			    AND m.author_type = 'agent' AND m.author_id IS NULL
-			    AND m.created_at > NOW() - $1::interval),
-			(SELECT COUNT(*)
-			   FROM messages m JOIN rooms r ON r.id = m.room_id
-			  WHERE ` + countedRoomPredicate + ` AND m.deleted_at IS NULL
-			    AND m.author_type = 'human'
-			    AND m.created_at > NOW() - $1::interval),
+			w.rooms, w.agent, w.unverified, w.human,
 			(SELECT COUNT(DISTINCT e.room_id)
 			   FROM room_events e JOIN rooms r ON r.id = e.room_id
-			  WHERE ` + countedRoomPredicate + ` AND e.event_type = $2
-			    AND e.created_at > NOW() - $1::interval),
+			  WHERE ` + countedRoomPredicate + ` AND e.event_type = '` + RoomActivationEventType + `'
+			    AND e.created_at > NOW() - INTERVAL '` + window.interval() + `'),
 			(SELECT MIN(e.created_at)
 			   FROM room_events e JOIN rooms r ON r.id = e.room_id
-			  WHERE ` + countedRoomPredicate + ` AND e.event_type = $2),
+			  WHERE ` + countedRoomPredicate + ` AND e.event_type = '` + RoomActivationEventType + `'),
 			(SELECT COUNT(*) FROM rooms r WHERE ` + countedRoomPredicate + `),
 			(SELECT COUNT(*) FROM rooms r WHERE ` + publicRoomPredicate + `),
-			(SELECT COUNT(*)
-			   FROM messages m JOIN rooms r ON r.id = m.room_id
-			  WHERE ` + countedRoomPredicate + ` AND m.deleted_at IS NULL
-			    AND m.author_type <> 'system'
-			    AND m.created_at > NOW() - INTERVAL '24 hours')
+			w.last_day
+		  FROM windowed w
 	`
 
-	err := r.pool.QueryRow(ctx, query, window.interval(), RoomActivationEventType).Scan(
+	err := r.pool.QueryRow(ctx, query).Scan(
 		&pulse.Presence.AgentsOnline,
 		&pulse.Presence.PublicAgentsOnline,
 		&pulse.Presence.VerifiedAgentsOnline,
@@ -295,16 +320,20 @@ func (r *HomepageRepository) GetRoomPulse(ctx context.Context, window RoomStatsW
 
 // messageSeries returns exactly window.Buckets buckets, oldest first, with
 // zeros filled in for quiet steps so the series never has gaps. Like every
-// count, it covers every non-deleted room, private ones included.
+// count, it covers every non-deleted room, private ones included. The caller
+// has checked the window is offered: its unit and length are written as
+// constants, like GetRoomPulse's.
 func (r *HomepageRepository) messageSeries(ctx context.Context, window RoomStatsWindow) ([]BucketCount, error) {
+	unit := "'" + window.BucketUnit + "'"
 	rows, err := r.pool.Query(ctx, `
-		SELECT date_trunc($1, m.created_at) AS bucket, COUNT(*)
+		SELECT date_trunc(`+unit+`, m.created_at) AS bucket, COUNT(*)
 		  FROM messages m JOIN rooms r ON r.id = m.room_id
 		 WHERE `+countedRoomPredicate+` AND m.deleted_at IS NULL
 		   AND m.author_type <> 'system'
-		   AND m.created_at >= date_trunc($1, NOW()) - ($2::int - 1) * $3::interval
+		   AND m.created_at >= date_trunc(`+unit+`, NOW()) - INTERVAL '`+
+		fmt.Sprintf("%d %s", window.Buckets-1, window.BucketUnit)+`'
 		 GROUP BY bucket
-	`, window.BucketUnit, window.Buckets, window.bucketInterval())
+	`)
 	if err != nil {
 		LogQueryError(ctx, "messageSeries", "messages", err)
 		return nil, fmt.Errorf("message series: %w", err)

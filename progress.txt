@@ -6773,3 +6773,136 @@ UAT (for when idx 77 closes, not now): as slice 14's list, plus migration 000127
   the 2026-09-29 dump; ShareLock for milliseconds). After the deploy, open https://solvr.dev and confirm
   the activity stream shows the newest room messages and work events, "Load more" adds older ones, and
   the "new updates" control still appears when a room gets a new message.
+
+2026-10-01 09:56 — Task idx 77 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Make indexes, counters, search projections, and analytics rebuildable from authoritative records"
+SLICE 16 of N: step 1, room activity, part 3: the homepage room section (HomepageRepository.GetRoomPulse
++ messageSeries; GET /v1/homepage/rooms and the overview's room section). The five message figures are
+now one pass over the window's messages, and the two activation figures read a small new index
+(migration 000128). Same figures, same series. At 600k room entries, room_entries buffers per call:
+24h 4,750 -> 681, 7d 14,547 -> 4,508, 30d 51,487 -> 19,380; wall 40 -> 24 ms, 104 -> 61 ms, 733 -> 284 ms.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 77-95, 97, 98; no open
+  URGENT. 24 and 67 are acceptance tasks (skipped as in every earlier entry); 68 waits on the owner
+  (08:15 entry). idx 77 is the first buildable task; slice 15's REMAINING list puts GetRoomPulse (+
+  messageSeries) next. Tree clean at start; HEAD 56e1b643.
+
+MEASURED FIRST [REAL, /tmp/solvr_idx77_s14/spike/plans_head.txt, slice 14's saved HEAD plans at 2M
+  entries; read, not re-run]: GetRoomPulse 4.4-5.2 s at every window. InitPlans 5, 6, 7, 8 and 13 (the
+  five message figures) were each a Parallel Seq Scan of room_entries, ~600 ms and ~68k buffers apiece.
+  InitPlans 9 and 10 (activation figures) each read the whole idx_room_entries_room_type index (it
+  leads with room_id, so event_type = 'room.activated' cannot seek): ~4,800 buffers each. Presence and
+  room totals: 2-41 ms, not touched. messageSeries 30d: Seq Scan, 736 ms.
+
+WHAT CHANGED [REAL, git status --porcelain: 4 M + 3 ??; git diff --stat 72+/43-, plus new files]:
+  M backend/internal/db/homepage_rooms.go (487 -> 516 lines):
+    - GetRoomPulse: the five message subqueries are replaced by two CTEs. per_room reads the window's
+      non-deleted, non-system messages once and counts, per room, the in-window rows, agent, agent with
+      NULL author_id (unverified), human, and the last 24 hours (FILTER clauses). windowed joins those
+      groups to rooms (countedRoomPredicate) and sums them; rooms = groups with in_window > 0. The scan
+      covers max(window, 24 h) so the pinned Messages24h stays exact if a window under 24 h is ever
+      offered. Same 13 columns, same Scan order, same signature.
+      Why grouped per room first [TEST, this session's first GREEN attempt, log overwritten by the
+      second run, numbers from the run output]: with COUNT(DISTINCT m.room_id) over the join, the 30d
+      statement read 435,207 room_entries buffers (no Seq Scan; the planner walked the month in room
+      order, a heap page per message) and the call failed the bound at 444,890. Grouping per room
+      before the join gives a Seq Scan / bitmap read in table order: 9,697.
+    - The window interval, the activation event type ('room.activated', a Go const) and, in
+      messageSeries, the bucket unit and length are written into the SQL as constants instead of
+      parameters, so the statements have no parameters and the plan is made knowing the window. New
+      RoomStatsWindow.offered(): GetRoomPulse returns an error for a window not in RoomStatsWindows,
+      so only the fixed vocabulary reaches the SQL (handlers already resolve the window through
+      RoomStatsWindowByValue / DefaultRoomStatsWindow).
+  ?? backend/migrations/000128_room_entries_activation_index.{up,down}.sql:
+    idx_room_entries_activations ON room_entries (created_at, room_id) WHERE kind = 'event' AND
+    event_type = 'room.activated'. Down drops it. Header states the rebuild path (REINDEX; derived from
+    room_entries alone).
+  M backend/cmd/cutover/main.go: --expect-version default 127 -> 128.
+  M backend/cmd/cutover/main_test.go and backend/internal/db/cutover_rollback_test.go: the same version
+    bumps slices 13-15 made (127 -> 128; 43 -> 44 down migrations "000128..000085"). Only those numbers.
+  ?? backend/internal/db/homepage_rooms_scale_test.go (225 lines, package db, scratch DB via
+    newMigratedScratchDatabase): TestRoomPulse_AtGrowthVolumeEveryWindowMatchesTheDefinitionAndReads
+    ItsWindowOnce. Seed: slice 15's seedRoomFeed (2,000 rooms, 600k entries 5 s apart, ~35 days; mixed
+    kinds, private/deleted/expired rooms, system/human/agent/unverified/deleted messages) plus
+    seedRoomPulseExtras: a room.activated event in every 4th room spread over 40 days, and 3 presence
+    rows in every 3rd room (live and expired), with a live token for presence-1 and a rotated one for
+    presence-2. Per window (24h, 7d, 30d): the result must EQUAL the definition (pulseByDefinition =
+    HEAD's 13-subquery statement written out, plus HEAD's series query), compared only when the
+    definition read the same before and after the call (the window slides; retried up to 4 times).
+    The series must have window.Buckets buckets matching the definition per bucket. Bound: the call
+    is 2 statements and their room_entries buffers sum to at most 3x the heap pages the window's
+    entries live on (counted by ctid); the 24h statements may not Seq Scan room_entries.
+  No test deleted, skipped or loosened. Existing tests edited: only the three cutover version numbers.
+
+VERIFICATION [this session; DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test (local
+  docker solvr-postgres), migrated 127 -> 128 this session (128|f). The scale test makes and drops its
+  own scratch DB. Logs in /tmp/solvr_idx77_s16/]:
+  [TEST] RED (tdd/red_final.log, HEAD code + new test): 3/3 FAIL on the bound, every figure EQUAL to
+    the definition. 24h 4,750 buffers (window lives on 280 of 9,683 pages), 7d 14,547 (1,956), 30d
+    51,487 (8,375; both statements Seq Scan, the first five times).
+  [TEST] GREEN (tdd/green.log): 3/3 PASS, 0 SKIP, 0 FAIL. 24h 346 + 335 buffers, no Seq Scan, 24 ms;
+    7d 2,337 + 2,171, 61 ms; 30d 9,697 + 9,683 (one Seq Scan each), 284 ms.
+  MUTATION [TEST] M1 (mut/m1.log; migration 000128 held out; files restored, `shasum -c mut/orig.sha`
+    OK): 24h FAIL 3,361 > 840, 7d FAIL 7,187 > 5,868 (statement 1 reads the room_type index for the
+    activation figures); 30d passes (the cost hides in a month-sized bound).
+    M2 = the COUNT(DISTINCT)-over-join shape above: 30d FAIL 444,890.
+  [TEST] TARGETED SUITES (no full backend run this iteration):
+    `go test ./internal/db -count=1 -p 1 -v -run 'RoomPulse|RoomStats|RoomActivation|Cutover|Homepage|
+      Activity|RoomFeed|Migration'` -> db.log: 93 top-level PASS, 1 FAIL, 0 SKIP. Every TestGetRoomPulse_*
+      (presence now, unexpired only, verified vs name-only, private counted/deleted not, expired keeps
+      history, window follows, agent vs human excl. system/deleted, system-only rooms, activation
+      milestone, series buckets, fixed 24 h count, private series), TestCutoverRollback_*, TestRoomFeed_*
+      and the new test pass. The 1 FAIL, TestInferSpecialties_UserWithActivity (matched by "Activity";
+      not a room test): "failed to create test agent: agent ID already exists". Cause [REAL, psql]:
+      solvr_test holds agent ia_other_for_user_1790857919981569000 (display_name 'Infer Test Agent
+      other_for_user', created 2026-10-01 12:31:59 UTC = the 09:31 session's run) and agents has
+      UNIQUE (display_name); the test's cleanup did not remove it. Ambient fixture data, same class as
+      the TestRoomRepository_* failures in slice 13's fail.base. Not touched; left for the owner.
+    `go test ./internal/api/... -count=1 -p 1 -v -run 'Homepage|Overview|RoomStats|Pulse|PublicPrivacy|
+      Expiry'` -> api.log: 150 top-level PASS, 4 FAIL, 0 SKIP. The 4 (TestHomepageOverview_ServesEvery
+      SectionToALoggedOutVisitor, three TestHomepageSearch_*) are all in /tmp/solvr_idx77_s13/fail.base
+      (checked by grep). Every TestHomepageRooms_* passes (six statistics, selector default + each
+      choice, presence stays now, rejected window falls back, never leaks a private room,
+      uninstrumented milestone reads unavailable, second agent records the milestone, sparkline buckets
+      follow the window, cacheable).
+    `go test ./cmd/cutover -count=1` -> cutover.log: ok.
+    NOT RUN: the full `go test ./...` serial run (~40 min). Still owed before idx 77 closes, compared
+      against /tmp/solvr_idx77_s13/fail.now.
+  [REAL] gofmt -l clean on every touched Go file; go build ./... ok; go vet ./internal/db ./cmd/cutover
+    ok; check-file-size.sh "Found 33 file(s) exceeding 800 lines" (unchanged); none of the touched files
+    is on it (homepage_rooms.go 516, test 225).
+  [UNVERIFIED, reasoned] The statements now carry no parameters, so the plan the scale test EXPLAINs is
+    the plan a cached prepared statement keeps (Postgres uses a generic plan only when there are bound
+    parameters to choose against); no 7th-EXECUTE check was added for that reason.
+  NOT RUN: frontend (no frontend file touched; the /v1/homepage/rooms response shape is unchanged).
+  Leftovers [REAL]: no debug block, no zz_* file. Scratch DBs dropped by the test; solvr_idx77_s12b_clean,
+    solvr_idx77_s12v_clean and solvr_scratch_1790853180756789000 were there before this session.
+
+FINDINGS, NOT FIXED:
+  - [TEST] At 30 days the window is most of this seed's table, so both statements read the table once
+    (19,380 buffers, 284 ms at 600k; [UNVERIFIED] roughly 3.3x that at 2M, about 1 s). Two passes is
+    the floor for raw reads; going lower needs an hourly per-room message projection maintained with
+    the writes (steps 2-3). Not built: no measurement yet says 1 s on a cacheable homepage section is a
+    bottleneck (step 6).
+  - ListFiltered sort=active (116 ms, slice 14) and the feed's unbounded offset (slice 15): unchanged.
+
+REMAINING for idx 77 (next slices, in order) [UNVERIFIED plan]:
+  step 1: the slice 13 post-listing findings (exact total, search LIMIT), then reply pagination /
+    membership / token / timeline replay checks not yet measured.
+  step 4: raw eligible search events vs time buckets + retention windows; no summed distincts.
+  step 5: reconcile counters/sampled search after migration and rebuilds.
+  step 6: this slice added one partial index for a measured bottleneck, and no cache or service.
+  Before closing idx 77: one full serial backend run, compared against slice 13's fail.now.
+
+git status at journal time [REAL, git status --porcelain]: M backend/cmd/cutover/main.go, M backend/cmd/
+  cutover/main_test.go, M backend/internal/db/cutover_rollback_test.go, M backend/internal/db/
+  homepage_rooms.go, ?? backend/internal/db/homepage_rooms_scale_test.go, ?? backend/migrations/
+  000128_room_entries_activation_index.{up,down}.sql, plus M progress.txt (this entry). spec.json
+  unchanged; idx 77 passes stays false.
+
+UAT (for when idx 77 closes, not now): as slice 15's list, plus migration 000128 on production, before or
+  with the API deploy that carries this slice. One plain CREATE INDEX on room_entries (3,629 entries in
+  the 2026-09-29 dump; ShareLock for milliseconds). After the deploy, open https://solvr.dev, switch the
+  room section between 24 hours, 7 days and 30 days, and confirm the six statistics and the sparkline
+  load and move with the window while "agents online" stays the same.

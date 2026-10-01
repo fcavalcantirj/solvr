@@ -5339,3 +5339,167 @@ UAT (for when idx 77 closes, not now): apply 000112, 000113, 000119, 000120, 000
   and confirm the drift query returns 0 rows (rerun the command if it printed "Changed while
   embedding"); plus the reputation / view_count / vote_score / room_activity drift and rebuild checks
   from slices 1-5. Run the cutover with the new default --expect-version 122.
+
+================================================================================
+2026-10-01 04:58 — Task idx 77 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Make indexes, counters, search projections, and analytics rebuildable from authoritative records"
+SLICE 7 of N: step 5 "visibility/deletion changes remove public projections promptly" for the public
+overview. GET /v1/overview's 30 s per-instance snapshot now leaves every instance when a listed post
+is deleted, edited, rejected or loses its last reply (DB triggers -> solvr_overview_changed at commit,
+migration 000123), and a snapshot built across such a change is no longer stored (cache generation).
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 77-95, 97, 98; no open
+  URGENT. idx 24 and 67 are acceptance tasks (skipped as in every earlier entry); idx 68 still waits
+  for the owner call on step 1 and owner decision 4. idx 77 is the first buildable task; slice 6's
+  REMAINING list named this finding ("the /v1/overview snapshot vs post deletion / moderation / edit:
+  spike the 30 s window through the API"). Tree clean at start; HEAD 4a8013f6.
+
+SPIKE FIRST [REAL, /tmp/solvr_idx77_s7/spike/spike.sh + spike.out, live API on HEAD, fresh DB at 122,
+  :8099 under env -i (no moderator), 4 posts approved by SQL each with one live reply, DB dropped]:
+  A. DELETE /v1/posts/{id} -> 204, GET /v1/posts/{id} -> 404, overview still listed it; gone after 30.1 s.
+  B. PATCH title -> 200, overview kept the OLD title for 30.0 s.
+  C. status='rejected' by SQL (the moderator's status write) -> still listed for 30.2 s.
+  D. DELETE its only reply -> 200, 0 live replies, still listed for 30.0 s.
+  (First spike run listed nothing: without GROQ_API_KEY new posts stay pending_review; rerun with the
+  posts approved by SQL.) Code facts [REAL, read]: the overview Posts section = ListReusablePosts
+  (public, not draft/pending_review/rejected, not deleted, >= 1 live non-system reply; shows id, type,
+  title, status, tags, contribution count); only RoomHandler (visibility/archive/reopen/delete) called
+  Pool.OverviewChanged; ListenRooms (always started by cmd/api via StartRoomRelay) already LISTENs on
+  solvr_overview_changed and drops the snapshots on each notice and on every (re)LISTEN. Room entries
+  have no removal path (no UPDATE/DELETE of messages besides pinning), so rooms were not in scope.
+
+DESIGN: same place as slices 1-6, the database, so every writer (handlers, the async moderation and
+  translation goroutines, the translation job, SQL, purges) is covered: AFTER row triggers send the
+  existing notice (empty payload, like Pool.OverviewChanged; Postgres folds identical notices of one
+  transaction, so a purge sends one). Only writes that change what the section shows notify. Then a
+  second gap found by reading GetOverviewConsolidated: a build that read the posts before a change and
+  stored after the change's invalidation kept the stale snapshot for 30 s. The live probe could not
+  hit it (below), so it was reproduced deterministically in a test before fixing it (RED below).
+
+WHAT THIS SLICE CHANGED [REAL, git status --porcelain / git diff --numstat before this append]:
+  A backend/migrations/000123_overview_change_notify.up.sql (70): overview_changed_notify() (for
+    replies: only when the reply's post is public; nested IF because PL/pgSQL does not short-circuit
+    AND); posts_overview_changed_update AFTER UPDATE OF deleted_at, visibility, status, title, type,
+    tags WHEN (old or new public) AND one of them IS DISTINCT; posts_overview_changed_delete AFTER
+    DELETE WHEN old public; replies_overview_changed_update AFTER UPDATE OF deleted_at WHEN non-system
+    and changed; replies_overview_changed_delete AFTER DELETE WHEN non-system. Header lists what stays
+    quiet (votes, views, description/body edits, same-value rewrites, system verdicts, family-only
+    posts, new posts/replies: they appear with the next snapshot, nothing listed is stale).
+  A backend/migrations/000123_overview_change_notify.down.sql (7): drops the 4 triggers + function.
+  M backend/internal/api/handlers/overview_cache.go (+40/-4): generation counter; Invalidate bumps it;
+    Generation(); SetIfCurrent(window, data, until, generation) stores only when no invalidation came
+    since (checked under the write lock); SetUntil/SetIfCurrent share storeLocked. Set/SetUntil kept.
+  M backend/internal/api/handlers/homepage_overview.go (+4/-2, now 785 lines): GetOverviewConsolidated
+    reads the generation before snapshotDeadline/build and stores with SetIfCurrent.
+  M backend/internal/db/overview_changes.go (+3/-1): OverviewChannel doc names the 000123 triggers.
+  A backend/internal/db/overview_change_notify_test.go (155): TestOverviewChanges_WritesThatChangeThe
+    ListedPostsAnnounceIt (scratch DB, own LISTEN conn, sentinel notice so "quiet" needs no timeout):
+    quiet = new post+reply, vote, description edit, same title/tags/status rewrite, reply body edit,
+    system verdict removed, family post retitled/status/reply removed/soft+hard deleted; exactly one
+    notice each = title edit, tags edit, UpdateStatus, SQL rejection, ApplyTranslation, reply soft
+    delete, post soft delete, post row DELETE (with replies), public->family, bulk soft delete of 5.
+  A backend/internal/api/router_overview_changes_test.go (174): TestOverview_APostTakenOffLeavesEvery
+    InstancesSnapshotAtCommit (two full instances with their own relays on one scratch DB; delete on a,
+    title PATCH on b, SQL rejection, only reply deleted on a; both overviews must catch up within 3 s;
+    clears GROQ_API_KEY, see NOTE) and TestOverview_ASnapshotBuiltAcrossAChangeIsNotKept (real handler
+    + real repos on a scratch DB; a stats-reader wrapper deletes the post and invalidates during the
+    build's knowledge read, which runs after ListReusablePosts; the next read must not list it).
+  A backend/internal/api/handlers/overview_cache_test.go (37): TestOverviewCache_SetIfCurrentKeepsOut
+    ASnapshotBuiltBeforeAnInvalidation (no DB: stale generation refused, current stored, nil safe).
+  M backend/cmd/cutover/main.go: --expect-version default 122 -> 123; main_test.go: same version in
+    TestParseOptions_GuardsTheProductionRun / TestCheckSchema_... (same assertions).
+  M backend/internal/db/cutover_rollback_test.go: down-migration count 38 -> 39 ("000123..000085") and
+    the comment; the test still asserts every down step runs and archives what it cannot hold.
+  No test deleted, skipped or loosened.
+
+VERIFICATION [this session; DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test (local
+  docker solvr-postgres), migrated 122 -> 123 with `migrate up` this session (123 dirty=f); the new
+  tests use scratch DBs migrated from the files; logs under /tmp/solvr_idx77_s7/]:
+  [TEST] RED (red_db.log, red_api.log, red_race.log): _WritesThatChange FAIL :116 "a title edit"
+    (0 notices; the quiet cases before it passed on HEAD); _APostTakenOff FAIL :95 deleted post still
+    listed 3.019 s after; _ASnapshotBuiltAcross FAIL :173 (with the triggers in place, before the
+    generation fix: the next read was served the snapshot built across the delete).
+  [TEST] GREEN: first trigger version failed with `record "old" has no field "post_id"` (PL/pgSQL AND
+    is not short-circuit; fixed with a nested IF). _APostTakenOff then showed the edited post ABSENT:
+    measured (temporary debug, removed) status=pending_review moderation=pending after the PATCH,
+    because the test process inherited GROQ_API_KEY from my shell and a content edit of an open post
+    goes back to moderation when a moderator is wired (posts.go:745); with the fixture approved through
+    UpdateStatus(open) and GROQ_API_KEY cleared in the test: PASS, both instances caught up in 20-26 ms
+    for all four cases. green_targeted.log: internal/db, cmd/cutover, internal/api/handlers ok; in
+    internal/api 4 homepage tests FAIL (TestHomepageOverview_ServesEverySectionToALoggedOutVisitor
+    :468 shared search_queries data, 3 TestHomepageSearch_*) — all 4 are on slice 6's FAIL list.
+    go build ./... ok; go vet ./internal/api/ ./internal/api/handlers/ ./internal/db/ exit 0; gofmt -l
+    clean on every touched file.
+  MUTATIONS [TEST] (/tmp/solvr_idx77_s7/mut/mut.sh + mut.out), each restored, shasum -c OK after:
+    A no 000123 -> DB :116 + API :57 (deleted post 3.004 s); B no visibility guard -> DB :144 (family);
+    C replies update trigger off -> DB :126 + API orphan case; D reply notice whatever the post's
+    visibility -> DB :144; E tags not watched -> DB :118; F system replies counted -> DB :107; G any
+    write of a watched column -> DB :99 (description edit); H post row DELETE not announced -> DB
+    :132; I handler stores with SetUntil (HEAD) -> race test :173; J Invalidate keeps the generation ->
+    race test :173 + cache unit :16; K SetIfCurrent ignores the generation -> same two.
+  MIGRATION [REAL, rehearsal.sh + rehearsal.out] throwaway DB: up -> 123 dirty=false, 4 triggers + 1
+    function, 39 other triggers; down 1 -> 122 dirty=false, 0 + 0, 39 others intact; up -> 123. Dropped.
+  REHEARSAL [REAL, same files] copies (CREATE DATABASE ... TEMPLATE) migrated goto 122, then up:
+    solvr_cutover_rehearsal (2108 live public posts, 3509 live replies) and solvr_rehearsal_purge113
+    (524 / 1018): every post, reply and room row unchanged by 000123 (md5 of whole rows); one title
+    edit -> 1 notice; an updated_at-only write of every live post -> 0; committed bulk reply soft delete
+    -> 1; committed bulk post soft delete -> 1. Bulk post soft delete inside a rolled-back transaction,
+    median of 3: 1102 -> 1211 ms (2108 rows) and 339 -> 359 ms (524 rows); reply bulk 378 -> 352 and
+    111 -> 114 ms (noise). Copies dropped; both sources still at 113.
+  LIVE PROBE [REAL, final code; probe/probe.sh + probe.out, final/spike_final.out; fresh DBs at 123,
+    API on :8099 under env -i]: spike A-D rerun -> each change visible on the very next GET (A/C/D
+    absent, B new title; HEAD 30.0-30.2 s). Probe (1) 12 deletes: the author's next GET listed it 0/12,
+    gone in 51-64 ms (one curl+jq round trip). (2) 8 clients reading /v1/overview in a loop, two posts
+    deleted concurrently, 12 rounds: 0/12 left a deleted post listed 0.5 s later (also 0/12 on the
+    trigger-only build before the generation fix: the build/invalidation race is real but was only
+    reproducible deterministically, in the test). api.log 1900 x 200, 36 x 204; :8099 free; DBs dropped.
+  FULL BACKEND [TEST] (once) `go test ./... -count=1 -p 1 -v -timeout 45m` on solvr_test at 123 ->
+    full.log, exit 1: FAIL internal/api and internal/db only; 3271 top-level PASS, 68 FAIL, 13 SKIP.
+    SKIP set identical to slice 6's (diff empty). FAIL set = slice 6's 69 minus TestCrossAuth_
+    RemoveProvider_OthersStillWork (the constant-provider-id flake slice 6 measured); 0 new. All 7
+    tests this slice wrote or touched PASS in it (TestOverviewChanges_*, TestOverview_* x2,
+    TestOverviewCache_*, TestCutoverRollback_*, TestParseOptions_*, TestCheckSchema_*).
+  check-file-size.sh -> filesize.log "Found 34 file(s) exceeding 800 lines", same count as slices 1-6;
+    none of this slice's files is on it. 0 solvr_scratch*/solvr_idx77_s7* databases left [REAL, psql].
+    NOT RUN: frontend (no frontend file touched); golangci-lint (config/version mismatch, slice 31).
+
+NOTE [REAL/UNVERIFIED]: before the API test cleared GROQ_API_KEY, up to 3 of its runs on this machine
+  PATCHed an open post with the shell's GROQ_API_KEY wired, which starts async moderation; whether
+  that goroutine reached the Groq API before the test process exited is [UNVERIFIED]. Other router
+  tests in the tree still inherit the shell's key (not changed, not asked).
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW (runtime, from this commit):
+  - A post deleted, rejected, made family-only, retitled/retagged/status-moved, or left without a live
+    reply now leaves GET /v1/overview on every instance within milliseconds of commit instead of up to
+    30 s. New posts and first replies still appear with the next snapshot (<= 30 s), as before.
+  - Each such write (and each bulk statement) costs one pg_notify; the room listener of every instance
+    then rebuilds its overview on the next read. Measured bulk overhead +6-10% on a full soft delete.
+  - Deploy ordering: 000123 can go before or after the API; without the new API the notices only drop
+    snapshots (no harm); without 000123 the new API behaves like the old one plus the generation guard.
+  - The cutover command now refuses a database not at 123 (--expect-version default).
+
+REMAINING for idx 77 (next slices, in order) [UNVERIFIED plan]:
+  step 3/5: re-embed in the translation path (or a periodic embedding sweep) so a cleared vector does
+    not wait for an operator run — spike first: measure how often the embedder fails/translates.
+  step 5: other public projections vs removal: /v1/data/* 60 s cache, the sitemap, feeds — spike each
+    through the API like this slice; rooms changed outside RoomHandler (SQL/admin) still wait 30 s.
+  step 1: measured query plans on representative data for the listed lookups.
+  step 4: raw eligible search events vs time buckets + retention windows; no summed distincts.
+  step 5: reconcile counters/sampled search after migration and rebuilds.
+  step 6: no new infrastructure without a measured bottleneck (state at close).
+
+git status at journal time [REAL, git status --porcelain]: M backend/cmd/cutover/main.go, M backend/
+  cmd/cutover/main_test.go, M backend/internal/api/handlers/homepage_overview.go, M backend/internal/
+  api/handlers/overview_cache.go, M backend/internal/db/cutover_rollback_test.go, M backend/internal/
+  db/overview_changes.go, ?? backend/internal/api/handlers/overview_cache_test.go, ?? backend/internal/
+  api/router_overview_changes_test.go, ?? backend/internal/db/overview_change_notify_test.go,
+  ?? backend/migrations/000123_overview_change_notify.{up,down}.sql, M progress.txt (this entry).
+  spec.json unchanged, idx 77 passes stays false.
+
+UAT (for when idx 77 closes, not now): apply 000112, 000113, 000119, 000120, 000121, 000122 AND 000123
+  on production before the API deploy carrying b9d7644c, 619b44b8, 1fce63ef, 7c6d5e7c, f68f6a15,
+  4a8013f6 and this commit; after 000123 confirm `SELECT count(*) FROM pg_trigger WHERE tgname LIKE
+  '%overview_changed%'` = 4, then delete or reject one test post that is on https://solvr.dev's
+  overview and confirm it is gone on the next load (not 30 s later); plus the drift/rebuild checks of
+  slices 1-6. Run the cutover with the new default --expect-version 123.

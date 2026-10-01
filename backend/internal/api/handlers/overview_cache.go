@@ -41,6 +41,9 @@ type OverviewCache struct {
 	ttl        time.Duration
 	entries    map[string]*overviewCacheEntry
 	maxEntries int
+	// generation counts invalidations. A snapshot whose build began before the latest one may
+	// hold what that invalidation removed, so SetIfCurrent does not store it.
+	generation uint64
 }
 
 type overviewCacheEntry struct {
@@ -109,9 +112,14 @@ func (c *OverviewCache) SetUntil(window string, data []byte, until time.Time) {
 	if c == nil {
 		return
 	}
-	key := overviewCacheKey(window)
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.storeLocked(window, data, until)
+}
+
+// storeLocked stores the entry, evicting the oldest when full. c.mu must be held for writing.
+func (c *OverviewCache) storeLocked(window string, data []byte, until time.Time) {
+	key := overviewCacheKey(window)
 	if len(c.entries) >= c.maxEntries {
 		// Evict the oldest entry to bound memory.
 		var oldestKey string
@@ -128,9 +136,9 @@ func (c *OverviewCache) SetUntil(window string, data []byte, until time.Time) {
 	c.entries[key] = &overviewCacheEntry{data: out, cachedAt: time.Now(), until: until}
 }
 
-// Invalidate drops every cache entry. Called from the room write path when a
-// room's visibility changes or it is moderated, so the public overview can never
-// serve a stale preview of a room that just went private.
+// Invalidate drops every cache entry. Called when the public overview changes (a room
+// going private, archived or deleted; a listed post removed or edited, migration 000123),
+// so the public overview can never serve a stale preview of what just left it.
 func (c *OverviewCache) Invalidate() {
 	if c == nil {
 		return
@@ -138,6 +146,34 @@ func (c *OverviewCache) Invalidate() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.entries = make(map[string]*overviewCacheEntry)
+	c.generation++
+}
+
+// Generation returns the invalidation count. Read it before building a snapshot and hand it
+// to SetIfCurrent.
+func (c *OverviewCache) Generation() uint64 {
+	if c == nil {
+		return 0
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.generation
+}
+
+// SetIfCurrent is SetUntil for a snapshot whose build began at generation: it is stored only
+// when no invalidation came since, otherwise a change committed during the build (and already
+// announced) would be served for the rest of the TTL. Reports whether it stored.
+func (c *OverviewCache) SetIfCurrent(window string, data []byte, until time.Time, generation uint64) bool {
+	if c == nil {
+		return false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.generation != generation {
+		return false
+	}
+	c.storeLocked(window, data, until)
+	return true
 }
 
 // snapshotDeadline is when an overview read now may no longer be served from the cache: the

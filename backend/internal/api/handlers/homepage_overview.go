@@ -751,6 +751,8 @@ func (h *HomepageOverviewHandler) GetOverviewConsolidated(w http.ResponseWriter,
 		}
 	}
 
+	// Before anything is read: a change announced during the build keeps its snapshot out.
+	generation := h.cache.Generation()
 	// Read before the overview so a room expiring during the build still caps the snapshot.
 	until, cacheable := h.snapshotDeadline(ctx)
 	overview, partialErrors := h.buildOverview(ctx, window)
@@ -769,9 +771,9 @@ func (h *HomepageOverviewHandler) GetOverviewConsolidated(w http.ResponseWriter,
 		return
 	}
 
-	// Store in cache.
+	// Store in cache, unless the overview changed while it was being built.
 	if h.cache != nil && cacheable {
-		h.cache.SetUntil(cacheKey, buf, until)
+		h.cache.SetIfCurrent(cacheKey, buf, until, generation)
 	}
 
 	w.Header().Set("Cache-Control", roomContentCacheControl)

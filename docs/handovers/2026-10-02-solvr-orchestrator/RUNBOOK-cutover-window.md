@@ -58,6 +58,8 @@ dir), and defines `PSQL` (read-write), `PSQL_RO` (`default_transaction_read_only
 
 ## PRE-0 — window worktree (no gate; local)
 
+Measured (dress): 0.8 s.
+
 ```bash
 export WINDOW_ENV=... FROZEN_SHA=... WINDOW_DIR=...   # the prelude (first line only: the worktree does not exist yet)
 git -C /Users/fcavalcanti/dev/solvr worktree add --detach "$WINDOW_DIR" "$FROZEN_SHA"
@@ -67,6 +69,8 @@ git -C "$WINDOW_DIR" log --oneline -1
 Expect the frozen commit. Abort if the worktree exists at another commit (remove it, never reuse it).
 
 ## PRE-1 — both images build at FROZEN_SHA, the cutover binary, its version guard (no gate; local)
+
+Measured (dress): 95.8 s in all: api image 11.9 s (warm layer cache), web image 80.4 s, cutover build and guard test about 3.5 s.
 
 A failed image build is a **window blocker**: EasyPanel deploys images built from these exact Dockerfiles.
 
@@ -83,9 +87,10 @@ grep -o 'expect-version", [0-9]*' "$WINDOW_DIR/backend/cmd/cutover/main.go"
 Expect: both builds exit 0; `cutover test exit 0` (`TestParseOptions_ExpectsTheHighestMigrationByDefault`
 pins the default to the newest migration); the newest file is `000135_…` and the default is `135` (or both
 the same newer number). Abort on any failure.
-Dress: api build 29 s (warm cache), web build — s, cutover build + test — s. *(filled in below)*
 
 ## P1 — read-only checks on production (gate P1)
+
+Measured (dress): 1.0 s, 14 transactions; local RTT through the container route 5–26 ms.
 
 ```bash
 export WINDOW_ENV=... FROZEN_SHA=... WINDOW_DIR=...   # the prelude
@@ -110,6 +115,8 @@ Abort if any 85+ marker is true, `schema_migrations` exists, or a tombstone is m
 Felipe.**
 
 ## G1 — push the frozen SHA (gate G1)
+
+Measured (dress): scan 39.6 s (fetch, 314 commits, 152 masked rows, the same 18 unhinted rows as D4); push not rehearsed.
 
 ```bash
 export WINDOW_ENV=... FROZEN_SHA=... WINDOW_DIR=...   # the prelude
@@ -140,6 +147,8 @@ If Felipe chose rollback option (a) (see ROLLBACK), push its branch now, under t
 **From here until G6: nobody clicks Deploy in EasyPanel.**
 
 ## G2 — fresh dump and restore-test (gate G2: reads production; writes only locally)
+
+Measured (dress): 60.3 s: dump and restore about 5 s, `up` 2.6 s, three cutover passes about 45 s, reconciliation under 1 s.
 
 The 2026-09-29 route: `pg_dump` 17 inside the `solvr-postgres` container (the host's pg_dump is 18).
 
@@ -173,6 +182,8 @@ numbers differ by the writes since then and are the G5 reference. Abort on any n
 
 ## G3 — write pause: stop solvr-api (gate G3)
 
+Measured (dress): the stop (simulated with `docker stop`) 0.3 s; the block 1.8 s including the safety dump.
+
 **Felipe, in EasyPanel:** `solvr-api` → Stop. Note the time: the write pause starts here.
 `solvr-web` keeps running and shows errors until G6 (FELIPE'S CALL whether to stop it too).
 
@@ -195,6 +206,8 @@ The safety dump is the exact pre-cutover state: it is what makes a lossless rest
 Abort if the API still answers 200 or still holds sessions. **STOP — Felipe's yes for P5.**
 
 ## P5 — collation repair inside the write pause (gate P5; `RUNBOOK-collation.md`)
+
+Measured (dress): (a)+(b) 0.4 s; (d)+(e) 1.6 s (production on the 2026-09-29 pre-purge data: REINDEX DATABASE 3.7 s).
 
 ```bash
 export WINDOW_ENV=... FROZEN_SHA=... WINDOW_DIR=...   # the prelude
@@ -222,6 +235,8 @@ mismatch for the database. Production measured on 2026-09-29 data: REINDEX DATAB
 
 ## G4 — schema 84 → head (gate G4; includes P6: 000114 ban list and trigger)
 
+Measured (dress): 3.0 s (`up` 2.54 s for 51 files), 192 transactions.
+
 ```bash
 export WINDOW_ENV=... FROZEN_SHA=... WINDOW_DIR=...   # the prelude
 source "$WINDOW_DIR/docs/handovers/2026-10-02-solvr-orchestrator/window/window-env.sh"
@@ -236,6 +251,8 @@ lines `NNN/u …`, `up exit 0`, `135|f`. **Abort on any non-zero exit or `dirty 
 R-G4.** Do not re-run `up` blindly.
 
 ## G5 — the knowledge cutover (gate G5)
+
+Measured (dress): dry run 8.1 s (1,831 transactions); apply, second pass, reconciliation and trigger probe 43.5 s (10,941 transactions). The 200-query search sample is most of it (see the write-pause estimate).
 
 ```bash
 export WINDOW_ENV=... FROZEN_SHA=... WINDOW_DIR=...   # the prelude
@@ -268,6 +285,8 @@ The probe's inserts are inside `BEGIN … ROLLBACK`: nothing is kept. Abort on a
 
 ## G6 — deploy both services (gate G6)
 
+Measured (dress): 5.9 s with images already built locally; in production EasyPanel builds first (API 1–2 min, web 2–4 min, from memory). One `curl: (7) … Couldn't connect` line before the API is up is expected.
+
 **Before the yes:** Felipe ticks the "Pre-G6 EasyPanel env checklist" below, for both services.
 
 Trigger both webhooks **back to back**: old web against the new API is broken, and so is new web against a
@@ -290,6 +309,8 @@ a probe still fails after 15 minutes or `probes.sh` reports a failure.
 
 ## G7 — UAT with Felipe (gate G7)
 
+Not rehearsed (human UAT).
+
 Against production, read-only unless Felipe acts himself:
 1. Home: live overview (rooms, searches, statistics), the agent-connect prompt; navigation Rooms, Posts, Docs,
    plus DATA (/data) and SKILL (/skill) as top-level header links on desktop and mobile (idx 95).
@@ -307,6 +328,8 @@ Against production, read-only unless Felipe acts himself:
 Failure on any item that blocks users: Felipe decides between a fix-forward and ROLLBACK (entry R-G7).
 
 ## P7 / P8 — IPFS unpin and gc (each its own gate; after G6; `RUNBOOK-ipfs-unpin.md`)
+
+Measured (dress): dry run 0.3 s (`{"would_unpin":87}`); the real run and gc were not rehearsed (no IPFS node; irreversible).
 
 ```bash
 export WINDOW_ENV=... FROZEN_SHA=... WINDOW_DIR=...   # the prelude
@@ -349,9 +372,9 @@ Felipe's call at any entry point. Each step is its own block, as above.
 | R-G6 | a completion probe or `probes.sh` failed | R1, R2, R4 |
 | R-G7 | UAT failed and Felipe chose rollback | R1, R2, R4 |
 
-**R1 — stop serving.** Felipe, in EasyPanel: stop `solvr-api` (and `solvr-web` if v1.3 web is deployed).
+**R1 — stop serving.** Felipe, in EasyPanel: stop `solvr-api` (and `solvr-web` if v1.3 web is deployed). Measured (dress, simulated): 0.2 s.
 
-**R2 — pre-rollback dump** (keeps every post-cutover write, beyond what `rollback_archive` keeps):
+**R2 — pre-rollback dump** (keeps every post-cutover write, beyond what `rollback_archive` keeps): Measured (dress): 2.0 s.
 
 ```bash
 export WINDOW_ENV=... FROZEN_SHA=... WINDOW_DIR=...   # the prelude
@@ -371,7 +394,7 @@ nothing behind, and `dirty = t` only marks the version:
 - after a **down** failure while going down (`T|t`, T = the version below the failed file F): the database is
   still at F → `migrate -path backend/migrations -database "$DBURL" force <F>`.
 
-**R4 — schema back to 84:**
+**R4 — schema back to 84:** Measured (dress): 1.0 s (`goto 84` 0.67 s, 51 files).
 
 ```bash
 export WINDOW_ENV=... FROZEN_SHA=... WINDOW_DIR=...   # the prelude
@@ -383,7 +406,7 @@ source "$WINDOW_DIR/docs/handovers/2026-10-02-solvr-orchestrator/window/window-e
 Expect `goto exit 0`, 51 lines `NNN/d …` (from 135), `84|f`. `schema_migrations`, `rollback_archive` and
 `cutover_ledger` stay (old code ignores them). Abort on a failure: R3, then R4 again.
 
-**R5 — compare with the G3 snapshot:**
+**R5 — compare with the G3 snapshot:** Measured (dress): 0.5 s.
 
 ```bash
 export WINDOW_ENV=... FROZEN_SHA=... WINDOW_DIR=...   # the prelude
@@ -490,8 +513,53 @@ That is one more reason G6 triggers both webhooks back to back.
 
 ## Dress rehearsal results (D6c)
 
-(Filled in after the rehearsal.)
+Lane D, 2026-10-02, on a local stand-in. The stand-in was born through the runbook's own dump route:
+`solvr_rehearsal_purge` (post-purge production copy, schema 84, no `schema_migrations`) was dumped and
+restored into `solvr_lane_d_dress`, owned by a dedicated role whose password holds `# & ? = $ ' " @ : / % +`
+and a space. "Production" ran the `c03734ae` **API image** behind a stub of the two deploy webhooks; G6 and R6
+"deployed" the v1.3 and `c03734ae` images through that stub. Every block was extracted from the committed
+runbook and run unchanged except the prelude values; four defects were found and fixed here first:
+
+1. PRE-0 used `WINDOW_DIR`/`FROZEN_SHA` without setting them (found before running).
+2. G4 ran `up` even after a failed `force`, and G5 ran the second pass after a failed apply (found reading
+   G2's output): both are now chained.
+3. The cutover logs every sampled search (3,597 lines, 465 KB per G2) to the terminal: each run now writes
+   its own log under `$BACKUP_DIR`.
+4. Continuation blocks after a STOP had no prelude, so a fresh shell had an empty `PSQL`
+   (`-v: command not found`, P5 d/e): every block now starts with the prelude.
+
+| Step | Result | Time |
+|---|---|---|
+| PRE-0, PRE-1 | worktree; both images built; cutover guard test ok; default 135 = newest migration | 0.8 s; 95.8 s |
+| P1 | all 84 markers present, all 85+ absent (incl. `tags`), 8 rate limits, 11 tombstones | 1.0 s |
+| G1 | scan only: 152 masked rows, the 18 unhinted = D4's reviewed set; no push | 39.6 s |
+| G2 | dump, 42 tables, restore; `135\|f`; 883 replies + 135 progress notes; second pass all zero | 60.3 s |
+| G3 | `/health` 000, 0 API sessions, safety dump, snapshot | 0.3 s stop + 1.8 s |
+| P5 | 0 duplicate groups; REINDEX + REFRESH (no local mismatch) | 0.4 s + 1.6 s |
+| G4 | `force 84`, 51 files `up`, `135\|f` | 3.0 s |
+| G5 | dry = G2; apply 883 + 135; second all zero; 0 unexplained orphans; 418 = 305 − 26 − 3 + 16 + 126; trigger refuses both tombstoned emails | 8.1 s + 43.5 s |
+| G6 | both webhooks `Deploying...`; API image `/v1/overview` 200; web image `skill.md` marker 1; `probes.sh new` 13/13, contributions 418 | 5.9 s |
+| P7 | dry run `{"would_unpin":87}` (real run and gc not rehearsed) | 0.3 s |
+| R1–R6 | 5 post-cutover writes, then: pre-rollback dump; `goto 84` 51 files `84\|f`; only the kept writes changed (post +1 as `idea`, messages +1); 2 replies, 1 vote, 1 post, 12 bans archived; tombstones, trigger, rooms equal; 0/78 shared tokens, 44/44 agent tokens; `c03734ae` image `probes.sh old` 9/9, contributions 305, 0 5xx | 0.2 + 2.0 + 1.0 + 0.5 + 1.1 + 0.6 s |
+
+Hygiene: after the rehearsal, no file under the rehearsal folder (128 files) and neither container log held
+the stand-in password, raw or percent-encoded (the stand-in env file itself excepted).
 
 ## Write-pause estimate
 
-(Filled in after the rehearsal.)
+The pause runs from the G3 stop to the moment both G6 completion probes pass.
+
+| Part | Dress | Production |
+|---|---|---|
+| G3 stop + checks + safety dump | 2.1 s | + the dump's transfer time (a few MB of post-purge data) |
+| P5 (a)–(e) | 2.0 s | REINDEX measured 3.7 s on the larger pre-purge data |
+| G4 | 3.0 s | + 192 transactions × RTT |
+| G5 (dry, apply, second, checks) | 51.6 s | + 12,772 transactions × RTT |
+| G6 | 5.9 s | EasyPanel builds: API 1–2 min, web 2–4 min, in parallel; worst case 4 min |
+| Felipe's yes at G3→P5, P5 (d), G4, G5 apply, G6 | — | about 1 min each (estimate) |
+
+Machine time is about 65 s locally. Network: about 13,000 transactions at the RTT measured in P1. At 20 ms
+that adds about 4.5 min, at 50 ms about 11 min. Roughly 9,000 of the G5 transactions are the 200-query
+search sample, run before and after each pass; whether to keep it at 200 on the second pass is FELIPE'S CALL.
+**Estimate: about 10–15 minutes at 20–30 ms RTT; worst case about 25 minutes** (slow RTT, 4-minute web build,
+slow approvals). Recompute with P1's RTT before G3.

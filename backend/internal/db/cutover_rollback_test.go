@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -92,21 +94,7 @@ func TestCutoverRollback_DownPathKeepsOrArchivesEveryPostCutoverWrite(t *testing
 	exec(`INSERT INTO flags (target_type, target_id, reporter_type, reporter_id, reason, status)
 		VALUES ('answer', $1, 'system', 'content-moderation', 'moderation_rejected', 'pending')`, answer)
 
-	// Run every down migration above 000084, newest first, as `migrate down` would.
-	files, err := filepath.Glob(filepath.Join(backendRoot(t), "migrations", "*.down.sql"))
-	require.NoError(t, err)
-	sort.Sort(sort.Reverse(sort.StringSlice(files)))
-	applied := 0
-	for _, f := range files {
-		if filepath.Base(f) < "000085" {
-			break
-		}
-		sql, err := os.ReadFile(f)
-		require.NoError(t, err)
-		_, err = pool.Exec(ctx, string(sql))
-		require.NoError(t, err, "apply %s", filepath.Base(f))
-		applied++
-	}
+	applied := migrateDownTo84(ctx, t, pool)
 	require.Equal(t, 51, applied, "down migrations 000135..000085")
 
 	var replies *string
@@ -165,4 +153,46 @@ func TestCutoverRollback_DownPathKeepsOrArchivesEveryPostCutoverWrite(t *testing
 	require.Equal(t, 1, countRows(t, pool, ctx, `SELECT count(*) FROM flags WHERE target_type = 'answer' AND target_id = $1`, answer))
 	require.Equal(t, 1, countRows(t, pool, ctx, `SELECT count(*) FROM answers WHERE id = $1 AND content = 'legacy answer'`, answer))
 	require.Equal(t, "question", id(`SELECT type FROM posts WHERE id = $1`, question))
+}
+
+// migrateDownTo84 runs every down migration above 000084, newest first, as `migrate down`
+// would, and returns how many it applied. On a database that has golang-migrate's
+// schema_migrations table (production after `migrate force 84` and `up`), each step is
+// recorded the way migrate records it: the version below the file marked dirty before the
+// file runs, and clean after it.
+func migrateDownTo84(ctx context.Context, t *testing.T, pool *Pool) int {
+	t.Helper()
+	files, err := filepath.Glob(filepath.Join(backendRoot(t), "migrations", "*.down.sql"))
+	require.NoError(t, err)
+	sort.Sort(sort.Reverse(sort.StringSlice(files)))
+	var down []string
+	for _, f := range files {
+		if filepath.Base(f) < "000085" {
+			break
+		}
+		down = append(down, f)
+	}
+	var tracked bool
+	require.NoError(t, pool.QueryRow(ctx, `SELECT to_regclass('schema_migrations') IS NOT NULL`).Scan(&tracked))
+	for i, f := range down {
+		below := int64(84)
+		if i+1 < len(down) {
+			prefix, _, _ := strings.Cut(filepath.Base(down[i+1]), "_")
+			below, err = strconv.ParseInt(prefix, 10, 64)
+			require.NoError(t, err, "version of %s", filepath.Base(down[i+1]))
+		}
+		if tracked {
+			_, err = pool.Exec(ctx, `UPDATE schema_migrations SET version = $1, dirty = true`, below)
+			require.NoError(t, err)
+		}
+		sql, err := os.ReadFile(f)
+		require.NoError(t, err)
+		_, err = pool.Exec(ctx, string(sql))
+		require.NoError(t, err, "apply %s", filepath.Base(f))
+		if tracked {
+			_, err = pool.Exec(ctx, `UPDATE schema_migrations SET dirty = false`)
+			require.NoError(t, err)
+		}
+	}
+	return len(down)
 }

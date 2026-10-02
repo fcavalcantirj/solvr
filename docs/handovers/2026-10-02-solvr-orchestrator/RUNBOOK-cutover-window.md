@@ -155,9 +155,9 @@ docker exec solvr-postgres rm -f "/tmp/$NAME.dump"
 migrate -path backend/migrations -database "$RTDBURL" force 84
 migrate -path backend/migrations -database "$RTDBURL" up 2>&1 | tail -n 2
 "${LPSQL[@]}" -d "$RESTORE_TEST_DB" -Atc 'SELECT version, dirty FROM schema_migrations'
-"$BIN/cutover" --database-url "$RTDBURL" --dry-run --report "$BACKUP_DIR/g2-dry.json"; echo "dry exit $?"
-"$BIN/cutover" --database-url "$RTDBURL" --confirm-prod --report "$BACKUP_DIR/g2-apply.json"; echo "apply exit $?"
-"$BIN/cutover" --database-url "$RTDBURL" --confirm-prod --report "$BACKUP_DIR/g2-second.json"; echo "second exit $?"
+"$BIN/cutover" --database-url "$RTDBURL" --dry-run --report "$BACKUP_DIR/g2-dry.json" > "$BACKUP_DIR/g2-dry.log" 2>&1; echo "dry exit $?"
+"$BIN/cutover" --database-url "$RTDBURL" --confirm-prod --report "$BACKUP_DIR/g2-apply.json" > "$BACKUP_DIR/g2-apply.log" 2>&1; echo "apply exit $?"
+"$BIN/cutover" --database-url "$RTDBURL" --confirm-prod --report "$BACKUP_DIR/g2-second.json" > "$BACKUP_DIR/g2-second.log" 2>&1; echo "second exit $?"
 for r in dry apply second; do jq -c -f "$RB/cutover-summary.jq" "$BACKUP_DIR/g2-$r.json"; done
 "${LPSQL[@]}" -d "$RESTORE_TEST_DB" -At < "$RB/reconcile.sql" > "$BACKUP_DIR/g2-reconcile.json"
 jq -c '{schema, replies_by_legacy_type, orphans: (.orphans | length), drift, cutover_ledger}' "$BACKUP_DIR/g2-reconcile.json"
@@ -236,15 +236,15 @@ R-G4.** Do not re-run `up` blindly.
 ```bash
 export WINDOW_ENV=... FROZEN_SHA=... WINDOW_DIR=...   # the prelude
 source "$WINDOW_DIR/docs/handovers/2026-10-02-solvr-orchestrator/window/window-env.sh"
-"$BIN/cutover" --database-url "$DBURL" --dry-run --report "$BACKUP_DIR/g5-dry.json"; echo "dry exit $?"
+"$BIN/cutover" --database-url "$DBURL" --dry-run --report "$BACKUP_DIR/g5-dry.json" > "$BACKUP_DIR/g5-dry.log" 2>&1; echo "dry exit $?"
 jq -c -f "$RB/cutover-summary.jq" "$BACKUP_DIR/g5-dry.json"; jq -c -f "$RB/cutover-summary.jq" "$BACKUP_DIR/g2-dry.json"
 ```
 
 Expect the dry run to match G2's dry run, apart from writes made after the G2 dump. **STOP — Felipe's yes to apply.**
 
 ```bash
-"$BIN/cutover" --database-url "$DBURL" --confirm-prod --report "$BACKUP_DIR/g5-apply.json"; rc=$?; echo "apply exit $rc"
-[ "$rc" = 0 ] && { "$BIN/cutover" --database-url "$DBURL" --confirm-prod --report "$BACKUP_DIR/g5-second.json"; echo "second exit $?"; }
+"$BIN/cutover" --database-url "$DBURL" --confirm-prod --report "$BACKUP_DIR/g5-apply.json" > "$BACKUP_DIR/g5-apply.log" 2>&1; rc=$?; echo "apply exit $rc"
+[ "$rc" = 0 ] && { "$BIN/cutover" --database-url "$DBURL" --confirm-prod --report "$BACKUP_DIR/g5-second.json" > "$BACKUP_DIR/g5-second.log" 2>&1; echo "second exit $?"; }
 for r in apply second; do jq -c -f "$RB/cutover-summary.jq" "$BACKUP_DIR/g5-$r.json"; done
 "${PSQL_RO[@]}" -At < "$RB/reconcile.sql" > "$BACKUP_DIR/g5-reconcile.json"
 jq -c '{schema, legacy, replies_by_legacy_type, orphans: (.orphans | length), unexplained: ([.orphans[] | select(.reason | test("UNEXPLAINED"))] | length), drift, cutover_ledger}' "$BACKUP_DIR/g5-reconcile.json"

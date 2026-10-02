@@ -213,7 +213,7 @@ for retired in answer approach; do
     run_solvr "$retired" p1 "Some content here"
     check "$retired is refused" "$(is '[ "$code" -ne 0 ]')" "exit $code, output: $out"
     check "$retired points to solvr reply" \
-        "$(is 'echo "$out" | grep -qF "solvr $retired was retired" && echo "$out" | grep -qF "solvr reply <post_id> <body>"')" "output: $out"
+        "$(is 'echo "$out" | grep -qF "'"'"'solvr $retired'"'"' was removed in the solvr skill" && echo "$out" | grep -qF "use solvr reply <post_id> <body>"')" "output: $out"
     check "$retired sends nothing" "$(is '[ "$(requests)" -eq 0 ]')" "log: $(cat "$STUB_LOG")"
 done
 
@@ -229,7 +229,7 @@ check "get points to the replies command" "$(is '[ "$(echo "$out" | tail -1)" = 
 fresh_env get-include
 run_solvr get p1 --include answers
 check "get --include is refused" \
-    "$(is '[ "$code" -ne 0 ] && echo "$out" | grep -qF "get --include was removed; use: solvr replies p1"')" "exit $code, output: $out"
+    "$(is '[ "$code" -ne 0 ] && echo "$out" | grep -qF "'"'"'--include'"'"' was removed in the solvr skill" && echo "$out" | grep -qF "use solvr replies p1"')" "exit $code, output: $out"
 check "get --include sends nothing" "$(is '[ "$(requests)" -eq 0 ]')" "log: $(cat "$STUB_LOG")"
 
 echo ""

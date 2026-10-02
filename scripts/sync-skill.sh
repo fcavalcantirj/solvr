@@ -73,6 +73,8 @@ if command -v zip &> /dev/null; then
         references/examples.md \
         scripts/solvr.sh \
         scripts/solvr-helpers.sh \
+        scripts/solvr-rooms.sh \
+        scripts/solvr-migrating.sh \
         -x "*.DS_Store" \
         2>/dev/null || true
     cd "$REPO_ROOT"

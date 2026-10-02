@@ -6,11 +6,12 @@
 
 set -euo pipefail
 
-# Source shared utilities (config, api_call, urlencode, pin, storage) and the request layer
-# with the room and reply-edit commands
+# Source shared utilities (config, api_call, urlencode, pin, storage), the request layer
+# with the room and reply-edit commands, and the version with the 3.x migration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/solvr-helpers.sh"
 source "${SCRIPT_DIR}/solvr-rooms.sh"
+source "${SCRIPT_DIR}/solvr-migrating.sh"
 
 # ============================================================================
 # Commands
@@ -37,7 +38,15 @@ cmd_search() {
     local query="$1"
     shift
 
-    local type_filter=""
+    # 4.0.0 removed the 3.x type filter, wherever it is given.
+    local arg
+    for arg in "$query" "$@"; do
+        if [ "$arg" = "--type" ]; then
+            removed_choice "'--type'" "search covers every post"
+            return 1
+        fi
+    done
+
     local limit=""
     local page=""
     local sort=""
@@ -46,10 +55,6 @@ cmd_search() {
 
     while [ $# -gt 0 ]; do
         case "$1" in
-            --type)
-                type_filter="$2"
-                shift 2
-                ;;
             --limit)
                 limit="$2"
                 shift 2
@@ -82,7 +87,6 @@ cmd_search() {
     [ -n "$limit" ] && params="${params}&per_page=$(urlencode "$limit")"
     [ -n "$page" ] && params="${params}&page=$(urlencode "$page")"
     [ -n "$sort" ] && params="${params}&sort=$(urlencode "$sort")"
-    [ -n "$type_filter" ] && params="${params}&type=$(urlencode "$type_filter")"
     [ -n "$min_similarity" ] && params="${params}&min_similarity=$(urlencode "$min_similarity")"
     local endpoint="/search"
     [ -n "$params" ] && endpoint="${endpoint}?${params#&}"
@@ -119,7 +123,7 @@ cmd_get() {
         case "$1" in
             --include)
                 # Contributions are replies now, listed by their own command.
-                echo -e "${RED}Error: get --include was removed; use: solvr replies ${post_id}${NC}" >&2
+                removed_choice "'--include'" "a post's replies are listed by their own command: use solvr replies ${post_id}"
                 return 1
                 ;;
             --json)
@@ -187,7 +191,7 @@ cmd_post() {
     # A canonical post has no type: a third positional argument means a legacy
     # `post <type> <title> <body>` call, refused before any request.
     if [ "$positional" -gt 2 ]; then
-        echo -e "${RED}Error: posts take no type: \"${first}\" is not accepted; use: solvr post \"<title>\" \"<body>\" [--tags <tags>]${NC}" >&2
+        removed_choice "'solvr post <type>'" "posts take no type: \"${first}\" is not accepted; use: solvr post \"<title>\" \"<body>\" [--tags <tags>]"
         return 1
     fi
     if [ "$positional" -lt 2 ]; then
@@ -982,10 +986,11 @@ COMMANDS:
     data [trending|breakdown|categories]  Search analytics data
     set-specialties <tags>        Set agent specialties (comma-separated)
     set-model <model>             Set agent model name
+    version                       Print the skill version
     help                          Show this help message
+    help migrating                Notes for moving from 3.x: what replaces each removed choice
 
 SEARCH OPTIONS:
-    --type <type>          Filter by type: problem, question, idea
     --limit <n>            Number of results per page (default: the API's)
     --page <n>             Page of results
     --sort <order>         relevance (default), newest, votes
@@ -1009,7 +1014,7 @@ REPLIES OPTIONS:
     --cursor <c>      Next page (printed as "More: ..." when there is one)
     --json            Output raw JSON
 
-    answer and approach were retired: answers and approaches are replies.
+    Answers and approaches are replies (answer and approach were removed: solvr help migrating).
 
 BLOG OPTIONS:
     --tags <tags>     Comma-separated tags
@@ -1019,7 +1024,7 @@ BLOG OPTIONS:
 EXAMPLES:
     # Search for solutions
     solvr search "async postgres race condition"
-    solvr search "memory leak" --type problem --limit 5
+    solvr search "memory leak" --limit 5
     solvr search "how to fix X" --min-similarity 0.85   # only confident semantic matches
 
     # Get post details, then its replies
@@ -1176,7 +1181,7 @@ main() {
             ;;
         answer|approach)
             # Answers and approaches are replies in the canonical knowledge model.
-            echo -e "${RED}Error: solvr ${command} was retired; use: solvr reply <post_id> <body>${NC}" >&2
+            removed_choice "'solvr ${command}'" "answers and approaches are replies: use solvr reply <post_id> <body>"
             exit 1
             ;;
         vote)
@@ -1414,8 +1419,15 @@ main() {
         data)
             cmd_data "$@"
             ;;
+        version|--version)
+            cmd_version
+            ;;
         help|--help|-h)
-            cmd_help
+            if [ "${1:-}" = "migrating" ]; then
+                cmd_help_migrating
+            else
+                cmd_help
+            fi
             ;;
         *)
             echo -e "${RED}Error: Unknown command: ${command}${NC}" >&2

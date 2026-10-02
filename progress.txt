@@ -11161,3 +11161,159 @@ REMAINING FOR idx 78 (next slices, in order):
 
 git status at journal time [REAL]: as FIX above (7 M, 2 ??), plus M progress.txt (this entry). spec.json unchanged
   (idx 78 passes stays false).
+
+2026-10-02 09:23: RALPH BLOCKED — 20 batches with no ledger movement (engine claude, 76 passing). Supervisor stopped.
+
+2026-10-02 11:02 — Task idx 78 (spec.json, category functional) — IN PROGRESS, passes STAYS false
+"Keep SDKs, CLI, MCP, skills, and webhooks consistent with the redesigned product"
+SLICE 21: step 5, skill half — the agent skill moves to 4.0.0: search --type (still offered and sent) is refused,
+every removed 3.x choice (post <type>, answer, approach, get --include, search --type) is refused BEFORE any
+request and before credentials with what replaces it and `solvr help migrating`; versioned notes live in the skill
+(`solvr help migrating`) and SKILL.md; skill.json publishes 4.0.0 and no retired route; both installers and the
+zip list install every file solvr.sh sources.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 78-95, 97, 98; no open URGENT.
+  24/67 acceptance (skipped as in every earlier entry); 68 waits on the owner (as journaled). idx 78 first buildable;
+  continued from slice 20 (HEAD 238f1537), REMAINING item "21.. step 5 rest: the skill". Tree at start: only
+  M progress.txt (the supervisor's "RALPH BLOCKED" line, 09:23, not mine).
+
+STATE FOUND [REAL, code read + run this session]:
+  - skill/scripts/solvr.sh: `search --type` still offered (SEARCH OPTIONS "Filter by type: problem, question,
+    idea", example `--type problem`) and SENT (stub log: GET .../search?q=pool-race&type=problem); `search --type
+    problem q` sent q=--type. answer/approach, get --include, post <type> refused with ad-hoc texts naming no
+    version or notes. No version command.
+  - The 3.x surface (git show c03734ae:skill/scripts/solvr.sh, skill 3.7.16, the last version bump, 2026-07-06):
+    post <type> <title> <body>, answer <post_id> <content> (POST /v1/questions/{id}/answers), approach
+    <problem_id> <strategy> (POST /v1/problems/{id}/approaches), get --include, search --type. skill.json still
+    published "version": "3.7.16" and endpoints "approaches": GET/POST /v1/problems/:id/approaches, "answers":
+    GET/POST /v1/questions/:id/answers (all four retired: 410 ENDPOINT_RETIRED).
+  - SKILL.md "## Post Types" table taught problem/question/idea (approaches, answers, responses).
+  - Installer: scripts/install-solvr-skill.sh (the source sync-skill.sh copies over frontend/public/install.sh) did
+    NOT download solvr-rooms.sh, which solvr.sh sources since slice 11; the served copy frontend/public/install.sh
+    did. sync-skill.sh's zip list lacked solvr-rooms.sh.
+
+DESIGN:
+  - ?? skill/scripts/solvr-migrating.sh (48 lines, sourced by solvr.sh): SOLVR_SKILL_VERSION="4.0.0";
+    removed_choice NAME INSTEAD -> stderr "Error: <name> was removed in the solvr skill 4.0.0; <instead>. Run
+    'solvr help migrating'." and return 1; cmd_version ("solvr skill 4.0.0"); cmd_help_migrating (notes: heading
+    "Migrating from 3.x to 4.0.0", the example refusal, 3.x -> 4.0.0 table, the two retired routes a 3.x skill
+    calls, 410 ENDPOINT_RETIRED + error.details.replacement, the install command). Own file because solvr.sh is
+    already 1428 lines (shell files are not in check-file-size.sh; the 800 rule still applies in spirit).
+  - solvr.sh (+12 lines, 1440): sources solvr-migrating.sh; cmd_search scans every argument (the query included)
+    for --type before parsing and no longer sends type; get --include, post <type>, answer|approach use
+    removed_choice (post keeps `posts take no type: "<type>" is not accepted; use: solvr post "<title>" "<body>"
+    [--tags <tags>]`); `version|--version`; `help migrating`; help text: --type gone from SEARCH OPTIONS and the
+    example, "version" and "help migrating" listed, the retired line now "Answers and approaches are replies
+    (answer and approach were removed: solvr help migrating)."
+  - Version 3.7.16 -> 4.0.0 (major: removed commands/options, as the CLIs/SDKs/MCP did). Owner may overrule; nothing
+    published, tagged or deployed.
+  - skill.json AND frontend/public/skill.json (kept byte-identical): version 4.0.0; "approaches"/"answers" replaced
+    by "replies": GET/POST /v1/posts/:id/replies, "reply": GET/PATCH/DELETE /v1/replies/:id (routes checked in
+    router.go:666-667,786-788).
+  - SKILL.md AND frontend/public/skill.md (identical edits; their 2 pre-existing divergent lines — frontmatter
+    description and line 9 positioning, from 3bb120de — untouched): "## Post Types" replaced by "## Migrating from
+    3.x to 4.0.0" (the exact refusal, the table, the two retired routes and their replacement); the post/reply
+    paragraphs point to it / say "removed in 4.0.0".
+  - frontend/public/install.sh downloads + chmods solvr-migrating.sh; scripts/install-solvr-skill.sh := that file
+    (gains solvr-rooms.sh too, so sync-skill.sh no longer regresses the served installer); sync-skill.sh zips
+    scripts/solvr-rooms.sh and scripts/solvr-migrating.sh.
+
+TESTS FIRST [logs /tmp/solvr_idx78_s21/]:
+  ?? skill/scripts/test_migration.sh (254 lines, stub curl, offline): version == skill.json == public skill.json ==
+    `version`/`--version`; 6 removed invocations (answer, approach, post problem, get --include, search q --type,
+    search --type q) x (human, --json): exit 1, stderr EXACTLY the refusal, stdout empty, 0 requests, and with no
+    API key anywhere still the refusal; search without type sends exactly q+per_page+sort; help offers no removed
+    choice and lists version + help migrating; `help migrating` headed with the version, names every removed choice,
+    replacement, both retired routes, ENDPOINT_RETIRED, error.details.replacement, shows the exact refusal
+    `search --type` prints, and every `solvr X` it names is a command main() dispatches; both SKILL.md copies carry
+    the heading and that exact refusal line; BOTH installers RUN (HOME=tmp, stub curl serving this checkout's
+    skill/ at the raw GitHub URL, missing file -> GitHub's "404: Not Found" body) and install every file solvr*.sh
+    sources byte-identical, and the installed skill prints its version; sync-skill.sh zips every sourced file.
+  ?? backend/internal/api/published_skill_migration_test.go (2 tests, no DB):
+    TestPublishedSkillJSON_PublishesTheSkillVersionAndNoRetiredRoute (both skill.json copies: version ==
+    SOLVR_SKILL_VERSION parsed from solvr-migrating.sh, every route of every endpoint not in
+    LegacyWriteRetirements/LegacyReadRetirements, reply routes named, copies identical);
+    TestPublishedSkill_MigrationNotesNameTheRetiredRoutesTruly (both SKILL.md copies: notes section, each route it
+    calls retired is retired by the API with the replacement it names, every removed choice named).
+  RED [TEST] red_shell.final.log: 65 passed / 58 failed, all assertions (e.g. "skill.json version: 3.7.16",
+    "Unknown command: version", search --type "log: GET .../search?q=pool-race&type=problem", "SEARCH OPTIONS
+    --type <type> Filter by type"). Two vacuous guards found in the first RED (empty refusal matched an empty
+    line) were tightened with [ -n "$example" ] before GREEN. red_go.log after a no-behavior scaffold
+    (solvr-migrating.sh with only SOLVR_SKILL_VERSION="3.7.16"; before it the tests failed on the missing file):
+    2 FAIL on assertions — `endpoint "approaches" names GET /v1/problems/:id/approaches, which answers 410
+    ENDPOINT_RETIRED`, `SKILL.md must carry "## Migrating from 3.x to 3.7.16"`.
+
+EXISTING TESTS CHANGED (protocol; each pinned the wording this slice replaces; nothing deleted or skipped):
+  1. skill/scripts/test_canonical_posts.sh #14 "$retired points to solvr reply" (answer, approach): asserted output
+     contains "solvr $retired was retired" and "solvr reply <post_id> <body>". Now "'solvr $retired' was removed in
+     the solvr skill" and "use solvr reply <post_id> <body>". Same strength; exact text held by NEW test_migration.sh
+     rows 1-2. PASS [TEST] green_canonical.log 55/55.
+  2. same file #16 "get --include is refused": asserted "get --include was removed; use: solvr replies p1". Now
+     "'--include' was removed in the solvr skill" and "use solvr replies p1"; exact text held by NEW
+     test_migration.sh row 4. PASS [TEST].
+  NOT CHANGED: skill/scripts/test.sh:146 "help shows --type flag" still PASSES — the help still lists --type for the
+    room watch / room-stream / events event-type filter; the absence of a SEARCH --type is held by NEW
+    test_migration.sh "help SEARCH OPTIONS offers no --type".
+
+VERIFICATION [this session]:
+  [TEST] test_migration.sh green_shell.log 108/108; test_canonical_posts.sh 55/55; test.sh all passed;
+    test_room_credentials.sh 13/13; test_contract.sh (local python server on 127.0.0.1) 45/45 "every operation in
+    the contract is exercised".
+  [TEST] green_go.log (`-run 'TestPublished|TestSpecMCPSections' -v`): 11 PASS, 0 FAIL, 0 SKIP incl. both new
+    tests and the existing TestPublishedSkill_/TestPublishedHeartbeat_/References/AgentDocs tests.
+  MUTATIONS [TEST] (mut/, each alone, restored, `shasum -c mut/orig.sha` 4/4 OK): m1 search --type not refused ->
+    test_migration 21 FAIL; m2 SOLVR_SKILL_VERSION 4.0.1 -> test_migration 25 FAIL + both Go tests FAIL; m3 served
+    install.sh skips solvr-migrating.sh -> installer runs/installs/version checks FAIL; m4 skill.json names
+    GET/POST /v1/questions/:id/answers -> TestPublishedSkillJSON_ FAIL naming it.
+  [TEST] FULL BACKEND once (backend_full.log, DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test,
+    local docker solvr-postgres) -> exit 1: FAIL in internal/api, api/handlers, db (rest ok). 90 failing names, none
+    from this slice; errors are the shared-DB class (30x SQLSTATE 53300 too many connections, 23502/23503,
+    DUPLICATE_CONTENT, ROOM_ARCHIVED). vs slice 20's names.fail: 12 new -> run alone per package (alone.log, -v):
+    11 PASS; TestSearch_KeywordPageEqualsTheFullSearch (internal/db) FAILED alone once ("Not equal" on the page vs
+    full result list), then PASSED alone on the next run (kw_again.log) — flaky; this slice changes no file in
+    internal/db and no Go production code (the db test binary is HEAD's).
+  [TEST] frontend FULL once (frontend_full.log, `npx vitest run --maxWorkers=4`): 202 files, 1761 passed (same as
+    slice 20), 0 skipped. No frontend test reads public/skill.*, install.sh (grep); no TS changed.
+  [REAL] go vet ./internal/api exit 0; gofmt -l clean; shellcheck -S warning on solvr-migrating.sh and
+    test_migration.sh: none; bash -n on the 6 touched/new shell files ok.
+  [REAL] SMOKE (smoke/): the real API binary (go build ./cmd/api; env -i, DATABASE_URL solvr_test, throwaway
+    JWT_SECRET, PORT 18099, run from /tmp), the repo's solvr.sh: `version` -> "solvr skill 4.0.0"; `help migrating`
+    headed "Migrating from 3.x to 4.0.0"; `search postgres --limit 2` -> "Found 2188 results" (1 /v1 log line);
+    search --type, get --include, post problem, answer -> each its exact refusal, exit 1, API /v1 log lines 1 -> 1
+    (0 requests). The 3.7.16 skill (c03734ae solvr.sh + helpers) against the same API: answer -> "Error (410): POST
+    /v1/questions/{id}/answers was retired ...; use POST /v1/posts/{id}/replies instead", approach -> the same for
+    /v1/problems/{id}/approaches; raw curl: {"code":"ENDPOINT_RETIRED","replacement":"POST
+    /v1/posts/{id}/replies"} — the notes' claim holds live. Server killed (0 listeners on 18099). No rows created.
+
+FINDINGS, NOT FIXED:
+  - [REAL] frontend/public/solvr-skill.zip (served at solvr.dev/solvr-skill.zip, linked from /skill) is the
+    2026-07 skill 3.7.16 — it still offers every removed 3.x choice. Not regenerated here: sync-skill.sh would also
+    copy skill/SKILL.md over frontend/public/skill.md, reverting the public positioning lines (frontmatter
+    description + line 9, 3bb120de; the anti-abuse HANDOVER says "Don't restore the old skill text"). Owner call:
+    bring skill/SKILL.md's two lines up to the public text, then run sync-skill.sh (which now zips every sourced
+    file and no longer regresses install.sh).
+  - [REAL] HEARTBEAT.md, SKILL.md workflow prose ("start an approach", "POST APPROACH", stale-approach status) and
+    the installer's closing banner ("Post your approach BEFORE starting") still describe the legacy model in prose
+    (no command or option); references/api.md documents /v1/search type/status/content_types, which the API still
+    accepts (API unchanged, as in slices 17-18). Left for a docs pass / the owner.
+  - [REAL smoke] the skill's search output still prints legacy badges ("[problem] ...") — slices 18-20 finding.
+  - [REAL] skill/scripts/solvr.sh is 1440 lines and solvr-helpers.sh 1200 (over the 800 rule; shell files are not in
+    check-file-size.sh); this slice added 12 lines to solvr.sh and put the rest in the new 48-line file.
+  - The skill reaches agents only after the owner pushes (installer downloads from GitHub main) and deploys the
+    frontend (served install.sh, skill.md, skill.json).
+  - Slices 6-20 findings stand.
+
+REMAINING FOR idx 78 (next slices, in order):
+  22.. step 6 (an external consumer against a clean new schema plus an upgraded schema, not only mocked SDK
+    responses), then step 7 (participants as collections; a members command/tool in each first-party integration);
+    findings of slices 6-21.
+
+UAT (for when idx 78 closes, not now): push + deploy the frontend so solvr.dev/install.sh, skill.md, skill.json
+  serve skill 4.0.0; decide the skill version number; regenerate solvr-skill.zip (finding above).
+
+git status at journal time [REAL]: M frontend/public/install.sh, frontend/public/skill.json, frontend/public/skill.md,
+  progress.txt, scripts/install-solvr-skill.sh, scripts/sync-skill.sh, skill/SKILL.md, skill/scripts/solvr.sh,
+  skill/scripts/test_canonical_posts.sh, skill/skill.json; ?? backend/internal/api/published_skill_migration_test.go,
+  skill/scripts/solvr-migrating.sh, skill/scripts/test_migration.sh (git diff --stat: 10 tracked files, 80+/43-
+  before this entry). spec.json unchanged (idx 78 passes stays false).

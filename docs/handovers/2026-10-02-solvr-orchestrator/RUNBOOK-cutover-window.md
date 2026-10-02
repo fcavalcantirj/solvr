@@ -127,6 +127,8 @@ new one. Abort on any unreviewed row: look at it (masked) before anything is pus
 **STOP — Felipe's yes to push.**
 
 ```bash
+export WINDOW_ENV=... FROZEN_SHA=... WINDOW_DIR=...   # the prelude
+source "$WINDOW_DIR/docs/handovers/2026-10-02-solvr-orchestrator/window/window-env.sh"
 git -C /Users/fcavalcanti/dev/solvr push origin "$FROZEN_SHA:refs/heads/main"
 git -C /Users/fcavalcanti/dev/solvr ls-remote origin refs/heads/main
 ```
@@ -208,6 +210,8 @@ Optional (c), its own yes, a write (`CREATE EXTENSION amcheck`):
 **STOP — Felipe's yes for (d)+(e).**
 
 ```bash
+export WINDOW_ENV=... FROZEN_SHA=... WINDOW_DIR=...   # the prelude
+source "$WINDOW_DIR/docs/handovers/2026-10-02-solvr-orchestrator/window/window-env.sh"
 "${PSQL[@]}" -v db="$SOLVR_DB_NAME" <<< 'REINDEX DATABASE :"db";'
 "${PSQL[@]}" -v db="$SOLVR_DB_NAME" <<< 'ALTER DATABASE :"db" REFRESH COLLATION VERSION;'
 "${PSQL_RO[@]}" -c "SELECT datname, datcollversion, pg_database_collation_actual_version(oid) FROM pg_database"
@@ -243,6 +247,8 @@ jq -c -f "$RB/cutover-summary.jq" "$BACKUP_DIR/g5-dry.json"; jq -c -f "$RB/cutov
 Expect the dry run to match G2's dry run, apart from writes made after the G2 dump. **STOP — Felipe's yes to apply.**
 
 ```bash
+export WINDOW_ENV=... FROZEN_SHA=... WINDOW_DIR=...   # the prelude
+source "$WINDOW_DIR/docs/handovers/2026-10-02-solvr-orchestrator/window/window-env.sh"
 "$BIN/cutover" --database-url "$DBURL" --confirm-prod --report "$BACKUP_DIR/g5-apply.json" > "$BACKUP_DIR/g5-apply.log" 2>&1; rc=$?; echo "apply exit $rc"
 [ "$rc" = 0 ] && { "$BIN/cutover" --database-url "$DBURL" --confirm-prod --report "$BACKUP_DIR/g5-second.json" > "$BACKUP_DIR/g5-second.log" 2>&1; echo "second exit $?"; }
 for r in apply second; do jq -c -f "$RB/cutover-summary.jq" "$BACKUP_DIR/g5-$r.json"; done
@@ -315,12 +321,16 @@ curl -s -X POST "$SOLVR_API_BASE/admin/ipfs/unpin" -H "X-Admin-API-Key: $ADMIN_A
 Expect 87 and `{"would_unpin": 87}`. Any `in_use_*`, `invalid` or `error`: STOP. **STOP — Felipe's yes (P7).**
 
 ```bash
+export WINDOW_ENV=... FROZEN_SHA=... WINDOW_DIR=...   # the prelude
+source "$WINDOW_DIR/docs/handovers/2026-10-02-solvr-orchestrator/window/window-env.sh"
 curl -s -X POST "$SOLVR_API_BASE/admin/ipfs/unpin" -H "X-Admin-API-Key: $ADMIN_API_KEY" -H "Content-Type: application/json" --data @"$BACKUP_DIR/p7-unpin-run.json" | tee "$BACKUP_DIR/p7-unpin-report.json" | jq -c .data.summary
 ```
 
 Expect `unpinned` (or `not_pinned`) for every CID. **STOP — Felipe's separate yes (P8, irreversible).**
 
 ```bash
+export WINDOW_ENV=... FROZEN_SHA=... WINDOW_DIR=...   # the prelude
+source "$WINDOW_DIR/docs/handovers/2026-10-02-solvr-orchestrator/window/window-env.sh"
 curl -s -X POST "$SOLVR_API_BASE/admin/ipfs/gc" -H "X-Admin-API-Key: $ADMIN_API_KEY" --max-time 700 | jq -c .
 ```
 
@@ -364,6 +374,8 @@ nothing behind, and `dirty = t` only marks the version:
 **R4 — schema back to 84:**
 
 ```bash
+export WINDOW_ENV=... FROZEN_SHA=... WINDOW_DIR=...   # the prelude
+source "$WINDOW_DIR/docs/handovers/2026-10-02-solvr-orchestrator/window/window-env.sh"
 /usr/bin/time -p migrate -path backend/migrations -database "$DBURL" goto 84 > "$BACKUP_DIR/r4-goto84.log" 2>&1; echo "goto exit $?"; tail -n 4 "$BACKUP_DIR/r4-goto84.log"
 "${PSQL_RO[@]}" -Atc 'SELECT version, dirty FROM schema_migrations'
 ```
@@ -374,6 +386,8 @@ Expect `goto exit 0`, 51 lines `NNN/d …` (from 135), `84|f`. `schema_migration
 **R5 — compare with the G3 snapshot:**
 
 ```bash
+export WINDOW_ENV=... FROZEN_SHA=... WINDOW_DIR=...   # the prelude
+source "$WINDOW_DIR/docs/handovers/2026-10-02-solvr-orchestrator/window/window-env.sh"
 "${PSQL_RO[@]}" -At < "$RB/legacy-state.sql" > "$BACKUP_DIR/r5-legacy-state.json"
 jq -n --slurpfile a "$BACKUP_DIR/g3-legacy-state.json" --slurpfile b "$BACKUP_DIR/r5-legacy-state.json" -f "$RB/compare-legacy.jq" | jq -c .
 "${PSQL_RO[@]}" -Atc "SELECT source_table, reason, count(*) FROM rollback_archive GROUP BY 1, 2 ORDER BY 1, 2"
@@ -400,6 +414,8 @@ per-agent room tokens keep their hashes; the ban list is archived and its table 
 Then the old-code probes:
 
 ```bash
+export WINDOW_ENV=... FROZEN_SHA=... WINDOW_DIR=...   # the prelude
+source "$WINDOW_DIR/docs/handovers/2026-10-02-solvr-orchestrator/window/window-env.sh"
 curl -s -o /dev/null -w 'api /v1/overview %{http_code} (old code: 404)\n' --connect-timeout 5 --max-time 10 "$SOLVR_API_BASE/v1/overview"
 bash "$RB/probes.sh" old "$BACKUP_DIR/r6-probes"
 ```

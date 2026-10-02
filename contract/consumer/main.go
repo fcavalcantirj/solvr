@@ -7,11 +7,15 @@
 //	consumer collaborate   a planner and an executor work in a new room, the planner posts,
 //	                       both reply; with SOLVR_EXISTING_POST / SOLVR_EXISTING_ROOM the
 //	                       executor also continues that post and joins that room
+//	consumer members       the planner opens a closed room and admits every later agent to
+//	                       it; all join, the planner addresses the participants it listed,
+//	                       and each answers
 //	consumer find          search each query in SOLVR_FIND ("|"-separated)
 //
-// Environment: SOLVR_API_URL (the API's base URL), SOLVR_API_KEYS (the planner's and the
-// executor's agent API keys, comma-separated), SOLVR_RUN (one word naming this run; it is
-// in every text the consumer writes).
+// Environment: SOLVR_API_URL (the API's base URL), SOLVR_API_KEYS (the planner's, the
+// executor's and any later agent's API keys, comma-separated), SOLVR_AGENT_IDS (the agent
+// ids of those keys, in order; members needs it and at least three agents), SOLVR_RUN (one
+// word naming this run; it is in every text the consumer writes).
 //
 // It prints one JSON report on stdout: what the SDK surfaced at each step. A step that
 // fails ends the run with exit status 1 and the report names the step and the error.
@@ -44,6 +48,7 @@ type report struct {
 	MissingPost *errorReport     `json:"missing_post,omitempty"`
 	Existing    *existingReport  `json:"existing,omitempty"`
 	Searches    []searchReport   `json:"searches,omitempty"`
+	Members     *membersReport   `json:"members,omitempty"`
 }
 
 type roomReport struct {
@@ -147,6 +152,8 @@ func step(name string, err error) error {
 type consumer struct {
 	run                string
 	planner, executor  *solvr.Client
+	agents             []*solvr.Client // every key's client, the planner first
+	agentIDs           []string        // SOLVR_AGENT_IDS
 	anonymous          *solvr.Client
 	existingPost, room string
 	find               []string
@@ -189,10 +196,12 @@ func runPhase(phase string, rep *report) error {
 	switch phase {
 	case "collaborate":
 		return c.collaborate(ctx, rep)
+	case "members":
+		return c.members(ctx, rep)
 	case "find":
 		return c.search(ctx, rep)
 	default:
-		return step("configure", fmt.Errorf("unknown phase %q: use collaborate or find", phase))
+		return step("configure", fmt.Errorf("unknown phase %q: use collaborate, members or find", phase))
 	}
 }
 
@@ -200,19 +209,27 @@ func newConsumer() (*consumer, error) {
 	base := os.Getenv("SOLVR_API_URL")
 	keys := strings.Split(os.Getenv("SOLVR_API_KEYS"), ",")
 	run := os.Getenv("SOLVR_RUN")
-	if base == "" || len(keys) != 2 || keys[0] == "" || keys[1] == "" || run == "" {
-		return nil, errors.New("SOLVR_API_URL, SOLVR_API_KEYS (planner,executor) and SOLVR_RUN are required")
+	if base == "" || len(keys) < 2 || run == "" {
+		return nil, errors.New("SOLVR_API_URL, SOLVR_API_KEYS (planner,executor[,...]) and SOLVR_RUN are required")
 	}
 	client := func(key string) *solvr.Client {
 		return solvr.NewClient(key, solvr.WithBaseURL(base), solvr.WithMaxRetries(0), solvr.WithTimeout(15*time.Second))
 	}
 	c := &consumer{
 		run:          run,
-		planner:      client(keys[0]),
-		executor:     client(keys[1]),
 		anonymous:    client(""),
 		existingPost: os.Getenv("SOLVR_EXISTING_POST"),
 		room:         os.Getenv("SOLVR_EXISTING_ROOM"),
+	}
+	for _, key := range keys {
+		if key == "" {
+			return nil, errors.New("SOLVR_API_KEYS has an empty key")
+		}
+		c.agents = append(c.agents, client(key))
+	}
+	c.planner, c.executor = c.agents[0], c.agents[1]
+	if ids := os.Getenv("SOLVR_AGENT_IDS"); ids != "" {
+		c.agentIDs = strings.Split(ids, ",")
 	}
 	if find := os.Getenv("SOLVR_FIND"); find != "" {
 		c.find = strings.Split(find, "|")

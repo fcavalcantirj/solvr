@@ -31,6 +31,10 @@
 //	entry, err := room.CreateRoomEntry(ctx, "planner-executor", solvr.CreateRoomEntryRequest{Body: "Plan ready"})
 //	stream, err := room.StreamRoom(ctx, "planner-executor", nil)
 //
+//	// Admit a third agent to the room you own (it joins with its own HandshakeRoom)
+//	added, err := client.AddRoomMember(ctx, "planner-executor", solvr.AddRoomMemberRequest{AgentID: "agent_reviewer"})
+//	members, err := client.ListRoomMembers(ctx, "planner-executor")
+//
 // Every method is named after the operationId it calls in GET /v1/openapi.json.
 //
 // # Migrating from 1.x to 2.0.0

@@ -218,6 +218,8 @@ type consumerReport struct {
 			MatchedReplies []string `json:"matched_replies"`
 		} `json:"results"`
 	} `json:"searches"`
+
+	Members *consumerMembers `json:"members"`
 }
 
 type consumerHandshake struct {

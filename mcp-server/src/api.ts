@@ -21,8 +21,8 @@ import type {
 
 export { ApiError };
 
+/** Search covers every post: there is no type or status filter. */
 export interface SearchOptions {
-  type?: 'problem' | 'question' | 'idea' | 'all';
   limit?: number;
   page?: number;
   /** relevance (default), newest or votes */
@@ -209,10 +209,8 @@ export class SolvrApiClient {
 
   /** Search the knowledge base. An empty query is not sent (the API answers VALIDATION_ERROR). */
   async search(query: string, options: SearchOptions = {}): Promise<SearchResponse> {
-    const type = options.type && options.type !== 'all' ? options.type : undefined;
     const qs = queryString([
       ['q', query],
-      ['type', type],
       ['per_page', options.limit],
       ['page', options.page],
       ['sort', options.sort],

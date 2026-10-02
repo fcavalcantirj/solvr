@@ -10832,3 +10832,174 @@ REMAINING FOR idx 78 (next slices, in order):
 
 git status at journal time [REAL]: as FIX above (17 M, 5 ??), plus M progress.txt (this entry). spec.json unchanged
   (idx 78 passes stays false).
+
+2026-10-02 08:44 — Task idx 78 (spec.json, category functional) — IN PROGRESS, passes STAYS false
+"Keep SDKs, CLI, MCP, skills, and webhooks consistent with the redesigned product"
+SLICE 19: step 5, npm MCP server half — @solvr/mcp-server drops the last legacy choice it offered (solvr_search
+`type`), every removed 1.x tool and argument (solvr_answer, solvr_post `type`, solvr_search `type`, solvr_get
+`include`) is refused BEFORE any request naming what replaces it, the package moves to 2.0.0, its README carries
+"Migrating from 1.x to 2.0.0" notes a test holds to the code, and the /mcp and /api-docs pages stop documenting
+the search type filter.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 78-95, 97, 98; no open URGENT (96 true).
+  24/67 acceptance (skipped as in every earlier entry); 68 waits on the owner (as journaled). idx 78 first buildable;
+  continued from slice 18 (HEAD 4c07d27c), REMAINING item "19.. step 5 rest", its first part (npm mcp-server).
+  Tree clean at start. No git pull (local branch is ahead 289 of origin with unpushed loop commits).
+
+STATE FOUND [REAL, code read this session]:
+  - mcp-server 1.0.0: solvr_search still offered `type` (problem|question|idea|all) and sent it; a 1.x solvr_post
+    `type` was silently dropped (mcp-e2e "solvr_post does not forward a legacy type argument" pinned that); a 1.x
+    solvr_get `include` was silently ignored; solvr_answer answered "Unknown tool: solvr_answer".
+  - The 1.x surface (git show 821d2fa8^:mcp-server/src/tools.ts): solvr_search {query, type, limit}, solvr_get {id,
+    include}, solvr_post {type (required), title, description, tags}, solvr_answer {post_id, content,
+    approach_angle}, solvr_claim. 1.x solvr_answer called POST /v1/questions/{id}/answers and POST
+    /v1/problems/{id}/approaches; 1.x solvr_get called GET /v1/posts/{id}?include=... (not a retired route).
+  - backend POST /v1/mcp (not touched here): already refuses solvr_answer naming solvr_reply, and silently IGNORES
+    a search `type`, a post `type` and a get `include` (mcp_knowledge.go:166 comment; handlers/mcp_tools_test.go:65
+    and jobs/legacy_dropped_write_steps_test.go:241 call solvr_search with type "problem").
+
+DESIGN:
+  - ?? mcp-server/src/removed.ts: REMOVED_TOOLS {solvr_answer} and REMOVED_ARGUMENTS {solvr_search.type,
+    solvr_post.type, solvr_get.include}, each with what replaces it; removedChoice(tool, args) -> the refusal text or
+    undefined. An undefined or null argument counts as not given; any other value (also type "all") is refused.
+    Texts: "'solvr_answer' was removed in @solvr/mcp-server 2.0.0; use solvr_reply with post_id and body: answers and
+    approaches are replies. See "Migrating from 1.x to 2.0.0" in the @solvr/mcp-server README." and "The 'type'
+    argument of solvr_post was removed in @solvr/mcp-server 2.0.0; a post has no type (it was given "question").
+    See ...". SolvrTools.executeTool checks it first: isError result, no request.
+  - Version 1.0.0 -> 2.0.0 (major: removed arguments). ?? src/version.ts VERSION read from package.json (like
+    packages/cli); server.ts SERVER_INFO.version = VERSION, so initialize answers it. The build's dist/version.js
+    reads ../package.json, i.e. the package root (verified in the smoke, below). Owner may overrule the number;
+    nothing published or tagged.
+  - Notes: README "## Migrating from 1.x to 2.0.0" (table 1.x -> 2.0.0 for solvr_answer (post_id, content,
+    approach_angle), solvr_post type, solvr_search type, solvr_get include; an example refusal; tools/list offers
+    none; initialize answers 2.0.0; null = not given; a still-installed 1.x server's solvr_answer meets 410
+    ENDPOINT_RETIRED with error.details.replacement). solvr_search docs/example without type.
+
+TESTS FIRST [logs /tmp/solvr_idx78_s19/]:
+  ?? mcp-server/src/__tests__/migration.test.ts (22 tests, through handleRequest against a real local server):
+    10 1.x calls (solvr_answer x2, solvr_search type problem/question/idea/all, solvr_post type problem/question/
+    idea, solvr_get include): isError, "<name> was removed in @solvr/mcp-server <VERSION>", what replaces it, the
+    README section, 0 requests; the refused post type is named; undefined/null type is no choice (call runs); a
+    never-existing tool is still "Unknown tool: <name>"; solvr_search sends exactly q/per_page/page/sort; solvr_post
+    exactly the canonical body; solvr_get 2 reads; SolvrApiClient.search sends no type even when a JS caller passes
+    one and SearchOptions declares none (source read); tools/list offers no solvr_answer and no tool has type/
+    include/approach_angle; VERSION 2.0.0 == package.json == package-lock (both root lines) == initialize answer;
+    the notes name every removed tool/argument, the refusal, ENDPOINT_RETIRED, error.details.replacement; every
+    solvr_x the notes or a refusal point at is served.
+  Before the test could fail on an assertion: no-behavior refactor src/version.ts + SERVER_INFO.version = VERSION
+    (still 1.0.0; tsc exit 0, refactor_tsc.log).
+  RED [TEST] red.log: 16 failed / 121 passed, all assertions ("expected 'Unknown tool: solvr_answer' to contain
+    ''solvr_answer' was removed in @solv…'", "expected '1.0.0' to be '2.0.0'", "solvr_search offers type", "expected
+    undefined to be true" x7, notes ""); the guards (still run, null, unknown tool, refusal names) passed.
+  frontend RED [TEST] fe_red.log: 3 assertions ("the arguments of solvr_search: expected [ 'query', 'type', ... ] to
+    deeply equal [ 'query', 'limit', 'page', 'sort' ]", the /mcp `type` count, api-mcp "Unable to find ... query,
+    limit?, page?, sort?").
+
+EXISTING TESTS CHANGED (protocol; each pinned the behavior this slice replaces; nothing deleted or skipped):
+  1. mcp-server api.test.ts "includes type filter when provided": `client.search('test', { type: 'problem' })`
+     expected a URL containing 'type=problem'. Now "sends no type filter, even when a JavaScript caller still
+     passes one (2.0.0)": { type: 'problem', limit: 5 } -> exactly `${mockApiUrl}/v1/search?q=test&per_page=5`.
+     Covered also by NEW migration.test.ts "the API client sends no legacy search filter...". PASS [TEST].
+  2. tools.test.ts "solvr_search tool has correct schema": `expect(...properties).toHaveProperty('type')`. Now
+     `.not.toHaveProperty('type')` (rest unchanged). Covered by NEW "tools/list offers none of the removed tools or
+     arguments". PASS.
+  3. tools.test.ts "passes type filter": expected `search('test', { type: 'problem' })`. Now "refuses the removed
+     type filter before searching (2.0.0)": isError, "The 'type' argument of solvr_search was removed in
+     @solvr/mcp-server", "search covers every post", search not called. Covered by NEW migration rows solvr_search
+     type *. PASS.
+  4. tools.test.ts "never sends a type, even when a caller still passes one": expected createPost({title,
+     description, visibility}) for a call with type 'problem'. Now "never sends a type: a caller that still passes
+     one is refused before any request (2.0.0)": isError, the removal + "a post has no type", createPost not
+     called (still never sends a type). Covered by NEW migration rows solvr_post type *. PASS.
+  5. tools.test.ts solvr_answer "is no longer a tool (replaced by solvr_reply)": `toContain('Unknown tool:
+     solvr_answer')`. Now toContain "'solvr_answer' was removed in @solvr/mcp-server" and "use solvr_reply";
+     isError and "createReply not called" kept. Covered by NEW migration rows solvr_answer. PASS.
+  6. mcp-e2e.test.ts "solvr_search with type filter works via MCP": expected search('test', { type: 'problem' }) and
+     the result shown. Now "solvr_search refuses the removed type filter via MCP (2.0.0)": no JSON-RPC error,
+     isError, the removal text, search not called. Covered by NEW migration rows. PASS.
+  7. mcp-e2e.test.ts "solvr_post does not forward a legacy type argument": for problem/question/idea expected
+     createPost({title, description}) and "Created post". Now "solvr_post refuses a legacy type argument before any
+     request (2.0.0)": createPost not called, isError, "a post has no type" and the quoted type. Covered by NEW
+     migration rows + "names the type a 1.x solvr_post asked for". PASS.
+  8. frontend components/mcp/mcp-tools.test.tsx "offers no retired answer tool, approach angle, include option or
+     post type": `expect(screen.getAllByText('type', { selector: 'code' })).toHaveLength(1)` ("Only solvr_search
+     keeps a type filter"). Now `queryAllByText(...)).toHaveLength(0)` (no tool takes a type). Covered by NEW
+     "documents each tool with exactly the arguments the npm mcp-server serves". PASS.
+  STRENGTHENED (no assertion loosened): tools.test.ts "offers no legacy typed choice" now checks EVERY tool (it
+    exempted solvr_search). NEW frontend tests: mcp-tools.test.tsx "documents each tool with exactly the arguments
+    the npm mcp-server serves" (parses each tool's inputSchema property keys from mcp-server/src/tools.ts +
+    room-tools.ts, anchored by solvr_search == [query, limit, page, sort]; every card's parameter list must equal
+    it — only solvr_search differed before this slice); api-mcp.test.tsx "documents solvr_search without the type
+    filter 2.0.0 removed".
+  Not changed: mcp-e2e.test.ts "server responds to initialize with correct capabilities" asserts version '1.0.0'
+    of the test file's OWN MCPServer copy (it hard-codes its initialize answer, line ~89), not of server.ts; the
+    real answer is held by NEW migration "the version the migration notes describe" (see FINDINGS).
+
+FIX (GREEN) [git status --porcelain + git diff --stat this session: 13 tracked files 120+/65-, 3 new]:
+  M mcp-server/src/tools.ts (solvr_search schema without type; executeTool refuses removedChoice first;
+    executeSearch without type; post comment), src/api.ts (SearchOptions without type + doc line; search sends no
+    type), src/server.ts (SERVER_INFO.version = VERSION), package.json + package-lock.json (2.0.0, the lock's two
+    root lines only), README.md (search docs/example without type, a link from the solvr_answer note, "## Migrating
+    from 1.x to 2.0.0"); ?? src/removed.ts (42 lines), src/version.ts; M src/api.test.ts, src/tools.test.ts,
+    src/mcp-e2e.test.ts (changes 1-7); ?? src/__tests__/migration.test.ts (220 lines).
+  M frontend/components/mcp/mcp-tools.tsx (solvr_search card drops the `type` parameter), components/api/
+    api-mcp.tsx (solvr_search params "query, limit?, page?, sort?"); M mcp-tools.test.tsx (change 8 + new test),
+    api-mcp.test.tsx (new test).
+  No backend, migration, SPEC.md, contract fixture, SDK, CLI or skill change.
+
+VERIFICATION [this session]:
+  [TEST] baseline: base_mcp.log 7 files 115 passed; base_tsc.log exit 0.
+  [TEST] GREEN: final_mcp.log `npx vitest run --coverage` (mcp-server) 8 files 137 passed (115 + 22), 0 skipped;
+    coverage 91.45% statements (removed.ts 100, version.ts 100, tools.ts 99.3, api.ts 94.6); final_tsc.log exit 0.
+  [TEST] frontend: fe_green_api.log components/mcp + components/api 11 files 106 passed; frontend_full.log FULL
+    `npx vitest run --maxWorkers=4`: 202 files, 1760 tests passed (slice 17's 1758 + the 2 new), 0 skipped — this
+    also closes slice 18's unproven full run (app/data/page.test.tsx passed; load average was ~14 again);
+    `npm run typecheck` exit 0; eslint on the 4 touched frontend files exit 0.
+  MUTATIONS [TEST] (mut/, each alone, restored, `shasum -c mut/orig.sha` 4/4 OK): m1 solvr_get stops refusing
+    include -> the include row fails; m2 notes drop `approach_angle` -> "the notes do not name `approach_angle`";
+    m3 api.ts sends a JS caller's type again -> 2 failed (api.test + migration); m4 executeTool stops refusing
+    solvr_answer -> 3 failed (tools.test + 2 migration rows).
+  [REAL] SMOKE (smoke/smoke.log): the real API binary (go build ./cmd/api; env -i, DATABASE_URL local docker
+    solvr-postgres solvr_test, throwaway JWT_SECRET, PORT 18098, no env file read) and the MCP server compiled
+    with tsc into smoke/dist beside a copy of its package.json (the published layout), ONE stdio process with a
+    freshly registered agent's key: initialize {"name":"solvr","version":"2.0.0",...}; tools/list 14 tools, no
+    solvr_answer, none with type/include/approach_angle; solvr_answer (x2, one with approach_angle), solvr_search
+    type problem / all, solvr_post type question, solvr_get include -> each isError with its removal text; API
+    request lines (non-/health "Request completed") during the 6 refused calls: +0; solvr_search postgres limit 2
+    -> "Found 2188 results" (API log: GET /v1/search?q=postgres&per_page=2 200, no type); solvr_post created a
+    post (POST /v1/posts 201); solvr_get read it (GET /v1/posts/{id} 200 + GET .../replies?limit=20 200). The notes'
+    claim about a still-installed 1.x server: POST /v1/questions/{id}/answers and POST /v1/problems/{id}/approaches
+    with the agent key -> 410 ENDPOINT_RETIRED, details.replacement "POST /v1/posts/{id}/replies". MCP stderr "".
+    The smoke script reported 1 FAIL that is a bug in its own check, not the product: it matched
+    'GET /v1/search 200' while the logged path carries the query string ('GET /v1/search?q=postgres&per_page=2
+    200' is in the log line it printed); not re-run (the run creates rows). API killed (0 listeners on 18098);
+    cleanup.log (one transaction): replies 0, posts 1, agents 1; recount.log 0 agent_mcp_s19_% agents, 0 "MCP s19
+    smoke%" posts (the refused 1.x post was never created).
+  [REAL] check-file-size.sh: 32 files over 800 (same as slices 17/18), none touched here; largest touched file
+    mcp-e2e.test.ts 718 (mcp-server is not scanned by it).
+  NOT RUN: backend suites (no backend file touched; the binary was only built for the smoke); packages/*, cli/,
+    skill (untouched); mcp-server `npm run lint` (eslint not installed there, as slice 9 found).
+
+FINDINGS, NOT FIXED:
+  - [REAL code read] backend POST /v1/mcp still silently ignores a 1.x solvr_search `type`, solvr_post `type` and
+    solvr_get `include` (it already refuses solvr_answer); the npm server now refuses them. Same tool names,
+    different answers to the same 1.x call: align /v1/mcp (its tests mcp_tools_test.go:65 and
+    jobs/legacy_dropped_write_steps_test.go:241 send type "problem" and would need the protocol).
+  - [REAL] mcp-e2e.test.ts tests a hand-written copy of the JSON-RPC handler (its own initialize answer with
+    version '1.0.0'), not server.ts; the real handler is covered by __tests__/ (slice 9 moved it to server.ts).
+  - [REAL smoke] solvr_search output still prints the legacy badge ("[PROBLEM]") and "Status: open" of legacy posts
+    (rendering what the API returns, as the CLIs do — slice 18 finding).
+  - [REAL code read] SPEC.md ~3066 says the /v1/mcp `type` argument is ignored — true of /v1/mcp today; SPEC is
+    reference, not edited.
+  - Version 2.0.0 exists only in the code; nothing published or tagged (owner's release call).
+  - Slices 6-18 findings stand.
+
+REMAINING FOR idx 78 (next slices, in order):
+  20.. step 5 rest: backend /v1/mcp refuses the same 1.x arguments as the npm server; the skill (skill/scripts/
+    solvr.sh:1022 `search ... --type problem`, test_canonical_posts.sh:230 `get p1 --include answers`, skill.json
+    legacy endpoints, help text) with its own versioned notes and refusals; then 6 (external consumer vs clean +
+    upgraded schema), 7 (participants as collections, a members command/tool); findings of slices 6-19.
+
+git status at journal time [REAL]: as FIX above (13 M, 3 ??), plus M progress.txt (this entry). spec.json unchanged
+  (idx 78 passes stays false).

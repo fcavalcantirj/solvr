@@ -265,19 +265,8 @@ describe('MCP Server E2E Tests', () => {
       expect(result.content[0].text).toContain('95%'); // Score as percentage
     });
 
-    it('solvr_search with type filter works via MCP', async () => {
-      mockApiClient.search.mockResolvedValue({
-        data: [
-          {
-            id: 'problem_1',
-            type: 'problem',
-            title: 'Filtered Problem',
-            score: 0.9,
-            status: 'open',
-          },
-        ],
-        meta: { total: 1 },
-      });
+    it('solvr_search refuses the removed type filter via MCP (2.0.0)', async () => {
+      mockApiClient.search.mockResolvedValue({ data: [], meta: { total: 0 } });
 
       const response = await client.sendRequest('tools/call', {
         name: 'solvr_search',
@@ -285,12 +274,14 @@ describe('MCP Server E2E Tests', () => {
       });
 
       expect(response.error).toBeUndefined();
-      expect(mockApiClient.search).toHaveBeenCalledWith('test', { type: 'problem' });
+      expect(mockApiClient.search).not.toHaveBeenCalled();
 
       const result = response.result as {
         content: Array<{ type: string; text: string }>;
+        isError?: boolean;
       };
-      expect(result.content[0].text).toContain('Filtered Problem');
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("The 'type' argument of solvr_search was removed in @solvr/mcp-server");
     });
 
     it('solvr_search with limit works via MCP', async () => {
@@ -482,7 +473,7 @@ describe('MCP Server E2E Tests', () => {
       expect(result.content[0].text).toContain('new_post_123');
     });
 
-    it('solvr_post does not forward a legacy type argument', async () => {
+    it('solvr_post refuses a legacy type argument before any request (2.0.0)', async () => {
       for (const legacyType of ['problem', 'question', 'idea']) {
         mockApiClient.createPost.mockResolvedValueOnce({
           data: { id: `new_${legacyType}`, type: 'post', title: 'Race condition in async code' },
@@ -497,15 +488,14 @@ describe('MCP Server E2E Tests', () => {
           },
         });
 
-        expect(mockApiClient.createPost).toHaveBeenLastCalledWith({
-          title: 'Race condition in async code',
-          description: 'Description of the problem.',
-        });
+        expect(mockApiClient.createPost).not.toHaveBeenCalled();
         const result = response.result as {
           content: Array<{ type: string; text: string }>;
+          isError?: boolean;
         };
-        expect(result.content[0].text).toContain('Created post');
-        expect(result.content[0].text).toContain(`new_${legacyType}`);
+        expect(result.isError).toBe(true);
+        expect(result.content[0].text).toContain('a post has no type');
+        expect(result.content[0].text).toContain(`"${legacyType}"`);
       }
     });
 

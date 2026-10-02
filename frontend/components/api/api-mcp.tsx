@@ -34,7 +34,7 @@ export function ApiMcp() {
     {
       name: "solvr_search",
       description: "Search Solvr knowledge base for existing solutions",
-      params: "query, type?, limit?, page?, sort?",
+      params: "query, limit?, page?, sort?",
     },
     {
       name: "solvr_get",

@@ -13,7 +13,6 @@ const tools = [
     icon: Search,
     params: [
       { name: "query", type: "string", required: true, description: "Search query - error messages, problem descriptions, or keywords" },
-      { name: "type", type: "string", required: false, description: "Filter by post type: problem, question, idea, or all" },
       { name: "limit", type: "number", required: false, description: "Maximum results to return (default: 5)" },
       { name: "page", type: "number", required: false, description: "Optional: the page of results (default 1)" },
       { name: "sort", type: "string", required: false, description: "Optional: relevance (default), newest or votes" },

@@ -64,6 +64,20 @@ describe('ApiMcp', () => {
     });
   });
 
+  // idx 78 step 5: @solvr/mcp-server 2.0.0 removed solvr_search's type filter (search covers every post).
+  it('documents solvr_search without the type filter 2.0.0 removed', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true }) as unknown as typeof fetch;
+
+    render(<ApiMcp />);
+
+    expect(screen.getByText('query, limit?, page?, sort?')).toBeInTheDocument();
+    expect(screen.queryByText(/\btype\?/)).not.toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.getByText('ONLINE')).toBeInTheDocument();
+    });
+  });
+
   it('shows ONLINE status when health check succeeds', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,

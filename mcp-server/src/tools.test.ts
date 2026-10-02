@@ -61,7 +61,7 @@ describe('SolvrTools', () => {
       expect(searchTool).toBeDefined();
       expect(searchTool?.description).toContain('Search Solvr knowledge base');
       expect(searchTool?.inputSchema.properties).toHaveProperty('query');
-      expect(searchTool?.inputSchema.properties).toHaveProperty('type');
+      expect(searchTool?.inputSchema.properties).not.toHaveProperty('type');
       expect(searchTool?.inputSchema.properties).toHaveProperty('limit');
       expect(searchTool?.inputSchema.required).toContain('query');
     });
@@ -107,7 +107,7 @@ describe('SolvrTools', () => {
       const manifest = tools.getManifest();
 
       expect(manifest.tools.map(t => t.name)).not.toContain('solvr_answer');
-      for (const tool of manifest.tools.filter(t => t.name !== 'solvr_search')) {
+      for (const tool of manifest.tools) {
         expect(tool.inputSchema.properties).not.toHaveProperty('type');
         expect(tool.inputSchema.properties).not.toHaveProperty('approach_angle');
       }
@@ -141,15 +141,18 @@ describe('SolvrTools', () => {
         expect(result.content[0].text).toContain('Test');
       });
 
-      it('passes type filter', async () => {
+      it('refuses the removed type filter before searching (2.0.0)', async () => {
         mockClient.search.mockResolvedValue({ data: [], meta: {} });
 
-        await tools.executeTool('solvr_search', {
+        const result = await tools.executeTool('solvr_search', {
           query: 'test',
           type: 'problem'
         });
 
-        expect(mockClient.search).toHaveBeenCalledWith('test', { type: 'problem' });
+        expect(result.isError).toBe(true);
+        expect(result.content[0].text).toContain("The 'type' argument of solvr_search was removed in @solvr/mcp-server");
+        expect(result.content[0].text).toContain('search covers every post');
+        expect(mockClient.search).not.toHaveBeenCalled();
       });
 
       it('passes limit', async () => {
@@ -245,21 +248,20 @@ describe('SolvrTools', () => {
         expect(result.content[0].text).toContain('new_post');
       });
 
-      it('never sends a type, even when a caller still passes one', async () => {
+      it('never sends a type: a caller that still passes one is refused before any request (2.0.0)', async () => {
         mockClient.createPost.mockResolvedValue({ data: { id: 'p1', title: 'T', type: 'post' } });
 
-        await tools.executeTool('solvr_post', {
+        const result = await tools.executeTool('solvr_post', {
           type: 'problem',
           title: 'T',
           description: 'D',
           visibility: 'family',
         });
 
-        expect(mockClient.createPost).toHaveBeenCalledWith({
-          title: 'T',
-          description: 'D',
-          visibility: 'family',
-        });
+        expect(result.isError).toBe(true);
+        expect(result.content[0].text).toContain("The 'type' argument of solvr_post was removed in @solvr/mcp-server");
+        expect(result.content[0].text).toContain('a post has no type');
+        expect(mockClient.createPost).not.toHaveBeenCalled();
       });
 
       it('returns error on validation failure', async () => {
@@ -325,7 +327,8 @@ describe('SolvrTools', () => {
         const result = await tools.executeTool('solvr_answer', { post_id: 'p', content: 'c' });
 
         expect(result.isError).toBe(true);
-        expect(result.content[0].text).toContain('Unknown tool: solvr_answer');
+        expect(result.content[0].text).toContain("'solvr_answer' was removed in @solvr/mcp-server");
+        expect(result.content[0].text).toContain('use solvr_reply');
         expect(mockClient.createReply).not.toHaveBeenCalled();
       });
     });

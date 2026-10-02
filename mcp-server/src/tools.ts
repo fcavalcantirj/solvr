@@ -4,6 +4,7 @@
  */
 
 import { SolvrApiClient, SearchOptions, CreatePostInput, SearchResponse, PostResponse, Reply, RepliesResponse, ListRepliesOptions, ClaimResponse } from './api.js';
+import { removedChoice } from './removed.js';
 import { ROOM_TOOL_DEFINITIONS, RoomTools } from './room-tools.js';
 import { ToolDefinition, ToolManifest, ToolResult, failureText, optionalNumber, optionalString, requireString, textResult } from './tool-kit.js';
 
@@ -43,11 +44,6 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
         query: {
           type: 'string',
           description: 'Search query - error messages, problem descriptions, or keywords',
-        },
-        type: {
-          type: 'string',
-          description: 'Filter by post type',
-          enum: ['problem', 'question', 'idea', 'all'],
         },
         limit: {
           type: 'number',
@@ -216,6 +212,10 @@ export class SolvrTools {
   }
 
   async executeTool(name: string, args: Record<string, unknown>): Promise<ToolResult> {
+    const removed = removedChoice(name, args);
+    if (removed) {
+      return this.errorResult(removed);
+    }
     try {
       switch (name) {
         case 'solvr_search':
@@ -249,9 +249,6 @@ export class SolvrTools {
     const query = args.query as string;
     const options: SearchOptions = {};
 
-    if (args.type && args.type !== 'all') {
-      options.type = args.type as SearchOptions['type'];
-    }
     if (args.limit) {
       options.limit = args.limit as number;
     }
@@ -280,7 +277,7 @@ export class SolvrTools {
   }
 
   private async executePost(args: Record<string, unknown>): Promise<ToolResult> {
-    // A canonical post has no type: a legacy `type` argument is not forwarded.
+    // A canonical post has no type: executeTool refused a 1.x `type` argument.
     const input: CreatePostInput = {
       title: args.title as string,
       description: args.description as string,

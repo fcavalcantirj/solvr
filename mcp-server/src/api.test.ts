@@ -46,16 +46,16 @@ describe('SolvrApiClient', () => {
       expect(result).toEqual(mockResponse);
     });
 
-    it('includes type filter when provided', async () => {
+    it('sends no type filter, even when a JavaScript caller still passes one (2.0.0)', async () => {
       (fetch as Mock).mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ data: [], meta: {} }),
       });
 
-      await client.search('test', { type: 'problem' });
+      await client.search('test', { type: 'problem', limit: 5 } as Parameters<SolvrApiClient['search']>[1]);
 
       expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining('type=problem'),
+        `${mockApiUrl}/v1/search?q=test&per_page=5`,
         expect.any(Object)
       );
     });

@@ -3,6 +3,7 @@
  */
 
 import { SolvrTools } from './tools.js';
+import { VERSION } from './version.js';
 
 export interface MCPRequest {
   jsonrpc: '2.0';
@@ -23,7 +24,7 @@ export interface MCPResponse {
 
 export const SERVER_INFO = {
   name: 'solvr',
-  version: '1.0.0',
+  version: VERSION,
   protocolVersion: '2024-11-05',
 };
 

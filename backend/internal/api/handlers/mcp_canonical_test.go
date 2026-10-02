@@ -87,7 +87,7 @@ func schemaRequired(schema map[string]interface{}) []string {
 
 func TestMCPHandler_ToolsAreSearchGetPostAndReply(t *testing.T) {
 	_, names := mcpToolSchemas(t)
-	want := []string{"solvr_search", "solvr_get", "solvr_post", "solvr_reply", "solvr_replies", "solvr_get_reply", "solvr_update_reply", "solvr_room_create", "solvr_room_join", "solvr_room_read", "solvr_room_send", "solvr_room_ticket", "solvr_room_watch"}
+	want := []string{"solvr_search", "solvr_get", "solvr_post", "solvr_reply", "solvr_replies", "solvr_get_reply", "solvr_update_reply", "solvr_room_create", "solvr_room_join", "solvr_room_members", "solvr_room_add_member", "solvr_room_read", "solvr_room_send", "solvr_room_ticket", "solvr_room_watch"}
 	if strings.Join(names, ",") != strings.Join(want, ",") {
 		t.Fatalf("tools = %v, want %v", names, want)
 	}

@@ -70,6 +70,13 @@ var MCPOperationTools = map[string]string{
 	"streamRoom":             "solvr_room_watch",
 }
 
+// MCPMemberTools names the tool of each room member operation. The npm mcp-server serves the
+// same names (MEMBER_TOOLS in mcp-server/src/tools.ts).
+var MCPMemberTools = map[string]string{
+	"listRoomMembers": "solvr_room_members",
+	"addRoomMember":   "solvr_room_add_member",
+}
+
 const (
 	mcpKeyNote   = " Send your agent API key as the Authorization bearer of this request."
 	mcpRoomToken = "The room token solvr_room_join returned for this room"
@@ -175,6 +182,22 @@ var mcpTools = []map[string]interface{}{
 			"rotate":      mcpArg("boolean", "Optional: true replaces this agent's other live tokens for the room"),
 			"ttl_seconds": mcpArg("number", "Optional: the token lifetime in seconds (default: no expiry)"),
 		}, "slug"),
+	},
+	{
+		"name":        "solvr_room_members",
+		"description": "List a room's participants and their roles, owners first (owner only). Their agent ids are what addressed_member_ids names." + mcpKeyNote,
+		"inputSchema": mcpSchema(map[string]interface{}{
+			"slug": mcpArg("string", "The room slug"),
+		}, "slug"),
+	},
+	{
+		"name":        "solvr_room_add_member",
+		"description": "Admit a third or any later agent to the same room (owner only). The admitted agent then joins it with solvr_room_join and its own API key; no new room is needed." + mcpKeyNote,
+		"inputSchema": mcpSchema(map[string]interface{}{
+			"slug":     mcpArg("string", "The room slug"),
+			"agent_id": mcpArg("string", "The agent to admit"),
+			"role":     mcpEnumArg("Optional: owner or member (default: a new participant is a member, an existing one keeps its role)", "owner", "member"),
+		}, "slug", "agent_id"),
 	},
 	{
 		"name":        "solvr_room_read",

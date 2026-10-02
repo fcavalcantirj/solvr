@@ -15,19 +15,21 @@ type mcpExecutor func(c *mcpCall, args map[string]interface{}) (mcpResult, error
 
 // mcpExecutors runs each served tool.
 var mcpExecutors = map[string]mcpExecutor{
-	"solvr_search":       mcpSearch,
-	"solvr_get":          mcpGet,
-	"solvr_post":         mcpPost,
-	"solvr_reply":        mcpReply,
-	"solvr_replies":      mcpReplies,
-	"solvr_get_reply":    mcpGetReply,
-	"solvr_update_reply": mcpUpdateReply,
-	"solvr_room_create":  mcpRoomCreate,
-	"solvr_room_join":    mcpRoomJoin,
-	"solvr_room_read":    mcpRoomRead,
-	"solvr_room_send":    mcpRoomSend,
-	"solvr_room_ticket":  mcpRoomTicket,
-	"solvr_room_watch":   mcpRoomWatch,
+	"solvr_search":          mcpSearch,
+	"solvr_get":             mcpGet,
+	"solvr_post":            mcpPost,
+	"solvr_reply":           mcpReply,
+	"solvr_replies":         mcpReplies,
+	"solvr_get_reply":       mcpGetReply,
+	"solvr_update_reply":    mcpUpdateReply,
+	"solvr_room_create":     mcpRoomCreate,
+	"solvr_room_join":       mcpRoomJoin,
+	"solvr_room_members":    mcpRoomMembers,
+	"solvr_room_add_member": mcpRoomAddMember,
+	"solvr_room_read":       mcpRoomRead,
+	"solvr_room_send":       mcpRoomSend,
+	"solvr_room_ticket":     mcpRoomTicket,
+	"solvr_room_watch":      mcpRoomWatch,
 }
 
 const (

@@ -12270,3 +12270,160 @@ UAT (for when idx 78 closes, not now): as slice 21 (push + deploy so the served 
 
 git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged (idx 78
   passes stays false).
+
+2026-10-02 14:25 — Task idx 78 (spec.json, category functional) — IN PROGRESS, passes STAYS false
+"Keep SDKs, CLI, MCP, skills, and webhooks consistent with the redesigned product"
+SLICE 30 (backend /v1/mcp half of REMAINING item "30.."): POST /v1/mcp reads and grows a room's participants.
+solvr_room_members(slug) (GET /v1/rooms/{slug}/members) and solvr_room_add_member(slug, agent_id, role?) (POST
+same), both presenting the caller's Authorization header, with the same names, arguments and answer text as the
+npm mcp-server's (slice 29). Unit-tested against a recording dispatcher, then through the real router + local DB
+with a third and fourth agent admitted to the same private room, and smoked against the real API binary.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 78-95, 97, 98; no URGENT open.
+  24/67 acceptance (skipped as in every earlier entry); 68 waits on the owner (as journaled). idx 78 first
+  buildable; continued from slice 29 (HEAD 34bbbcd7), REMAINING item "30..", backend /v1/mcp first. Tree clean.
+
+DESIGN (from a code read this session):
+  - Definitions in handlers/mcp.go mcpTools right after solvr_room_join (the npm order); descriptions as the npm
+    tools' + mcpKeyNote; role declared enum [owner, member] but passed through unvalidated (the API refuses
+    others: 400 VALIDATION_ERROR). No room_token argument; a stray one is ignored (the key is presented).
+  - Executors in mcp_knowledge.go mcpExecutors; mcpRoomMembers/mcpRoomAddMember in mcp_rooms.go (decode
+    created_at as a string so the text shows what the API wrote, as the npm server). Output identical to npm:
+    "<n> participants of <slug>:" + "<agent_id> <role> (added by <added_by>, since <created_at>)" in the API's
+    order; "<agent> is in <slug> as <role> (added by <by>)" + "It joins with its own API key: solvr_room_join
+    with slug <slug>.". Errors through the existing mcpFailureText ("... API request failed: <status>: CODE:
+    message" + "request id: <id>"); a missing slug/agent_id fails before any request ("<name> is required").
+  - MCPOperationTools NOT grown (TestMCPContract_HasAToolForEveryOperation requires it to equal the fixture's
+    operations; TestMCPContract_ToolNamesMatchTheNpmServer compares it to npm OPERATION_TOOLS). New exported
+    handlers.MCPMemberTools {listRoomMembers, addRoomMember}, held equal to npm MEMBER_TOOLS by a new test; the
+    fixture slice moves both servers' entries into their operation maps together.
+
+WHAT CHANGED [REAL, git status --porcelain: M SPEC.md, M backend/internal/api/handlers/mcp.go, M .../mcp_canonical
+  _test.go, M .../mcp_knowledge.go, M .../mcp_rooms.go, M .../mcp_test.go, M backend/internal/api/router_test.go,
+  M frontend/components/api/api-endpoint-data-core.ts, M frontend/components/api/api-endpoint-data.test.ts,
+  ?? backend/internal/api/handlers/mcp_members_test.go, ?? backend/internal/api/router_mcp_members_test.go;
+  git diff --stat (tracked): 9 files, 125+/31-]:
+  PRODUCTION (backend/internal/api/handlers):
+  M mcp.go (408 -> 431): MCPMemberTools; the two tool definitions.
+  M mcp_knowledge.go: two mcpExecutors entries (the map re-aligned by gofmt: 28 lines of diff, 2 new entries).
+  M mcp_rooms.go (243 -> 295): header names the four API-key tools; mcpRoomMember, mcpRoomMembers,
+    mcpRoomAddMember.
+  DOCS: M SPEC.md 18.2: the two tools in the tools block (after solvr_room_join), the Credentials sentence names
+    them among the Authorization-header tools, one paragraph says they are MEMBER_TOOLS/MCPMemberTools and not
+    contract operations until the fixture records listRoomMembers/addRoomMember; 18.3 ai-agent.json tools list
+    grows by the two (TestSpecMCPSections_DocumentTheServedTools compares both to MCPToolNames()).
+  FRONTEND (display only): M api-endpoint-data-core.ts (794 -> 796): the POST /mcp description lists the two
+    tools, says room tools other than create, join, members and add_member present room_token, and that
+    solvr_room_add_member admits a third or later agent; the example tools/list response gains the two rows.
+  TESTS: ?? handlers/mcp_members_test.go (219, 9 tests): members -> one GET to the escaped path ("a b/c" ->
+    /v1/rooms/a%20b%2Fc/members) with the caller's key, no query, no body, exact text with rows in the API's
+    order (agent_planner, zeta_executor, alpha_reviewer: a sort breaks it); both tools present the key even with
+    a room_token argument (not sent); without a key no Authorization is sent and the API's 401 is reported with
+    request id; add_member without role -> body exactly {"agent_id":...}, Content-Type JSON, no Idempotency-Key,
+    exact text + join hint; role owner sent; role admin SENT and the API's 400 reported; INVALID_AGENT 400 /
+    FORBIDDEN 403 / LAST_OWNER 409 (add) and FORBIDDEN 403 (members) each exact "Error executing ..." + request
+    id, sent once; missing slug/agent_id (incl. "") refused with no request; schemas (members [slug]/[slug];
+    add_member [agent_id, role, slug]/[agent_id, slug], role enum [owner, member]) listed right after
+    solvr_room_join; MCPMemberTools equals npm MEMBER_TOOLS (regex-read of mcp-server/src/tools.ts), both served,
+    neither in MCPOperationTools.
+    ?? internal/api/router_mcp_members_test.go (99, 1 test, real router + DB via setupRoomTestServer):
+    TestMCP_OwnerAdmitsAThirdAndFourthAgentToTheSameRoomThroughTheRealRouter — 4 registered agents; planner
+    solvr_room_create is_private; executor solvr_room_join before admission -> 403 FORBIDDEN + request id; planner
+    admits executor and reviewer (exact text); re-adding reviewer leaves solvr_room_members byte-identical; tester
+    admitted (fourth); members -> "4 participants of <slug>:", planner owner first, the 3 others member added by
+    the planner in admission order; all 4 join -> 4 distinct room tokens; planner sends addressed to the 3, each
+    of the 3 replies to it; each of the 4 reads exactly the 4 messages; refusals: tester members -> 403 FORBIDDEN,
+    tester add self owner -> 403 FORBIDDEN, unknown agent -> 400 INVALID_AGENT, demoting the only owner -> 409
+    LAST_OWNER, no key -> 401, each with request id; participants unchanged after the refusals.
+
+EXISTING TESTS CHANGED (each pins the exact served list, which this slice grows by two; none deleted, skipped or
+  loosened; each still asserts the exact list/count):
+  (1) handlers/mcp_test.go TestMCPHandler_ToolsList asserted `len(tools) != 13` -> "expected 13 tools" and the 13
+      names present. Now 15, the names list with solvr_room_members and solvr_room_add_member after
+      solvr_room_join. PASSES (green_handlers.log).
+  (2) handlers/mcp_canonical_test.go TestMCPHandler_ToolsAreSearchGetPostAndReply asserted tools ==
+      MCPToolNames() == the exact 13 names in order. Now the exact 15 in order. PASSES.
+  (3) internal/api/router_test.go TestMCPToolsListEndpoint asserted `len(tools) != 13` ("Should have 13 tools:
+      one per contract operation"); found RED only by the full run (missed by my first grep). Now 15, comment
+      names MCPOperationTools and MCPMemberTools; the doc comment above it says 15. PASSES (alone_api.log).
+  (4) frontend api-endpoint-data.test.ts "documents exactly the tools POST /v1/mcp serves" asserted the
+      regex-read served list of mcp.go equals the exact 13 names and the page lists exactly them. Now the exact
+      15. PASSES.
+
+TESTS FIRST [logs /tmp/solvr_idx78_s30/]:
+  [TEST] RED tdd/red_handlers.log: the first run panicked (nil schema in DeclareTheirArguments; added two
+    require.Contains guards); rerun: 11 FAIL (the 9 new + the 2 grown handler lists), 0 panic; tdd/red_router.log:
+    TestMCP_OwnerAdmits... FAIL (router_mcp_members_test.go:40, unknown tool). MCPMemberTools was declared
+    empty first so the RED compiled. tdd/fe_red.log: 1 failed (the grown frontend list) | 50 passed.
+  [TEST] GREEN tdd/green_handlers.log `go test -count=1 -v -run MCP ./internal/api/handlers/`: ok, 62 PASS, 0 FAIL,
+    0 SKIP (incl. the 4 TestMCPContract_*). tdd/green_router.log: TestMCP_OwnerAdmits... and TestMCP_ThreeAgents...
+    PASS; TestSpecMCPSections_DocumentTheServedTools RED until SPEC.md was updated, then PASS (alone_api.log).
+    tdd/fe_green.log: 51 passed. `go vet` ./internal/api/handlers/ ./internal/api/ exit 0; gofmt -l clean on the
+    touched files (all were clean at HEAD).
+  MUTATIONS [TEST] (mut/mut.py, mut/m*.log, mut/summary.log; each alone over `go test -run MCP` of the handlers
+    package, restored, `shasum -c mut/orig.sha` OK for mcp.go, mcp_rooms.go, mcp_knowledge.go), each caught:
+    m1 members presents the room_token arg -> 3 FAIL; m2 add defaults role member -> 2; m3 list reads
+    /participants -> 1; m4 add PUT -> 1; m5 rows sorted by agent id -> 1; m6 tool validates role -> 1; m7 slug not
+    escaped -> 1; m8 add_member not dispatched -> 6; m9 MCPMemberTools renamed -> 1; m10 role enum dropped -> 1;
+    m11 join hint dropped -> 1; m12 listRoomMembers put in MCPOperationTools -> 3; m13 members presents no key -> 2.
+
+OTHER CHECKS [this session]:
+  [TEST] FULL BACKEND once (be_full.log, DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test,
+    `go test -count=1 ./...`) -> exit 1: FAIL in internal/api, api/handlers, db, jobs (every other package ok).
+    116 failing names (names.fail). Against the union of slices 20-24's names.fail + slice 22's base.union
+    (prior.union, 173 names): 5 new (names.new). TestMCPToolsListEndpoint was this slice's (see (3), fixed). The
+    other 4 — TestGetAllTimeTotals_CountsScaleAndExcludesWhatIsNotPublic ("a deleted account is not a registered
+    human", expected 1 actual 2), TestRoomOverview_InvalidationLostDuringListenerGapIsCaughtUpOnReconnect (timing,
+    :104), TestRoomSecrets_NoRoomSurfaceRevealsCredentials (401 "account no longer exists"),
+    TestSearch_KeywordPageBuildsOnlyItsPage (empty page; FK 23503 cleanup warnings beside it) -> run alone with
+    the fixed MCP test (alone_api.log, alone_db.log, -v): all PASS, 0 FAIL, 0 SKIP. The jobs package's 3 failures
+    are "FATAL: sorry, too many clients already (SQLSTATE 53300)" opening scratch databases (32 such lines in the
+    log; 2 of the 3 names were in slice 22's list). Shared-database interference / connection exhaustion between
+    packages run in parallel; none of these touches /v1/mcp.
+  [TEST] frontend `npm test` (fe_full.log): 202 files, 1761 passed, 0 failed. `npm run typecheck` exit 0; `npx
+    eslint` on the two touched files exit 0.
+  [REAL] ./scripts/check-file-size.sh: "Found 32 file(s) exceeding 800 lines" (same as slices 17-29), none of this
+    slice's (mcp.go 431, mcp_rooms.go 295, mcp_members_test.go 219, router_mcp_members_test.go 99,
+    api-endpoint-data-core.ts 796).
+
+REAL-API SMOKE [REAL, smoke/smoke.log]: `go build ./cmd/api -> smoke/api`, run under env -i with DATABASE_URL =
+  local docker solvr-postgres solvr_test, throwaway JWT_SECRET, PORT 18097 (port checked free first; no env file
+  read); smoke/smoke.py over plain HTTP: 3 agents registered; tools/list serves 15 tools with the two after
+  solvr_room_join; planner solvr_room_create is_private -> "(private)"; reviewer solvr_room_join before admission
+  -> "403 Forbidden: FORBIDDEN: not authorized to join this closed room; ask the owner to add you as a member";
+  planner solvr_room_add_member executor, reviewer -> "<id> is in <slug> as member (added by <planner>)" + join
+  hint; solvr_room_members -> "3 participants of <slug>:" planner owner (added by system) first; all 3 join -> 3
+  distinct tokens; planner send addressed to both, reviewer replies; executor reads "(to <exe>, <rev>): plan" and
+  "(reply to <id>): review done"; reviewer self-promote -> 403 FORBIDDEN "only the room owner or admin can manage
+  members" + request id; demoting the only owner -> 409 LAST_OWNER + request id. "SMOKE OK test-mcp-s30-1790961699".
+  API stopped (kill 80002; port 18097: 0 listeners). Rows deleted in one transaction (smoke/cleanup.log:
+  room_entries 3, room_agent_tokens 3, notifications 2, rooms 1, agents 3; rooms/agents/members of the run all 0).
+
+VERIFICATION [this session]: [TEST] and [REAL] above.
+  NOT RUN: sdk-go/sdk-ts/sdk-python/packages/cli/cli/mcp-server/skill suites (none of their files changed; the
+    handlers test that regex-reads mcp-server/src/tools.ts ran).
+
+FINDINGS, NOT FIXED:
+  - Slices 6-29 findings stand (members list owner-only; LAST_OWNER absent from the shared Conflict text; host
+    backstop commit message; the owner's participant row answers added_by "system"; cli/config_test.go not
+    gofmt-clean).
+  - [REAL] /v1/mcp's MCPVersion was not bumped for the two additive tools (npm mcp-server stayed 2.0.0 in slice 29
+    too); version numbers are the owner's call (UAT of slice 21).
+
+REMAINING FOR idx 78 (next slices, in order):
+  31.. members commands in the skill; unit-tested against a stub, then verified with a third agent added to the
+    same room. Then ONE slice adds the x-solvr-examples (listRoomMembers, addRoomMember + an error example),
+    regenerates the fixture, and adds each client's CALLERS / commands entry together (mcp-server: MEMBER_TOOLS ->
+    OPERATION_TOOLS + contract.test.ts calls, replies.test.ts back to OPERATION_TOOLS + solvr_claim; backend:
+    MCPMemberTools -> MCPOperationTools + mcpContractCalls entries, router_test.go/SPEC 18.2 wording "one tool per
+    contract operation" again true, TestMCPMemberTools_MatchTheNpmServer retired with a named replacement;
+    cli/ contract_test.go contractCommands; packages/cli contract.test.ts commands map; Python: see slice 26 NOTE)
+    so no suite is red between slices; then findings of slices 6-29.
+
+UAT (for when idx 78 closes, not now): as slice 21 (push + deploy so the served skill/installer are 4.0.0, decide
+  the version numbers, regenerate solvr-skill.zip); deploying the API so production /v1/mcp serves the two member
+  tools; publishing @solvr/cli and @solvr/mcp-server with the member tools and releasing the Go CLI are the owner's.
+
+git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged (idx 78
+  passes stays false).

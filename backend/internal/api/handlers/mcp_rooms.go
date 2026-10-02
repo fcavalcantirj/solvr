@@ -8,9 +8,10 @@ import (
 	"strings"
 )
 
-// The room tools: create, join, read, send, ticket and watch. create and join present the
-// caller's agent API key; read, send, ticket and watch present the room_token argument (the
-// token join returned), never the caller's key. /v1/mcp keeps no state between calls.
+// The room tools: create, join, members, add_member, read, send, ticket and watch. create,
+// join, members and add_member present the caller's agent API key; read, send, ticket and watch
+// present the room_token argument (the token join returned), never the caller's key. /v1/mcp
+// keeps no state between calls.
 
 // mcpRoomAuth is the Authorization of a room-token call.
 func mcpRoomAuth(slug string, args map[string]interface{}) (string, error) {
@@ -93,6 +94,57 @@ func mcpRoomJoin(c *mcpCall, args map[string]interface{}) (mcpResult, error) {
 	}
 	return mcpLines("Joined "+joined.RoomSlug+" as "+joined.AgentID+rotated, "Room token: "+joined.RoomToken,
 		"Pass it as room_token to solvr_room_read, solvr_room_send, solvr_room_ticket and solvr_room_watch on "+slug+"."), nil
+}
+
+// mcpRoomMember is one participant of a room. created_at is shown as the API wrote it.
+type mcpRoomMember struct {
+	AgentID   string `json:"agent_id"`
+	Role      string `json:"role"`
+	AddedBy   string `json:"added_by"`
+	CreatedAt string `json:"created_at"`
+}
+
+func mcpRoomMembers(c *mcpCall, args map[string]interface{}) (mcpResult, error) {
+	slug, err := mcpRequireString(args, "slug")
+	if err != nil {
+		return mcpResult{}, err
+	}
+	var answer struct {
+		Data []mcpRoomMember `json:"data"`
+	}
+	if _, err := c.do(apiRequest{method: http.MethodGet, path: apiPath("/v1/rooms/%s/members", slug), auth: c.callerAuth()}, &answer); err != nil {
+		return mcpResult{}, err
+	}
+	lines := []string{itoa(len(answer.Data)) + " participants of " + slug + ":"}
+	for _, m := range answer.Data {
+		lines = append(lines, m.AgentID+" "+m.Role+" (added by "+m.AddedBy+", since "+m.CreatedAt+")")
+	}
+	return mcpLines(lines...), nil
+}
+
+// mcpRoomAddMember sends the role only when the call gave one; the API decides which roles exist.
+func mcpRoomAddMember(c *mcpCall, args map[string]interface{}) (mcpResult, error) {
+	slug, err := mcpRequireString(args, "slug")
+	if err != nil {
+		return mcpResult{}, err
+	}
+	agentID, err := mcpRequireString(args, "agent_id")
+	if err != nil {
+		return mcpResult{}, err
+	}
+	body := map[string]interface{}{"agent_id": agentID}
+	if role := mcpOptionalString(args, "role"); role != "" {
+		body["role"] = role
+	}
+	var answer struct {
+		Data mcpRoomMember `json:"data"`
+	}
+	if _, err := c.do(apiRequest{method: http.MethodPost, path: apiPath("/v1/rooms/%s/members", slug), auth: c.callerAuth(), body: body}, &answer); err != nil {
+		return mcpResult{}, err
+	}
+	m := answer.Data
+	return mcpLines(m.AgentID+" is in "+slug+" as "+m.Role+" (added by "+m.AddedBy+")",
+		"It joins with its own API key: solvr_room_join with slug "+slug+"."), nil
 }
 
 type mcpRoomEntry struct {

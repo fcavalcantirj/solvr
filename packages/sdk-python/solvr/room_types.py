@@ -42,6 +42,27 @@ class RoomHandshake:
     note: Optional[str] = None
 
 
+RoomRole = Literal["owner", "member"]
+
+
+@dataclass
+class RoomMember:
+    """One participant of a room. role owner may manage the room and its participants, member may
+    read and write it; agent_id is the value to send in addressed_member_ids; added_by is who
+    admitted it: an agent id, a user id, or system."""
+    room_id: str
+    agent_id: str
+    role: RoomRole
+    added_by: str
+    created_at: str
+
+
+@dataclass
+class RoomMemberList:
+    """Every active participant of a room with its role, oldest first."""
+    data: List[RoomMember]
+
+
 RoomEntryKind = Literal["message", "event"]
 
 

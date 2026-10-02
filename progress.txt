@@ -11780,3 +11780,107 @@ UAT (for when idx 78 closes, not now): as slice 21 (push + deploy so the served 
 
 git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged (idx 78
   passes stays false).
+
+2026-10-02 13:05 — Task idx 78 (spec.json, category functional) — IN PROGRESS, passes STAYS false
+"Keep SDKs, CLI, MCP, skills, and webhooks consistent with the redesigned product"
+SLICE 26 (Python SDK half of REMAINING item "26.."): the Python SDK reads and grows a room's participants.
+solvr gains Solvr.list_room_members(slug) and Solvr.add_room_member(slug, agent_id, role=None) (operationIds
+listRoomMembers/addRoomMember in snake_case, as every other method) with RoomRole/RoomMember/RoomMemberList, unit-tested
+against a local server and driven against the real API with a third and fourth agent admitted to the same room.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 78-95, 97, 98; no open URGENT.
+  24/67 acceptance (skipped as in every earlier entry); 68 waits on the owner (as journaled). idx 78 first buildable;
+  continued from slice 25 (HEAD 77ee4c25), REMAINING item "26..", Python SDK first. Tree clean at start.
+
+WHAT CHANGED [REAL, git status --porcelain: M packages/sdk-python/README.md, M .../solvr/__init__.py,
+  M .../solvr/client.py, M .../solvr/room_types.py, M .../solvr/types.py, ?? .../tests/test_members.py;
+  git diff --stat (tracked): 5 files, 81+/0-]:
+  PRODUCTION (packages/sdk-python/solvr):
+  M room_types.py (164 -> 185): RoomRole = Literal["owner", "member"]; @dataclass RoomMember {room_id, agent_id,
+    role: RoomRole, added_by, created_at}, all str and all WITHOUT a default (the published RoomMember's required
+    list, so an answer missing one fails to decode); @dataclass RoomMemberList {data: List[RoomMember]} (the published
+    RoomMemberList; a wrapper like RoomEntryPage/ReplyPage, so callers read .data as in Go/TS).
+  M client.py (617 -> 639): list_room_members(slug) -> RoomMemberList, GET /v1/rooms/{slug}/members;
+    add_room_member(slug, agent_id, role=None) -> RoomMember (unwrapped data, as create_room -> Room), POST same with
+    _fields(agent_id, role) so no role -> body {"agent_id"} only. Both use the client's credential (the agent key)
+    through the existing _request()/_send() (4xx not retried). No Idempotency-Key (same as Go/TS SDKs).
+  M types.py (+3) and __init__.py (+10): re-export/export the three types; package docstring example admits a third
+    agent and lists the participants.
+  M README.md (+25): Rooms section "A third and later agents join the same room" (owner-only, private room refuses an
+    unadmitted handshake, agent_id is what addressed_member_ids names, INVALID_AGENT/LAST_OWNER, example) and the
+    two types in the Type Hints import list; says the methods are held by tests/test_members.py (no recorded example
+    yet).
+  TESTS: ?? tests/test_members.py (130, 10 tests): local socket server (tests/local_server.serve): list_room_members
+    sends GET to the escaped path with the Bearer key and no body, answers a RoomMemberList of RoomMember with every
+    field in order; add_room_member without role -> body exactly {agent_id}, answers a RoomMember; with role ->
+    {agent_id, role}; FORBIDDEN 403 (list), INVALID_AGENT 400, LAST_OWNER 409 raise SolvrError with
+    status/code/message/request_id and are sent once (default retries 3); the types are held to the published
+    schemas (backend openapi_member_paths.go): RoomMember fields == the 5, none defaulted, str except role ==
+    RoomRole; RoomRole == Literal["owner","member"]; RoomMemberList == [data: List[RoomMember]]; add_room_member's
+    signature is (self, slug, agent_id, role) with agent_id required, role default None, hints str /
+    Optional[RoomRole] / -> RoomMember; list_room_members -> RoomMemberList.
+  Backend, frontend, contract fixture, SPEC.md, other packages: untouched. No migration.
+
+TESTS FIRST [logs /tmp/solvr_idx78_s26/] (venv packages/sdk-python/.venv, Python 3.10.10):
+  [TEST] baseline.log: before any change `python -m pytest -q` 80 passed; baseline_mypy.log `mypy solvr` Success
+    (6 files; the pre-existing python_version 3.8 warning).
+  [TEST] RED tdd/red.log: test_members.py 10/10 FAIL — "'Solvr' object has no attribute 'list_room_members'",
+    "... 'add_room_member'", "module 'solvr' has no attribute 'RoomMember' / 'RoomMemberList' / 'RoomRole'".
+  [TEST] GREEN tdd/green.log (`pytest -q --cov=solvr`): 90 passed (80 + 10), 0 skipped; coverage 95% total
+    (client 92, room_types 100); tdd/mypy.log `mypy solvr` Success; tdd/mypy_tests.log test_members.py Success.
+  MUTATIONS [TEST] (mut/mut.py, mut/m*.log, mut/summary.log; each alone over the whole suite, restored,
+    `shasum -c mut/orig.sha` 2/2 OK), each caught:
+    m1 body {"agent_id", "role": role or ""} -> 1 FAIL (body is the agent id alone); m2 list reads /participants ->
+    1 FAIL (path); m3 RoomMember drops added_by -> 3 FAIL (list, add, type); m4 role defaults "member" -> 2 FAIL
+    (body, signature); m5 RoomRole adds "admin" -> 1 FAIL; m6 add_room_member PUT -> 1 FAIL (method);
+    m7 created_at defaults "" -> 1 FAIL (each required).
+
+REAL-API SMOKE [REAL, smoke/smoke.log]: the API binary (go build ./cmd/api -> /tmp/solvr_idx78_s26/smoke/api; env -i
+  with DATABASE_URL = local docker solvr-postgres solvr_test, throwaway JWT_SECRET, PORT 18095; no env file read)
+  driven by smoke/smoke.py importing this SDK from its venv. 4 agents registered (planner, executor, reviewer,
+  tester): planner create_room is_private True; executor handshake_room before admission -> 403 FORBIDDEN; planner
+  add_room_member x3 -> each RoomMember {room_id = the room, agent_id, role member, added_by planner}; repeating one
+  changes nothing (same created_at, role member); all 4 handshake, 4 distinct solvr_rt_ tokens; list_room_members ->
+  RoomMemberList of 4, planner first as owner (added_by "system"); the SDK's list == the API's raw answer
+  (asdict per member) and each raw member has exactly the 5 fields; directive addressed to the 3 members
+  (addressed_member_ids echoed); each of the 3 replies to it; every one of the 4 reads the 4 messages, authors in
+  order, sequence increasing; tester list_room_members -> 403 FORBIDDEN, tester add_room_member(self, owner) -> 403
+  FORBIDDEN, unknown agent -> 400 INVALID_AGENT, demoting the only owner -> 409 LAST_OWNER; every error carried
+  request_id. "SMOKE OK", one room. API stopped (pkill -f missed it because argv was "./api"; killed by pid 84396
+  after lsof showed its cwd was the smoke dir; port 18095 free: lsof 0). Smoke rows deleted from solvr_test
+  (smoke/cleanup.log: room_entries DELETE 5, room_agent_tokens DELETE 4, the explicit room_members DELETE was
+  refused by trigger room_members_keep_owner ("must keep at least one owner"), rooms DELETE 1 (cascaded the members),
+  agents DELETE 4; remaining rooms/agents/members/tokens/entries all 0).
+
+EXISTING TESTS CHANGED: none (test_client.py, test_contract.py, test_rooms.py, test_migration.py untouched).
+  contract/openapi-examples.json unchanged, so test_contract.py's CALLERS map does not move yet.
+
+VERIFICATION [this session]:
+  [TEST] above (baseline, RED, GREEN, mutations). [REAL] smoke above.
+  NOT RUN: backend `go test ./...` (no backend file changed; the smoke ran the real binary instead), frontend
+    (untouched), sdk-go/sdk-ts/cli/mcp-server/skill suites (none of their files changed).
+    ./scripts/check-file-size.sh scans backend/ and frontend/ only; the slice's files are all under 800 lines
+    (client.py 639, room_types.py 185, test_members.py 130).
+
+NOTE FOR THE FIXTURE SLICE [REAL, read tests/test_contract.py]: its surfaced() wraps any result without both data and
+  meta as {"data": asdict(result)}. add_room_member's RoomMember fits that; list_room_members' RoomMemberList (data
+  only) would surface as {"data": {"data": [...]}}, so that slice must let surfaced() pass a data-only wrapper as is
+  when it adds the listRoomMembers CALLERS entry.
+
+FINDINGS, NOT FIXED:
+  - Slices 6-25 findings stand (members list owner-only; LAST_OWNER absent from the shared Conflict text; host
+    backstop commit message; the owner's participant row answers added_by "system").
+
+REMAINING FOR idx 78 (next slices, in order):
+  27.. members methods/commands/tools in: packages/cli, cli/, mcp-server, backend /v1/mcp, skill; each unit-tested
+    against a stub, then verified with a third agent added to the same room. Then ONE slice adds the
+    x-solvr-examples (listRoomMembers, addRoomMember + an error example), regenerates the fixture, and adds each
+    client's CALLERS entry together (Python: see NOTE above) so no suite is red between slices; then findings of
+    slices 6-25.
+
+UAT (for when idx 78 closes, not now): as slice 21 (push + deploy so the served skill/installer are 4.0.0, decide
+  the version numbers, regenerate solvr-skill.zip).
+
+git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged (idx 78
+  passes stays false).

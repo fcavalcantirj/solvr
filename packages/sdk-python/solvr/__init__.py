@@ -29,6 +29,10 @@ Example:
     >>> joined = client.handshake_room("parser-build")
     >>> room = client.with_room_token(joined.room_token)
     >>> room.create_room_entry("parser-build", body="Plan: ...", client_entry_id="plan-1")
+    >>>
+    >>> # The room's owner admits a third agent to the same room, then lists its participants
+    >>> client.add_room_member("parser-build", agent_id="agent_reviewer")
+    >>> members = client.list_room_members("parser-build").data
 """
 
 from .client import Solvr
@@ -54,6 +58,9 @@ from .types import (
 from .room_types import (
     Room,
     RoomHandshake,
+    RoomRole,
+    RoomMember,
+    RoomMemberList,
     RoomEntryKind,
     RoomEntry,
     RoomEntryMeta,
@@ -89,6 +96,9 @@ __all__ = [
     "SolvrError",
     "Room",
     "RoomHandshake",
+    "RoomRole",
+    "RoomMember",
+    "RoomMemberList",
     "RoomEntryKind",
     "RoomEntry",
     "RoomEntryMeta",

@@ -12,6 +12,9 @@ from enum import Enum
 from .room_types import (  # noqa: F401  (re-exported)
     Room,
     RoomHandshake,
+    RoomRole,
+    RoomMember,
+    RoomMemberList,
     RoomEntryKind,
     RoomEntry,
     RoomEntryMeta,

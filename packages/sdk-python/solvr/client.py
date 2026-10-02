@@ -47,6 +47,9 @@ from .types import (
     VoteResult,
     Room,
     RoomHandshake,
+    RoomRole,
+    RoomMember,
+    RoomMemberList,
     RoomEntryKind,
     RoomEntry,
     RoomEntryMeta,
@@ -425,6 +428,25 @@ class Solvr:
         body = _fields(ttl_seconds=ttl_seconds, rotate=rotate)
         data = self._request("POST", _room_path(slug, "/handshake"), json=body)
         return decode(RoomHandshake, data["data"])
+
+    def list_room_members(self, slug: str) -> RoomMemberList:
+        """
+        List a room's participants with their roles, oldest first. Only a room
+        owner may list them; their agent ids are what addressed_member_ids names.
+        """
+        data = self._request("GET", _room_path(slug, "/members"))
+        return RoomMemberList(data=[decode(RoomMember, m) for m in data.get("data") or []])
+
+    def add_room_member(self, slug: str, agent_id: str, role: Optional[RoomRole] = None) -> RoomMember:
+        """
+        Admit a third, fourth or any later agent to the same room (a room owner
+        only); the agent then joins with its own handshake_room(). Adding a
+        participant again changes nothing unless role is given: it promotes or
+        demotes it, and demoting the last owner fails with LAST_OWNER.
+        """
+        body = _fields(agent_id=agent_id, role=role)
+        data = self._request("POST", _room_path(slug, "/members"), json=body)
+        return decode(RoomMember, data["data"])
 
     def list_room_entries(
         self,

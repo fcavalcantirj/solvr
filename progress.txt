@@ -11599,3 +11599,90 @@ UAT (for when idx 78 closes, not now): as slice 21 (push + deploy so the served 
 
 git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged (idx 78
   passes stays false).
+
+2026-10-02 12:33 — Task idx 78 (spec.json, category functional) — IN PROGRESS, passes STAYS false
+"Keep SDKs, CLI, MCP, skills, and webhooks consistent with the redesigned product"
+SLICE 24 (Go SDK half of REMAINING item "24.."): VERIFY AND JOURNAL the work already committed by the host backstop.
+The previous iteration wrote the Go SDK members methods and the external consumer's members phase, then ended without
+its own commit or journal entry; ralph.sh:466-471 ("Host commit backstop") committed the dirty tree as 6b6cfd9c with
+the last journal header cut to 72 chars as its message ("2026-10-02 11:58 — Task idx 78 ... — IN"). That commit was
+unverified. This iteration ran its tests, proved them with mutations, and records it. No code changed this iteration.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 78-95, 97, 98; no open URGENT.
+  24/67 acceptance (skipped as in every earlier entry); 68 waits on the owner (as journaled). idx 78 first buildable.
+  Tree clean at start; HEAD 6b6cfd9c.
+
+WHAT 6b6cfd9c HOLDS [REAL, git show --stat 6b6cfd9c: 7 files, 533+/8-]:
+  packages/sdk-go/members.go (63, PRODUCTION): RoomRoleOwner/RoomRoleMember; RoomMember {room_id, agent_id, role,
+    added_by, created_at}; AddRoomMemberRequest {agent_id, role omitempty}; RoomMemberResponse; RoomMembersResponse;
+    Client.ListRoomMembers (GET /v1/rooms/{slug}/members) and Client.AddRoomMember (POST same), both with the agent key.
+    No Idempotency-Key is sent (the middleware is optional: idempotency.go:58 passes requests without the header).
+  packages/sdk-go/client.go (+4): package doc example admits a third agent and lists members.
+  packages/sdk-go/members_test.go (181): stub-server tests — list (path escaping, Bearer key, no body, order, every
+    field), add (role omitted -> body {agent_id} only; role named), errors FORBIDDEN 403 / INVALID_AGENT 400 /
+    LAST_OWNER 409 surface as *APIError and are sent once, RoomMember/AddRoomMemberRequest JSON fields == the
+    published schema (backend openapi_member_paths.go).
+  contract/consumer/members.go (125) + main.go (+33/-8): new phase `consumer members`; SOLVR_API_KEYS takes 2+ keys,
+    new SOLVR_AGENT_IDS. The planner creates a CLOSED room; the executor's handshake is refused before admission;
+    the planner AddRoomMember's every later agent; all agents handshake (own room tokens); the planner
+    ListRoomMembers and addresses its directive to every non-owner; each later agent answers it; the last agent
+    reads the timeline and is refused ListRoomMembers (not owner).
+  backend/internal/api/external_consumer_members_test.go (133) + external_consumer_helpers_test.go (+2):
+    TestExternalConsumer_AThirdAndFourthAgentAreAdmittedToTheSameClosedRoomThroughTheSDK (DB, clean schema at head,
+    4 agents): one room only, stored private; refusal 403 FORBIDDEN; Admitted == {room, agent, member, added_by
+    planner} per later agent; Members == stored RoomMemberRepository.ListByRoom, planner owner first; 4 handshakes,
+    4 distinct room tokens stored; Addressed == the 3 later agents == stored addressed_member_ids; each answer
+    replies to the directive; last agent's timeline == directive + answers == stored messages; NotOwner 403.
+
+TESTS [logs /tmp/solvr_idx78_s24/]:
+  RED: not observable any more (code and tests landed together in 6b6cfd9c); replaced by MUTATIONS below.
+  GREEN [TEST] sdkgo.log: packages/sdk-go `go test ./... -count=1` -> ok 1.96 s.
+  GREEN [TEST] tdd/green-consumer.log (-v, -run TestExternalConsumer): AThirdAndFourth... PASS 1.58 s, CleanSchema
+    (every_migration, legacy_tables_dropped) PASS, UpgradedSchema PASS; 0 FAIL, 0 SKIP; ok 5.96 s.
+  MUTATIONS [TEST] (mut/, each alone, restored, `shasum -c mut/orig.sha` 2/2 OK):
+    m1 AddRoomMemberRequest.Role loses omitempty -> FAIL members_test.go:112 'request body
+      {"agent_id":"reviewer","role":""}, want map[agent_id:reviewer]'.
+    m2 ListRoomMembers reads /participants -> FAIL members_test.go:59 'sent GET .../participants, want GET .../members'.
+    m3 consumer addresses every listed participant (owner too) -> live FAIL external_consumer_members_test.go:112
+      (Addressed has agent_members_planner first).
+    m4 consumer skips admitting the last agent -> live FAIL :61 'consumer members failed at "handshakeRoom":
+      FORBIDDEN: not authorized to join this closed room; ask the owner to add you as a member'.
+
+EXISTING TESTS CHANGED: none this iteration (no file touched but progress.txt). 6b6cfd9c edited no existing test
+  either (external_consumer_helpers_test.go only gained the Members report field). contract/openapi-examples.json
+  unchanged, so no client CALLERS map moves yet.
+
+VERIFICATION [this session; DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test?sslmode=disable
+  (local docker solvr-postgres)]:
+  [TEST] above (GREEN, mutations).
+  [REAL] go vet: contract/consumer, packages/sdk-go, backend/internal/api all exit 0; gofmt -l clean on the slice's
+    files; ./scripts/check-file-size.sh: "Found 32 file(s) exceeding 800 lines" (same as slices 17-23), none of
+    this slice's (largest members_test.go 181).
+  [TEST] FULL BACKEND once (backend_full.log, `go test ./... -count=1`) -> exit 1: FAIL in internal/api,
+    api/handlers, db (every other package ok). 99 failing names (names.fail; 90 in slice 23), none ExternalConsumer,
+    OpenAPI, Contract, MCP or Members. Against slice 23's names.fail + base.union: 20 new (names.new), all
+    internal/db: 17 TestAgentRepository_* ("agent ID already exists" / 23505 idx_agents_display_name_unique) and 3
+    TestBadges_* (cleanup FK 23503 approaches_problem_id_fkey) -> run alone (alone.log, -v): all 20 PASS, 0 FAIL,
+    0 SKIP. Shared-database interference between packages run in parallel, not this slice (no db file touched).
+    SQLSTATE 53300 lines: 12 (4 in slice 23).
+  NOT RUN: frontend, sdk-ts, sdk-python, packages/cli, cli/, mcp-server, skill suites (none of their files changed).
+
+FINDINGS, NOT FIXED:
+  - [REAL harness] an iteration that ends without committing leaves its work to ralph.sh's host backstop, whose
+    message is the PREVIOUS entry's header; the commit log then names the wrong slice. Owner call whether the
+    backstop should say "unjournaled work" instead (harness is owner infrastructure; not touched).
+  - Slices 6-23 findings stand (members list owner-only; LAST_OWNER absent from the shared Conflict text).
+
+REMAINING FOR idx 78 (next slices, in order):
+  25.. members methods/commands/tools in: TS SDK (packages/sdk-ts/src/client.ts + room-types.ts), Python SDK
+    (packages/sdk-python/solvr/client.py + room_types.py), packages/cli, cli/, mcp-server, backend /v1/mcp, skill;
+    each unit-tested against a stub, then verified with a third agent added to the same room. Then ONE slice adds
+    the x-solvr-examples (listRoomMembers, addRoomMember + an error example), regenerates the fixture, and adds
+    each client's CALLERS entry together so no suite is red between slices; then findings of slices 6-24.
+
+UAT (for when idx 78 closes, not now): as slice 21 (push + deploy so the served skill/installer are 4.0.0, decide
+  the version numbers, regenerate solvr-skill.zip).
+
+git status at journal time [REAL]: clean before this entry (`git status --porcelain` and `git diff --stat` both
+  empty); this commit holds only M progress.txt. spec.json unchanged (idx 78 passes stays false).

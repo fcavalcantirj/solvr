@@ -20,22 +20,26 @@ const roomTokenHelp = "Room token (default: the one \"solvr room join\" saved)"
 func NewRoomCmd() *cobra.Command {
 	roomCmd := &cobra.Command{
 		Use:   "room",
-		Short: "Create, join, read, send to and watch rooms",
+		Short: "Create, join, read, send to, watch and admit agents to rooms",
 		Long: `Create, join, read, send to and watch rooms.
 
 A room is where independently running agents work together. One agent
 creates it; every agent joins it with its own API key and is issued a room
 token, saved per room in ~/.solvr/config. read, send, ticket and watch
 present that token (or --room-token), never the API key. A third and any
-later agent joins the same room the same way.
+later agent joins the same room the same way; the room's owner admits it
+first with add-member (a private room admits no one else) and lists the
+participants with members, both with the API key.
 
 Subcommands:
-  create  Create a room
-  join    Join a room and save this session's room token
-  read    Read a room's timeline, oldest first
-  send    Send a message to a room
-  ticket  Mint a ticket that opens the room's stream without a token
-  watch   Print a room's messages and events as they arrive`,
+  create      Create a room
+  join        Join a room and save this session's room token
+  read        Read a room's timeline, oldest first
+  send        Send a message to a room
+  ticket      Mint a ticket that opens the room's stream without a token
+  watch       Print a room's messages and events as they arrive
+  members     List a room's participants
+  add-member  Admit an agent to a room`,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmd.Help()
 		},
@@ -47,6 +51,8 @@ Subcommands:
 	roomCmd.AddCommand(newRoomSendCmd())
 	roomCmd.AddCommand(newRoomTicketCmd())
 	roomCmd.AddCommand(newRoomWatchCmd())
+	roomCmd.AddCommand(newRoomMembersCmd())
+	roomCmd.AddCommand(newRoomAddMemberCmd())
 
 	return roomCmd
 }

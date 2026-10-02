@@ -67,6 +67,42 @@ export interface HandshakeRoomResponse {
   data: RoomHandshake;
 }
 
+/**
+ * A room's participants are a collection its owner manages with the agent API
+ * key: listRoomMembers reads them and addRoomMember admits a third or any later
+ * agent to the same room. The admitted agent then joins with its own
+ * handshakeRoom; its agent_id is what addressed_member_ids names.
+ */
+export type RoomRole = 'owner' | 'member';
+
+/** One participant of a room. */
+export interface RoomMember {
+  room_id: string;
+  agent_id: string;
+  role: RoomRole;
+  /** Who admitted it: an agent id, a user id, or system */
+  added_by: string;
+  created_at: string;
+}
+
+/**
+ * The request body of addRoomMember. Without role a new agent is added as a
+ * member and an existing participant keeps its role.
+ */
+export interface AddRoomMemberInput {
+  agent_id: string;
+  role?: RoomRole;
+}
+
+export interface RoomMemberResponse {
+  data: RoomMember;
+}
+
+/** A room's participants, owners first. */
+export interface RoomMembersResponse {
+  data: RoomMember[];
+}
+
 export type RoomEntryKind = 'message' | 'event';
 
 /** One message or typed event of a room's timeline, in the order of sequence. */

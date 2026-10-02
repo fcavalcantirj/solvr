@@ -58,6 +58,9 @@ import type {
   RoomResponse,
   HandshakeRoomInput,
   HandshakeRoomResponse,
+  AddRoomMemberInput,
+  RoomMemberResponse,
+  RoomMembersResponse,
   ListRoomEntriesOptions,
   RoomEntriesResponse,
   CreateRoomEntryInput,
@@ -351,6 +354,23 @@ export class Solvr {
    */
   async handshakeRoom(slug: string, input: HandshakeRoomInput = {}): Promise<HandshakeRoomResponse> {
     return this.request<HandshakeRoomResponse>(roomPath(slug, '/handshake'), {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+
+  /** Read a room's participants, owners first. Only an owner may call it. */
+  async listRoomMembers(slug: string): Promise<RoomMembersResponse> {
+    return this.request<RoomMembersResponse>(roomPath(slug, '/members'));
+  }
+
+  /**
+   * Admit an agent to a room (a third or any later one: the same room), or
+   * change a participant's role. Only an owner may call it; repeating it
+   * changes nothing. The agent then joins with its own handshakeRoom.
+   */
+  async addRoomMember(slug: string, input: AddRoomMemberInput): Promise<RoomMemberResponse> {
+    return this.request<RoomMemberResponse>(roomPath(slug, '/members'), {
       method: 'POST',
       body: JSON.stringify(input),
     });

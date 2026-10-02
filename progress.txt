@@ -11686,3 +11686,97 @@ UAT (for when idx 78 closes, not now): as slice 21 (push + deploy so the served 
 
 git status at journal time [REAL]: clean before this entry (`git status --porcelain` and `git diff --stat` both
   empty); this commit holds only M progress.txt. spec.json unchanged (idx 78 passes stays false).
+
+2026-10-02 12:48 — Task idx 78 (spec.json, category functional) — IN PROGRESS, passes STAYS false
+"Keep SDKs, CLI, MCP, skills, and webhooks consistent with the redesigned product"
+SLICE 25 (TS SDK half of REMAINING item "25.."): the TypeScript SDK reads and grows a room's participants.
+@solvr/sdk gains listRoomMembers(slug) and addRoomMember(slug, {agent_id, role?}) (operationIds of slice 23's
+published operations) with RoomRole/RoomMember/AddRoomMemberInput/RoomMemberResponse/RoomMembersResponse, unit-tested
+against a local server and driven against the real API with a third and fourth agent admitted to the same room.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 78-95, 97, 98; no open URGENT.
+  24/67 acceptance (skipped as in every earlier entry); 68 waits on the owner (as journaled). idx 78 first buildable;
+  continued from slice 24 (HEAD f351d122), REMAINING item "25..", TS SDK first. Tree clean at start.
+
+WHAT CHANGED [REAL, git status --porcelain: M packages/sdk-ts/README.md, M packages/sdk-ts/src/client.ts,
+  M packages/sdk-ts/src/index.ts, M packages/sdk-ts/src/room-types.ts, ?? packages/sdk-ts/src/members.test.ts;
+  git diff --stat (tracked): 4 files, 79+/2-]:
+  PRODUCTION (packages/sdk-ts/src):
+  M room-types.ts (214 -> 250): RoomRole 'owner' | 'member'; RoomMember {room_id, agent_id, role, added_by,
+    created_at}, all required (the published RoomMember's required list); AddRoomMemberInput {agent_id, role?};
+    RoomMemberResponse {data}; RoomMembersResponse {data: RoomMember[]}. Re-exported through types.ts's existing
+    `export * from './room-types.js'`.
+  M client.ts (500 -> 520): listRoomMembers(slug) GET /v1/rooms/{slug}/members; addRoomMember(slug, input) POST
+    same with JSON.stringify(input) (an undefined role is dropped, so no role -> body {agent_id}). Both use the
+    client's credential (the API key) through the existing request()/send() (4xx not retried). No Idempotency-Key
+    (same as the Go SDK: the middleware passes requests without it).
+  M index.ts (+5): exports the five types.
+  M README.md: the API reference lists the two methods and says they are held by src/members.test.ts (no recorded
+    example yet); Rooms section: admitting a third/later agent to the same room, owner-only, private room refuses an
+    unadmitted handshake, agent_id is what addressed_member_ids names, with an example.
+  TESTS: ?? members.test.ts (152): local node:http server (real fetch): listRoomMembers sends GET to the escaped
+    path with the Bearer key and no body, surfaces every field in order; addRoomMember without role -> body exactly
+    {agent_id}; with role -> {agent_id, role}; FORBIDDEN 403 (list), INVALID_AGENT 400, LAST_OWNER 409 surface as
+    SolvrError with status/code/message/requestId and are sent once; the types are held to the published schemas
+    (backend openapi_member_paths.go) by parsing room-types.ts with the TypeScript compiler API: RoomMember's
+    properties == the 5 fields, none optional; AddRoomMemberInput == agent_id + role?; RoomRole == 'owner'|'member';
+    both envelopes == {data}.
+  Backend, frontend, contract fixture, SPEC.md, other packages: untouched. No migration.
+
+TESTS FIRST [logs /tmp/solvr_idx78_s25/]:
+  [TEST] baseline.log: before any change 73/73 (4 files); baseline_tsc.log tsc --noEmit exit 0.
+  [TEST] RED tdd/red.log: members.test.ts 10/10 FAIL — "listRoomMembers is not a function", "addRoomMember is not a
+    function", "room-types.ts declares no RoomMember/AddRoomMemberInput/RoomRole/RoomMemberResponse".
+  [TEST] GREEN tdd/green.log: 5 files, 83 passed (73 + 10), none skipped; tdd/tsc.log exit 0; tdd/tsc_tests.log:
+    members.test.ts itself typechecks under the package's strict config (exit 0).
+  MUTATIONS [TEST] (mut/mut.py, mut/m*.log; each alone, restored, `shasum -c mut/orig.sha` 2/2 OK), each 1 FAIL:
+    m1 body {role:'', ...input} -> 'expected { role: '', agent_id: 'reviewer' } to deeply equal { agent_id: ... }';
+    m2 list reads /participants -> path assertion; m3 RoomMember drops added_by -> fields; m4 role required in
+    AddRoomMemberInput -> ['agent_id','role'] vs ['agent_id','role?']; m5 RoomRole adds 'admin' -> union;
+    m6 addRoomMember PUT -> 'expected 'PUT' to be 'POST''.
+  [TEST] final.log (vitest run --coverage, restored tree): 5 files, 83 passed; client.ts 95.7% lines, all files
+    95.88%; final_tsc.log exit 0.
+
+REAL-API SMOKE [REAL, smoke/smoke.log]: the API binary (go build ./cmd/api -> /tmp/solvr_idx78_s25/smoke/api; env -i
+  with DATABASE_URL = local docker solvr-postgres solvr_test, throwaway JWT_SECRET, PORT 18095; no env file read)
+  driven by smoke/smoke.mjs importing the SDK bundled by tsup into /tmp (smoke/sdk/index.js). 4 agents registered
+  (planner, executor, reviewer, tester): planner createRoom is_private true; executor handshakeRoom before admission
+  -> 403 FORBIDDEN; planner addRoomMember x3 -> each {room_id = the room, agent_id, role member, added_by planner};
+  repeating one changes nothing (same created_at, role member); all 4 handshake, 4 distinct solvr_rt_ tokens;
+  listRoomMembers -> 4, planner first as owner (added_by "system"), each answer has exactly the 5 fields; directive
+  addressed to the 3 members (addressed_member_ids echoed); each of the 3 replies to it; every one of the 4 reads
+  the 4 messages, authors in order, sequence increasing; tester listRoomMembers -> 403 FORBIDDEN, tester
+  addRoomMember(self, owner) -> 403 FORBIDDEN, unknown agent -> 400 INVALID_AGENT, demoting the only owner -> 409
+  LAST_OWNER; every error carried request_id. "SMOKE OK", one room. API stopped (kill; port 18095 free: lsof 0);
+  smoke room + 4 agents deleted from solvr_test (smoke/cleanup.log: DELETE 1, DELETE 4, remaining rooms/agents/
+  members/tokens all 0).
+
+EXISTING TESTS CHANGED: none (client.test.ts, contract.test.ts, rooms.test.ts, migration.test.ts untouched).
+  contract/openapi-examples.json unchanged, so contract.test.ts's callers map does not move yet.
+
+VERIFICATION [this session]:
+  [TEST] above (RED, GREEN, mutations, final). [REAL] smoke above.
+  NOT RUN: backend `go test ./...` (no backend file changed; the smoke ran the real binary instead), frontend
+    (untouched), sdk-go/sdk-python/cli/mcp-server/skill suites (none of their files changed).
+    ./scripts/check-file-size.sh scans backend/ and frontend/ only; the slice's files are all under 800 lines
+    (client.ts 520, room-types.ts 250, members.test.ts 152, index.ts 109).
+
+FINDINGS, NOT FIXED:
+  - [REAL smoke] the owner's participant row answers added_by "system" (the room creator is not recorded as its own
+    admitter); the published description allows "system", so not a contract break.
+  - Slices 6-24 findings stand (members list owner-only; LAST_OWNER absent from the shared Conflict text; host
+    backstop commit message).
+
+REMAINING FOR idx 78 (next slices, in order):
+  26.. members methods/commands/tools in: Python SDK (packages/sdk-python/solvr/client.py + room_types.py), then
+    packages/cli, cli/, mcp-server, backend /v1/mcp, skill; each unit-tested against a stub, then verified with a
+    third agent added to the same room. Then ONE slice adds the x-solvr-examples (listRoomMembers, addRoomMember + an
+    error example), regenerates the fixture, and adds each client's CALLERS entry together so no suite is red
+    between slices; then findings of slices 6-24.
+
+UAT (for when idx 78 closes, not now): as slice 21 (push + deploy so the served skill/installer are 4.0.0, decide
+  the version numbers, regenerate solvr-skill.zip).
+
+git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged (idx 78
+  passes stays false).

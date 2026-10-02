@@ -12573,3 +12573,10 @@ UAT (for when idx 78 closes, not now): as slice 21 (push + deploy so the served 
 
 git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged (idx 78
   passes stays false).
+
+2026-10-02 14:56 — OWNER NOTE (orchestrator lanes) — not a task entry
+idx 97 and idx 98 are OWNED by executor lane B (branch lane/b-97-98, worktree /Users/fcavalcanti/dev/solvr-lanes/lane-b).
+idx 93 and idx 95 are OWNED by the deploy track (lane D, branch lane/d-deploy-track, worktree /Users/fcavalcanti/dev/solvr-lanes/lane-d).
+The loop must SKIP idx 93, 95, 97 and 98: do not edit their code or tests, do not flip their passes. They return through
+orchestrator validation and an owner merge; the owner flips passes. All other tasks keep their order. A later OWNER NOTE releases them.
+Plan: docs/handovers/2026-10-02-solvr-orchestrator/PLAN-r1.md.

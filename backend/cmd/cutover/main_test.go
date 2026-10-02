@@ -1,9 +1,43 @@
 package main
 
 import (
+	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
+
+// highestMigration is the highest NNNNNN prefix among backend/migrations/*.up.sql: the version
+// `migrate up` leaves a database at, and so the version the cutover must expect by default.
+func highestMigration(t *testing.T) int64 {
+	t.Helper()
+	files, err := filepath.Glob(filepath.Join("..", "..", "migrations", "*.up.sql"))
+	if err != nil || len(files) == 0 {
+		t.Fatalf("no up migrations found in backend/migrations (%v)", err)
+	}
+	var highest int64
+	for _, f := range files {
+		prefix, _, _ := strings.Cut(filepath.Base(f), "_")
+		n, err := strconv.ParseInt(prefix, 10, 64)
+		if err != nil {
+			t.Fatalf("migration %s: prefix %q is not a version number", f, prefix)
+		}
+		if n > highest {
+			highest = n
+		}
+	}
+	return highest
+}
+
+func TestParseOptions_ExpectsTheHighestMigrationByDefault(t *testing.T) {
+	opts, err := parseOptions([]string{"--database-url", "postgres://x/db", "--dry-run"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := highestMigration(t); opts.expectVersion != want {
+		t.Fatalf("--expect-version defaults to %d, the highest migration is %d: bump the default with every migration", opts.expectVersion, want)
+	}
+}
 
 func TestParseOptions_GuardsTheProductionRun(t *testing.T) {
 	cases := []struct {
@@ -28,8 +62,8 @@ func TestParseOptions_GuardsTheProductionRun(t *testing.T) {
 				if opts.databaseURL != "postgres://x/db" {
 					t.Fatalf("database url %q, want the flag's value", opts.databaseURL)
 				}
-				if opts.expectVersion != 132 {
-					t.Fatalf("expect version %d, want the default 132", opts.expectVersion)
+				if want := highestMigration(t); opts.expectVersion != want {
+					t.Fatalf("expect version %d, want the default, the highest migration %d", opts.expectVersion, want)
 				}
 				return
 			}

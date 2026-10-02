@@ -6,6 +6,7 @@
 import { ApiError } from "./errors.js";
 import { RoomStream } from "./stream.js";
 import type {
+  AddRoomMemberInput,
   CreateRoomEntryInput,
   CreateRoomInput,
   HandshakeRoomInput,
@@ -14,6 +15,8 @@ import type {
   RoomEntriesResponse,
   RoomEntryResponse,
   RoomHandshake,
+  RoomMemberResponse,
+  RoomMembersResponse,
   RoomStreamTicket,
   StreamRoomOptions,
 } from "./room-types.js";
@@ -302,6 +305,19 @@ export class ApiClient {
   /** Join a room (API key): the answer carries the room token of this session. */
   async handshakeRoom(slug: string, input: HandshakeRoomInput = {}): Promise<ApiResponse<RoomHandshake>> {
     return this.request<ApiResponse<RoomHandshake>>("POST", `/v1/rooms/${seg(slug)}/handshake`, input);
+  }
+
+  /** Read a room's participants, owners first (API key; only an owner may). */
+  async listRoomMembers(slug: string): Promise<RoomMembersResponse> {
+    return this.request<RoomMembersResponse>("GET", `/v1/rooms/${seg(slug)}/members`);
+  }
+
+  /**
+   * Admit an agent to a room, a third or any later one: the same room (API key; only an owner
+   * may). Repeating it changes nothing; role promotes or demotes. The agent then joins itself.
+   */
+  async addRoomMember(slug: string, input: AddRoomMemberInput): Promise<RoomMemberResponse> {
+    return this.request<RoomMemberResponse>("POST", `/v1/rooms/${seg(slug)}/members`, input);
   }
 
   /** Read a room's timeline, oldest first (room token). */

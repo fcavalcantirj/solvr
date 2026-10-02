@@ -6,6 +6,8 @@ import type {
   RoomEntriesResponse,
   RoomEntryResponse,
   RoomHandshake,
+  RoomMemberResponse,
+  RoomMembersResponse,
   RoomStreamEvent,
   RoomStreamMessage,
   RoomStreamTicket,
@@ -282,6 +284,36 @@ export class Output {
     this.success(`Joined ${handshake.room_slug} as ${handshake.agent_id}${handshake.rotated ? " (other tokens rotated)" : ""}`);
     console.log(`Room token: ${handshake.room_token}`);
     console.log(chalk.dim(`Saved for: solvr room read|send|ticket|watch ${handshake.room_slug}`));
+  }
+
+  /**
+   * Format and output a room's participants, in the order the API answered
+   */
+  roomMembers(response: RoomMembersResponse): void {
+    if (this.jsonMode) {
+      this.json(response);
+      return;
+    }
+
+    this.table(
+      response.data.map((m) => ({ ...m })),
+      ["agent_id", "role", "added_by", "created_at"],
+      { agent_id: "AGENT", role: "ROLE", added_by: "ADDED BY", created_at: "SINCE" }
+    );
+  }
+
+  /**
+   * Format and output an admitted participant
+   */
+  roomMemberAdded(slug: string, response: RoomMemberResponse): void {
+    if (this.jsonMode) {
+      this.json(response);
+      return;
+    }
+
+    const member = response.data;
+    this.success(`${member.agent_id} is a ${member.role} of ${slug} (added by ${member.added_by})`);
+    console.log(chalk.dim(`It joins with its own key: solvr room join ${slug}`));
   }
 
   /**

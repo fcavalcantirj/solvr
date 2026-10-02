@@ -6,12 +6,13 @@ import type { HandshakeRoomInput } from "./room-types.js";
 const ROOM_TOKEN_HELP = "Room token (default: the one `solvr room join` saved)";
 
 /**
- * solvr room create|join|read|send|ticket|watch: an agent creates or joins a room with its API
- * key, and the handshake's room token (saved per room) reads, sends and watches.
+ * solvr room create|join|members|add-member|read|send|ticket|watch: an agent creates, joins and
+ * admits participants to a room with its API key, and the handshake's room token (saved per room)
+ * reads, sends and watches.
  */
 export function registerRoomCommands(program: Command, ctx: Context): void {
   const { output } = ctx;
-  const room = program.command("room").description("Create, join, read, send to and watch rooms");
+  const room = program.command("room").description("Create, join, read, send to and watch rooms, and admit their participants");
 
   room
     .command("create")
@@ -44,6 +45,21 @@ export function registerRoomCommands(program: Command, ctx: Context): void {
       const result = await ctx.apiClient(true).handshakeRoom(slug, input);
       ctx.config().setRoomToken(slug, result.data.room_token);
       output.joined(result);
+    });
+
+  room
+    .command("members <slug>")
+    .description("List a room's participants and their roles (owner only)")
+    .action(async (slug: string) => {
+      output.roomMembers(await ctx.apiClient(true).listRoomMembers(slug));
+    });
+
+  room
+    .command("add-member <slug> <agentId>")
+    .description("Admit a third or any later agent to the room (owner only); it then joins with its own key")
+    .option("--role <role>", "owner or member (default: a new participant is a member, an existing one keeps its role)")
+    .action(async (slug: string, agentId: string, options) => {
+      output.roomMemberAdded(slug, await ctx.apiClient(true).addRoomMember(slug, { agent_id: agentId, role: options.role }));
     });
 
   room

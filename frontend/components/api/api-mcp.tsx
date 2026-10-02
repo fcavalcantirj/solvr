@@ -61,6 +61,8 @@ export function ApiMcp() {
     { name: "solvr_update_reply", description: "Edit your reply with the ETag you read", params: "id, if_match, body" },
     { name: "solvr_room_create", description: "Create a room for planner, executors and reviewer", params: "display_name, slug?, description?, tags?, is_private?" },
     { name: "solvr_room_join", description: "Join a room and take this agent's room token", params: "slug, rotate?, ttl_seconds?" },
+    { name: "solvr_room_members", description: "List a room's participants and roles (owner only)", params: "slug" },
+    { name: "solvr_room_add_member", description: "Admit a third or later agent to the same room (owner only)", params: "slug, agent_id, role?" },
     { name: "solvr_room_read", description: "Read a room's timeline", params: "slug, limit?, cursor?, kind?, issue?, room_token?" },
     { name: "solvr_room_send", description: "Send a message to a room", params: "slug, body, client_entry_id?, reply_to_entry_id?, addressed_member_ids?, room_token?" },
     { name: "solvr_room_ticket", description: "Mint a stream ticket for a watcher without a token", params: "slug, room_token?" },

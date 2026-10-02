@@ -1,17 +1,21 @@
 /**
- * The room tools: create, join, read, send, ticket and watch. A join keeps the room token the
- * API issued; the other room tools present that token (never the API key), or the room_token
- * argument when one is given.
+ * The room tools: create, join, members, add_member, read, send, ticket and watch. A join keeps
+ * the room token the API issued; read, send, ticket and watch present that token (never the API
+ * key), or the room_token argument when one is given. Create, join, members and add_member
+ * present the API key.
  */
 
 import { SolvrApiClient } from './api.js';
 import type { RoomStream } from './stream.js';
 import type {
+  AddRoomMemberInput,
   CreateRoomEntryInput,
   CreateRoomInput,
   HandshakeRoomInput,
   ListRoomEntriesOptions,
   RoomEntry,
+  RoomMember,
+  RoomRole,
   RoomStreamEvent,
   RoomStreamMessage,
 } from './room-types.js';
@@ -64,6 +68,30 @@ export const ROOM_TOOL_DEFINITIONS: ToolDefinition[] = [
         ttl_seconds: { type: 'number', description: 'Optional: the token lifetime in seconds (default: no expiry)' },
       },
       required: ['slug'],
+    },
+  },
+  {
+    name: 'solvr_room_members',
+    description: "List a room's participants and their roles, owners first (owner only; presents the API key). Their agent ids are what addressed_member_ids names.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        slug: SLUG,
+      },
+      required: ['slug'],
+    },
+  },
+  {
+    name: 'solvr_room_add_member',
+    description: 'Admit a third or any later agent to the same room (owner only; presents the API key). The admitted agent then joins it with solvr_room_join and its own API key; no new room is needed.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        slug: SLUG,
+        agent_id: { type: 'string', description: 'The agent to admit' },
+        role: { type: 'string', description: 'Optional: owner or member (default: a new participant is a member, an existing one keeps its role)', enum: ['owner', 'member'] },
+      },
+      required: ['slug', 'agent_id'],
     },
   },
   {
@@ -149,6 +177,10 @@ export class RoomTools {
         return this.create(args);
       case 'solvr_room_join':
         return this.join(args);
+      case 'solvr_room_members':
+        return this.members(args);
+      case 'solvr_room_add_member':
+        return this.addMember(args);
       case 'solvr_room_read':
         return this.read(args);
       case 'solvr_room_send':
@@ -200,6 +232,25 @@ export class RoomTools {
       `Joined ${handshake.room_slug} as ${handshake.agent_id}${handshake.rotated ? ' (your other tokens for this room were rotated)' : ''}`,
       `Room token: ${handshake.room_token}`,
       `Kept for solvr_room_read, solvr_room_send, solvr_room_ticket and solvr_room_watch on ${slug}; after a restart of this server pass it as room_token.`,
+    ]);
+  }
+
+  private async members(args: Record<string, unknown>): Promise<ToolResult> {
+    const slug = requireString(args, 'slug');
+    const participants = (await this.client.listRoomMembers(slug)).data;
+    return textResult([`${participants.length} participants of ${slug}:`, ...participants.map(memberLine)]);
+  }
+
+  private async addMember(args: Record<string, unknown>): Promise<ToolResult> {
+    const slug = requireString(args, 'slug');
+    const input: AddRoomMemberInput = { agent_id: requireString(args, 'agent_id') };
+    const role = optionalString(args, 'role');
+    if (role !== undefined) input.role = role as RoomRole;
+
+    const member = (await this.client.addRoomMember(slug, input)).data;
+    return textResult([
+      `${member.agent_id} is in ${slug} as ${member.role} (added by ${member.added_by})`,
+      `It joins with its own API key: solvr_room_join with slug ${slug}.`,
     ]);
   }
 
@@ -304,6 +355,11 @@ export class RoomTools {
     }
     return textResult(lines, failure !== undefined);
   }
+}
+
+/** One participant: its agent id, role, who admitted it and since when. */
+function memberLine(member: RoomMember): string {
+  return `${member.agent_id} ${member.role} (added by ${member.added_by}, since ${member.created_at})`;
 }
 
 /** One timeline entry: its sequence and id, who wrote it, and its body or event. */

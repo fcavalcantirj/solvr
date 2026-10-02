@@ -35,7 +35,7 @@ describe('SolvrTools', () => {
     it('returns tool manifest with all tools', () => {
       const manifest = tools.getManifest();
 
-      expect(manifest.tools).toHaveLength(14);
+      expect(manifest.tools).toHaveLength(16);
       expect(manifest.tools.map(t => t.name)).toEqual([
         'solvr_search',
         'solvr_get',
@@ -47,6 +47,8 @@ describe('SolvrTools', () => {
         'solvr_update_reply',
         'solvr_room_create',
         'solvr_room_join',
+        'solvr_room_members',
+        'solvr_room_add_member',
         'solvr_room_read',
         'solvr_room_send',
         'solvr_room_ticket',

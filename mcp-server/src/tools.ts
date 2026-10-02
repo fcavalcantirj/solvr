@@ -30,6 +30,15 @@ export const OPERATION_TOOLS: Record<string, string> = {
   streamRoom: 'solvr_room_watch',
 };
 
+/**
+ * The tool of each membership operation of the API's OpenAPI document (a room's participants:
+ * list, admit). Their recorded examples are not in contract/openapi-examples.json yet.
+ */
+export const MEMBER_TOOLS: Record<string, string> = {
+  listRoomMembers: 'solvr_room_members',
+  addRoomMember: 'solvr_room_add_member',
+};
+
 /** Replies shown by solvr_get, and how much of each reply body. */
 const REPLIES_SHOWN = 20;
 const REPLY_PREVIEW_CHARS = 1000;

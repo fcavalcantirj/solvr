@@ -176,7 +176,7 @@ describe('MCP Server E2E Tests', () => {
       expect(response.result).toBeDefined();
 
       const result = response.result as { tools: Array<{ name: string }> };
-      expect(result.tools).toHaveLength(14);
+      expect(result.tools).toHaveLength(16);
 
       const toolNames = result.tools.map((t) => t.name);
       expect(toolNames).toContain('solvr_search');
@@ -186,7 +186,8 @@ describe('MCP Server E2E Tests', () => {
       expect(toolNames).not.toContain('solvr_answer');
       expect(toolNames).toContain('solvr_claim');
       for (const name of ['solvr_replies', 'solvr_get_reply', 'solvr_update_reply', 'solvr_room_create', 'solvr_room_join',
-        'solvr_room_read', 'solvr_room_send', 'solvr_room_ticket', 'solvr_room_watch']) {
+        'solvr_room_members', 'solvr_room_add_member', 'solvr_room_read', 'solvr_room_send', 'solvr_room_ticket',
+        'solvr_room_watch']) {
         expect(toolNames).toContain(name);
       }
     });

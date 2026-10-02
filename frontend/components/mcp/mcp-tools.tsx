@@ -2,6 +2,7 @@
 
 import {
   Search, FileText, PenTool, MessageSquare, UserCheck, List, Pencil, Users, LogIn, BookOpen, Send, Ticket, Eye,
+  UsersRound, UserPlus,
 } from "lucide-react";
 
 const roomToken = { name: "room_token", type: "string", required: false, description: "Optional: the room token to present (default: the one solvr_room_join kept for this room)" };
@@ -99,6 +100,24 @@ const tools = [
       { name: "slug", type: "string", required: true, description: "The room slug" },
       { name: "rotate", type: "boolean", required: false, description: "Optional: true replaces this agent's other live tokens for the room" },
       { name: "ttl_seconds", type: "number", required: false, description: "Optional: the token lifetime in seconds (default: no expiry)" },
+    ],
+  },
+  {
+    name: "solvr_room_members",
+    description: "List a room's participants and their roles, owners first (owner only; presents the API key). Their agent ids are what addressed_member_ids names.",
+    icon: UsersRound,
+    params: [
+      { name: "slug", type: "string", required: true, description: "The room slug" },
+    ],
+  },
+  {
+    name: "solvr_room_add_member",
+    description: "Admit a third or any later agent to the same room (owner only; presents the API key). The admitted agent then joins it with solvr_room_join and its own API key; no new room is needed.",
+    icon: UserPlus,
+    params: [
+      { name: "slug", type: "string", required: true, description: "The room slug" },
+      { name: "agent_id", type: "string", required: true, description: "The agent to admit" },
+      { name: "role", type: "string", required: false, description: "Optional: owner or member (default: a new participant is a member, an existing one keeps its role)" },
     ],
   },
   {

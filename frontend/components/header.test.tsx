@@ -68,6 +68,11 @@ function topLevelLabels(nav: HTMLElement) {
   );
 }
 
+/** The Docs trigger and its dropdown — Skill is also a top-level link, so docs queries scope here. */
+function docsGroup(nav: HTMLElement) {
+  return within(nav).getByRole('button', { name: /docs/i }).parentElement!;
+}
+
 describe('Header', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -83,11 +88,11 @@ describe('Header', () => {
     });
   });
 
-  describe('primary navigation is Rooms, Posts, Docs — in that order', () => {
-    it('exposes exactly three top-level destinations on desktop', () => {
+  describe('top-level navigation is Rooms, Posts, Data, Skill, Docs — in that order', () => {
+    it('exposes Rooms, Posts, Data, Skill and Docs as the top-level destinations on desktop, in that order', () => {
       render(<Header />);
 
-      expect(topLevelLabels(primaryNav())).toEqual(['ROOMS', 'POSTS', 'DOCS']);
+      expect(topLevelLabels(primaryNav())).toEqual(['ROOMS', 'POSTS', 'DATA', 'SKILL', 'DOCS']);
     });
 
     it('points Rooms at /rooms and Posts at /posts', () => {
@@ -98,13 +103,25 @@ describe('Header', () => {
       expect(within(nav).getByRole('link', { name: 'POSTS' })).toHaveAttribute('href', '/posts');
     });
 
+    it('points Data at /data and Skill at /skill on desktop, styled like Rooms', () => {
+      render(<Header />);
+      const nav = primaryNav();
+      const rooms = within(nav).getByRole('link', { name: 'ROOMS' });
+      const data = within(nav).getByRole('link', { name: 'DATA' });
+      const skill = within(nav).getByRole('link', { name: 'SKILL' });
+
+      expect(data).toHaveAttribute('href', '/data');
+      expect(skill).toHaveAttribute('href', '/skill');
+      expect(data.className).toBe(rooms.className);
+      expect(skill.className).toBe(rooms.className);
+    });
+
     it.each([
       ['/feed'],
       ['/problems'],
       ['/ideas'],
       ['/questions'],
       ['/agents'],
-      ['/data'],
       ['/ipfs'],
       ['/leaderboard'],
       ['/dashboard'],
@@ -121,7 +138,7 @@ describe('Header', () => {
       render(<Header />);
       const nav = primaryNav();
 
-      expect(within(nav).queryByRole('link', { name: 'SKILL' })).toBeNull();
+      expect(within(docsGroup(nav)).queryByRole('link', { name: 'SKILL' })).toBeNull();
       expect(within(nav).queryByRole('link', { name: 'MCP' })).toBeNull();
     });
 
@@ -130,12 +147,13 @@ describe('Header', () => {
       const nav = primaryNav();
 
       fireEvent.click(within(nav).getByRole('button', { name: /docs/i }));
+      const group = within(docsGroup(nav));
 
-      expect(within(nav).getByRole('link', { name: 'OVERVIEW' })).toHaveAttribute('href', '/docs');
-      expect(within(nav).getByRole('link', { name: 'SKILL' })).toHaveAttribute('href', '/skill');
-      expect(within(nav).getByRole('link', { name: 'API REFERENCE' })).toHaveAttribute('href', '/api-docs');
-      expect(within(nav).getByRole('link', { name: 'MCP' })).toHaveAttribute('href', '/mcp');
-      expect(within(nav).getByRole('link', { name: 'GUIDES' })).toHaveAttribute('href', '/docs/guides');
+      expect(group.getByRole('link', { name: 'OVERVIEW' })).toHaveAttribute('href', '/docs');
+      expect(group.getByRole('link', { name: 'SKILL' })).toHaveAttribute('href', '/skill');
+      expect(group.getByRole('link', { name: 'API REFERENCE' })).toHaveAttribute('href', '/api-docs');
+      expect(group.getByRole('link', { name: 'MCP' })).toHaveAttribute('href', '/mcp');
+      expect(group.getByRole('link', { name: 'GUIDES' })).toHaveAttribute('href', '/docs/guides');
     });
 
     it('marks the docs trigger as an expandable group for assistive technology', () => {
@@ -155,10 +173,10 @@ describe('Header', () => {
       const group = within(nav).getByRole('button', { name: /docs/i }).parentElement!;
 
       fireEvent.mouseEnter(group);
-      expect(within(nav).getByRole('link', { name: 'SKILL' })).toBeInTheDocument();
+      expect(within(group).getByRole('link', { name: 'SKILL' })).toBeInTheDocument();
 
       fireEvent.mouseLeave(group);
-      expect(within(nav).queryByRole('link', { name: 'SKILL' })).toBeNull();
+      expect(within(group).queryByRole('link', { name: 'SKILL' })).toBeNull();
     });
 
     it('collapses the group once a docs destination is chosen', () => {
@@ -173,13 +191,13 @@ describe('Header', () => {
       expect(within(nav).queryByRole('link', { name: 'GUIDES' })).toBeNull();
     });
 
-    it('does not expose the docs children as peers of the primary destinations', () => {
+    it('keeps the docs children out of the top level when the group is open', () => {
       render(<Header />);
       const nav = primaryNav();
 
       fireEvent.click(within(nav).getByRole('button', { name: /docs/i }));
 
-      expect(topLevelLabels(nav)).toEqual(['ROOMS', 'POSTS', 'DOCS']);
+      expect(topLevelLabels(nav)).toEqual(['ROOMS', 'POSTS', 'DATA', 'SKILL', 'DOCS']);
     });
   });
 
@@ -247,11 +265,24 @@ describe('Header', () => {
   });
 
   describe('mobile navigation mirrors the same hierarchy', () => {
-    it('shows the same three top-level destinations in the same order', () => {
+    it('shows Rooms, Posts, Data, Skill and Docs as the top-level destinations on mobile, in the same order', () => {
       render(<Header />);
       openMobileMenu();
 
-      expect(topLevelLabels(mobileNav())).toEqual(['ROOMS', 'POSTS', 'DOCS']);
+      expect(topLevelLabels(mobileNav())).toEqual(['ROOMS', 'POSTS', 'DATA', 'SKILL', 'DOCS']);
+    });
+
+    it('points Data at /data and Skill at /skill on mobile and closes the menu when chosen', () => {
+      render(<Header />);
+      openMobileMenu();
+      const nav = mobileNav();
+
+      expect(within(nav).getByRole('link', { name: 'DATA' })).toHaveAttribute('href', '/data');
+      expect(within(nav).getByRole('link', { name: 'SKILL' })).toHaveAttribute('href', '/skill');
+
+      fireEvent.click(within(nav).getByRole('link', { name: 'DATA' }));
+
+      expect(screen.queryByRole('navigation', { name: /mobile/i })).toBeNull();
     });
 
     it('nests the docs destinations under Docs on mobile too', () => {
@@ -259,15 +290,16 @@ describe('Header', () => {
       openMobileMenu();
       const nav = mobileNav();
 
-      expect(within(nav).queryByRole('link', { name: 'SKILL' })).toBeNull();
+      expect(within(docsGroup(nav)).queryByRole('link', { name: 'SKILL' })).toBeNull();
 
       fireEvent.click(within(nav).getByRole('button', { name: /docs/i }));
+      const group = within(docsGroup(nav));
 
-      expect(within(nav).getByRole('link', { name: 'OVERVIEW' })).toHaveAttribute('href', '/docs');
-      expect(within(nav).getByRole('link', { name: 'SKILL' })).toHaveAttribute('href', '/skill');
-      expect(within(nav).getByRole('link', { name: 'API REFERENCE' })).toHaveAttribute('href', '/api-docs');
-      expect(within(nav).getByRole('link', { name: 'MCP' })).toHaveAttribute('href', '/mcp');
-      expect(within(nav).getByRole('link', { name: 'GUIDES' })).toHaveAttribute('href', '/docs/guides');
+      expect(group.getByRole('link', { name: 'OVERVIEW' })).toHaveAttribute('href', '/docs');
+      expect(group.getByRole('link', { name: 'SKILL' })).toHaveAttribute('href', '/skill');
+      expect(group.getByRole('link', { name: 'API REFERENCE' })).toHaveAttribute('href', '/api-docs');
+      expect(group.getByRole('link', { name: 'MCP' })).toHaveAttribute('href', '/mcp');
+      expect(group.getByRole('link', { name: 'GUIDES' })).toHaveAttribute('href', '/docs/guides');
     });
 
     it('offers Connect agents and a quiet Log in when logged out', () => {

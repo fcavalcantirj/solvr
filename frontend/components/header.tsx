@@ -7,10 +7,12 @@ import { useAuth } from "@/hooks/use-auth";
 import { UserMenu } from "@/components/ui/user-menu";
 
 /**
- * Primary navigation is deliberately three destinations: Rooms (where agents
- * connect), Posts (the shared knowledge) and Docs (everything a developer needs
- * to wire an agent up). Discovery surfaces — Agents, Data, Leaderboard, IPFS —
- * live in the footer; account surfaces live in the account menu.
+ * Top-level navigation is Rooms (where agents connect), Posts (the shared
+ * knowledge), Data and Skill as direct links — as production has them (owner
+ * decision 2026-10-02) — and Docs (everything a developer needs to wire an
+ * agent up). Skill also stays inside the Docs group. The other discovery
+ * surfaces — Agents, Leaderboard, IPFS — live in the footer; account surfaces
+ * live in the account menu.
  */
 const DOCS_LINKS = [
   { label: "OVERVIEW", href: "/docs" },
@@ -56,6 +58,20 @@ export function Header() {
               className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
             >
               POSTS
+            </Link>
+            <Link
+              href="/data"
+              data-nav-level="primary"
+              className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+            >
+              DATA
+            </Link>
+            <Link
+              href="/skill"
+              data-nav-level="primary"
+              className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+            >
+              SKILL
             </Link>
 
             {/* Docs group — Skill, API reference, MCP and Guides live beneath it */}
@@ -164,6 +180,22 @@ export function Header() {
               className="font-mono text-sm tracking-wider"
             >
               POSTS
+            </Link>
+            <Link
+              href="/data"
+              data-nav-level="primary"
+              onClick={closeMobileMenu}
+              className="font-mono text-sm tracking-wider"
+            >
+              DATA
+            </Link>
+            <Link
+              href="/skill"
+              data-nav-level="primary"
+              onClick={closeMobileMenu}
+              className="font-mono text-sm tracking-wider"
+            >
+              SKILL
             </Link>
 
             <div className="flex flex-col gap-4">

@@ -23,7 +23,7 @@ schema 135, the knowledge cutover, and both services redeployed. Rehearsed end t
 | | Production | Rehearsal (dress) |
 |---|---|---|
 | `WINDOW_ENV` | `/Users/fcavalcanti/dev/solvr/.env` (never edited) | `/tmp/solvr-lane-d/d6/standin.env` |
-| `FROZEN_SHA` | the SHA Felipe freezes (FELIPE'S CALL) | the D6 branch head |
+| `FROZEN_SHA` | DECIDED 2026-10-02 (owner): the lane D freeze head (D7), recorded in the D7 report and the journal | the D7 freeze head |
 | `WINDOW_DIR` | `/Users/fcavalcanti/dev/solvr-window` | `/Users/fcavalcanti/dev/solvr-lanes/lane-d-window` |
 
 Keys read from `WINDOW_ENV` (names only): `SOLVR_DB_HOST SOLVR_DB_PORT SOLVR_DB_USER SOLVR_DB_PASSWORD
@@ -88,6 +88,24 @@ Expect: both builds exit 0; `cutover test exit 0` (`TestParseOptions_ExpectsTheH
 pins the default to the newest migration); the newest file is `000135_…` and the default is `135` (or both
 the same newer number). Abort on any failure.
 
+## PRE-2 — the rollback commit exists and is exactly c03734ae's tree on top of FROZEN_SHA (no gate; local)
+
+DECIDED 2026-10-02 (owner): rollback route (c), a tree-restore commit. It is built at the freeze, with git
+plumbing and no checkout, and stays local until R6:
+`R=$(git commit-tree 'c03734ae^{tree}' -p "$FROZEN_SHA" -m "revert(release): restore the c03734ae tree (v1.3 rollback; parent = frozen $FROZEN_SHA)")`,
+then `git branch rollback/v1.3-to-c03734ae "$R"`.
+
+```bash
+export WINDOW_ENV=... FROZEN_SHA=... WINDOW_DIR=...   # the prelude
+source "$WINDOW_DIR/docs/handovers/2026-10-02-solvr-orchestrator/window/window-env.sh"
+git -C /Users/fcavalcanti/dev/solvr rev-parse --verify rollback/v1.3-to-c03734ae
+[ "$(git -C /Users/fcavalcanti/dev/solvr rev-parse 'rollback/v1.3-to-c03734ae^')" = "$(git -C /Users/fcavalcanti/dev/solvr rev-parse "$FROZEN_SHA")" ] && echo "parent = FROZEN_SHA" || echo "PARENT MISMATCH"
+git -C /Users/fcavalcanti/dev/solvr diff --quiet c03734ae rollback/v1.3-to-c03734ae && echo "tree = c03734ae" || echo "TREE MISMATCH"
+```
+
+Expect the rollback commit's SHA, `parent = FROZEN_SHA`, `tree = c03734ae`. Abort on either mismatch:
+rebuild the branch with the two commands above (`git branch -f`), then run PRE-2 again.
+
 ## P1 — read-only checks on production (gate P1)
 
 Measured (dress): 1.0 s, 14 transactions; local RTT through the container route 5–26 ms.
@@ -141,8 +159,7 @@ git -C /Users/fcavalcanti/dev/solvr ls-remote origin refs/heads/main
 ```
 
 Expect a fast-forward and `ls-remote` = `FROZEN_SHA`. Abort on a rejected push: never force.
-If Felipe chose rollback option (a) (see ROLLBACK), push its branch now, under the same yes or its own:
-`git -C /Users/fcavalcanti/dev/solvr push origin c03734ae:refs/heads/rollback-c03734ae`.
+The rollback branch is not pushed here (route (c): it reaches GitHub only in R6, as a fast-forward of `main`).
 
 **From here until G6: nobody clicks Deploy in EasyPanel.**
 
@@ -185,7 +202,7 @@ numbers differ by the writes since then and are the G5 reference. Abort on any n
 Measured (dress): the stop (simulated with `docker stop`) 0.3 s; the block 1.8 s including the safety dump.
 
 **Felipe, in EasyPanel:** `solvr-api` → Stop. Note the time: the write pause starts here.
-`solvr-web` keeps running and shows errors until G6 (FELIPE'S CALL whether to stop it too).
+`solvr-web` keeps running and shows errors until G6 (DECIDED 2026-10-02 (owner): solvr-web keeps running during the pause).
 
 ```bash
 export WINDOW_ENV=... FROZEN_SHA=... WINDOW_DIR=...   # the prelude
@@ -202,8 +219,9 @@ jq -c '{counts, legacy_public_contributions, tombstones: (.tombstones | length),
 
 Expect `/health` not 200 (502/503 behind the proxy; `000` when nothing listens); `sessions.sql` shows no
 API session (only short-lived sessions of these commands, which it excludes for itself); dump exit 0.
-The safety dump is the exact pre-cutover state: it is what makes a lossless restore possible (ROLLBACK R8).
-Abort if the API still answers 200 or still holds sessions. **STOP — Felipe's yes for P5.**
+The safety dump is mandatory (DECIDED 2026-10-02 (owner): yes): it is the exact pre-cutover state and what makes
+a lossless restore possible (ROLLBACK R8). Abort if the API still answers 200 or still holds sessions, or if the
+dump does not exit 0. **STOP — Felipe's yes for P5.**
 
 ## P5 — collation repair inside the write pause (gate P5; `RUNBOOK-collation.md`)
 
@@ -261,6 +279,7 @@ source "$WINDOW_DIR/docs/handovers/2026-10-02-solvr-orchestrator/window/window-e
 jq -c -f "$RB/cutover-summary.jq" "$BACKUP_DIR/g5-dry.json"; jq -c -f "$RB/cutover-summary.jq" "$BACKUP_DIR/g2-dry.json"
 ```
 
+The search sample stays at its default, 200 queries, on every pass (DECIDED 2026-10-02 (owner); no flag).
 Expect the dry run to match G2's dry run, apart from writes made after the G2 dump. **STOP — Felipe's yes to apply.**
 
 ```bash
@@ -425,7 +444,8 @@ room entries are kept; **0 of 78 shared room tokens stay valid** (000098.down fi
 per-agent room tokens keep their hashes; the ban list is archived and its table dropped; the
 `users_refuse_tombstoned_email` trigger stays with its original body.
 
-**R6 — redeploy old code, both services. FELIPE'S CALL: pick one before the window; this runbook does not.**
+**R6 — redeploy old code, both services. DECIDED 2026-10-02 (owner): option (c), the tree-restore commit
+`rollback/v1.3-to-c03734ae` built at the freeze (PRE-2).** The option table is kept for the record.
 
 | Option | How | Risks |
 |---|---|---|
@@ -434,16 +454,47 @@ per-agent room tokens keep their hashes; the ban list is archived and its table 
 | (c) Tree-restore commit | In a clean worktree at `FROZEN_SHA`: restore the `c03734ae` tree as one new commit, push it to `main` (fast-forward), both webhooks. | One very large commit; history is kept and no force is needed; re-shipping v1.3 later means reverting that commit. Build is the same tree as c03734ae. |
 | (d) EasyPanel previous image | EasyPanel's redeploy/rollback of the previous deployment, if it keeps one. | [UNVERIFIED] that EasyPanel keeps and offers the previous image; must be checked in the panel before the window. No git change; fastest. `main` still holds v1.3 (same risk as (a)). |
 
-Then the old-code probes:
+Procedure for (c), three blocks.
+
+R6a — preflight:
 
 ```bash
 export WINDOW_ENV=... FROZEN_SHA=... WINDOW_DIR=...   # the prelude
 source "$WINDOW_DIR/docs/handovers/2026-10-02-solvr-orchestrator/window/window-env.sh"
-curl -s -o /dev/null -w 'api /v1/overview %{http_code} (old code: 404)\n' --connect-timeout 5 --max-time 10 "$SOLVR_API_BASE/v1/overview"
+git -C /Users/fcavalcanti/dev/solvr fetch origin
+[ "$(git -C /Users/fcavalcanti/dev/solvr rev-parse origin/main)" = "$(git -C /Users/fcavalcanti/dev/solvr rev-parse "$FROZEN_SHA")" ] && echo "origin/main = FROZEN_SHA" || echo "ORIGIN/MAIN IS NOT FROZEN_SHA"
+[ "$(git -C /Users/fcavalcanti/dev/solvr rev-parse 'rollback/v1.3-to-c03734ae^')" = "$(git -C /Users/fcavalcanti/dev/solvr rev-parse "$FROZEN_SHA")" ] && echo "parent = FROZEN_SHA" || echo "PARENT MISMATCH"
+git -C /Users/fcavalcanti/dev/solvr diff --quiet c03734ae rollback/v1.3-to-c03734ae && echo "tree = c03734ae" || echo "TREE MISMATCH"
+```
+
+Expect the three positive lines. If `origin/main` is not `FROZEN_SHA`, someone pushed after G1: STOP (never
+force); Felipe decides. **STOP — Felipe's yes to push the rollback commit.**
+
+R6b — push it (a plain fast-forward of `main`: it fails safely if `origin/main` is not `FROZEN_SHA`):
+
+```bash
+export WINDOW_ENV=... FROZEN_SHA=... WINDOW_DIR=...   # the prelude
+source "$WINDOW_DIR/docs/handovers/2026-10-02-solvr-orchestrator/window/window-env.sh"
+git -C /Users/fcavalcanti/dev/solvr push origin rollback/v1.3-to-c03734ae:main
+git -C /Users/fcavalcanti/dev/solvr ls-remote origin refs/heads/main
+git -C /Users/fcavalcanti/dev/solvr rev-parse rollback/v1.3-to-c03734ae
+```
+
+Expect the push to succeed and the two SHAs to be equal. A rejected push: STOP, never force.
+
+R6c — both webhooks back to back, then the old-code completion probes and smoke probes:
+
+```bash
+export WINDOW_ENV=... FROZEN_SHA=... WINDOW_DIR=...   # the prelude
+source "$WINDOW_DIR/docs/handovers/2026-10-02-solvr-orchestrator/window/window-env.sh"
+curl -fsS -X POST "$SOLVR_DEPLOY_API"; echo; curl -fsS -X POST "$SOLVR_DEPLOY_WEB"; echo
+for i in $(seq 90); do c=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$SOLVR_API_BASE/v1/overview"); echo "$(date +%T) api /v1/overview $c (old code: 404)"; [ "$c" = 404 ] && break; sleep 10; done
+for i in $(seq 90); do c=$(curl -s -o "$BACKUP_DIR/r6-skill.md" -w '%{http_code}' --max-time 10 "$SOLVR_WEB_BASE/skill.md?cb=$(date +%s)$RANDOM"); n=$(grep -c 'Connect your agents so they collaborate in a shared room' "$BACKUP_DIR/r6-skill.md"); echo "$(date +%T) web skill.md $c, v1.3 marker $n (old web: 200, 0)"; [ "$c" = 200 ] && [ "$n" = 0 ] && break; sleep 10; done
 bash "$RB/probes.sh" old "$BACKUP_DIR/r6-probes"
 ```
 
-Expect 404, `probes failed: 0`, `total_contributions` = G3's `legacy_public_contributions`.
+Expect `Deploying...` twice, `/v1/overview 404`, web `200` with marker `0`, `probes failed: 0`, and
+`total_contributions` = G3's `legacy_public_contributions`. Rollback ends when both completion probes pass.
 
 **R7 — tell agents.** Shared room tokens are invalid after the rollback; per-agent room tokens still work.
 
@@ -560,6 +611,6 @@ The pause runs from the G3 stop to the moment both G6 completion probes pass.
 
 Machine time is about 65 s locally. Network: about 13,000 transactions at the RTT measured in P1. At 20 ms
 that adds about 4.5 min, at 50 ms about 11 min. Roughly 9,000 of the G5 transactions are the 200-query
-search sample, run before and after each pass; whether to keep it at 200 on the second pass is FELIPE'S CALL.
+search sample, run before and after each pass (DECIDED 2026-10-02 (owner): 200 on every pass).
 **Estimate: about 10–15 minutes at 20–30 ms RTT; worst case about 25 minutes** (slow RTT, 4-minute web build,
 slow approvals). Recompute with P1's RTT before G3.

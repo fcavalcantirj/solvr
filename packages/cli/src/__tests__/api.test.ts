@@ -44,10 +44,11 @@ describe("ApiClient", () => {
         json: async () => ({ data: [], meta: { total: 0 } }),
       });
 
-      await client.search("query", { type: "problem", limit: 5 });
+      // 2.0.0: no legacy type/status filter (migration.test.ts "the API client sends no legacy search filter")
+      await client.search("query", { limit: 5, page: 2, sort: "newest" });
 
       expect(mockFetch).toHaveBeenCalledWith(
-        "https://api.solvr.dev/v1/search?q=query&type=problem&per_page=5",
+        "https://api.solvr.dev/v1/search?q=query&per_page=5&page=2&sort=newest",
         expect.any(Object)
       );
     });

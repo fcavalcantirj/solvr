@@ -39,7 +39,9 @@ func rejectTypeArgument(cmd *cobra.Command, args []string) error {
 	if len(args) == 0 {
 		return nil
 	}
-	return fmt.Errorf(`posts take no type: %q is not accepted; use solvr post --title "..." --description "..."`, args[0])
+	cmd.SilenceUsage = true
+	return removedError("solvr post <type>",
+		fmt.Sprintf(`posts take no type (%q is not accepted): solvr post --title "..." --description "..."`, args[0]))
 }
 
 // NewPostCmd creates the post command

@@ -241,8 +241,8 @@ func TestReplyCommand_AnswerCommandRemoved(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected the removed answer command to fail")
 	}
-	if !strings.Contains(err.Error(), `unknown command "answer"`) {
-		t.Errorf("expected unknown command error, got: %s", err.Error())
+	if !strings.Contains(err.Error(), "'solvr answer' was removed") || !strings.Contains(err.Error(), "solvr reply <post_id>") {
+		t.Errorf("expected the removed-command error naming solvr reply, got: %s", err.Error())
 	}
 	if called {
 		t.Error("the removed answer command must not call the API")

@@ -36,11 +36,8 @@ solvr config show
 Search the knowledge base:
 
 ```bash
-# Basic search
+# Basic search: every post, whatever it was created as
 solvr search "async postgres race condition"
-
-# Filter by type
-solvr search "error: ECONNREFUSED" --type problem
 
 # Limit results, newest first (unset options are left to the API's defaults)
 solvr search "query" --limit 5 --sort newest
@@ -96,9 +93,8 @@ solvr replies post_abc123
 solvr replies post_abc123 --limit 10 --cursor <next_cursor>
 ```
 
-`solvr answer`, `solvr approach`, `solvr post <type>` and `solvr get --include` were removed: the API
-retired the routes behind them (410 `ENDPOINT_RETIRED`). Use `solvr post`, `solvr reply` and
-`solvr replies`.
+`solvr answer`, `solvr approach`, `solvr post <type>` and `solvr get --include` were removed in 2.0.0: see
+[Migrating from 1.x to 2.0.0](#migrating-from-1x-to-200).
 
 ### Get and edit a reply
 
@@ -178,6 +174,30 @@ All commands support these global options:
 - `SOLVR_API_KEY` - API key (alternative to config file)
 - `SOLVR_BASE_URL` - Custom API endpoint
 - `SOLVR_CONFIG_PATH` - Custom config file path
+
+## Migrating from 1.x to 2.0.0
+
+2.0.0 removes the choices of the legacy knowledge model: a post has no type or success criteria, every
+contribution to a post is a reply, a post's replies are read on their own, and search covers every post.
+A removed command, argument or option is refused before any request, with exit code 1 and what replaces it:
+
+```
+✗ '--type' was removed in @solvr/cli 2.0.0; search covers every post. See "Migrating from 1.x to 2.0.0" in the README.
+```
+
+| 1.x | 2.0.0 |
+| --- | --- |
+| `solvr post <type>` (`problem`, `question`, `idea`) | `solvr post --title "..." --description "..."`: a post has no type |
+| `solvr post` `--criteria` | Put the success criteria in `--description` |
+| `solvr answer <questionId> --content` | `solvr reply <postId> --body "..."` |
+| `solvr approach <problemId> --angle --method --assumptions` | `solvr reply <postId> --body "..."`: the approach and whether it worked |
+| `solvr get <id>` `--include` (`-i`) `approaches,answers` | `solvr get <id>`, then `solvr replies <id>`: answers and approaches from before the change are replies there |
+| `solvr search` `--type` (`-t`) and `--status` (`-s`) | `solvr search <query>` searches every post |
+| `solvr search` `--limit` and `--page` defaulted to 10 and 1 | Left unset, they are the API's defaults |
+| `--json` of `post`, `answer` and `approach` printed the created object | `--json` prints the API's answer (`{"data": ...}`) for every command |
+
+A 1.x CLI that is still installed fails on `answer` and `approach`: the API retired the routes they call and
+answers them 410 `ENDPOINT_RETIRED`, naming the route to use in `error.details.replacement`.
 
 ## License
 

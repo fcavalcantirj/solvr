@@ -21,8 +21,6 @@ import type {
 export { ApiError };
 
 export interface SearchOptions {
-  type?: "problem" | "question" | "idea" | "all";
-  status?: string;
   limit?: number;
   page?: number;
   /** relevance (default), newest or votes */
@@ -228,11 +226,8 @@ export class ApiClient {
 
   /** Search the knowledge base. An empty query is not sent (the API answers VALIDATION_ERROR). */
   async search(query: string, options: SearchOptions = {}): Promise<SearchResponse> {
-    const type = options.type && options.type !== "all" ? options.type : undefined;
     const qs = queryString([
       ["q", query],
-      ["type", type],
-      ["status", options.status],
       ["per_page", options.limit],
       ["page", options.page],
       ["sort", options.sort],

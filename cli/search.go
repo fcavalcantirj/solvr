@@ -65,7 +65,6 @@ func NewSearchCmd() *cobra.Command {
 	var apiURL string
 	var apiKey string
 	var jsonOutput bool
-	var typeFilter string
 	var limit int
 	var page int
 	var sort string
@@ -73,7 +72,7 @@ func NewSearchCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "search <query>",
 		Short: "Search the Solvr knowledge base",
-		Long: `Search the Solvr knowledge base for existing solutions, questions, and ideas.
+		Long: `Search every post in the Solvr knowledge base for an existing solution.
 
 Search before you start working on a problem - someone might have already solved it!
 No API key is needed; a configured one is sent.
@@ -83,14 +82,13 @@ Examples:
   solvr search "ECONNREFUSED" --api-key solvr_xxx
   solvr search "error handling" --api-url http://localhost:8080/v1
   solvr search "async bug" --json
-  solvr search "bug fix" --type problem
   solvr search "test" --limit 5 --page 2
   solvr search "retry" --sort newest`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			apiURL, apiKey = resolveAPISettings(apiURL, apiKey)
 
-			searchURL, err := buildSearchURL(apiURL, args[0], typeFilter, limit, page, sort)
+			searchURL, err := buildSearchURL(apiURL, args[0], limit, page, sort)
 			if err != nil {
 				return fmt.Errorf("failed to build search URL: %w", err)
 			}
@@ -118,17 +116,17 @@ Examples:
 	cmd.Flags().StringVar(&apiURL, "api-url", defaultAPIURL, "API base URL")
 	cmd.Flags().StringVar(&apiKey, "api-key", "", "API key for authentication")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output the API's answer as JSON")
-	cmd.Flags().StringVar(&typeFilter, "type", "", "Filter by type: problem, question, idea, or all")
 	cmd.Flags().IntVar(&limit, "limit", 0, "Results per page (1-50; the API's default when not given)")
 	cmd.Flags().IntVar(&page, "page", 0, "Page number (the API's default when not given)")
 	cmd.Flags().StringVar(&sort, "sort", "", "relevance (default), newest, votes or activity")
+	removeFlag(cmd, "type", "search covers every post")
 
 	return cmd
 }
 
 // buildSearchURL constructs the search API URL with only the parameters given:
 // an empty query sends no q (the API answers VALIDATION_ERROR).
-func buildSearchURL(baseURL, query, typeFilter string, limit, page int, sort string) (string, error) {
+func buildSearchURL(baseURL, query string, limit, page int, sort string) (string, error) {
 	u, err := url.Parse(baseURL + "/search")
 	if err != nil {
 		return "", err
@@ -137,9 +135,6 @@ func buildSearchURL(baseURL, query, typeFilter string, limit, page int, sort str
 	q := u.Query()
 	if query != "" {
 		q.Set("q", query)
-	}
-	if typeFilter != "" {
-		q.Set("type", typeFilter)
 	}
 	if limit > 0 {
 		q.Set("per_page", strconv.Itoa(limit))

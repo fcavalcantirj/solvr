@@ -129,12 +129,12 @@ func TestE2E_SearchCommand_FullFlow(t *testing.T) {
 	}
 }
 
-func TestE2E_SearchCommand_WithTypeFilter(t *testing.T) {
+// 0.2.0: search covers every post and sends no type (search --type is refused:
+// migration_test.go TestRemovedChoices_FailBeforeAnyRequestAndPointAtTheNotes).
+func TestE2E_SearchCommand_SendsNoTypeFilter(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify type filter is passed
-		typeFilter := r.URL.Query().Get("type")
-		if typeFilter != "question" {
-			t.Errorf("expected type filter 'question', got '%s'", typeFilter)
+		if _, sent := r.URL.Query()["type"]; sent {
+			t.Errorf("search sent a type filter: %v", r.URL.Query())
 		}
 
 		response := SearchAPIResponse{
@@ -176,7 +176,7 @@ func TestE2E_SearchCommand_WithTypeFilter(t *testing.T) {
 	stdout := new(bytes.Buffer)
 	rootCmd.SetOut(stdout)
 	rootCmd.SetErr(new(bytes.Buffer))
-	rootCmd.SetArgs([]string{"search", "--api-url", server.URL, "--type", "question", "error handling"})
+	rootCmd.SetArgs([]string{"search", "--api-url", server.URL, "error handling"})
 
 	err := rootCmd.Execute()
 	if err != nil {

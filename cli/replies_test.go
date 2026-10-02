@@ -15,11 +15,12 @@ func repliesPage(replies []map[string]interface{}, meta map[string]interface{}) 
 }
 
 // TestGetCommand_NoIncludeFlag verifies get no longer fetches typed
-// contributions: --include is gone and an old invocation sends nothing.
+// contributions: --include is removed (hidden; 0.2.0 refuses it naming
+// solvr replies, migration_test.go) and an old invocation sends nothing.
 func TestGetCommand_NoIncludeFlag(t *testing.T) {
 	getCmd := NewGetCmd()
-	if flag := getCmd.Flags().Lookup("include"); flag != nil {
-		t.Error("get command should not have an --include flag (replies are read with solvr replies)")
+	if flag := getCmd.Flags().Lookup("include"); flag == nil || !flag.Hidden {
+		t.Error("get command should offer no --include flag (replies are read with solvr replies)")
 	}
 
 	isolateHome(t)
@@ -35,8 +36,8 @@ func TestGetCommand_NoIncludeFlag(t *testing.T) {
 	rootCmd.SetArgs([]string{"get", "q-123", "--include", "answers", "--api-url", server.URL})
 
 	err := rootCmd.Execute()
-	if err == nil || !strings.Contains(err.Error(), "unknown flag: --include") {
-		t.Errorf("expected unknown flag error, got: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "'--include' was removed") || !strings.Contains(err.Error(), "solvr replies <id>") {
+		t.Errorf("expected the removed-flag error naming solvr replies, got: %v", err)
 	}
 	if called {
 		t.Error("get --include must not call the API")

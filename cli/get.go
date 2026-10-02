@@ -83,6 +83,7 @@ Examples:
 	cmd.Flags().StringVar(&apiURL, "api-url", defaultAPIURL, "API base URL")
 	cmd.Flags().StringVar(&apiKey, "api-key", "", "API key for authentication")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output the API's answer as JSON")
+	removeFlag(cmd, "include", "read the replies with: solvr replies <id>")
 
 	return cmd
 }

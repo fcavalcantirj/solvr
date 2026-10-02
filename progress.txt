@@ -10659,3 +10659,176 @@ REMAINING FOR idx 78 (next slices, in order):
 
 git status at journal time [REAL]: as FIX above (16 M, 4 ??), plus M progress.txt (this entry). spec.json
   unchanged (idx 78 passes stays false).
+
+2026-10-02 02:05 — Task idx 78 (spec.json, category functional) — IN PROGRESS, passes STAYS false
+"Keep SDKs, CLI, MCP, skills, and webhooks consistent with the redesigned product"
+SLICE 18: step 5, CLI half — both CLIs drop the last legacy choice they offered (search --type/--status), every
+removed 1.x/0.1 command, argument and option is refused BEFORE any request with what replaces it, both move a
+version (@solvr/cli 2.0.0, Go solvr 0.2.0), and each carries versioned migration notes a test holds to the code.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 78-95, 97, 98; no open URGENT (96 true).
+  24/67 acceptance (skipped as in every earlier entry); 68 waits on the owner (as journaled). idx 78 first buildable;
+  continued from slice 17 (HEAD 659dfde5), REMAINING item "18.. step 5 rest", its first half (both CLIs). Tree clean.
+
+STATE FOUND [REAL, code read + spike this session]:
+  - TS CLI (packages/cli 1.0.0, commander 12.1.0): search -t/--type, -s/--status still offered and sent. The 1.x
+    surface (git show 0eafb8a0:packages/cli/src/index.ts): post <type> + --criteria, answer, approach, get
+    -i/--include, search -t/-s. Removed earlier: answer/approach -> "error: unknown command 'answer'";
+    --include/--criteria -> "error: unknown option". SPIKE (/tmp/solvr_idx78_s18/spike.mjs): commander 12 lets excess
+    arguments through, so `solvr post problem --title x ...` RAN (command.args ["problem"]): a 1.x typed post became
+    a canonical post silently (RED below confirmed: exit 0).
+  - Go CLI (cli/, Version 0.1.0): search --type still offered and sent. The 0.1 surface (git show 1ed017b6^:cli/):
+    post [type], answer (--content/-c, --editor/-e), get --include, search --type. Removed earlier: answer ->
+    `unknown command "answer"`, --include -> "unknown flag: --include"; post <type> -> "posts take no type ...".
+  - Routes a still-installed old CLI calls [REAL, backend legacy_*_retirement.go]: TS answer POST
+    /v1/questions/{id}/answers and approach POST /v1/problems/{id}/approaches, Go answer and get --include
+    (GET /v1/problems/{id}/approaches, /questions/{id}, /ideas/{id}) are retired: 410 ENDPOINT_RETIRED with
+    error.details.replacement. POST /v1/posts with a legacy type and search type/status are NOT retired (API
+    unchanged by this slice, as in slice 17); the notes claim only the retired ones.
+
+DESIGN:
+  - A removed choice still PARSES so it can be refused meaningfully, before credentials and before any request:
+    TS src/removed.ts removedCommand (hidden command, any args/options), removedOption (hidden Option + preAction
+    hook), removedError: "'<name>' was removed in @solvr/cli <VERSION>; <instead>. See "Migrating from 1.x to
+    <VERSION>" in the README." post refuses command.args (a type) in its action before apiClient(true).
+    Go cli/removed.go removedCommand (Hidden, DisableFlagParsing), removeFlag (hidden flag + chained PreRunE),
+    removedError: "'<name>' was removed in solvr <Version>; <instead>. Run 'solvr help migrating'"; both set
+    SilenceUsage so the hint is the notes, not --help. rejectTypeArgument now returns removedError (keeps "posts
+    take no type" and the quoted type).
+  - Versions: TS 1.0.0 -> 2.0.0 (major: removed options; src/version.ts VERSION read from package.json, used by
+    --version and the messages); Go 0.1.0 -> 0.2.0 (0.x semver: a breaking change bumps the minor). Owner may
+    overrule either number; nothing published or tagged.
+  - Notes: TS README "## Migrating from 1.x to 2.0.0" (table 1.x -> 2.0.0: post <type>, --criteria, answer,
+    approach, get --include/-i, search --type/-t --status/-s, --limit/--page defaults 10/1 -> API's, post/answer/
+    approach --json printed the created object -> the API's answer; ENDPOINT_RETIRED + error.details.replacement).
+    Go: a cobra help topic `solvr help migrating` (listed under "Additional help topics"), the notes in the CLI
+    itself (cli/ has no README; go doc of a main package is not reachable for an installed binary).
+
+TESTS FIRST [logs /tmp/solvr_idx78_s18/]:
+  ?? packages/cli/src/__tests__/migration.test.ts (17 tests): 10 1.x invocations (answer, approach, post problem,
+    --criteria, get --include, get -i, search --type, -t, --status, -s), each human and --json: exit 1, stderr names
+    the removal + the README section, stdout empty, 0 requests to a real local server; the refused post type is
+    named; a removed choice is refused before "No API key configured"; search/post/get still run with their 2.0.0
+    options (exact query and body); --help lists none of the removed; ApiClient.search sends no type/status even
+    when a JS caller passes them, SearchOptions declares neither; VERSION 2.0.0 == package.json == --version; the
+    notes name every removed choice, -i/-t/-s, ENDPOINT_RETIRED, details.replacement, --json, and every `solvr X`
+    they point to (other than answer/approach) is a non-hidden command.
+  ?? cli/migration_test.go (6 tests): TestRemovedChoices_FailBeforeAnyRequestAndPointAtTheNotes (5 0.1 invocations,
+    human and --json, exit 1, removal + 'solvr help migrating', no "for usage", 0 requests),
+    TestRemovedPostType_NamesTheRefusedType, TestSearch_StillRunsWithItsOptionsAndSendsNoType,
+    TestHelp_ListsNoRemovedCommandOrFlag, TestVersion_IsTheOneTheMigrationNotesDescribe (0.2.0, --version, notes
+    heading), TestMigrationNotes_NameEveryRemovedChoiceAndWhatReplacesIt (names + every `solvr X` is a command).
+  Before the TS test could fail on an assertion: no-behavior refactor src/version.ts (program.ts --version used
+    require("../package.json").version directly).
+  RED [TEST]: red_ts2.log 16 failed / 105 passed — all assertions (e.g. "expected 'error: unknown command 'answer''
+    to contain ''solvr answer' was removed...", `post problem` "expected +0 to be 1", "expected '1.0.0' to be
+    '2.0.0'"); the "still run" guard passed. red_go.log: 4 FAIL (removed rows: "unknown command", "unknown flag",
+    search --type sent 2 requests; help; version 0.1.0; notes missing), the two guards passed. None a compile error.
+
+EXISTING TESTS CHANGED (protocol; each pinned the behavior this slice replaces):
+  1. packages/cli api.test.ts "includes optional parameters": `client.search("query", { type: "problem", limit: 5 })`
+     expected URL `...?q=query&type=problem&per_page=5`. Now `{ limit: 5, page: 2, sort: "newest" }` ->
+     `...?q=query&per_page=5&page=2&sort=newest`. Covered by NEW migration.test.ts "the API client sends no legacy
+     search filter". PASS [TEST] green_ts2.log.
+  2. packages/cli commands.test.ts "rejects the removed answer command": `expect(stderr).toContain("unknown command
+     'answer'")`. Now "rejects the removed answer command, naming what replaces it": stderr contains "'solvr answer'
+     was removed in @solvr/cli" and "solvr reply <postId>" (hermetic env, exit != 0 kept). Covered by NEW
+     migration.test.ts "'solvr answer' fails before any request...". PASS [TEST].
+  3. cli/search_test.go TestSearchCommand_TypeFlag: asserted `receivedType != "problem"` -> error (type sent). Now:
+     --type problem -> "'--type' was removed in solvr 0.2.0", 0 requests. Covered by NEW TestRemovedChoices row
+     "search pool race --type problem". PASS [TEST] green_go_named.log.
+  4. TestSearchCommand_TypeFlagAllValues: problem/question/idea/all each sent. Now each refused ("search covers every
+     post"), 0 requests. Same covering test. PASS [TEST].
+  5. TestSearchCommand_TypeFlagInHelpText: "help should mention '--type' flag". Now help must NOT mention --type.
+     Covered by NEW TestHelp_ListsNoRemovedCommandOrFlag. PASS [TEST].
+  6. cli_e2e_test.go TestE2E_SearchCommand_WithTypeFilter (server asserted type=question; `--type question`) ->
+     TestE2E_SearchCommand_SendsNoTypeFilter: same search without --type, server asserts no `type` parameter, the
+     result is shown. Refusal covered by TestRemovedChoices. PASS [TEST].
+  7. replies_test.go TestGetCommand_NoIncludeFlag: asserted `Lookup("include") == nil` and error "unknown flag:
+     --include". Now the flag must be absent or hidden and the error "'--include' was removed" naming "solvr
+     replies <id>"; "must not call the API" kept. Covered by TestRemovedChoices row get --include + TestHelp_... .
+     PASS [TEST].
+  8. reply_test.go TestReplyCommand_AnswerCommandRemoved: `unknown command "answer"`. Now "'solvr answer' was
+     removed" naming "solvr reply <post_id>"; "must not call the API" kept. Covered by TestRemovedChoices answer
+     rows. PASS [TEST].
+  STRENGTHENED (no assertion loosened): frontend api-sdk-examples.test.tsx 'CLI: every solvr command and flag
+    exists in @solvr/cli': it now also collects the CLI's removedCommand/removedOption declarations (asserts
+    answer/approach and --type/--status/--include/--criteria are among them) and fails when a /api-docs CLI sample
+    uses one. RED [TEST] fe_red.log: 'solvr search "error: ECONNREFUSED" --type problem --limit 10: --type was
+    removed' (the hidden option would have satisfied the old flag-exists check alone).
+  Nothing deleted, skipped or loosened.
+
+FIX (GREEN) [git status --porcelain + git diff --stat this session: 17 tracked files 111+/117-, 5 new]:
+  M cli/search.go (no --type flag/typeFilter; buildSearchURL(baseURL, query, limit, page, sort); help text and
+    example without --type; removeFlag "type"), cli/get.go (removeFlag "include"), cli/post.go (rejectTypeArgument
+    -> removedError, SilenceUsage), cli/main.go (Version "0.2.0"; removedCommand("answer"); NewMigratingCmd());
+    ?? cli/removed.go (notes const migratingHelp, NewMigratingCmd, removedError, removedCommand, removeFlag);
+    M cli/search_test.go, cli/cli_e2e_test.go, cli/replies_test.go, cli/reply_test.go (changes 3-8);
+    ?? cli/migration_test.go.
+  M packages/cli/src/program.ts (search without -t/-s; removedOption search -t/--type, -s/--status, get
+    -i/--include, post --criteria; post refuses a type argument; removedCommand answer, approach; VERSION import),
+    src/api.ts (SearchOptions without type/status; search sends neither), package.json + package-lock.json (2.0.0,
+    the lock's two root lines only), README.md (search example without --type; pointer + "## Migrating from 1.x to
+    2.0.0"); ?? src/removed.ts, src/version.ts; M src/__tests__/api.test.ts, commands.test.ts (changes 1-2);
+    ?? src/__tests__/migration.test.ts.
+  M frontend/components/api/api-sdks.tsx: the /api-docs CLI sample `solvr search ... --type problem --limit 10`
+    -> `--limit 10`; M frontend/components/api/api-sdk-examples.test.tsx (strengthened, above).
+  No backend, migration, SPEC.md, contract fixture, sdk, mcp-server or skill change.
+
+VERIFICATION [this session]:
+  [TEST] baselines: base_go.log `go test ./...` (cli/) ok; base_ts.log 6 files 104 passed.
+  [TEST] GREEN: green_go2.log `go test -count=1 ./...` (cli/, HOME=/tmp/solvr_idx78_s18/home, HTTP(S)_PROXY
+    127.0.0.1:9) ok, 0 FAIL/SKIP lines; green_go_named.log the 13 new/changed tests PASS. green_ts2.log 7 files 121
+    passed (104 + 17), 0 skipped; `tsc --noEmit` (packages/cli) exit 0; gofmt -l clean on every touched Go file
+    (config_test.go is listed by gofmt -l — pre-existing, untouched); go vet ok.
+  [TEST] frontend: components/api 10 files 100 passed (fe_green_api.log, --maxWorkers=2); `npm run typecheck`
+    exit 0; eslint api-sdks.tsx + api-sdk-examples.test.tsx exit 0.
+  FRONTEND FULL SUITE NOT PROVEN GREEN THIS SESSION [REAL]: macOS installd (PackageKit, a system update) held
+    80-126% CPU, load average 14-22 the whole time. `npm test -- --maxWorkers=4` once (frontend_full.log): 193 files
+    passed, 2 tests "Test timed out in 5000ms" after ~59s each (posts-page-client, use-auth) and 7 files "Failed to
+    start forks worker ... Timeout waiting for worker to respond". Those 9 files alone (frontend_unrun9.log,
+    --maxWorkers=2): 7 passed incl. the two that had timed out; this time connect-panel and app/data/page timed out
+    (~59s). Those two alone (frontend_last2.log, 1 worker): connect-panel passed; app/data/page.test.tsx "renders
+    PieChart and BarChart components" timed out (60s) and the NEXT test "calls all three /v1/data/* endpoints ...
+    on mount" failed "expected false to be true" (1.0s). [REAL] that file imports only ./page (last changed
+    2026-04-06) and no file of this diff; slice 17's full run (1758 tests) was green. [UNVERIFIED] that its
+    assertion failure is a cascade of the timeout before it — re-run app/data/page.test.tsx on an idle machine.
+  [REAL] SMOKE: the real API binary (go build ./cmd/api; env -i, DATABASE_URL local docker solvr_test, throwaway
+    JWT_SECRET, PORT 18098, no env file read). Go CLI 0.2.0 binary (smoke_go.log): --version "solvr version
+    0.2.0"; search postgres --limit 2 -> "Found 2188 result(s)"; search --type problem, get <id> --include answers,
+    answer <id> --content hi, post problem --title --description -> each exit 1 with its removal message; API log
+    request lines before/after the 4 refused calls: +0; `solvr help migrating` prints the notes. TS CLI 2.0.0 via
+    tsx (smoke_ts.log): --version 2.0.0; search --type, -s open, get -i, answer, approach, post problem, post
+    --criteria -> each exit 1 with its message, API request lines +0; anonymous search postgres --limit 2 ->
+    "Found 2188 results" (a first attempt with a made-up SOLVR_API_KEY got the API's INVALID_API_KEY, as it must).
+    API killed (0 listeners on 18098). The smoke created no rows (reads and refusals only).
+  MUTATIONS [TEST] (mut/, each alone, restored, `shasum -c` 4/4 OK): m1 Go get stops refusing --include -> 3 FAIL;
+    m2 Go notes stop naming --type -> "the notes do not name --type"; m3 TS search stops refusing --status -> 2
+    failed; m4 TS README drops `-s` -> "the notes do not name -s".
+  [REAL] check-file-size.sh: 32 files over 800 (same as slice 17), none touched here; largest touched cli file
+    search_test.go 663.
+  NOT RUN: backend suites (no backend file touched; binary built only for the smoke); packages/sdk-*, mcp-server,
+    skill (untouched).
+
+FINDINGS, NOT FIXED:
+  - [REAL smoke] Go CLI search output still prints a legacy type badge ("[problem]"), "Votes: 0" from a field the
+    API does not send (`votes`; the API sends vote_score) and "Answers: <answers_count>"; TS CLI prints "[PROBLEM]"
+    and "Status: open". These render what the API returns for legacy posts (not a user choice); the Votes field
+    mismatch is a display bug (slice 8 finding stands).
+  - [REAL code read] Go CLI get still prints a legacy problem's Weight/Success Criteria when the API returns them —
+    rendering, not a choice; left as is.
+  - [REAL code read] SPEC.md "Method 2: CLI Tool" (lines ~3100-3125) still teaches `--type problem`, `get --include`,
+    `post problem`, `solvr answer` — SPEC is reference, not a published client doc; not edited (as slices 4/5 noted).
+  - [REAL] skill/scripts/solvr.sh:1022 still teaches `solvr search ... --type problem`; skill/scripts/
+    test_canonical_posts.sh:230 runs `get p1 --include answers` (skill slice, next).
+  - Versions 2.0.0 (npm) / 0.2.0 (Go) exist only in the code; nothing published or tagged (owner's release call).
+  - Slices 6-17 findings stand.
+
+REMAINING FOR idx 78 (next slices, in order):
+  19.. step 5 rest: the npm mcp-server and the skill (search --type, skill.json legacy endpoints, solvr.sh help
+    text), each with its own versioned notes and refusals; then 6 (external consumer vs clean + upgraded schema),
+    7 (participants as collections, a members command/tool); findings of slices 6-18.
+
+git status at journal time [REAL]: as FIX above (17 M, 5 ??), plus M progress.txt (this entry). spec.json unchanged
+  (idx 78 passes stays false).

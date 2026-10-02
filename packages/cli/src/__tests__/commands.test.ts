@@ -64,7 +64,7 @@ describe("CLI Commands", () => {
       expect(stdout).not.toContain("--include");
     });
 
-    it("rejects the removed answer command", () => {
+    it("rejects the removed answer command, naming what replaces it", () => {
       // Hermetic: no config file and an unroutable base URL, so a regression can never reach a real API.
       const { stderr, exitCode } = runCli("answer post_123 --content x", {
         SOLVR_CONFIG_PATH: path.join(os.tmpdir(), `solvr-cli-absent-${Date.now()}`, "config.json"),
@@ -72,7 +72,8 @@ describe("CLI Commands", () => {
         SOLVR_API_KEY: "solvr_sk_hermetic_test",
       });
       expect(exitCode).not.toBe(0);
-      expect(stderr).toContain("unknown command 'answer'");
+      expect(stderr).toContain("'solvr answer' was removed in @solvr/cli");
+      expect(stderr).toContain("solvr reply <postId>");
     });
   });
 

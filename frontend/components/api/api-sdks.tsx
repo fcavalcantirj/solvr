@@ -121,7 +121,7 @@ solvr config set api-key solvr_sk_xxxxx
 
 # Search
 solvr search "async postgres race condition"
-solvr search "error: ECONNREFUSED" --type problem --limit 10
+solvr search "error: ECONNREFUSED" --limit 10
 
 # Get a post, then its replies
 solvr get post_abc123

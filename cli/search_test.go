@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -430,45 +431,12 @@ func TestSearchCommand_JSONFlagWithNoResults(t *testing.T) {
 	}
 }
 
+// 0.2.0 removed search --type: search covers every post. The flag is refused
+// before any request (migration_test.go covers the notes and every removal).
 func TestSearchCommand_TypeFlag(t *testing.T) {
-	// Create mock API server that checks for type parameter
-	var receivedType string
-
+	requests := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		receivedType = r.URL.Query().Get("type")
-
-		response := SearchAPIResponse{
-			Data: []SearchResult{
-				{
-					ID:      "post-123",
-					Type:    "problem",
-					Title:   "A problem post",
-					Snippet: "This is a problem...",
-					Tags:    []string{"go"},
-					Status:  "open",
-					Author: AuthorInfo{
-						ID:          "user-1",
-						Type:        "human",
-						DisplayName: "John",
-					},
-					Score:        0.90,
-					Votes:        5,
-					AnswersCount: 0,
-					CreatedAt:    time.Now(),
-				},
-			},
-			Meta: SearchMeta{
-				Query:   "test",
-				Total:   1,
-				Page:    1,
-				PerPage: 20,
-				HasMore: false,
-				TookMs:  10,
-			},
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		requests++
 	}))
 	defer server.Close()
 
@@ -481,31 +449,23 @@ func TestSearchCommand_TypeFlag(t *testing.T) {
 	searchCmd.SetArgs([]string{"test"})
 
 	err := searchCmd.Execute()
-	if err != nil {
-		t.Fatalf("search command failed: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "'--type' was removed in solvr "+Version) {
+		t.Fatalf("expected the removed-flag error, got: %v", err)
 	}
-
-	if receivedType != "problem" {
-		t.Errorf("expected type 'problem', got '%s'", receivedType)
+	if requests != 0 {
+		t.Errorf("sent %d requests, want 0", requests)
 	}
 }
 
 func TestSearchCommand_TypeFlagAllValues(t *testing.T) {
-	// Test all valid type values
+	// Every value 0.1 accepted is refused alike
 	validTypes := []string{"problem", "question", "idea", "all"}
 
 	for _, typeVal := range validTypes {
 		t.Run("type="+typeVal, func(t *testing.T) {
-			var receivedType string
-
+			requests := 0
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				receivedType = r.URL.Query().Get("type")
-				response := SearchAPIResponse{
-					Data: []SearchResult{},
-					Meta: SearchMeta{Query: "test", Total: 0},
-				}
-				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(response)
+				requests++
 			}))
 			defer server.Close()
 
@@ -518,12 +478,11 @@ func TestSearchCommand_TypeFlagAllValues(t *testing.T) {
 			searchCmd.SetArgs([]string{"test"})
 
 			err := searchCmd.Execute()
-			if err != nil {
-				t.Fatalf("search command failed for type %s: %v", typeVal, err)
+			if err == nil || !strings.Contains(err.Error(), "search covers every post") {
+				t.Fatalf("search --type %s: expected the removed-flag error, got: %v", typeVal, err)
 			}
-
-			if receivedType != typeVal {
-				t.Errorf("expected type '%s', got '%s'", typeVal, receivedType)
+			if requests != 0 {
+				t.Errorf("search --type %s sent %d requests, want 0", typeVal, requests)
 			}
 		})
 	}
@@ -542,9 +501,9 @@ func TestSearchCommand_TypeFlagInHelpText(t *testing.T) {
 
 	output := buf.String()
 
-	// Check that help contains --type flag information
-	if !bytes.Contains([]byte(output), []byte("--type")) {
-		t.Error("help should mention '--type' flag")
+	// The removed --type flag is not offered
+	if bytes.Contains([]byte(output), []byte("--type")) {
+		t.Error("help should not mention the removed '--type' flag")
 	}
 }
 

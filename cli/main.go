@@ -10,7 +10,7 @@ import (
 )
 
 // Version is the CLI version
-const Version = "0.1.0"
+const Version = "0.2.0"
 
 // NewRootCmd creates the root command for the solvr CLI
 func NewRootCmd() *cobra.Command {
@@ -60,6 +60,8 @@ Use "solvr [command] --help" for more information about a command.`,
 	rootCmd.AddCommand(NewRoomCmd())
 	rootCmd.AddCommand(NewClaimCmd())
 	rootCmd.AddCommand(NewPinCmd())
+	rootCmd.AddCommand(removedCommand("answer", `every contribution is a reply: solvr reply <post_id> --body "..."`))
+	rootCmd.AddCommand(NewMigratingCmd())
 
 	markRunErrors(rootCmd)
 	return rootCmd

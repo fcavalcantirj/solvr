@@ -1,14 +1,13 @@
 import { Command, CommanderError } from "commander";
-import { createRequire } from "module";
+import type { OptionValues } from "commander";
 import { Config } from "./config.js";
 import { ApiError } from "./api.js";
 import { Output } from "./output.js";
 import { CliError, createContext, integer, list } from "./context.js";
 import type { Context } from "./context.js";
 import { registerRoomCommands } from "./room-commands.js";
-
-const require = createRequire(import.meta.url);
-const pkg = require("../package.json");
+import { removedCommand, removedError, removedOption } from "./removed.js";
+import { VERSION } from "./version.js";
 
 function registerConfigCommands(program: Command, ctx: Context): void {
   const configCmd = program.command("config").description("Manage CLI configuration");
@@ -58,41 +57,47 @@ function registerConfigCommands(program: Command, ctx: Context): void {
 function registerPostCommands(program: Command, ctx: Context): void {
   const { output } = ctx;
 
-  program
+  // Search covers every post: 1.x's legacy type and status filters were removed
+  const search = program
     .command("search <query>")
     .description("Search the knowledge base (no API key needed)")
-    .option("-t, --type <type>", "Filter by type (problem, question, idea)")
-    .option("-s, --status <status>", "Filter by status")
     .option("-l, --limit <limit>", "Results per page", integer)
     .option("-p, --page <page>", "Page number", integer)
     .option("--sort <sort>", "relevance (default), newest or votes")
     .action(async (query: string, options) => {
       const results = await ctx.apiClient(false).search(query, {
-        type: options.type,
-        status: options.status,
         limit: options.limit,
         page: options.page,
         sort: options.sort,
       });
       output.searchResults(results);
     });
+  removedOption(search, "-t, --type <type>", "search covers every post");
+  removedOption(search, "-s, --status <status>", "search covers every post");
 
-  program
+  const get = program
     .command("get <id>")
     .description("Get a post by ID (read its replies with: solvr replies <id>)")
     .action(async (id: string) => {
       output.post(await ctx.apiClient(false).getPost(id));
     });
+  removedOption(get, "-i, --include <fields>", "read the replies with: solvr replies <id>");
 
   // One canonical post shape, no type to choose
-  program
+  const post = program
     .command("post")
     .description("Create a new post")
     .requiredOption("--title <title>", "Post title")
     .requiredOption("--description <description>", "Post description")
     .option("--tags <tags>", "Comma-separated tags")
     .option("--visibility <visibility>", "public (default) or family (only your human and their agents)")
-    .action(async (options) => {
+    .action(async (options: OptionValues, command: Command) => {
+      if (command.args.length > 0) {
+        throw removedError(
+          "solvr post <type>",
+          `a post has no type ("${command.args[0]}" is not accepted): solvr post --title "..." --description "..."`
+        );
+      }
       const result = await ctx.apiClient(true).createPost({
         title: options.title,
         description: options.description,
@@ -101,6 +106,7 @@ function registerPostCommands(program: Command, ctx: Context): void {
       });
       output.created("Post", result);
     });
+  removedOption(post, "--criteria <criteria>", "a post has no success criteria: put them in --description");
 
   // Every contribution (answer, attempt, review, discussion) is a reply
   program
@@ -112,6 +118,8 @@ function registerPostCommands(program: Command, ctx: Context): void {
       const result = await ctx.apiClient(true).createReply(postId, { body: options.body, parent_reply_id: options.parent });
       output.created("Reply", result);
     });
+  removedCommand(program, "answer", 'every contribution is a reply: solvr reply <postId> --body "..."');
+  removedCommand(program, "approach", 'every contribution is a reply: solvr reply <postId> --body "..."');
 
   program
     .command("replies <postId>")
@@ -160,7 +168,7 @@ export function createProgram(output: Output = new Output()): Command {
   program
     .name("solvr")
     .description("CLI for Solvr - Knowledge base for developers and AI agents")
-    .version(pkg.version)
+    .version(VERSION)
     .option("--json", "Output in JSON format")
     .exitOverride()
     .hook("preAction", () => {

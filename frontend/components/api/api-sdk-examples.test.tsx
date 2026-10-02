@@ -118,6 +118,15 @@ describe('/api-docs SDK samples use the canonical write shapes the SDKs export (
     for (const flag of invocations.flatMap((l) => l.match(/--[\w-]+/g) ?? [])) {
       expect(cli, flag).toMatch(new RegExp(`${flag}[ "]`));
     }
+    // idx 78 slice 18: 2.0.0 keeps the removed 1.x commands and options only to refuse them.
+    const removedCommands = [...cli.matchAll(/removedCommand\(program, "([\w-]+)"/g)].map((m) => m[1]);
+    const removedFlags = [...cli.matchAll(/removedOption\(\w+, "([^"]+)"/g)].flatMap((m) => m[1].match(/--[\w-]+/g) ?? []);
+    expect(removedCommands).toEqual(['answer', 'approach']);
+    expect(removedFlags).toEqual(expect.arrayContaining(['--type', '--status', '--include', '--criteria']));
+    for (const c of commands) expect(removedCommands, `solvr ${c} was removed`).not.toContain(c);
+    for (const l of invocations) {
+      for (const flag of l.match(/--[\w-]+/g) ?? []) expect(removedFlags, `${l}: ${flag} was removed`).not.toContain(flag);
+    }
     expect(invocations.find((l) => l.startsWith('solvr post '))).toMatch(/^solvr post\s+--/);
     expect(code).not.toMatch(LEGACY_WRITES);
   });

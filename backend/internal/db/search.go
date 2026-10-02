@@ -447,19 +447,21 @@ func buildSearchFilters(opts models.SearchOptions, args []any, argNum int) (stri
 	return strings.Join(filters, " "), args, argNum
 }
 
-// getSearchOrderBy returns the ORDER BY clause based on sort option.
+// getSearchOrderBy returns the ORDER BY clause based on sort option. Each ends on the post id, so
+// every sort is a total order: posts that tie on the sort's keys keep one order on every request,
+// and pages neither repeat nor skip them.
 func getSearchOrderBy(sort string) string {
 	switch sort {
 	case "newest":
-		return "p.created_at DESC"
+		return "p.created_at DESC, p.id"
 	case "votes":
-		return "(p.upvotes - p.downvotes) DESC, p.created_at DESC"
+		return "(p.upvotes - p.downvotes) DESC, p.created_at DESC, p.id"
 	case "activity":
-		return "p.updated_at DESC"
+		return "p.updated_at DESC, p.created_at DESC, p.id"
 	case "relevance":
 		fallthrough
 	default:
-		return "score DESC, p.created_at DESC"
+		return "score DESC, p.created_at DESC, p.id"
 	}
 }
 

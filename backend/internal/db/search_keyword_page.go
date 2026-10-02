@@ -143,12 +143,12 @@ func (r *SearchRepository) rankKeywordPage(ctx context.Context, tsquery string, 
 func keywordOwnOrder(sort string) string {
 	switch sort {
 	case "newest":
-		return "o.created_at DESC"
+		return "o.created_at DESC, o.id"
 	case "votes":
-		return "o.vote_score DESC, o.created_at DESC"
+		return "o.vote_score DESC, o.created_at DESC, o.id"
 	case "activity":
-		return "o.updated_at DESC"
+		return "o.updated_at DESC, o.created_at DESC, o.id"
 	default:
-		return "o.score DESC, o.created_at DESC"
+		return "o.score DESC, o.created_at DESC, o.id"
 	}
 }

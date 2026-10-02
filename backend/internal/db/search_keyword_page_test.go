@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"testing"
 	"time"
@@ -69,9 +70,16 @@ func TestSearch_KeywordPageEqualsTheFullSearch(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	seedKeywordPage(ctx, t, scratch)
-	repo := NewSearchRepository(scratch)
+	requireKeywordPageEqualsFullSearch(ctx, t, scratch)
+}
+
+// requireKeywordPageEqualsFullSearch compares Search's keyword page with fullKeywordSearch over the
+// seed's queries, content types, sorts and pages.
+func requireKeywordPageEqualsFullSearch(ctx context.Context, t *testing.T, pool *Pool) {
+	t.Helper()
+	repo := NewSearchRepository(pool)
 	var viewer string
-	require.NoError(t, scratch.QueryRow(ctx, `SELECT id::text FROM users WHERE username = 'sd1'`).Scan(&viewer))
+	require.NoError(t, pool.QueryRow(ctx, `SELECT id::text FROM users WHERE username = 'sd1'`).Scan(&viewer))
 
 	cases := 0
 	for _, q := range []string{"kubernetes", "postgres zeromq", "zeromq", "consensus lease", "nomatchanywhere"} {
@@ -100,6 +108,68 @@ func TestSearch_KeywordPageEqualsTheFullSearch(t *testing.T) {
 		}
 	}
 	require.Greater(t, cases, 100, "most cases return a page to compare")
+}
+
+// Posts that tie on every key a sort names still page as the full search does. The seed's posts
+// share their hour as created_at and updated_at (about sixty a group), so every sort meets ties;
+// the seed above meets them only when two posts happen to share updated_at (sort=activity).
+func TestSearch_KeywordPageEqualsTheFullSearchAmongTies(t *testing.T) {
+	scratch, _ := newMigratedScratchDatabase(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	seedKeywordPage(ctx, t, scratch)
+	_, err := scratch.Exec(ctx, `UPDATE posts SET created_at = date_trunc('hour', created_at), updated_at = date_trunc('hour', created_at)`)
+	require.NoError(t, err)
+	requireKeywordPageEqualsFullSearch(ctx, t, scratch)
+}
+
+// Posts that tie on every key of a sort page in id order, so consecutive pages neither repeat nor
+// skip a post. Twelve posts share their text, created_at, updated_at and votes, and are written in
+// descending id order: their physical order is the reverse of the order the search gives.
+func TestSearch_TiedPostsPageInIDOrder(t *testing.T) {
+	scratch, _ := newMigratedScratchDatabase(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	_, err := scratch.Exec(ctx, `
+		WITH a AS (INSERT INTO agents (id, display_name, key_sha256) VALUES ('tied_agent', 'Tied', md5('t') || md5('d')) RETURNING id)
+		INSERT INTO posts (id, type, title, description, tags, posted_by_type, posted_by_id, status,
+		                   publication_state, moderation_state, visibility, created_at, updated_at)
+		SELECT ('00000000-0000-4000-8000-' || lpad(g::text, 12, '0'))::uuid, 'post', 'Tied post', 'quokkapage lattice notes',
+		       ARRAY['tiedtag'], 'agent', a.id, 'open', 'published', 'approved', 'public', NOW(), NOW()
+		  FROM a, generate_series(12, 1, -1) g`)
+	require.NoError(t, err)
+	// Analyzed, the posts are read in their physical order (a sequential scan). Unanalyzed, the
+	// planner reads them through idx_posts_not_deleted, in id order, and a sort without the id
+	// tie-break would pass this test by accident.
+	_, err = scratch.Exec(ctx, `ANALYZE posts`)
+	require.NoError(t, err)
+	ids := make([]string, 12)
+	for i := range ids {
+		ids[i] = fmt.Sprintf("00000000-0000-4000-8000-%012d", i+1)
+	}
+	var physical []string
+	require.NoError(t, scratch.QueryRow(ctx, `SELECT array_agg(id::text ORDER BY ctid) FROM posts`).Scan(&physical))
+	require.Equal(t, []string{ids[11], ids[10], ids[9]}, physical[:3], "the posts are stored in descending id order")
+
+	repo := NewSearchRepository(scratch)
+	for _, ct := range [][]string{nil, {"posts"}} {
+		for _, sortBy := range []string{"", "newest", "votes", "activity"} {
+			var paged []string
+			for page := 1; page <= 3; page++ {
+				o := models.SearchOptions{Page: page, PerPage: 5, ContentTypes: ct, Sort: sortBy}
+				want, wantTotal := fullKeywordSearch(ctx, t, repo, "quokkapage", o)
+				got, total, _, _, err := repo.Search(ctx, "quokkapage", o)
+				require.NoError(t, err)
+				require.Equal(t, 12, total, "ct=%v sort=%q page=%d", ct, sortBy, page)
+				require.Equal(t, wantTotal, total, "ct=%v sort=%q page=%d", ct, sortBy, page)
+				require.Equal(t, want, got, "ct=%v sort=%q page=%d", ct, sortBy, page)
+				for _, r := range got {
+					paged = append(paged, r.ID)
+				}
+			}
+			require.Equal(t, ids, paged, "ct=%v sort=%q: tied posts page in id order, none twice and none missed", ct, sortBy)
+		}
+	}
 }
 
 func TestSearch_KeywordPageBuildsOnlyItsPage(t *testing.T) {

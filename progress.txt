@@ -11317,3 +11317,166 @@ git status at journal time [REAL]: M frontend/public/install.sh, frontend/public
   skill/scripts/test_canonical_posts.sh, skill/skill.json; ?? backend/internal/api/published_skill_migration_test.go,
   skill/scripts/solvr-migrating.sh, skill/scripts/test_migration.sh (git diff --stat: 10 tracked files, 80+/43-
   before this entry). spec.json unchanged (idx 78 passes stays false).
+
+2026-10-02 11:36 — Task idx 78 (spec.json, category functional) — IN PROGRESS, passes STAYS false
+"Keep SDKs, CLI, MCP, skills, and webhooks consistent with the redesigned product"
+SLICE 22: step 6 — an external consumer is tested against a clean new schema plus an upgraded schema, not only
+mocked SDK responses. contract/consumer is a program of its own Go module that knows Solvr only through the Go SDK
+(packages/sdk-go, via replace) and reaches the API over HTTP only; backend tests run it against the real router on
+scratch databases: clean (every migration; and the same with the legacy tables dropped) and upgraded (production's
+schema 84 holding rows the old release wrote, migrated to head, converted by db.RunKnowledgeCutover).
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 78-95, 97, 98; no open URGENT.
+  24/67 acceptance (skipped as in every earlier entry); 68 waits on the owner (as journaled). idx 78 first buildable;
+  continued from slice 21 (HEAD ccc73847), REMAINING item "22.. step 6". Tree clean at start.
+
+STATE FOUND [REAL, code read this session]:
+  - Every client test so far is a contract test against contract/openapi-examples.json served by a stub (slices
+    4-21); the live probes of idx 52 (step 6 "client half") were /tmp scripts against the shared solvr_test, never
+    committed, never on a clean or an upgraded schema.
+  - Scratch-schema helpers exist per package (db newMigratedScratchDatabase, api newHomepageScratchURL, jobs
+    newMigratedScratchURL): all apply EVERY migration; none stops at an older version to seed what an old release
+    wrote. Production's schema is 84 (cutover rehearsal 2026-09-29 and idx 77 slice 26: restored dumps at 84).
+  - A new post waits in pending_review (publication draft, moderation pending) without a moderation service; search
+    shows only published+approved posts (search_canonical.go:25). The only approve path is
+    PostRepository.UpdateStatus(open) (posts.go:582, "the only path that can set moderation_state to approved").
+
+SPIKE [REAL, throwaway backend/internal/api/zz_idx78_s22_spike_test.go (deleted) + /tmp/solvr_idx78_s22/spike/
+  consumer (go.mod replace to packages/sdk-go)]: migrations 1-84 on a scratch DB (column dump of agents, posts,
+  answers, approaches, progress_notes, responses, comments, votes, rooms, messages at 84), legacy seed, 85-135,
+  RunKnowledgeCutover (exceptions 0), real router on httptest:
+  - pre-upgrade bcrypt-only agent key authenticates (GET /v1/me 200; key_sha256 lazily backfilled); search finds
+    the migrated question and the problem with the migrated approach as matched reply; GET replies shows
+    legacy_type answer/approach; reply to a migrated post 201; handshake into the pre-upgrade room 201 and its
+    entries show the pre-upgrade message.
+  - POST /v1/posts by the seeded agent -> 429 RATE_LIMITED (retry 3599): seed artifact — rows timestamped now()
+    make the agent a new account (limit halved to 2) with 2 posts in the hour (create_ratelimit.go). Real legacy
+    rows are old: the seed backdates 40 days.
+  - The consumer workflow failed on all 3 schemas at "stream next" (10 s deadline) with LastEventID "0": the SSE
+    handler replays only for Last-Event-ID > 0 (rooms_sse.go:231). Consumer's mistake, not the API's: it now
+    resumes after its first entry and then receives a live one. (Finding below.)
+  - After that: the whole workflow succeeds on clean, clean with LegacyTables dropped, and upgraded.
+  Spike DBs dropped (solvr_spike78_84 by psql; the others by the test).
+
+DESIGN (no production code change: the spike found no API defect on these paths):
+  ?? contract/consumer/go.mod (module github.com/fcavalcantirj/solvr/contract/consumer, go 1.25.3 like sdk-go,
+    require sdk-go v0.0.0 + replace ../../packages/sdk-go; sdk-go has no dependencies, so no go.sum).
+  ?? contract/consumer/main.go (258 lines): doc comment = usage; env SOLVR_API_URL, SOLVR_API_KEYS (planner,executor),
+    SOLVR_RUN (one word in every text it writes), optional SOLVR_EXISTING_POST / SOLVR_EXISTING_ROOM, SOLVR_FIND
+    ("|"-separated); phases `collaborate` and `find`; prints ONE JSON report on stdout (what the SDK surfaced per
+    step; room tokens reported only as their prefix); a failed step -> exit 1 with failed_step, error, error_code
+    (failure implements Unwrap so errors.As reaches the SDK's *APIError — found by mutation m1, see below).
+  ?? contract/consumer/collaborate.go (253 lines): planner CreateRoom; both HandshakeRoom (own solvr_rt_ token);
+    planner entry, executor entry reply_to it; executor reads the message timeline one entry per page; planner
+    StreamRoom(LastEventID = its entry, type message) gets the executor's entry (replay), then a live entry the
+    executor sends while it watches; planner CreatePost (no type); executor reply, planner reply threaded under it;
+    anonymous ListReplies one per page; executor VoteReply up; anonymous GetPost of a missing id -> *APIError.
+    With SOLVR_EXISTING_POST: executor GetPost, ListReplies, reply threaded under the first (migrated) reply. With
+    SOLVR_EXISTING_ROOM: executor HandshakeRoom, reads its timeline, sends. `find`: anonymous Search per query.
+  ?? backend/internal/api/external_consumer_helpers_test.go (275 lines): productionSchemaVersion = 84;
+    newConsumerScratchSchema(t, before, seed) (first `before` migrations, seed in that schema, the rest);
+    serveConsumerSchema (real NewRouter + hub on httptest); registerConsumerAgent (POST /v1/agents/register);
+    buildExternalConsumer (`go build` in contract/consumer with GOWORK=off, 3 min timeout); runExternalConsumer
+    (90 s timeout, env = PATH + the SOLVR_* given, nothing ambient); approveConsumerPost (plays the moderator via
+    PostRepository.UpdateStatus(open)); the report types.
+  ?? backend/internal/api/external_consumer_test.go (321 lines):
+    TestExternalConsumer_CleanSchema/{every migration, legacy tables dropped}: two registered agents; collaborate;
+      approve; find by the run word.
+    TestExternalConsumer_UpgradedSchema: the 84th file is 000084_add_group_reply_fields_to_messages; seed at 84
+      (agent with ONLY a bcrypt key hash, question + answer, solved problem + approach + progress note, public room
+      + message, all 40 days old); 85-135; RunKnowledgeCutover (0 exceptions, 2 replies, 1 progress note); the
+      PLANNER is the pre-upgrade agent with its pre-upgrade key; collaborate with SOLVR_EXISTING_POST = the question
+      and SOLVR_EXISTING_ROOM = the legacy room; approve; find run word | "pgbouncer failover" | "cooperative
+      sticky assignor"; then a second cutover run.
+    Assertions (requireConsumerCollaborated, on every schema): handshakes = planner/executor ids, the slug,
+      solvr_rt_; entries' authors and reply_to; timeline (one per page, >= 2 pages) == what was sent; stream ==
+      [executor entry (replay), live entry]; room_entries (DB) message rows == entries + live, in sequence order;
+      post type "post", posted_by planner, moderation pending, DB row type post; replies: executor top-level, planner
+      threaded under it, DB rows (id, author, parent) in order and native (legacy_type NULL); reply pages: 2 x 1,
+      has_more/next_cursor then none, total 2, union == both; vote up and its DB row (target_type reply); missing
+      post 404 NOT_FOUND. Upgraded adds: pre-upgrade key got key_sha256 (it authenticated); existing post id/title,
+      type "question" (migrated posts keep their label); its one reply is the migrated answer (legacy_type answer,
+      legacy_id = the answer, author, body); follow-up threaded under it, native in API and DB; the executor
+      joined the pre-upgrade room (agent_id), saw the pre-upgrade message, sent one; room_entries == both; search
+      finds the consumer's post with both replies matched, the migrated question, and the problem with the
+      migrated approach's reply matched; the second cutover run: pending 0, replies created 0, progress notes 0,
+      post states 0, replies count unchanged.
+
+TESTS FIRST [logs /tmp/solvr_idx78_s22/]:
+  Scaffold before RED: contract/consumer with a main that prints {"phase": <arg>} (no behavior); go vet
+    ./internal/api exit 0 (vet_red.log).
+  RED [TEST] tdd/red.log (`go test ./internal/api/ -run TestExternalConsumer -count=1 -v`): 3 FAIL, all on
+    assertions — CleanSchema/every_migration and /legacy_tables_dropped and UpgradedSchema at
+    external_consumer_test.go requireConsumerCollaborated `require.NotEmpty(room.Slug)`: "Should NOT be empty". The
+    upgraded test's cutover assertions (0 exceptions, 2 replies, 1 progress note) already passed before it.
+  GREEN [TEST] tdd/green.log (final, after every edit): CleanSchema PASS (every_migration, legacy_tables_dropped),
+    UpgradedSchema PASS; 0 FAIL, 0 SKIP; ok 4.4 s.
+  MUTATIONS [TEST] (mut/, each alone, restored, `shasum -c mut/orig.sha` 4/4 OK):
+    m1 internal/db/agents.go getAgentByKeyBcryptFallback returns nil (pre-upgrade keys stop working) -> UpgradedSchema
+      FAIL `consumer collaborate failed at "createRoom": INVALID_API_KEY` (clean PASS). Its report first showed
+      code "" -> consumer bug (no Unwrap on failure) fixed; m1 re-run once: code "INVALID_API_KEY" (m1b.log).
+    m2 migrations/000094 copies no pre-upgrade message (`FROM seq WHERE false`) -> UpgradedSchema FAIL ("[]" should
+      have 1 item(s): the existing room timeline) (clean PASS).
+    m3 packages/sdk-go/replies.go ListReplies sends `after` instead of `cursor` -> all 3 FAIL ("two replies read one
+      per page": the same page 50 times) — the consumer goes through the SDK.
+    m4 handlers/rooms_sse.go never replays (afterID > 1<<62) -> all 3 FAIL at "streamRoom next": context deadline
+      exceeded.
+
+EXISTING TESTS CHANGED: none (no existing test edited, deleted or skipped).
+
+VERIFICATION [this session; DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test?sslmode=disable
+  (local docker solvr-postgres); the new tests create and drop their own solvr_scratch_consumer_* databases]:
+  [TEST] above (RED, GREEN, mutations).
+  [REAL] go vet ./internal/api exit 0; GOWORK=off go vet in contract/consumer exit 0; gofmt -l clean on the 4 new
+    Go files (gofmt -w applied once to each); ./scripts/check-file-size.sh from the repo root: "Found 32 file(s)
+    exceeding 800 lines" (same as slices 17-21), none of this slice's (largest 321).
+  [TEST] FULL BACKEND once (backend_full.log, `go test ./... -count=1`) -> exit 1: FAIL in internal/api,
+    api/handlers, db, jobs (rest ok). 116 failing names (names.fail), none ExternalConsumer, no SKIP of mine.
+    Against the union of slices 16/20/21 baselines: 45 names new (names.new; 44 top-level tests, new_by_pkg.txt:
+    api 10, jobs 4, db 30) -> run alone per package (alone.log, -v): api exit 0, jobs exit 0, db: 43 PASS, 1 FAIL =
+    TestRoomRepository_List/excludes_soft-deleted_rooms "Create() error = room slug already exists" (its parent is
+    in the s20/s21 baselines; shared-DB residue; no room code touched).
+    MEASURED: SQLSTATE 53300 "too many clients" lines 126 in this run vs 30 in slice 21 (8 in slice 20). I don't know
+    the cause. INFERRED, not shown: the new tests hold at most 12 connections (pool MaxConns 10 + admin + migration
+    connection, pool.go:90; server max_connections 100) for ~5 s of a 340 s package run. A psql of mine during the
+    run was itself refused with "too many clients" (saturation was already there).
+  NOT RUN: frontend (no frontend file touched); sdk-go/cli/mcp/skill suites (no file of theirs changed; the m3
+    mutation was restored and sha-checked).
+  [REAL] SMOKE (smoke/drive.sh, smoke.log): scratch DB solvr_smoke78_s22 from every migration via psql (56
+    tables); the REAL binary (go build ./cmd/api; env -i, throwaway JWT_SECRET, IPFS_API_URL dead port, PORT
+    18099, run from /tmp — no env file read); agents registered with curl; the consumer binary: collaborate exit 0
+    (room handoff-consumersmoke; entries 3 and 5 (reply_to 3); timeline [3,5] in 2 pages; stream [5, 9] with live
+    9; post type post, pending_review/pending; threaded reply; reply pages 1+1; vote up; missing 404 NOT_FOUND);
+    moderator step by psql setting the same 3 columns UpdateStatus(open) writes (DeriveStates: published,
+    approved); find exit 0: "consumersmoke" total 1 = the post with 2 matched replies; a bogus planner key -> exit 1,
+    failed_step createRoom, error_code INVALID_API_KEY. 20 /v1 request lines. Server killed (0 listeners on 18099),
+    DB dropped.
+
+FINDINGS, NOT FIXED:
+  - [REAL rooms_sse.go:231] Last-Event-ID (or ?after=) "0" replays nothing (only afterID > 0 replays), while the SDK
+    documents LastEventID as "the last event ID received: the stream replays what came after it" — a consumer
+    that has received nothing and passes "0" waits for live frames only. Owner call: replay from the start on 0,
+    or say so in the SDK/OpenAPI docs.
+  - [REAL] Without a moderation service (no GROQ_API_KEY) an external consumer's post never becomes searchable;
+    the tests play the moderator through UpdateStatus(open) — the only approve path; there is no operator route.
+  - Only the Go SDK is the external consumer here; the TS/Python SDKs, both CLIs, mcp-server, /v1/mcp and the skill
+    stay contract-tested against the recorded examples (slices 4-21), not run against the two schemas.
+  - The upgraded schema is a synthetic seed at 84 (no production data in tests); the real production upgrade
+    stays the owner's cutover gate (idx 93).
+  - The consumer needs Go >= 1.25.3 (its go.mod and sdk-go's), backend go.mod says 1.24.4; CI's backend job has no
+    DATABASE_URL, so these tests skip there before building the consumer.
+  - Slices 6-21 findings stand.
+
+REMAINING FOR idx 78 (next slices, in order):
+  23.. step 7 (participants, roles, invitations and recipient references as collections; each first-party
+    integration adds and works with a third and subsequent agent without creating another room; a members
+    command/tool where missing); findings of slices 6-22.
+
+UAT (for when idx 78 closes, not now): as slice 21 (push + deploy so the served skill/installer are 4.0.0, decide
+  the version numbers, regenerate solvr-skill.zip).
+
+git status at journal time [REAL]: ?? backend/internal/api/external_consumer_helpers_test.go,
+  backend/internal/api/external_consumer_test.go, contract/consumer/ (go.mod, main.go, collaborate.go); M progress.txt
+  (this entry). git diff --stat: no tracked file changed before this entry. spec.json unchanged (idx 78 passes stays
+  false).

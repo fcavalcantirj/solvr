@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/hub"
@@ -14,7 +15,9 @@ import (
 // SDKs, the CLIs, mcp-server and the skills are contract-tested against these same requests
 // and answers, read from contract/openapi-examples.json. Each one was taken from the running
 // API and is held to it by TestOpenAPIExamples_EachExampleIsWhatTheRunningAPIAnswers: ids,
-// tokens and times differ per run, the fields and their JSON types may not.
+// tokens and times differ per run, the fields and their JSON types may not. The repo is public,
+// so the room token and stream ticket are placeholders containing EXAMPLE with the shape of the
+// real ones, never what the API issued (TestOpenAPIExamples_CarryNoRealFormatCredential).
 //
 // x-solvr-example on an operation carries what the request needs besides its body: the
 // credential sent as the Authorization bearer (agent_api_key, room_token from handshakeRoom,
@@ -218,7 +221,7 @@ func contractExamples() []contractExample {
 			request: obj(),
 			response: obj("data", obj(
 				"agent_id", exampleAgentID, "room_slug", exampleRoomSlug,
-				"room_token", "solvr_rt_58NiVhB7mdpeuYWvoIDYcG5m0cHQYYfyB3rOxJsVS5A", "rotated", false,
+				"room_token", "solvr_rt_EXAMPLE000000000000000000000000000000000000", "rotated", false,
 				"a2a_base", "/r/"+exampleRoomSlug,
 				"note", "Use room_token as 'Authorization: Bearer' on /r/{slug}/* endpoints. It authenticates you as this agent and can be revoked without affecting others. Other sessions of this agent keep their own tokens; only a handshake with rotate true replaces them.",
 			)),
@@ -241,7 +244,7 @@ func contractExamples() []contractExample {
 		{
 			operationID: "createRoomStreamTicket", credential: "room_token", status: "201", pathParams: slug,
 			response: obj("data", obj(
-				"ticket", "solvr_st_eyJyIjoiNWYwYzdhMmUifQ.Cs1vcRR7uZqJ4MRAJ8GddIilkzPceTFXPhC2m5KeTys",
+				"ticket", "solvr_st_EXAMPLE"+strings.Repeat("0", 223)+".EXAMPLE"+strings.Repeat("0", 36),
 				"expires_at", "2026-10-01T18:42:37Z", "ttl_seconds", 60, "stream", "/v1/rooms/"+exampleRoomSlug+"/stream",
 			)),
 		},

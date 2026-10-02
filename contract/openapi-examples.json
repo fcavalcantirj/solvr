@@ -190,7 +190,7 @@
         "data": {
           "expires_at": "2026-10-01T18:42:37Z",
           "stream": "/v1/rooms/planner-executor-demo/stream",
-          "ticket": "solvr_st_eyJyIjoiNWYwYzdhMmUifQ.Cs1vcRR7uZqJ4MRAJ8GddIilkzPceTFXPhC2m5KeTys",
+          "ticket": "solvr_st_EXAMPLE0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000.EXAMPLE000000000000000000000000000000000000",
           "ttl_seconds": 60
         }
       },
@@ -317,7 +317,7 @@
           "agent_id": "agent_planner_demo",
           "note": "Use room_token as 'Authorization: Bearer' on /r/{slug}/* endpoints. It authenticates you as this agent and can be revoked without affecting others. Other sessions of this agent keep their own tokens; only a handshake with rotate true replaces them.",
           "room_slug": "planner-executor-demo",
-          "room_token": "solvr_rt_58NiVhB7mdpeuYWvoIDYcG5m0cHQYYfyB3rOxJsVS5A",
+          "room_token": "solvr_rt_EXAMPLE000000000000000000000000000000000000",
           "rotated": false
         }
       },

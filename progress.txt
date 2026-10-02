@@ -12427,3 +12427,149 @@ UAT (for when idx 78 closes, not now): as slice 21 (push + deploy so the served 
 
 git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged (idx 78
   passes stays false).
+
+2026-10-02 14:50 — Task idx 78 (spec.json, category functional) — IN PROGRESS, passes STAYS false
+"Keep SDKs, CLI, MCP, skills, and webhooks consistent with the redesigned product"
+SLICE 31 (skill half of REMAINING item "31.."): the agent skill's solvr.sh reads and grows a room's participants.
+`solvr.sh room members <slug>` (GET /v1/rooms/{slug}/members, listRoomMembers) and `solvr.sh room add-member
+<slug> <agent_id> [--role <role>]` (POST same, addRoomMember), both with the agent API key, the CLIs'/MCP's names
+and text, tested against a local stub server and driven against the real API with a third and fourth agent
+admitted to the same private room.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 78-95, 97, 98; URGENT idx 96 already
+  true. 24/67 acceptance (skipped as in every earlier entry); 68 waits on the owner (as journaled). idx 78 first
+  buildable; continued from slice 30 (HEAD f87aeaaf), REMAINING item "31.." (members commands in the skill). Tree
+  clean at start.
+
+DESIGN (code read this session: solvr.sh room dispatcher + help, solvr-rooms.sh request layer, solvr-helpers.sh
+  load_api_key/urlencode and the dashed room-members/room-add-member, test_contract.sh harness, the published-docs
+  Go tests, backend rooms_members.go error texts):
+  - The skill ALREADY had dashed adapter-era `room-members` / `room-add-member` (solvr-helpers.sh:774/789: api_call,
+    slug NOT escaped, "Members of <slug>:" / "Added <id> to <slug>"). Before this slice `room members <slug>` fell
+    through to `room <slug>` detail (GET /v1/rooms/members + /messages). The dashed commands are left untouched
+    (adapter commands, see FINDINGS); the canonical names are added beside room create/join/read/send/ticket/watch.
+  - solvr-rooms.sh: cmd_room_subcommand routes members/add-member; cmd_room_members_canonical and
+    cmd_room_add_member_canonical on solvr_request ... key (no key -> load_api_key's "No API key found" before any
+    request; a saved or SOLVR_ROOM_TOKEN room token is never presented), slug escaped with path_segment, no
+    Idempotency-Key, --role passed through unvalidated (empty --role = none sent), --json prints the API's answer,
+    errors through the existing solvr_report_error ("Error (<status>): CODE: message" + "  request id: <id>";
+    --json: the API's error answer on stderr). Text as the Go CLI/MCP: "<n> participants of <slug>:" then
+    "  <agent_id> <role> (added by <added_by>, since <created_at>)" in the API's order; "<agent> is in <slug> as
+    <role> (added by <added_by>)" + "It joins with its own API key: solvr.sh room join <slug>". A missing/empty
+    agent id, or a flag in its place, -> "room add-member requires a slug and an agent id" + usage, exit 1, no
+    request.
+
+WHAT CHANGED [REAL, git status --porcelain: M frontend/public/skill.md, M skill/SKILL.md, M skill/scripts/
+  solvr-rooms.sh, M skill/scripts/solvr.sh, ?? skill/scripts/test_members.sh; git diff --stat (tracked): 4 files,
+  69+/6-]:
+  PRODUCTION (skill/scripts):
+  M solvr-rooms.sh (491 -> 548): header names the two commands' credential; section title; routing; the two
+    functions in a new "Room participants: members, add-member" section.
+  M solvr.sh (1440 -> 1442; was already over 800 — check-file-size.sh scans only backend/frontend Go/TS): the
+    `room` dispatcher routes members|add-member (its error/usage lines list them); help gains
+    "room members <slug>" and "room add-member <slug> <agent_id> [--role owner|member]".
+  DOCS: skill/SKILL.md and frontend/public/skill.md (+2/-2 each, same text): the "Room commands — the same names
+    as the Solvr CLIs and MCP tools" list adds members | add-member; one sentence says they present the agent API
+    key, are the owner's (/v1/rooms/{slug}/members), the owner admits a third/fourth/later agent by its Agent ID
+    and that agent runs `room join` with its own key, and a private room admits only agents added this way (and
+    the owner's family — per openapi_member_paths.go); the example block gains `room add-member planner-executor
+    agent_reviewer` and `room members planner-executor`. skill.json unchanged (its endpoints already list
+    room_members); install.sh unchanged (no new sourced file).
+  TESTS: ?? skill/scripts/test_members.sh (289, 22 checks, test_contract.sh's pattern: python3 server on
+    127.0.0.1:0 recording method/path/query/Authorization/Content-Type/Idempotency-Key/body; 15 s watchdog per
+    run; every run has a saved room token in rooms.json AND SOLVR_ROOM_TOKEN set): members -> exactly 1 GET to
+    /v1/rooms/a%20b%2Fc/members with Bearer key, no query/body, exact human text with rows in the API's order
+    (agent_planner, zeta_executor, alpha_reviewer — a sort breaks it); --json == the answer; add-member -> 1 POST,
+    body exactly {"agent_id":"zeta_executor"}, Content-Type JSON, no Idempotency-Key, exact text + join hint;
+    --role owner in the body; --json == answer; --role admin SENT and the API's 400 VALIDATION_ERROR reported;
+    FORBIDDEN 403 (members), INVALID_AGENT 400, LAST_OWNER 409 (add) x {human: exit 1, empty stdout, "CODE:
+    message" + "request id: <id>"; json: stderr == the error answer}, each sent once; no key (both) -> exit 1,
+    "No API key", no request; no slug / no agent id / "" / flag in its place / no args -> exit 1, no request;
+    help lists both.
+
+TESTS FIRST [logs /tmp/solvr_idx78_s31/]:
+  [TEST] baseline (before any change): test_contract 45/0, test_room_credentials 13/0, test_canonical_posts 55/0,
+    test_migration 108/0, test.sh all passed (base_*.log).
+  [TEST] RED tdd/red.log: 19 FAIL / 2 pass — the failures show `room members`/`add-member` routed to the room
+    detail (GET /v1/rooms/members + /messages, exit 5); the 2 passing were the no-key checks (vacuous: the detail
+    path needs the key too).
+  [TEST] GREEN tdd/green.log: Passed 22, Failed 0.
+  MUTATIONS [TEST] (mut/mut.py, mut/m*.log, mut/summary.log; each alone over test_members.sh, restored,
+    `shasum -c mut/orig.sha` OK for solvr-rooms.sh and solvr.sh), 14/14 caught: m1 members presents the room
+    token -> 5 FAIL; m2 role defaults member -> 4; m3 /participants -> 4; m4 add PUT -> 8; m5 rows sorted -> 1;
+    m6 skill validates role -> 1 (first attempt's anchor matched twice, not applied; re-run with a unique anchor);
+    m7 slug not escaped -> 5; m8 add-member not routed -> 13; m9 join hint dropped -> 1; m10 add ignores --json
+    -> 1; m11 Idempotency-Key sent -> 8; m12 members presents no key -> 5; m13 help line dropped -> 1; m14 empty
+    agent id allowed -> 2.
+
+OTHER CHECKS [this session]:
+  [TEST] after the change: test_members 22/0, test_contract 45/0, test_room_credentials 13/0,
+    test_canonical_posts 55/0, test_migration 108/0, test.sh all passed (after_*.log). shellcheck -S warning
+    solvr-rooms.sh test_members.sh: exit 0, clean. bash -n solvr.sh / solvr-rooms.sh ok.
+  [TEST] docs_v.log: DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test (local docker solvr-postgres)
+    `go test -count=1 -v -run 'TestPublished|TestSpecMCPSections' ./internal/api/`: ok, 11 PASS, 0 SKIP/FAIL (they
+    read SKILL.md and frontend/public/skill.md).
+  [TEST] frontend `npm test` once (fe_full.log): 202 files, 1761 passed, exit 0 (no frontend test reads
+    public/skill.md — grep; only that static file changed under frontend/).
+
+REAL-API SMOKE [REAL, smoke/smoke.log]: `go build ./cmd/api -> smoke/api`, run from /tmp under env -i with
+  DATABASE_URL = local docker solvr-postgres solvr_test, a throwaway JWT_SECRET, PORT 18099 (port free first; no env
+  file read); smoke/smoke.sh runs THIS solvr.sh as 4 registered agents (planner, executor, reviewer, tester), each
+  with its own SOLVR_API_KEY and SOLVR_CONFIG_DIR, every call under a 20 s watchdog. 24 OK, "SMOKE OK
+  members-s31-1790962880": planner `room create --private`; executor `room join` before admission -> exit 1
+  "Error (403): FORBIDDEN: not authorized to join this closed room; ask the owner to add you as a member" + request
+  id; planner `room add-member` executor -> exact text + join hint; reviewer --json -> exactly the 5 fields, role
+  member, added_by planner; re-adding reviewer leaves `room members --json` byte-identical; tester admitted
+  (fourth); `room members` -> "4 participants of <slug>:", planner owner (added by system) first, the 3 others
+  member added by the planner in admission order; all 4 `room join` -> 4 distinct solvr_rt_ tokens in their own
+  rooms.json; planner send --to the 3 -> addressed_member_ids echoed; each of the 3 `room send --reply-to` the plan;
+  each of the 4 `room read --kind message --json` -> 4 messages; tester `room members` -> FORBIDDEN + request id;
+  tester add self --role owner -> FORBIDDEN; unknown agent -> INVALID_AGENT; demoting the only owner -> LAST_OWNER;
+  --role admin --json -> stderr the API's VALIDATION_ERROR answer with request_id, empty stdout; no key -> "No API
+  key"; participants still 4, roles [owner, member, member, member]. ("Terminated" lines are the watchdogs.)
+  Runs before it (kept): run 1 (smoke_run1_badsecret.log) — my throwaway JWT_SECRET was 30 chars, the API logged
+  "Database pool is nil. V1 API routes will not be mounted", every call 404, nothing written; restarted with a
+  longer secret. Runs 2 and 3 (smoke_run2/3_checkbug.log): 23 OK + 1 FAIL each on MY smoke assertion for the
+  members header (`cut` per line, then a `case` inside $() under bash 3.2); the printed output (members_human.txt)
+  was already right; fixed the assertion, run 4 is the one above.
+  API stopped (kill; port 18099: 0 listeners). Rows of runs 2-4 deleted in one transaction (smoke/cleanup.log:
+  room_entries 15, room_agent_tokens 12, notifications 9, rooms 3 (cascaded members), agents 12; recount rooms/
+  agents/members/tokens/notifications of the run all 0); reg-*.json with the throwaway keys removed.
+
+EXISTING TESTS CHANGED: none (no test file modified, skipped or loosened; the only test change is the new
+  test_members.sh). contract/openapi-examples.json unchanged, so test_contract.sh's covered list does not move yet.
+
+VERIFICATION [this session]: [TEST] and [REAL] above.
+  NOT RUN: backend `go test ./...` (no Go file changed; the docs tests that read the two changed .md files ran,
+    and the smoke ran the real binary); sdk-go/sdk-ts/sdk-python/packages/cli/cli/mcp-server suites (untouched);
+    ./scripts/check-file-size.sh (scans backend/frontend Go/TS only; none changed). frontend/public/solvr-skill.zip
+    not rebuilt (owner's UAT, slice 21).
+
+FINDINGS, NOT FIXED:
+  - Slices 6-30 findings stand (members list owner-only; LAST_OWNER absent from the shared Conflict text; host
+    backstop commit message; the owner's participant row answers added_by "system"; cli/config_test.go not
+    gofmt-clean; MCP versions not bumped).
+  - [REAL] The skill now has two spellings for the same two routes: canonical `room members` / `room add-member`
+    (escaped slug, CLI text) and the adapter-era `room-members` / `room-add-member` (unescaped slug, old text),
+    and SKILL.md's Agent Coordination section still teaches the dashed ones. Retiring or aliasing them belongs with
+    the adapter-command retirement (slice 11 finding); owner call.
+  - [REAL] solvr.sh grew 1440 -> 1442 (help lines); it was already over the 800-line rule (not CI-scanned).
+
+REMAINING FOR idx 78 (next slices, in order):
+  32.. ONE slice adds the x-solvr-examples (listRoomMembers, addRoomMember + an error example), regenerates the
+    fixture, and adds each client's CALLERS / commands entry together (mcp-server: MEMBER_TOOLS -> OPERATION_TOOLS
+    + contract.test.ts calls, replies.test.ts back to OPERATION_TOOLS + solvr_claim; backend: MCPMemberTools ->
+    MCPOperationTools + mcpContractCalls entries, router_test.go/SPEC 18.2 wording "one tool per contract
+    operation" again true, TestMCPMemberTools_MatchTheNpmServer retired with a named replacement; cli/
+    contract_test.go contractCommands; packages/cli contract.test.ts commands map; skill test_contract.sh covered
+    list + contract() calls for `room members` / `room add-member`; Python: see slice 26 NOTE) so no suite is red
+    between slices; then findings of slices 6-31.
+
+UAT (for when idx 78 closes, not now): as slice 21 (push + deploy so the served skill/installer are 4.0.0, decide
+  the version numbers, regenerate solvr-skill.zip); deploying the API so production /v1/mcp serves the two member
+  tools; publishing @solvr/cli and @solvr/mcp-server with the member tools/commands and releasing the Go CLI are
+  the owner's.
+
+git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged (idx 78
+  passes stays false).

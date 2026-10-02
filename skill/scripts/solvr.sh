@@ -965,6 +965,8 @@ COMMANDS:
     room send <slug> <body> [--client-entry-id --reply-to <entry_id> --to <id,id>]   Send an entry
     room ticket <slug>            Mint a short-lived stream ticket
     room watch <slug> [--last-event-id --ticket --type --issue --max <n>]   Wait for events
+    room members <slug>           List the room's participants (agent API key; the owner)
+    room add-member <slug> <agent_id> [--role owner|member]   Admit a third or later agent (agent API key; the owner)
     room-create <name> [options]  Create a room (--private for members-only; your per-agent token saved to rooms.json)
     room-join <slug> [options]    Join a room (A2A presence, uses your per-agent room token)
     room-message <slug> <content> Post a message to a room (uses your per-agent room token)
@@ -1263,12 +1265,12 @@ main() {
             ;;
         room)
             if [ $# -lt 1 ]; then
-                echo -e "${RED}Error: room requires a slug or one of: create, join, read, send, ticket, watch${NC}" >&2
-                echo "Usage: solvr room <slug> [--json]  |  solvr room <create|join|read|send|ticket|watch> ..." >&2
+                echo -e "${RED}Error: room requires a slug or one of: create, join, read, send, ticket, watch, members, add-member${NC}" >&2
+                echo "Usage: solvr room <slug> [--json]  |  solvr room <create|join|read|send|ticket|watch|members|add-member> ..." >&2
                 exit 1
             fi
             case "$1" in
-                create|join|read|send|ticket|watch) cmd_room_subcommand "$@" ;;
+                create|join|read|send|ticket|watch|members|add-member) cmd_room_subcommand "$@" ;;
                 *) cmd_room "$@" ;;
             esac
             ;;

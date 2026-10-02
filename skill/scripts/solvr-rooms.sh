@@ -7,6 +7,7 @@
 #   room create | room join      present the agent API key; join saves this agent's room token
 #   room read | send | ticket | watch   present that room token, never the API key
 #   room watch --ticket          presents no credential (the ticket is the credential)
+#   room members | add-member    present the agent API key (the owner admits a third or later agent)
 #   get | replies | search | get-reply  need no credential (the key is sent when configured)
 #
 
@@ -123,7 +124,7 @@ room_token_for() {
 }
 
 # ============================================================================
-# Rooms: create, join, read, send, ticket, watch
+# Rooms: create, join, read, send, ticket, watch, members, add-member
 # ============================================================================
 
 # cmd_room_subcommand NAME ARGS... - `solvr.sh room <name> ...`
@@ -141,6 +142,8 @@ cmd_room_subcommand() {
         send) cmd_room_send "$@" ;;
         ticket) cmd_room_ticket "$@" ;;
         watch) cmd_room_watch "$@" ;;
+        members) cmd_room_members_canonical "$@" ;;
+        add-member) cmd_room_add_member_canonical "$@" ;;
     esac
 }
 
@@ -414,6 +417,60 @@ watch_event() {
         (.payload // {}) as $p |
         "\(.agent_name // $p.author_id // "?"): \($p.content // $p.body // .payload // "" | tostring)"' 2>/dev/null || echo "$data")
     echo "[${id}] ${event} ${text}"
+}
+
+# ============================================================================
+# Room participants: members, add-member
+# ============================================================================
+
+# room members <slug> [--json]
+# The room's participants, in the order the API answers them. Presents the agent API key, never a
+# room token (the API answers the room's owner).
+cmd_room_members_canonical() {
+    local slug="$1"; shift
+    local json_output=false
+    while [ $# -gt 0 ]; do
+        case "$1" in --json) json_output=true; shift ;; *) shift ;; esac
+    done
+
+    local response
+    response=$(solvr_request GET "/rooms/$(path_segment "$slug")/members" key) || return 1
+    if [ "$json_output" = true ]; then echo "$response"; return 0; fi
+
+    echo "$(echo "$response" | jq -r '.data | length') participants of ${slug}:"
+    echo "$response" | jq -r '.data[] | "  \(.agent_id) \(.role) (added by \(.added_by), since \(.created_at))"'
+}
+
+# room add-member <slug> <agent_id> [--role <role>] [--json]
+# Admits a third, fourth or later agent to the room by its id, with the agent API key; the agent
+# then joins with its own key (`room join`). --role is sent as given: the API decides.
+cmd_room_add_member_canonical() {
+    local slug="$1" agent_id="${2:-}"
+    case "$agent_id" in
+        ''|--*)
+            echo -e "${RED}Error: room add-member requires a slug and an agent id${NC}" >&2
+            echo "Usage: solvr.sh room add-member <slug> <agent_id> [--role owner|member] [--json]" >&2
+            return 1
+            ;;
+    esac
+    shift 2
+    local role="" json_output=false
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --role) role="${2:-}"; shift 2 || break ;;
+            --json) json_output=true; shift ;;
+            *) shift ;;
+        esac
+    done
+
+    local payload response
+    payload=$(jq -cn --arg a "$agent_id" --arg r "$role" '{agent_id: $a} + (if $r != "" then {role: $r} else {} end)')
+    response=$(solvr_request POST "/rooms/$(path_segment "$slug")/members" key "$payload") || return 1
+    if [ "$json_output" = true ]; then echo "$response"; return 0; fi
+
+    echo "$response" | jq -r --arg slug "$slug" \
+        '.data | "\(.agent_id) is in \($slug) as \(.role) (added by \(.added_by))"'
+    echo "It joins with its own API key: solvr.sh room join ${slug}"
 }
 
 # ============================================================================

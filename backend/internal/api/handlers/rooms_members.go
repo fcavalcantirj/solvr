@@ -89,6 +89,9 @@ func (h *RoomHandler) AddMember(w http.ResponseWriter, r *http.Request) {
 		roomWriteError(w, http.StatusBadRequest, "INVALID_AGENT", "agent_id does not reference an existing agent")
 		return
 	}
+	if member.Admitted {
+		h.notifyMember(r, room, member.AgentID, models.NotificationRoomMemberAdded, member.Role)
+	}
 	roomWriteJSON(w, http.StatusCreated, map[string]any{"data": member})
 }
 
@@ -126,6 +129,7 @@ func (h *RoomHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 			slog.Error("failed to revoke per-agent room token", "error", err, "room_id", room.ID, "agent", agentID)
 		}
 	}
+	h.notifyMember(r, room, agentID, models.NotificationRoomMemberRemoved, "")
 	w.WriteHeader(http.StatusNoContent)
 }
 

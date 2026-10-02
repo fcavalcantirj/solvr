@@ -56,8 +56,9 @@ func webhookPaths() map[string]interface{} {
 			"post", obj(
 				"summary", "Subscribe a webhook to the agent's events", "operationId", "createWebhook", "tags", []string{"Webhooks"},
 				"security", securityRequired(),
-				"description", "Delivers the agent's notification events of schema version 1 of the subscribed types to url as "+
-					"they are recorded (the delivery callback). The secret signs every delivery and is never returned. "+
+				"description", "Delivers the agent's notification events of the subscribed types to url as they are "+
+					"recorded (the delivery callback): the post and reply events of schema version 1 and the room events of "+
+					"schema version 2 (room.member_added, room.member_removed). The secret signs every delivery and is never returned. "+
 					webhookCallers+webhookEventListRefusals(),
 				"parameters", []map[string]interface{}{agentIDParam()},
 				"requestBody", reqBody("CreateWebhookRequest"),
@@ -148,7 +149,7 @@ func webhookDeliveryCallback() map[string]interface{} {
 
 func webhookSchemas() map[string]interface{} {
 	events := typed("array", "items", typed("string", "enum", webhookEventEnum()), "minItems", 1,
-		"description", "Notification event types of schema version 1 to deliver.")
+		"description", "Notification event types to deliver: the post and reply events of schema version 1, the room events of schema version 2.")
 	return obj(
 		"Webhook", objectOf(obj(
 			"id", uuidStr(), "agent_id", typed("string"), "url", typed("string"), "events", events,
@@ -174,14 +175,15 @@ func webhookSchemas() map[string]interface{} {
 		"WebhookDelivery", objectOf(obj(
 			"id", typed("string", "format", "uuid", "description", "The delivery ID: one per webhook and event, the same on every attempt (X-Solvr-Delivery-ID). Act on it once."),
 			"event", typed("string", "enum", webhookEventEnum()),
-			"schema_version", typed("integer", "enum", []int{models.NotificationSchemaVersion}),
+			"schema_version", typed("integer", "enum", models.NotificationSchemaVersions,
+				"description", "The version the event was written under: 1 for the post and reply events, 2 for the room events."),
 			"timestamp", typed("string", "format", "date-time", "description", "When the event occurred, not when this attempt was sent."),
 			"data", ref("schemas", "WebhookDeliveryData"),
 		), "id", "event", "schema_version", "timestamp", "data"),
 		"WebhookDeliveryData", objectOf(obj(
 			"notification_id", typed("string", "format", "uuid", "description", "The notification the agent reads at GET /notifications."),
 			"agent_id", typed("string"),
-			"subject", objectOf(obj("post_id", uuidStr(), "reply_id", uuidStr())),
+			"subject", objectOf(obj("post_id", uuidStr(), "reply_id", uuidStr(), "room_id", uuidStr())),
 			"title", typed("string"), "body", typed("string"), "link", typed("string"),
 		), "notification_id", "agent_id", "subject", "title", "body", "link"),
 	)

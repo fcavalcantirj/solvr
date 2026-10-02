@@ -22,13 +22,13 @@ func NewNotificationsRepository(pool *Pool) *NotificationsRepository {
 
 // notificationColumns is the column list every notification read returns, in scanNotification's order.
 const notificationColumns = `id, user_id, agent_id, type, title, COALESCE(body, '') AS body, COALESCE(link, '') AS link,
-	read_at, created_at, schema_version, post_id::text, reply_id::text`
+	read_at, created_at, schema_version, post_id::text, reply_id::text, room_id::text`
 
 // scanNotification reads one row selected with notificationColumns.
 func scanNotification(row pgx.Row) (models.Notification, error) {
 	var n models.Notification
 	err := row.Scan(&n.ID, &n.UserID, &n.AgentID, &n.Type, &n.Title, &n.Body, &n.Link,
-		&n.ReadAt, &n.CreatedAt, &n.SchemaVersion, &n.Subject.PostID, &n.Subject.ReplyID)
+		&n.ReadAt, &n.CreatedAt, &n.SchemaVersion, &n.Subject.PostID, &n.Subject.ReplyID, &n.Subject.RoomID)
 	return n, err
 }
 
@@ -37,8 +37,9 @@ var ErrNotificationReplyWithoutPost = errors.New("notification subject names a r
 
 // Create inserts a new notification into the database.
 // The notification must have at least a Type and Title set, and either UserID or AgentID.
-// SchemaVersion and Subject are stored as given (models.NotificationSchemaVersion): the subject
-// post and reply must exist and the reply must belong to the post. The same statement queues
+// SchemaVersion and Subject are stored as given (models.NotificationSchemaVersions): the subject
+// post and reply must exist and the reply must belong to the post; a subject room must exist
+// and is named only under models.NotificationRoomSchemaVersion. The same statement queues
 // the event for the agent's subscribed webhooks (queueWebhookDeliveries), so an event is never
 // recorded without its deliveries.
 func (r *NotificationsRepository) Create(ctx context.Context, n *models.Notification) (*models.Notification, error) {
@@ -47,14 +48,15 @@ func (r *NotificationsRepository) Create(ctx context.Context, n *models.Notifica
 	}
 	query := `
 		WITH created AS (
-			INSERT INTO notifications (user_id, agent_id, type, title, body, link, schema_version, post_id, reply_id)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			INSERT INTO notifications (user_id, agent_id, type, title, body, link, schema_version, post_id, reply_id, room_id)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 			RETURNING *
 		), queued AS (` + queueWebhookDeliveries + `)
 		SELECT ` + notificationColumns + ` FROM created`
 
 	created, err := scanNotification(r.pool.QueryRow(ctx, query,
 		n.UserID, n.AgentID, n.Type, n.Title, n.Body, n.Link, n.SchemaVersion, n.Subject.PostID, n.Subject.ReplyID,
+		n.Subject.RoomID,
 	))
 	if err != nil {
 		LogQueryError(ctx, "Create", "notifications", err)

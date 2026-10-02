@@ -10339,3 +10339,168 @@ UAT: none for this slice (documentation of already-served routes; no migration).
 
 git status at journal time [REAL]: as FIX above (4 M, 3 ??), plus M progress.txt (this entry). spec.json unchanged
   (idx 78 passes stays false).
+
+2026-10-01 23:07 — Task idx 78 (spec.json, category functional) — IN PROGRESS, passes STAYS false
+"Keep SDKs, CLI, MCP, skills, and webhooks consistent with the redesigned product"
+SLICE 16: step 4, room half — "Map webhook and notification events to canonical post/reply/room identifiers".
+A room owner admitting an agent to a room, or removing it, now notifies that agent with an event naming the
+canonical room (subject.room_id) under schema version 2, readable in GET /v1/notifications and the /v1/me inbox
+and delivered to the agent's webhooks subscribed to it (same delivery-ID/retry machinery as slice 14).
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 78-95, 97, 98; URGENT idx 96 already
+  true. 24/67 acceptance (skipped as in every earlier entry); 68 waits on the owner (as journaled). idx 78 first
+  buildable; continued from slice 15 (HEAD 4be01f62), REMAINING item "16.. step 4 rest: room events (and room_id
+  in the subject)". Tree clean at start.
+
+STATE FOUND [REAL, code read this session]: no notification named a room (types post.approved/post.rejected/
+  reply.removed/reply.flagged/blog_post_rejected only). Memberships change in exactly three places:
+  RoomHandler.AddMember (owner admits an agent, POST /v1/rooms/{slug}/members), RemoveMember (owner removes,
+  DELETE .../members/{agent_id}) and the handshake's ensureMember (an agent joining by itself). SPEC 5.6 already
+  said "New event types or subject fields are added under a new schema_version".
+
+DESIGN:
+  - Schema version 2 = the room events + subject.room_id. Version 1 events keep version 1 (a v1 reader still reads
+    every event it knows). models: NotificationRoomSchemaVersion = 2, NotificationSchemaVersions = [1, 2],
+    NotificationRoomMemberAdded "room.member_added", NotificationRoomMemberRemoved "room.member_removed",
+    NotificationSubject.RoomID (json room_id, omitempty). Both added to ValidWebhookEventTypes.
+  - Migration 000135_room_notification_events: notifications.room_id UUID FK rooms ON DELETE SET NULL (+ partial
+    index), schema_version CHECK (0,1,2), CHECK (room_id IS NULL OR schema_version = 2); webhook_deliveries
+    schema_version CHECK (1,2); webhooks.events comment. Down: drops version-2 deliveries, turns version-2 rows
+    into version 0 (kept, no subject), restores the checks, removes the room names from webhooks.events.
+  - Producer: RoomMemberRepository.Add returns Admitted (json:"-", like AccessSource) = `created_at = NOW()` in
+    RETURNING — true for a new or readmitted membership (both set created_at to the statement's NOW()), false for
+    a re-add, promotion or demotion of an active member (keeps its own created_at; also false for a concurrent
+    second admission). New handlers/rooms_member_events.go: SetMemberNotifier + notifyMember (skips when the
+    caller IS the agent — managerIdentity; records after the committed change, context.WithoutCancel + 5s, logs a
+    failure like the moderation producers). AddMember notifies when Admitted; RemoveMember after a successful
+    removal. Handshake/ensureMember untouched, so a self-join notifies nobody. router_rooms.go wires
+    db.NewNotificationsRepository(pool).Create.
+  - Delivery: queueWebhookDeliveries queues schema_version IN (1, 2) and puts room_id in data.subject.
+  - OpenAPI: Notification.schema_version enum [0,1,2] + text, type text names the room events, subject.room_id;
+    WebhookDelivery.schema_version enum [1,2] + description; WebhookDeliveryData.subject.room_id; createWebhook and
+    the events array describe both versions. EVENT_RETIRED message: "notification events: <list>" (dropped
+    "of schema version 1").
+
+TESTS FIRST [logs /tmp/solvr_idx78_s16/]:
+  ?? backend/internal/db/notification_room_events_test.go (209, scratch DBs): _ARoomEventIsVersionTwoAndNamesItsRoom
+    OnEveryRead (create/list/inbox/find/mark-read; JSON subject is {room_id} only; a v1 event stays v1),
+    _TheRoomSubjectIsEnforced (unknown room, room_id under v1, version 3 all refused, nothing stored),
+    _DeletingTheRoomKeepsTheNotification, _ARoomEventIsQueuedForTheWebhooksSubscribedToIt (only subscribed hooks,
+    schema_version 2, exact data JSON, claimed deliveries keep v2), TestRoomMemberRepository_AddReportsWhenThe
+    MembershipBecameActive (new true, re-add/promote/demote false, readmission true, never in JSON).
+  ?? backend/internal/api/router_room_member_events_test.go (206, real router + solvr_test + TLS receiver):
+    _TheAdmittedAndRemovedAgentIsNotifiedAndItsWebhookDelivered (agent-owned private room; admit twice = 1 event;
+    owner not notified; /v1/notifications answers validate against the published Notification schema; /v1/me
+    inbox names the room; delivery job on two instances sends each event once, HMAC verified, payload validates
+    against WebhookDelivery, data.subject {room_id}; removal = room.member_removed; readmission = 2nd added;
+    promotion is not an admission; the promoted member removing ITSELF is not an event),
+    _AHumanOwnersAdmissionNotifiesTheAgentAndASelfJoinNotifiesNobody (JWT owner admits -> event; the admitted
+    agent's handshake 201 adds none; a self-join of a public room by handshake adds none). Own name prefixes
+    (rmev_/rmev-) because roomPreCleanup deletes every roomtest_/test- row other tests make.
+  M openapi_notification_event_test.go: + TestOpenAPI_NotificationDocumentsTheRoomEventsOfVersionTwo.
+  M frontend api-endpoint-data-notifications.test.ts / -webhooks.test.ts: +1 test each (room events, schema_version
+    2, subject.room_id named).
+  RED [TEST] red_db.log / red_api.log / red_handlers.log / fe_red.log: every failure an assertion, none a compile
+    error (model declarations were added first so the tests compiled): db 5 new + rollback count; api 2 new +
+    OpenAPI x3 + supported list; handlers 2; frontend 2.
+
+EXISTING TESTS CHANGED (protocol; each is the same assertion over the grown contract, nothing loosened):
+  1. api/openapi_notification_event_test.go TestOpenAPI_NotificationDocumentsTheEventContract asserted
+     `require.Equal(t, []interface{}{float64(0), float64(1)}, version["enum"])`, description contains "0" and "1",
+     `require.Len(t, props, 2)` + Contains post_id/reply_id. Now enum [0,1,2], description also "2", subject props
+     == jsonFields(models.NotificationSubject) (stronger: pinned to the model) and == [post_id reply_id room_id].
+     Covered further by NEW TestOpenAPI_NotificationDocumentsTheRoomEventsOfVersionTwo. PASS [TEST] final_api.log.
+  2. api/openapi_webhooks_test.go _SchemasDescribe...: `WebhookDeliveryData.subject properties` == [post_id
+     reply_id] -> == jsonFields(models.NotificationSubject) and that == [post_id reply_id room_id];
+     `assert.Equal([]interface{}{float64(models.NotificationSchemaVersion)}, ...schema_version.enum)` -> [1, 2].
+     PASS [TEST].
+  3. api/router_webhooks_test.go TestWebhooks_RetiredAndUnknown...: `supported` (the EVENT_RETIRED
+     details.supported_events) 5 names -> the same 5 + room.member_added, room.member_removed. PASS [TEST].
+  4. handlers/webhooks_events_test.go TestCreateWebhook_ARetiredEventNameAnswersTheMigrationError: same list
+     change. PASS [TEST]. handlers/webhooks_test.go TestIsValidWebhookEventType: rows ADDED (room.member_added
+     true, room.member_removed true, room.member_joined false); no row changed. PASS [TEST].
+  5. db/cutover_rollback_test.go `50, "down migrations 000134..000085"` -> `51, "down migrations 000135..000085"`
+     (000135.down runs too; same per-migration bump as slices 12-14). PASS [TEST] green_db.log.
+  Nothing deleted, skipped or loosened.
+
+FIX (GREEN) [git status --porcelain + git diff --stat this session: 23 tracked files 179+/64-, 5 new]:
+  ?? backend/migrations/000135_room_notification_events.{up,down}.sql (26/18).
+  ?? backend/internal/api/handlers/rooms_member_events.go (47): SetMemberNotifier, notifyMember.
+  M handlers/rooms.go (+3, field memberNotify), handlers/rooms_members.go (+4, the two calls), api/router_rooms.go
+    (+1 wiring), handlers/webhooks.go (1 line, EVENT_RETIRED message).
+  M db/notifications.go (columns/scan/insert room_id, doc), db/webhook_deliveries.go (versions 1-2, room_id in
+    data.subject), db/room_members.go (Add returns Admitted; scanMember takes extra destinations).
+  M models/notification.go (+20), models/room_member.go (+3), models/webhook.go (2 events; the const block was
+    realigned by gofmt).
+  M api/openapi_notification_schemas.go, api/openapi_webhook_paths.go (as DESIGN).
+  M SPEC.md (+25/-10): 5.6 schema-2 table (room.member_added/removed, room_id), subject bullet, a bullet on who is
+    notified when (owner admits/removes; retry/role change not an admission; self handshake not notified), webhook
+    bullet "versions 1 and 2"; 12.3 intro, events table +2 rows, "subject ... or the room".
+  M frontend/components/api/api-endpoint-data-user.ts (453 -> 460): type filter lists both versions; Webhooks group
+    description subject {post_id, reply_id, room_id} + versions; events param lists the room events.
+  M frontend/lib/api-types.ts (+1): NotificationSubject.room_id?.
+  + the test files above.
+
+VERIFICATION [this session; DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test?sslmode=disable
+  (local docker solvr-postgres); scratch-DB tests make and drop their own DBs]:
+  [REAL] `migrate up` on solvr_test 134 -> 135 (migrate_up.log), schema_migrations 135 dirty=f. Scratch DB
+    s16_migcheck: up to 135 (room_id present), down 1 (column gone; checks back to IN (0,1) and = 1), up again
+    (135 dirty=f; the three checks as designed); dropped (migcheck.log).
+  [TEST] GREEN: green_db.log 19 PASS 0 FAIL 0 SKIP (the 5 new + TestRoomMemberRepository_*,
+    TestNotificationEventContract_*, TestWebhookDeliveries_*, TestWebhookRepository_*, TestCutoverRollback_*);
+    final_api.log 17 PASS 0 FAIL 0 SKIP (TestRoomMemberEvents_* x2, TestOpenAPI_Notification* x2,
+    TestOpenAPIWebhooks_* x6, TestWebhooks_*, TestNotificationEvents_*); final_handlers.log 38 PASS 0 SKIP.
+    green_api.log also ran TestNAgentRoom_PrivateAdmissionAndIndividualRevocationAcrossInstances: PASS.
+    (First GREEN api run failed one assertion of MY test: the handshake answers 201, the test expected 200 — test
+    corrected to the served code.)
+  MUTATIONS [TEST] (mut/mut.py, each alone, sources restored — verified by grepping each original string back,
+    count 1 each; the shasum file came out empty because zsh did not split $F): m1 Add always Admitted -> db
+    _AddReports + api _TheAdmitted... FAIL; m2 no self-check -> api FAIL (self-removal event); m3 queue only v1 ->
+    db _Queued + api FAIL; m4 no room_id in delivery subject -> db + api FAIL; m5 RemoveMember not notifying ->
+    api FAIL; m6 reads drop room_id -> db _EveryRead + both api FAIL. Every FAIL an assertion.
+  [TEST] frontend: components/api 9 files 96 PASS (fe_green_api.log); FULL `npm test` once (frontend_full.log)
+    exit 0, 202 files, 1758 tests passed (slice 15: 1756). `npm run typecheck` exit 0; eslint on the 4 changed
+    frontend files exit 0.
+  [TEST] FULL BACKEND (once, backend_full.log, `go test ./...`) -> exit 1: FAIL in internal/api, api/handlers, db
+    (jobs passed this time). 78 failing names (names.mine) vs slice 15's 92: 23 of those pass now, 9 are new, all
+    shared-data/connection collisions: TestSearchIntegration_ExactTitleMatch/_MultiWordQuery/_PartialWordMatch
+    ("FATAL: sorry, too many clients already (SQLSTATE 53300)", 10 such lines) -> alone_handlers.log 3 PASS;
+    TestAPIUsagePulse_x2 (counter 11 vs 5, 85014 vs 85000), TestCommentsCount_IdeasShowCountAfterComment (409
+    DUPLICATE_CONTENT on a shared post), TestHomepageOverview_AllTimeTotals... -> alone 4 PASS (alone_db.log,
+    alone_api.log); TestSearchPulse_SeriesCoversTheWindowAndExcludesMonitoring (908 vs 900) and
+    TestHomepageSearch_ChartAddsUpToTheTotalBesideIt (912 vs 904) fail alone on solvr_test too but PASS on a fresh
+    DB migrated to 135 (fresh2.log, DB dropped) — the shared-DB time-window class journaled at idx 77 s24 and
+    idx 78 s1. None of this slice's tests is in names.mine or SKIPped.
+  [REAL] SMOKE: built cmd/api, ran on :18099 from /tmp against solvr_test (env inline, no .env read): two agents
+    registered, private room created, POST members 201 -> member's GET /v1/notifications?type=room.member_added
+    = {schema_version 2, subject {room_id}, link /rooms/<slug>}; DELETE member 204 -> room.member_removed
+    schema_version 2 subject {room_id}; /v1/openapi.json: CreateWebhookRequest events enum has the 7 names,
+    WebhookDelivery versions [1,2], Notification versions [0,1,2], both subjects [post_id reply_id room_id].
+    Server killed (port free); smoke room/agents/notifications deleted from solvr_test. The body text was then
+    reworded ("with the member role"); tests re-run after (final_*.log).
+  [REAL] gofmt -l on every Go file this slice touched: none (models/webhook.go has a gofmt diff in the Webhook
+    struct that is already there at HEAD — `git show HEAD:... | gofmt -l` lists it — not reformatted). go vet on
+    db, api, api/handlers exit 0. check-file-size.sh: 32 files over 800 (same as slice 15); none of this slice's.
+  NOT RUN: packages/*, cli/, mcp-server, skill suites (untouched; none of them names notification or webhook
+    events — grep this session); golangci-lint (environment mismatch, as before).
+
+FINDINGS, NOT FIXED:
+  - [REAL code read] Memberships that end without RemoveMember produce no room.member_removed: family-sourced
+    rows ended when the family relation ends (000096), and room deletion/archival. Role changes produce no event.
+  - [REAL] The event is recorded in a separate statement after the membership commit (as the moderation
+    producers do); a failure is logged, the membership stands.
+  - [REAL] frontend/lib/api-types.ts is 1626 lines (over 800 before this slice; check-file-size.sh does not list it).
+  - Slice 14/15 findings stand.
+
+REMAINING FOR idx 78 (next slices, in order):
+  17.. step 5 (versioned migration notes, deprecation errors, legacy choices out of first-party clients: both CLIs'
+    --type, npm and skill search --type, skill.json legacy endpoints), 6 (external consumer vs clean + upgraded
+    schema), 7 (participants as collections, a members command/tool); findings of slices 6-16.
+  Step 4 is now covered for post, reply and room identifiers (versions 1 and 2) with preserved delivery IDs.
+
+UAT: owner applies migration 000135_room_notification_events.up.sql on production (manual migrations) BEFORE
+  deploying this API — every notification read selects notifications.room_id.
+
+git status at journal time [REAL]: as FIX above (23 M, 5 ??), plus M progress.txt (this entry). spec.json unchanged
+  (idx 78 passes stays false).

@@ -31,6 +31,9 @@ type RoomHandler struct {
 	// delete) to every instance's cache. Optional: nil falls back to the process-local
 	// InvalidateOverviewCache hook.
 	overviewChanged func(ctx context.Context) error
+	// memberNotify records the room membership events (SetMemberNotifier). Optional: nil
+	// records none.
+	memberNotify ContributionNotifier
 }
 
 // SetOverviewChangeNotifier wires the announcement of public overview changes (see

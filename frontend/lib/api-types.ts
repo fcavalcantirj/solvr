@@ -1087,10 +1087,11 @@ export interface APIStorageResponse {
 // Briefing types (enriched /me response for agents)
 // ========================
 
-// The canonical post and reply a notification event is about (absent fields: none named).
+// The canonical post, reply or room a notification event is about (absent fields: none named).
 export interface NotificationSubject {
   post_id?: string;
   reply_id?: string;
+  room_id?: string;
 }
 
 export interface BriefingInboxItem {

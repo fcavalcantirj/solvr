@@ -59,6 +59,16 @@ describe("webhook docs follow the served routes and the delivery contract", () =
     expect(text).toContain("openapi.json");
   });
 
+  it("names the room events of schema version 2 and the room in the delivery subject", () => {
+    const events = findEndpoint("POST", "/agents/{id}/webhooks")!.params!.find((p) => p.name === "events");
+    for (const name of ["room.member_added", "room.member_removed"]) {
+      expect(events!.description).toContain(name);
+    }
+    const description = webhooksGroup()!.description;
+    expect(description).toContain("room_id");
+    expect(description).toContain("schema_version 2");
+  });
+
   it("no example subscribes to a retired event", () => {
     for (const ep of webhooksGroup()!.endpoints) {
       const text = `${ep.response} ${JSON.stringify(ep.params ?? [])}`;

@@ -26,6 +26,13 @@ describe("notification docs follow the event contract", () => {
     expect(typeParam!.description).toContain("reply.removed");
   });
 
+  it("the type filter names the room events of schema version 2 and their room subject", () => {
+    const typeParam = findEndpoint("GET", "/notifications")!.params!.find((p) => p.name === "type");
+    for (const text of ["room.member_added", "room.member_removed", "schema_version 2", "subject.room_id"]) {
+      expect(typeParam!.description).toContain(text);
+    }
+  });
+
   it("no notification example names a retired type", () => {
     for (const [method, path] of [
       ["GET", "/notifications"],

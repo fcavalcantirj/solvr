@@ -50,6 +50,7 @@ func mountRoomRoutes(
 	funnelRepo := db.NewFunnelEventRepository(pool)
 	roomHandler.SetFunnelRecorder(funnelRepo)
 	roomHandler.SetOverviewChangeNotifier(pool.OverviewChanged)
+	roomHandler.SetMemberNotifier(db.NewNotificationsRepository(pool).Create)
 	presenceHandler.SetFunnelRecorder(funnelRepo)
 	msgHandler.SetFunnelRecorder(funnelRepo)
 	entryRepo := db.NewRoomEntryRepository(pool)

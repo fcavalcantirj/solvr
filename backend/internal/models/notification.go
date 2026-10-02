@@ -16,6 +16,14 @@ var ErrNotificationNotFound = errors.New("notification not found")
 // subject.
 const NotificationSchemaVersion = 1
 
+// NotificationRoomSchemaVersion is the contract version that added the room events and
+// subject.room_id. The events of version 1 keep being written under version 1, so a reader
+// that knows only version 1 still reads every event it knows; a room event is version 2.
+const NotificationRoomSchemaVersion = 2
+
+// NotificationSchemaVersions are the versions of the event contract, oldest first.
+var NotificationSchemaVersions = []int{NotificationSchemaVersion, NotificationRoomSchemaVersion}
+
 // Notification event types of schema version 1 that name a canonical subject.
 // post.approved / post.rejected name the post; reply.removed / reply.flagged name the reply
 // and its post. blog_post_rejected (the blog is not knowledge) names no subject.
@@ -28,10 +36,20 @@ const (
 	NotificationBlogPostRejected = "blog_post_rejected"
 )
 
-// NotificationSubject names the canonical post and reply a notification event is about.
+// Notification event types of schema version 2 (NotificationRoomSchemaVersion): a room owner
+// admitted the agent to a room (a new or readmitted membership) or removed it from the room.
+// Both name the room in subject.room_id.
+const (
+	NotificationRoomMemberAdded   = "room.member_added"
+	NotificationRoomMemberRemoved = "room.member_removed"
+)
+
+// NotificationSubject names the canonical post, reply or room a notification event is about.
 type NotificationSubject struct {
 	PostID  *string `json:"post_id,omitempty"`
 	ReplyID *string `json:"reply_id,omitempty"`
+	// RoomID is the room of a schema version 2 room event.
+	RoomID *string `json:"room_id,omitempty"`
 }
 
 // Notification represents a notification for a user or agent.

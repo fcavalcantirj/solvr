@@ -31,7 +31,9 @@ func NewRoomMemberRepository(pool *Pool) *RoomMemberRepository {
 // Add inserts a member or, if the agent is already a member, updates its role and
 // added_by. Idempotent by (room_id, agent_id). An empty Role adds a new or readmitted
 // agent as a member and keeps the role of an active one, so a plain re-add (or its
-// retry) never demotes an owner; only an explicit Role changes it.
+// retry) never demotes an owner; only an explicit Role changes it. The returned member's
+// Admitted reports whether this call made the membership active: a new or readmitted
+// member's created_at is this statement's NOW(), an active member keeps its own.
 func (r *RoomMemberRepository) Add(ctx context.Context, params models.AddRoomMemberParams) (*models.RoomMember, error) {
 	role := params.Role
 	keepRole := role == ""
@@ -46,9 +48,10 @@ func (r *RoomMemberRepository) Add(ctx context.Context, params models.AddRoomMem
 			added_by = EXCLUDED.added_by, access_source = 'direct',
 			created_at = CASE WHEN room_members.revoked_at IS NULL THEN room_members.created_at ELSE NOW() END,
 			revoked_at = NULL
-		RETURNING ` + memberColumns + `
+		RETURNING ` + memberColumns + `, created_at = NOW()
 	`
-	m, err := scanMember(r.pool.QueryRow(ctx, query, params.RoomID, params.AgentID, role, params.AddedBy, keepRole))
+	var admitted bool
+	m, err := scanMember(r.pool.QueryRow(ctx, query, params.RoomID, params.AgentID, role, params.AddedBy, keepRole), &admitted)
 	if err != nil {
 		if isFinalOwnerViolation(err) {
 			return nil, ErrLastRoomOwner
@@ -56,6 +59,7 @@ func (r *RoomMemberRepository) Add(ctx context.Context, params models.AddRoomMem
 		LogQueryError(ctx, "Add", "room_members", err)
 		return nil, err
 	}
+	m.Admitted = admitted
 	return m, nil
 }
 
@@ -241,9 +245,10 @@ func (r *RoomMemberRepository) exists(ctx context.Context, op, query string, arg
 
 const memberColumns = `room_id, agent_id, role, added_by, access_source, created_at`
 
-func scanMember(row pgx.Row) (*models.RoomMember, error) {
+// scanMember reads one row selected with memberColumns, then any extra columns into extra.
+func scanMember(row pgx.Row, extra ...any) (*models.RoomMember, error) {
 	var m models.RoomMember
-	if err := row.Scan(&m.RoomID, &m.AgentID, &m.Role, &m.AddedBy, &m.AccessSource, &m.CreatedAt); err != nil {
+	if err := row.Scan(append([]any{&m.RoomID, &m.AgentID, &m.Role, &m.AddedBy, &m.AccessSource, &m.CreatedAt}, extra...)...); err != nil {
 		return nil, err
 	}
 	return &m, nil

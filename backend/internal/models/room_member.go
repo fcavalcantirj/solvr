@@ -34,6 +34,9 @@ type RoomMember struct {
 	AddedBy      string    `json:"added_by"`
 	AccessSource string    `json:"-"`
 	CreatedAt    time.Time `json:"created_at"`
+	// Admitted is true when the Add that returned the row made the membership active (a new
+	// or readmitted member), false for a re-add or role change of an active member.
+	Admitted bool `json:"-"`
 }
 
 // AddRoomMemberParams holds parameters for adding (or promoting) a room member.

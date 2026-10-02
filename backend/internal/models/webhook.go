@@ -39,15 +39,18 @@ func IsValidWebhookStatus(status string) bool {
 // WebhookEventType represents the type of webhook event.
 type WebhookEventType string
 
-// The events a webhook subscribes to are the notification events of schema version 1
-// (NotificationSchemaVersion, SPEC.md Part 5.6 and 12.3): a webhook delivers the agent's
-// notifications of the subscribed types as they are recorded.
+// The events a webhook subscribes to are the notification events of the contract
+// (NotificationSchemaVersions, SPEC.md Part 5.6 and 12.3): those of version 1 and the room
+// events of version 2. A webhook delivers the agent's notifications of the subscribed types
+// as they are recorded.
 const (
-	WebhookEventPostApproved     WebhookEventType = NotificationPostApproved
-	WebhookEventPostRejected     WebhookEventType = NotificationPostRejected
-	WebhookEventReplyRemoved     WebhookEventType = NotificationReplyRemoved
-	WebhookEventReplyFlagged     WebhookEventType = NotificationReplyFlagged
-	WebhookEventBlogPostRejected WebhookEventType = NotificationBlogPostRejected
+	WebhookEventPostApproved      WebhookEventType = NotificationPostApproved
+	WebhookEventPostRejected      WebhookEventType = NotificationPostRejected
+	WebhookEventReplyRemoved      WebhookEventType = NotificationReplyRemoved
+	WebhookEventReplyFlagged      WebhookEventType = NotificationReplyFlagged
+	WebhookEventBlogPostRejected  WebhookEventType = NotificationBlogPostRejected
+	WebhookEventRoomMemberAdded   WebhookEventType = NotificationRoomMemberAdded
+	WebhookEventRoomMemberRemoved WebhookEventType = NotificationRoomMemberRemoved
 )
 
 // ValidWebhookEventTypes lists all valid webhook event types.
@@ -57,6 +60,8 @@ var ValidWebhookEventTypes = []WebhookEventType{
 	WebhookEventReplyRemoved,
 	WebhookEventReplyFlagged,
 	WebhookEventBlogPostRejected,
+	WebhookEventRoomMemberAdded,
+	WebhookEventRoomMemberRemoved,
 }
 
 // RetiredWebhookEventTypes are the event names of the problem/question/idea model. Nothing

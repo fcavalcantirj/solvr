@@ -1,9 +1,11 @@
 package api
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/stretchr/testify/require"
 )
 
@@ -17,19 +19,38 @@ func TestOpenAPI_NotificationDocumentsTheEventContract(t *testing.T) {
 
 	version := at(t, spec, "components", "schemas", "Notification", "properties", "schema_version").(map[string]interface{})
 	require.Equal(t, "integer", version["type"])
-	require.Equal(t, []interface{}{float64(0), float64(1)}, version["enum"])
+	require.Equal(t, []interface{}{float64(0), float64(1), float64(2)}, version["enum"])
 	desc := version["description"].(string)
-	require.True(t, strings.Contains(desc, "0") && strings.Contains(desc, "1"), desc)
+	require.True(t, strings.Contains(desc, "0") && strings.Contains(desc, "1") && strings.Contains(desc, "2"), desc)
 
 	subject := at(t, spec, "components", "schemas", "Notification", "properties", "subject").(map[string]interface{})
 	require.Equal(t, "object", subject["type"])
 	props := subject["properties"].(map[string]interface{})
-	require.Len(t, props, 2)
-	require.Contains(t, props, "post_id")
-	require.Contains(t, props, "reply_id")
+	require.ElementsMatch(t, jsonFields(reflect.TypeOf(models.NotificationSubject{})), mapKeysOf(props),
+		"the subject documents exactly the fields the API answers")
+	require.ElementsMatch(t, []string{"post_id", "reply_id", "room_id"}, mapKeysOf(props))
 
 	eventType := at(t, spec, "components", "schemas", "Notification", "properties", "type").(map[string]interface{})
 	for _, name := range []string{"post.approved", "post.rejected", "reply.removed", "reply.flagged", "blog_post_rejected"} {
 		require.Contains(t, eventType["description"], name, "schema 1 event types are documented")
 	}
+}
+
+// Schema version 2 adds the room events and subject.room_id (SPEC.md Part 5.6): the type,
+// version and subject documentation name them.
+func TestOpenAPI_NotificationDocumentsTheRoomEventsOfVersionTwo(t *testing.T) {
+	spec := servedSpec(t)
+	props := func(path ...string) map[string]interface{} {
+		return at(t, spec, append([]string{"components", "schemas", "Notification", "properties"}, path...)...).(map[string]interface{})
+	}
+	typeDesc := props("type")["description"].(string)
+	for _, name := range []string{models.NotificationRoomMemberAdded, models.NotificationRoomMemberRemoved, "schema_version 2", "subject.room_id"} {
+		require.Contains(t, typeDesc, name)
+	}
+	require.Contains(t, props("schema_version")["description"], "2: ")
+	require.Contains(t, props("schema_version")["description"], "room")
+	room := props("subject", "properties", "room_id")
+	require.Equal(t, "string", room["type"])
+	require.Equal(t, "uuid", room["format"])
+	require.Contains(t, props("subject")["description"], "room")
 }

@@ -526,6 +526,10 @@ func TestIsValidWebhookEventType(t *testing.T) {
 		{"reply.removed", true},
 		{"reply.flagged", true},
 		{"blog_post_rejected", true},
+		// The room events of schema version 2.
+		{"room.member_added", true},
+		{"room.member_removed", true},
+		{"room.member_joined", false},
 		// The names of the problem/question/idea model are retired (EVENT_RETIRED).
 		{"answer.created", false},
 		{"comment.created", false},

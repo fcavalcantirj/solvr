@@ -190,7 +190,8 @@ func TestWebhooks_TheAgentsEventIsDeliveredOnceWithOneDeliveryIDAcrossRetriesAnd
 func TestWebhooks_RetiredAndUnknownEventNamesAreRefusedWithTheSupportedNames(t *testing.T) {
 	ts, _, pool := newStatusContractServer(t)
 	agentID, key := gateAgent(t, ts, pool)
-	supported := []any{"post.approved", "post.rejected", "reply.removed", "reply.flagged", "blog_post_rejected"}
+	supported := []any{"post.approved", "post.rejected", "reply.removed", "reply.flagged", "blog_post_rejected",
+		"room.member_added", "room.member_removed"}
 
 	for _, retired := range []string{"answer.created", "comment.created", "approach.stuck", "problem.solved", "mention"} {
 		got := createWebhookThroughAPI(t, ts, key, agentID, "https://receiver.example/hook", "whsec", "reply.removed", retired)

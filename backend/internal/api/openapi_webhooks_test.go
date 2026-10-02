@@ -144,7 +144,9 @@ func TestOpenAPIWebhooks_SchemasDescribeTheJSONTheHandlersAndTheDeliveryUse(t *t
 		[]string{"notification_id", "agent_id", "subject", "title", "body", "link"})
 	sameSet(t, "WebhookDeliveryData.subject properties",
 		mapKeysOf(at(t, spec, "components", "schemas", "WebhookDeliveryData", "properties", "subject", "properties")),
-		[]string{"post_id", "reply_id"})
+		jsonFields(reflect.TypeOf(models.NotificationSubject{})))
+	sameSet(t, "WebhookDeliveryData.subject fields", jsonFields(reflect.TypeOf(models.NotificationSubject{})),
+		[]string{"post_id", "reply_id", "room_id"})
 
 	events := webhookEventNames()
 	for _, path := range [][]string{
@@ -163,8 +165,9 @@ func TestOpenAPIWebhooks_SchemasDescribeTheJSONTheHandlersAndTheDeliveryUse(t *t
 	sameSet(t, "UpdateWebhookRequest.status enum", strings_(t, at(t, spec, "components", "schemas", "UpdateWebhookRequest", "properties", "status", "enum")), statuses)
 	sameSet(t, "CreateWebhookRequest required", strings_(t, at(t, spec, "components", "schemas", "CreateWebhookRequest", "required")),
 		[]string{"url", "events", "secret"})
-	assert.Equal(t, []interface{}{float64(models.NotificationSchemaVersion)},
-		at(t, spec, "components", "schemas", "WebhookDelivery", "properties", "schema_version", "enum"))
+	assert.Equal(t, []interface{}{float64(1), float64(2)},
+		at(t, spec, "components", "schemas", "WebhookDelivery", "properties", "schema_version", "enum"),
+		"a delivery carries the version its event was written under")
 	assert.Contains(t, at(t, spec, "components", "schemas", "WebhookDelivery", "properties", "id", "description"), "X-Solvr-Delivery-ID")
 	assert.Contains(t, at(t, spec, "components", "schemas", "CreateWebhookRequest", "properties", "secret", "description"), "never returned")
 }

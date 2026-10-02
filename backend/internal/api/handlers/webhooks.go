@@ -365,7 +365,7 @@ func validWebhookEvents(w http.ResponseWriter, events []string) bool {
 	if models.IsRetiredWebhookEventType(invalid) {
 		response.WriteErrorWithDetails(w, http.StatusBadRequest, "EVENT_RETIRED",
 			invalid+" was retired with the problem/question/idea model and is never delivered; subscribe to the "+
-				"notification events of schema version 1: "+strings.Join(supported, ", "),
+				"notification events: "+strings.Join(supported, ", "),
 			webhookEventDetails{RetiredEvent: invalid, SupportedEvents: supported})
 		return false
 	}

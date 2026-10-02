@@ -11480,3 +11480,122 @@ git status at journal time [REAL]: ?? backend/internal/api/external_consumer_hel
   backend/internal/api/external_consumer_test.go, contract/consumer/ (go.mod, main.go, collaborate.go); M progress.txt
   (this entry). git diff --stat: no tracked file changed before this entry. spec.json unchanged (idx 78 passes stays
   false).
+
+2026-10-02 11:58 — Task idx 78 (spec.json, category functional) — IN PROGRESS, passes STAYS false
+"Keep SDKs, CLI, MCP, skills, and webhooks consistent with the redesigned product"
+SLICE 23: step 7, contract half — a room's participants and roles are a PUBLISHED collection. The four membership
+routes (served since mission #3, absent from the OpenAPI document) are now operations listRoomMembers,
+addRoomMember, removeRoomMember, revokeRoomMemberToken with RoomMember/RoomMemberList/RoomMemberResponse/
+AddRoomMemberRequest schemas; addressed_member_ids (recipient references) is documented as a list of participant
+agent ids. A live test holds the document to the API with a third and fourth agent working in the one room.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 78-95, 97, 98; no open URGENT.
+  24/67 acceptance (skipped as in every earlier entry); 68 waits on the owner (as journaled). idx 78 first
+  buildable; continued from slice 22 (HEAD ae28c27e), REMAINING item "23.. step 7". Tree clean at start.
+
+STATE FOUND [REAL, code read this session]:
+  - router_rooms.go:154-160 serves GET/POST /v1/rooms/{slug}/members, DELETE .../members/{agent_id} (both POST
+    and DELETE behind Idempotency), DELETE .../members/{agent_id}/token; handlers/rooms_members.go: every one is
+    owner-or-admin only (resolveRoomForManage, 403 FORBIDDEN otherwise); errors INVALID_AGENT 400, LAST_OWNER 409,
+    NOT_FOUND 404, VALIDATION_ERROR 400 (role not owner|member). None was in the OpenAPI document.
+  - contract/openapi-examples.json is rendered from EVERY x-solvr-example, and all 8 first-party clients assert
+    "every contract operation has a method/command/tool" (sdk-go EveryOperationIsAClientMethod..., sdk-python
+    sorted(CALLERS) == sorted(OPERATIONS), sdk-ts, packages/cli, cli/, mcp-server, handlers/mcp_contract_test.go,
+    skill test_contract.sh). So an x-solvr-example on a membership operation turns all 8 client suites red at
+    once: this slice publishes the operations WITHOUT examples (fixture unchanged, byte-identical).
+  - RED showed the behavior already holds: the 4-agent part of the live test passed before any production
+    change; only the document was missing.
+
+WHAT CHANGED [REAL, git status --porcelain: M backend/internal/api/openapi_operation_schemas.go, M
+  backend/internal/api/openapi_operations.go, ?? backend/internal/api/openapi_member_paths.go, ??
+  backend/internal/api/openapi_members_test.go; git diff --stat: 2 files, 7+/1-]:
+  ?? openapi_member_paths.go (72 lines, PRODUCTION): memberPaths() — GET/POST /rooms/{slug}/members, DELETE
+    /rooms/{slug}/members/{agent_id}, DELETE .../token; tag Rooms; securityRequired; descriptions say only an owner
+    (or admin) may call, what each error code means, that a third/later agent is admitted to the SAME room then
+    takes its own token by handshake, and that agent ids are the addressed_member_ids values; IdempotencyKey on
+    add and remove (as routed); 201 RoomMemberResponse + Idempotent-Replayed; 204 on both deletes; error rows
+    list 401/403/404 (+400/409 add, +409 remove). memberSchemas(): RoomMember (room_id, agent_id, role enum
+    owner|member, added_by, created_at — models.RoomMember's JSON fields), RoomMemberList {data: [RoomMember]},
+    RoomMemberResponse, AddRoomMemberRequest {agent_id required, role enum}. (The helper is
+    memberAgentIDParam: openapi_webhook_paths.go already has an agentIDParam for /agents/{id}.)
+  M openapi_operations.go (+6): addOperations adds memberPaths() and memberSchemas().
+  M openapi_operation_schemas.go (+1/-1): PostEntryRequest.addressed_member_ids gains a description (any number
+    of participants, each by agent_id from GET /rooms/{slug}/members; a non-participant is 400 VALIDATION_ERROR —
+    rooms_entry_submit.go:114).
+  ?? openapi_members_test.go (294 lines):
+    TestOpenAPIMembers_MembershipOperationsArePublished: 4 operationIds, tag, served route (servedRoutes),
+      credential required, description names the owner, each error row is its shared response, no duplicate
+      parameter, slug/agent_id declared, every response described, Idempotency-Key on add/remove, response and
+      request schema refs, 204 on deletes; RoomMember properties == jsonFields(models.RoomMember); role enum ==
+      {owner, member} on RoomMember and AddRoomMemberRequest; agent_id required; RoomMemberList is an array of
+      RoomMember; addressed_member_ids description names agent_id.
+    TestOpenAPIMembers_AThirdAndFourthAgentJoinAndWorkInTheSameRoom (DB): planner creates a PUBLIC room;
+      executor handshakes by itself; planner admits reviewer (role member) and tester (no role) via POST members
+      (each 201, validates RoomMemberResponse); GET members validates RoomMemberList and == {planner owner,
+      executor/reviewer/tester member}; all four hold distinct room tokens; each posts an entry, the reviewer's
+      addressed to 3 participants; every one of the 4 reads all 4 entries in order and the 3 recipients; the
+      planner holds exactly 1 active membership (no other room); 8 documented failures (403 FORBIDDEN list/add by
+      non-owners, 400 INVALID_AGENT, 400 VALIDATION_ERROR role admin, 409 LAST_OWNER, 404 NOT_FOUND remove and
+      revoke of a non-member, 404 missing room) each answer a documented row of its operation in the Error
+      schema; revoking the reviewer's token -> its token 401, re-handshake works; removing the tester -> its
+      token 401, the other three keep posting (201), members == the remaining three. Own request helper
+      sendMemberRequest (sendExample requires a JSON body; 204 has none).
+
+TESTS FIRST [logs /tmp/solvr_idx78_s23/]:
+  RED [TEST] tdd/red.log: MembershipOperationsArePublished FAIL "spec has no paths./rooms/{slug}/members.get";
+    the live test FAIL only at schema refs ("unresolvable #/components/schemas/RoomMemberResponse",
+    "...RoomMemberList") and at "spec has no paths./rooms/{slug}/members.get" in the failures table — every
+    behavior assertion before them passed. (A first RED attempt failed on agent names > 30 chars; names fixed.)
+  GREEN [TEST] tdd/green.log: both PASS, 0 FAIL, 0 SKIP (-v), ok 0.9 s.
+  MUTATIONS [TEST] (mut/, each alone, restored, `shasum -c mut/orig.sha` 2/2 OK):
+    m1 removeRoomMember drops its 409 row -> both FAIL ("... does not contain \"409\"": the LAST_OWNER answer is
+      not a documented row).
+    m2 RoomMember loses added_by -> both FAIL (properties set; the live answers 'field "added_by" is not
+      documented').
+    m3 handlers ListMembers answers only the first participant -> live FAIL (participants map is the owner only).
+
+EXISTING TESTS CHANGED: none (no existing test edited, deleted or skipped). contract/openapi-examples.json
+  unchanged (TheClientFixtureIsThePublishedExamples is not in the failing names).
+
+VERIFICATION [this session; DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test?sslmode=disable
+  (local docker solvr-postgres)]:
+  [TEST] above (RED, GREEN, mutations).
+  [REAL] go vet ./internal/api exit 0; gofmt -l clean on the 4 files of this slice; ./scripts/check-file-size.sh:
+    "Found 32 file(s) exceeding 800 lines" (same as slices 17-22), none of this slice's (largest 294).
+  [TEST] FULL BACKEND once (backend_full.log, `go test ./... -count=1`) -> exit 1: FAIL in internal/api,
+    api/handlers, db (rest ok, jobs ok). 90 failing names (names.fail; 116 in slice 22), none OpenAPI/Contract/
+    MCP, none TestOpenAPIMembers. Against the union of slice 22's baselines: 9 names new (names.new; 5 top-level:
+    TestE2E_AgentCreatesPost (409 DUPLICATE_CONTENT residue), TestNAgentRoom_GroupSizes... (handshake 500),
+    TestRetiredTypedReads_CanonicalReadsServeWhatTheRouteServed (reputation_history FK 23503),
+    TestRoomPermissionMatrix_EverySurface... and _PrivateOutcomeStaysOwnerOnly... ("account no longer exists":
+    another package's cleanup deleted the user)) -> run alone (alone.log, -v): all 5 PASS with every subtest.
+    SQLSTATE 53300 "too many clients" lines: 4 (126 in slice 22).
+  NOT RUN: frontend (no frontend file touched); sdk/cli/mcp/skill suites (no file of theirs changed and the fixture
+    they read is unchanged).
+
+FINDINGS, NOT FIXED:
+  - [REAL code] GET /v1/rooms/{slug}/members is owner-or-admin only: a non-owner participant cannot list its peers
+    to fill addressed_member_ids (it can only learn ids from entries' author_id). Owner call: open the list to
+    the room's readers/participants, or keep it owner-only (documented as owner-only now).
+  - [REAL code] the shared Conflict response text lists CONFLICT, IDEMPOTENCY_*, PUBLICATION_STATE_CONFLICT,
+    TOKEN_LIMIT_REACHED but not LAST_OWNER; the member operations' descriptions name it instead (shared text left
+    as is: other tests pin conventions).
+  - "Invitations": there is no invitation object; admission is POST members (closed rooms) or a self-handshake
+    (open rooms), and the connect page's add_agent control is the reusable prompt for a third/Nth agent
+    (connect.go connectAddAgent). Nothing pair-shaped found on these paths.
+  - Slices 6-22 findings stand.
+
+REMAINING FOR idx 78 (next slices, in order):
+  24.. per client, a members command/tool calling listRoomMembers and addRoomMember (unit-tested against a stub,
+    NOT yet in each client's contract CALLERS map — the fixture has no member example yet): Go SDK, TS SDK,
+    Python SDK, packages/cli, cli/, mcp-server, backend /v1/mcp, skill; each verified with a third agent added
+    to the same room. Then ONE slice adds the x-solvr-examples (listRoomMembers, addRoomMember + an error
+    example), regenerates the fixture, and adds each client's caller entry together so no suite is red between
+    slices; then findings of slices 6-23.
+
+UAT (for when idx 78 closes, not now): as slice 21 (push + deploy so the served skill/installer are 4.0.0, decide
+  the version numbers, regenerate solvr-skill.zip).
+
+git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged (idx 78
+  passes stays false).

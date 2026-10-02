@@ -11,6 +11,9 @@ func addOperations(spec map[string]interface{}) {
 	for path, item := range roomPaths() {
 		paths[path] = item
 	}
+	for path, item := range memberPaths() {
+		paths[path] = item
+	}
 	for path, item := range replyPaths() {
 		paths[path] = item
 	}
@@ -21,6 +24,9 @@ func addOperations(spec map[string]interface{}) {
 
 	schemas := spec["components"].(map[string]interface{})["schemas"].(map[string]interface{})
 	for name, schema := range operationSchemas() {
+		schemas[name] = schema
+	}
+	for name, schema := range memberSchemas() {
 		schemas[name] = schema
 	}
 	for name, schema := range postSchemas() {

@@ -144,7 +144,7 @@ func operationSchemas() map[string]interface{} {
 			"issue", typed("string", "description", "The issue an event belongs to (kind event)."),
 			"extension", typed("object", "description", "Message metadata or the event payload."),
 			"reply_to_entry_id", typed("integer", "format", "int64"),
-			"addressed_member_ids", typed("array", "items", typed("string")),
+			"addressed_member_ids", typed("array", "items", typed("string"), "description", "The participants this entry is addressed to, any number of them, each named by its agent_id (GET /rooms/{slug}/members). A value that is not a participant of this room is 400 VALIDATION_ERROR."),
 			"supersedes_entry_id", typed("integer", "format", "int64"),
 			"client_entry_id", typed("string", "description", "Caller-chosen id that makes the write retry-safe; scoped to the authenticated actor."),
 		)),

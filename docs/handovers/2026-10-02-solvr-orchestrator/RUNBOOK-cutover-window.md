@@ -222,8 +222,8 @@ mismatch for the database. Production measured on 2026-09-29 data: REINDEX DATAB
 export WINDOW_ENV=... FROZEN_SHA=... WINDOW_DIR=...   # the prelude
 source "$WINDOW_DIR/docs/handovers/2026-10-02-solvr-orchestrator/window/window-env.sh"
 "${PSQL[@]}" -Atc 'SELECT 1'
-migrate -path backend/migrations -database "$DBURL" force 84; echo "force exit $?"
-/usr/bin/time -p migrate -path backend/migrations -database "$DBURL" up > "$BACKUP_DIR/g4-up.log" 2>&1; echo "up exit $?"; tail -n 4 "$BACKUP_DIR/g4-up.log"
+migrate -path backend/migrations -database "$DBURL" force 84; rc=$?; echo "force exit $rc"
+[ "$rc" = 0 ] && { /usr/bin/time -p migrate -path backend/migrations -database "$DBURL" up > "$BACKUP_DIR/g4-up.log" 2>&1; echo "up exit $?"; tail -n 4 "$BACKUP_DIR/g4-up.log"; }
 "${PSQL_RO[@]}" -Atc 'SELECT version, dirty FROM schema_migrations'
 ```
 
@@ -243,8 +243,8 @@ jq -c -f "$RB/cutover-summary.jq" "$BACKUP_DIR/g5-dry.json"; jq -c -f "$RB/cutov
 Expect the dry run to match G2's dry run, apart from writes made after the G2 dump. **STOP — Felipe's yes to apply.**
 
 ```bash
-"$BIN/cutover" --database-url "$DBURL" --confirm-prod --report "$BACKUP_DIR/g5-apply.json"; echo "apply exit $?"
-"$BIN/cutover" --database-url "$DBURL" --confirm-prod --report "$BACKUP_DIR/g5-second.json"; echo "second exit $?"
+"$BIN/cutover" --database-url "$DBURL" --confirm-prod --report "$BACKUP_DIR/g5-apply.json"; rc=$?; echo "apply exit $rc"
+[ "$rc" = 0 ] && { "$BIN/cutover" --database-url "$DBURL" --confirm-prod --report "$BACKUP_DIR/g5-second.json"; echo "second exit $?"; }
 for r in apply second; do jq -c -f "$RB/cutover-summary.jq" "$BACKUP_DIR/g5-$r.json"; done
 "${PSQL_RO[@]}" -At < "$RB/reconcile.sql" > "$BACKUP_DIR/g5-reconcile.json"
 jq -c '{schema, legacy, replies_by_legacy_type, orphans: (.orphans | length), unexplained: ([.orphans[] | select(.reason | test("UNEXPLAINED"))] | length), drift, cutover_ledger}' "$BACKUP_DIR/g5-reconcile.json"

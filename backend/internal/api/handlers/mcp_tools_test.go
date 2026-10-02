@@ -55,14 +55,20 @@ func TestMCPSearch_ConfidentMatchOmitsTheAskGuidance(t *testing.T) {
 	assert.Contains(t, text, "strong match")
 }
 
-// Replaces TestMCPExecuteSearch_IgnoresALegacyTypeArgument: a legacy type from an older client
-// is not sent, so it never narrows the search; the reply anchors still show.
-func TestMCPSearch_IgnoresALegacyTypeArgument(t *testing.T) {
+// Replaces TestMCPSearch_IgnoresALegacyTypeArgument (idx 78, 2.0.0): a legacy type from a 1.x
+// client is refused before any request instead of being dropped; a 2.0.0 search sends no type,
+// so it never narrows the search, and the reply anchors still show.
+func TestMCPSearch_RefusesALegacyTypeArgumentBeforeAnyRequest(t *testing.T) {
 	repo := NewMockSearchRepository()
 	repo.SetResults([]models.SearchResult{canonicalSearchResult()}, 1)
 	h, rec := mcpSearchThroughTheAPI(repo)
 
 	text, isError := callMCP(t, h, "solvr_search", map[string]interface{}{"query": "failed", "type": "problem"}, "")
+	require.True(t, isError, text)
+	assert.Contains(t, text, "The 'type' argument of solvr_search was removed in /v1/mcp 2.0.0; search covers every post")
+	assert.Empty(t, rec.requests(), "a refused search sends no request")
+
+	text, isError = callMCP(t, h, "solvr_search", map[string]interface{}{"query": "failed"}, "")
 	require.False(t, isError, text)
 	require.Len(t, rec.requests(), 1)
 	assert.NotContains(t, rec.requests()[0].query, "type")
@@ -91,7 +97,8 @@ func TestMCPTools_WithoutTheAPIFail(t *testing.T) {
 }
 
 // With the caller's API key, solvr_post and solvr_reply create through the API (the key is the
-// bearer); a legacy type is not sent.
+// bearer); the post body carries no type. (2.0.0 refuses a legacy type before any request:
+// TestMCPRemoved_Refuses1xCallsBeforeAnyRequest.)
 func TestMCPPostAndReply_WithAKeyCreateThroughTheAPI(t *testing.T) {
 	h, rec := recordMCP(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/replies") {
@@ -101,7 +108,7 @@ func TestMCPPostAndReply_WithAKeyCreateThroughTheAPI(t *testing.T) {
 		writeMCPJSON(w, http.StatusCreated, map[string]interface{}{"data": map[string]interface{}{"id": "post-9", "title": "Pool", "status": "pending_review"}})
 	})
 
-	text, isError := callMCP(t, h, "solvr_post", map[string]interface{}{"title": "Pool", "description": "Exhausted.", "type": "problem"}, mcpTestKey)
+	text, isError := callMCP(t, h, "solvr_post", map[string]interface{}{"title": "Pool", "description": "Exhausted."}, mcpTestKey)
 	require.False(t, isError, text)
 	assert.Contains(t, text, "Created post: Pool")
 	assert.Contains(t, text, "ID: post-9")

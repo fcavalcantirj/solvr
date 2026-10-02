@@ -128,16 +128,13 @@ func TestMCPHandler_ReplyToolSchema(t *testing.T) {
 	}
 }
 
-// Only the search filter (idx 53) may still name legacy post types; no write tool offers them.
+// No tool names legacy post types: since 2.0.0 (idx 78) not even the search filter, which is gone.
 func TestMCPHandler_NoWriteToolOffersALegacyTypeChoice(t *testing.T) {
 	result := mcpRPC(t, "tools/list", nil)
 	list, _ := json.Marshal(result)
 	tools, _ := result["tools"].([]interface{})
 	for _, tool := range tools {
 		name := tool.(map[string]interface{})["name"].(string)
-		if name == "solvr_search" {
-			continue
-		}
 		raw, _ := json.Marshal(tool) // description and input schema
 		for _, legacy := range []string{"problem", "question", "idea", "approach", "answer"} {
 			if strings.Contains(string(raw), legacy) {
@@ -150,12 +147,20 @@ func TestMCPHandler_NoWriteToolOffersALegacyTypeChoice(t *testing.T) {
 	}
 }
 
-func TestMCPHandler_PostCallPointsToTheCanonicalRouteAndDropsAType(t *testing.T) {
-	text, isError := mcpToolText(t, "solvr_post", map[string]interface{}{
+// Replaces TestMCPHandler_PostCallPointsToTheCanonicalRouteAndDropsAType (idx 78, 2.0.0): a
+// legacy type is refused, not dropped; a post without one still names the canonical route.
+func TestMCPHandler_PostCallPointsToTheCanonicalRouteAndRefusesAType(t *testing.T) {
+	post := map[string]interface{}{
 		"type":        "problem",
 		"title":       "Connection pool exhausted under load",
 		"description": "Every request after the 20th waits for a free connection.",
-	})
+	}
+	refused, isError := mcpToolText(t, "solvr_post", post)
+	if !isError || !strings.Contains(refused, `The 'type' argument of solvr_post was removed in /v1/mcp 2.0.0; a post has no type (it was given "problem")`) {
+		t.Fatalf("solvr_post with a type must be refused, got (isError %v): %s", isError, refused)
+	}
+	delete(post, "type")
+	text, isError := mcpToolText(t, "solvr_post", post)
 	if isError {
 		t.Fatalf("solvr_post returned an error: %s", text)
 	}
@@ -203,7 +208,8 @@ func TestMCPHandler_ReplyCallRequiresPostIDAndBody(t *testing.T) {
 	}
 }
 
-// An agent configured against the old tool list gets an actionable error, never a success.
+// An agent configured against the old tool list gets an actionable error, never a success. Since
+// 2.0.0 (idx 78) it is the npm server's refusal: the tool's replacement and the migration notes.
 func TestMCPHandler_RetiredAnswerToolPointsToReply(t *testing.T) {
 	text, isError := mcpToolText(t, "solvr_answer", map[string]interface{}{
 		"post_id": "post_123", "content": "The answer", "approach_angle": "pooling",
@@ -211,7 +217,8 @@ func TestMCPHandler_RetiredAnswerToolPointsToReply(t *testing.T) {
 	if !isError {
 		t.Fatalf("solvr_answer must be an error, got: %s", text)
 	}
-	for _, want := range []string{"solvr_answer was retired", "solvr_reply", "POST /v1/posts/{id}/replies"} {
+	for _, want := range []string{"'solvr_answer' was removed in /v1/mcp 2.0.0", "use solvr_reply with post_id and body",
+		"answers and approaches are replies", `"Migrating /v1/mcp from 1.x to 2.0.0" in SPEC.md 18.2`} {
 		if !strings.Contains(text, want) {
 			t.Errorf("retired solvr_answer text lacks %q:\n%s", want, text)
 		}

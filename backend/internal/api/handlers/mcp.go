@@ -45,7 +45,7 @@ type rpcError struct {
 // MCP server info
 var mcpServerInfo = map[string]interface{}{
 	"name":            "solvr",
-	"version":         "1.0.0",
+	"version":         MCPVersion,
 	"protocolVersion": "2024-11-05",
 	"capabilities": map[string]interface{}{
 		"tools": map[string]interface{}{},
@@ -298,10 +298,8 @@ func (h *MCPHandler) handleToolsCall(w http.ResponseWriter, r *http.Request, req
 		return
 	}
 
-	if name == "solvr_answer" {
-		// Retired with the canonical knowledge model (idx 52): answers and approaches are replies.
-		h.writeRPCResult(w, req.ID, mcpFailure(name, &ValidationError{Message: "solvr_answer was retired with the canonical knowledge model; " +
-			"use solvr_reply (POST /v1/posts/{id}/replies) instead"}))
+	if removed, ok := mcpRemovedChoice(name, args); ok {
+		h.writeRPCResult(w, req.ID, mcpResult{text: removed, isError: true}.rpc())
 		return
 	}
 	execute, ok := mcpExecutors[name]

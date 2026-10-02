@@ -11003,3 +11003,161 @@ REMAINING FOR idx 78 (next slices, in order):
 
 git status at journal time [REAL]: as FIX above (13 M, 3 ??), plus M progress.txt (this entry). spec.json unchanged
   (idx 78 passes stays false).
+
+2026-10-02 09:12 — Task idx 78 (spec.json, category functional) — IN PROGRESS, passes STAYS false
+"Keep SDKs, CLI, MCP, skills, and webhooks consistent with the redesigned product"
+SLICE 20: step 5, backend /v1/mcp half — POST /v1/mcp refuses every removed 1.x tool and argument (solvr_answer,
+solvr_post `type`, solvr_search `type`, solvr_get `include`) BEFORE any request with the same replacements as the
+npm @solvr/mcp-server 2.0.0 (a test holds the two removed sets equal), initialize answers 2.0.0, and SPEC.md 18.2
+carries "Migrating /v1/mcp from 1.x to 2.0.0" notes a test holds to the code; /api-docs POST /mcp says so.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 78-95, 97, 98; no open URGENT (96 true).
+  24/67 acceptance (skipped as in every earlier entry); 68 waits on the owner (as journaled). idx 78 first buildable;
+  continued from slice 19 (HEAD 8e2b6608), REMAINING item "20.. step 5 rest", its first part (backend /v1/mcp).
+  Tree clean at start.
+
+STATE FOUND [REAL, code read this session]:
+  - handlers/mcp.go: initialize answered "version" "1.0.0"; handleToolsCall answered solvr_answer with
+    "Error executing solvr_answer: solvr_answer was retired ...; use solvr_reply (POST /v1/posts/{id}/replies)
+    instead"; mcp_knowledge.go ran solvr_search/solvr_post/solvr_get with a 1.x `type`/`include` silently dropped.
+  - The 1.x /v1/mcp surface (git show fffa1c9d^:backend/internal/api/handlers/mcp.go): version 1.0.0, solvr_search
+    {query, type enum problem|question|idea|all, limit}, solvr_get {id, include (array, "Related content to
+    include")}, solvr_post {type (required, problem|question|idea), title, description, tags}, solvr_answer {post_id,
+    content, approach_angle} — the same removed choices as npm 1.x.
+  - The only published docs of POST /v1/mcp: SPEC.md 18.2 (repo is PUBLIC, `gh repo view` this session) and the
+    /api-docs POST /mcp entry (frontend components/api/api-endpoint-data-core.ts). The OpenAPI document and the
+    frontend /mcp page do not document /v1/mcp.
+
+DESIGN:
+  - ?? backend/internal/api/handlers/mcp_removed.go (44 lines): const MCPVersion = "2.0.0"; mcpRemovedTools
+    {solvr_answer}, mcpRemovedArguments {solvr_search.type, solvr_post.type, solvr_get.include}, each "instead"
+    text identical to mcp-server/src/removed.ts; mcpRemovedChoice(tool, args) -> (text, ok); a null argument is not
+    given; the given value is quoted as JSON. Text: "<'tool' | The 'arg' argument of tool> was removed in /v1/mcp
+    2.0.0; <instead>[ (it was given <json>)]. See "Migrating /v1/mcp from 1.x to 2.0.0" in SPEC.md 18.2."
+  - mcp.go: mcpServerInfo version = MCPVersion; handleToolsCall checks mcpRemovedChoice first (after the empty-name
+    check) and answers isError with the text, no "Error executing" prefix (as npm), no request. A never-existing
+    tool is still "Unknown tool: <name>". mcp_knowledge.go: 2 comments (search/post) say a 1.x type is refused.
+  - Version 1.0.0 -> 2.0.0 (removed arguments = breaking; same number as the npm server with the same removals).
+    Owner may overrule; nothing published, tagged or deployed. OpenAPI info.version and discovery "1.0" untouched.
+  - SPEC.md 18.2: the paragraph no longer says "a legacy `type` argument is ignored" (says since 2.0.0 solvr_answer,
+    a legacy type on solvr_post/solvr_search or include on solvr_get is refused before any request); NEW
+    "#### Migrating /v1/mcp from 1.x to 2.0.0" after the MCP Server Config blocks (outside the window
+    TestSpecMCPSections_DocumentTheServedTools reads): example refusal, 1.x -> 2.0.0 table (solvr_answer (post_id,
+    content, approach_angle) -> solvr_reply (POST /v1/posts/{id}/replies); solvr_post type; solvr_search type;
+    solvr_get include -> solvr_get + solvr_replies), JSON quoting, null = not given, tools/list offers none,
+    initialize "version": "2.0.0" (1.0.0 before), what 1.0.0 did with type/include.
+  - /api-docs POST /mcp description gains: "Since 2.0.0 a removed 1.x tool or argument (solvr_answer; type on
+    solvr_search, type on solvr_post, include on solvr_get) is refused before any request, naming what replaces
+    it: see "Migrating /v1/mcp from 1.x to 2.0.0" in SPEC.md 18.2."
+
+TESTS FIRST [logs /tmp/solvr_idx78_s20/]:
+  ?? backend/internal/api/handlers/mcp_removed_test.go (210 lines, 9 tests): 10 1.x calls x (agent key, anonymous)
+    -> isError, the EXACT refusal text, 0 dispatched requests; null type/include is no choice (search sends exactly
+    q+per_page, post body exactly title+description, get reads post + replies); a never-existing tool stays
+    "Unknown tool"; MCPVersion 2.0.0 == initialize; tools/list offers no removed tool/argument (no tool has
+    type/include/approach_angle/content); removed sets == mcp-server/src/removed.ts REMOVED_TOOLS/REMOVED_ARGUMENTS
+    (parsed); every solvr_x a refusal points to is served; SPEC.md 18.2 notes carry the handler's own solvr_answer
+    refusal, every removed tool/argument, solvr_replies, isError, null, "version": "2.0.0", tools/list, and no
+    "`type` argument is ignored"; the given value round-trips as JSON for string/number/bool/array/object.
+  Before the tests could fail on assertions: no-behavior scaffold (mcp_removed.go with MCPVersion "1.0.0", empty
+    maps, mcpRemovedChoice -> false; mcpServerInfo version = MCPVersion), go vet exit 0 (red_vet.log).
+  RED [TEST] red.log (`go test ./internal/api/handlers/ -run 'MCP|FormatSearch'`): 8 failed, all assertions —
+    TestMCPRemoved_Refuses1xCallsBeforeAnyRequest (expected "'solvr_answer' was removed in /v1/mcp 2.0.0; ..."
+    actual "Error executing solvr_answer: solvr_answer was retired ..."; "Should be empty, but was [{GET
+    /v1/search ...}]"), _InitializeAnswersTheVersionOfTheNotes, _MatchTheNpmServer, _SpecCarriesTheMigrationNotes,
+    _RefusalIsValidJSONForEveryArgumentShape, and changed tests 1, 3, 4 below; guards (_ANullArgumentIsNotAChoice,
+    _AToolThatNeverExistedIsStillUnknown, _ToolsListOffersNone, _EveryReplacementIsServed) passed.
+  frontend RED [TEST] fe_red.log: 1 failed / 50 passed: "expected 'Model Context Protocol (MCP) over HTT…' to
+    contain 'Since 2.0.0 a removed 1.x tool or arg…'".
+
+EXISTING TESTS CHANGED (protocol; each pinned the behavior this slice replaces; nothing deleted or skipped):
+  1. handlers/mcp_tools_test.go TestMCPSearch_IgnoresALegacyTypeArgument -> renamed
+     TestMCPSearch_RefusesALegacyTypeArgumentBeforeAnyRequest. Old: solvr_search {query "failed", type "problem"}
+     -> require.False(isError), 1 request, query without "type", repo searchOpts.Type and ContentTypes empty,
+     "Matched reply: /posts/post-1#reply-1 by Agent Two (approach, failed)". New: that call -> isError, "The 'type'
+     argument of solvr_search was removed in /v1/mcp 2.0.0; search covers every post", 0 requests; then the same
+     search without type keeps EVERY old assertion. Also covered by NEW _Refuses1xCallsBeforeAnyRequest. PASS.
+  2. handlers/mcp_tools_test.go TestMCPPostAndReply_WithAKeyCreateThroughTheAPI: its solvr_post call passed
+     "type": "problem" and expected creation with body exactly {"title":"Pool","description":"Exhausted."}
+     (comment "a legacy type is not sent"). Now the call passes no type; every assertion unchanged. The type-with-
+     a-key case is NEW _Refuses1xCallsBeforeAnyRequest (solvr_post type problem/question/idea, with mcpTestKey and
+     anonymous: isError, 0 requests). PASS.
+  3. handlers/mcp_canonical_test.go TestMCPHandler_PostCallPointsToTheCanonicalRouteAndDropsAType -> renamed
+     ...AndRefusesAType. Old: anonymous solvr_post with type "problem" -> not isError, text has "POST /v1/posts",
+     the title and description, and no "Type:"/"problem". New: that call -> isError with `The 'type' argument of
+     solvr_post was removed in /v1/mcp 2.0.0; a post has no type (it was given "problem")`; the same call without
+     type keeps every old assertion. PASS.
+  4. handlers/mcp_canonical_test.go TestMCPHandler_RetiredAnswerToolPointsToReply: asserted the text contains
+     "solvr_answer was retired", "solvr_reply", "POST /v1/posts/{id}/replies". Now: "'solvr_answer' was removed in
+     /v1/mcp 2.0.0", "use solvr_reply with post_id and body", "answers and approaches are replies", `"Migrating
+     /v1/mcp from 1.x to 2.0.0" in SPEC.md 18.2`. The REST route left the refusal (its "instead" is held equal to
+     the npm server's, which names none); the route is in the SPEC notes table, which NEW
+     _SpecCarriesTheMigrationNotes holds; NEW _Refuses1xCallsBeforeAnyRequest asserts the exact full text. PASS.
+  5. frontend components/api/api-endpoint-data.test.ts: unchanged tests; NEW "documents that POST /v1/mcp refuses
+     every removed 1.x tool and argument since its version" (parses MCPVersion and the removed tool/argument names
+     from mcp_removed.go and requires each in the description, with the notes pointer). PASS.
+  STRENGTHENED: TestMCPHandler_NoWriteToolOffersALegacyTypeChoice no longer exempts solvr_search.
+  NOT CHANGED: jobs/legacy_dropped_write_steps_test.go:241 still sends solvr_search {type "problem"} in its write
+    probe; it is now refused before any request, so for that one call the probe's "no dropped-table query" check
+    holds trivially. TestLegacyDroppedDatabase_WriteRoutesExposeOnlyLegacyRouteFamilies ran alone: PASS (probe.log,
+    -v, not SKIP).
+
+FIX (GREEN) [git status --porcelain + git diff --stat this session: 7 tracked files 85+/26-, 2 new]:
+  ?? backend/internal/api/handlers/mcp_removed.go, mcp_removed_test.go; M handlers/mcp.go (version = MCPVersion;
+  the refusal replaces the solvr_answer special case), handlers/mcp_knowledge.go (2 comments), handlers/
+  mcp_tools_test.go (changes 1-2), handlers/mcp_canonical_test.go (changes 3-4 + strengthened); M SPEC.md (18.2
+  paragraph + notes, 33 lines); M frontend/components/api/api-endpoint-data-core.ts (POST /mcp description, same
+  line count, 794), api-endpoint-data.test.ts (new test). No migration, mcp-server, SDK, CLI or skill change.
+
+VERIFICATION [this session; DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test?sslmode=disable
+  (local docker solvr-postgres) for the DB-backed runs]:
+  [TEST] GREEN green_mcp.log (-run 'MCP|FormatSearch', -v to the file): 56 PASS, 0 FAIL, 0 SKIP — all 9 new tests
+    and changes 1-4 listed PASS. green_spec.log internal/api TestSpecMCPSections|Discovery ok.
+  [TEST] coverage (cover.out, MCP tests): mcp_removed.go mcpRemovedText 100%, mcpRemovedChoice 100%;
+    handleToolsCall 87%.
+  MUTATIONS [TEST] (mut/, each alone, restored, `shasum -c mut/orig.sha` 3/3 OK): m1 drop solvr_get include ->
+    _Refuses1x + _MatchTheNpmServer FAIL; m2 a null argument counts as given -> _ANullArgumentIsNotAChoice FAIL;
+    m3 SPEC notes drop `approach_angle` -> _SpecCarriesTheMigrationNotes FAIL; m4 refusal unwired in
+    handleToolsCall -> changes 3, 4, _Refuses1x, change 1 FAIL.
+  [TEST] FULL BACKEND (once, backend_full.log, `go test ./... -count=1`) -> exit 1: FAIL in internal/api,
+    api/handlers, db (jobs, services and the rest ok). 83 failing names (names.fail), none MCP-related (grep -ci
+    mcp = 0). Against slice 16's baseline (/tmp/solvr_idx78_s16/names.mine, 78 names): 73 are in it (the
+    shared-DB class journaled since idx 77), 10 are new (names.new: TestApprovePublication_RetryCannotRepublish,
+    TestNAgentRoom_x2, TestPostCommentsEndpoints, TestRoomMembers_RetryCannotChangeOwnership,
+    TestRoomPermissionMatrix_x2, TestRoomPrivateConnect_x2, TestSaveAsPost_IdempotencyKeyNamesOneOutcome) with
+    errors "409 ROOM_ARCHIVED this room is finished", "agents_human_id_fkey (SQLSTATE 23503)", "409
+    DUPLICATE_CONTENT" (cross-package collisions on the shared solvr_test; 8 "too many clients" lines) -> all 10
+    run alone: exit 0, 10 PASS (alone_api.log, -v). No new test of this slice failed or SKIPped.
+  [TEST] frontend: fe_green_api.log components/api 9 files 98 passed; frontend_full.log FULL `npx vitest run
+    --maxWorkers=4` once: 202 files, 1761 tests passed (slice 19's 1760 + 1), 0 skipped; `npm run typecheck` exit
+    0; eslint on the 2 touched frontend files exit 0.
+  [REAL] go vet ./internal/api/handlers exit 0; gofmt -l on the 6 touched Go files: none. check-file-size.sh: 32
+    files over 800 (same as slices 17-19), none touched here (largest touched: api-endpoint-data-core.ts 794).
+  [REAL] SMOKE (smoke/smoke.log, tools_list.log): the real API binary (go build ./cmd/api; env -i, DATABASE_URL
+    solvr_test, throwaway JWT_SECRET, PORT 18099, run from /tmp — no env file read), anonymous JSON-RPC over curl:
+    initialize {"name":"solvr","version":"2.0.0"}; tools/list 13 tools, no solvr_answer, 0 type/include/
+    approach_angle properties, solvr_search [limit page query sort]; solvr_answer (with approach_angle),
+    solvr_search type problem / all, solvr_post type question, solvr_get include ["answers"] -> each isError:true
+    with its exact refusal text; solvr_search postgres limit 2 type null -> "Found 2188 results:"; solvr_get of an
+    existing post -> its title line. The API log does NOT record in-process dispatched requests (only POST /v1/mcp
+    lines), so 0-requests-per-refusal is [TEST]-proven (recorder), not observable in this smoke. Server killed
+    (0 listeners on 18099). Created no rows (anonymous; reads only).
+
+FINDINGS, NOT FIXED:
+  - [REAL] The refusal points at SPEC.md 18.2: agents reach it only through the public GitHub repo once the owner
+    pushes (local main is ahead of origin with unpushed loop commits). The API serves no notes for /v1/mcp (the
+    OpenAPI document does not describe /v1/mcp; the discovery document's mcp block has no version).
+  - [REAL smoke] solvr_get/solvr_search text still prints the legacy badge ("[QUESTION]") of legacy posts (slices
+    18/19 finding).
+  - Version 2.0.0 for /v1/mcp exists only in the code; nothing deployed (owner's call).
+  - Slices 6-19 findings stand.
+
+REMAINING FOR idx 78 (next slices, in order):
+  21.. step 5 rest: the skill (skill/scripts/solvr.sh:1022 `search ... --type problem`, test_canonical_posts.sh:230
+    `get p1 --include answers`, skill.json legacy endpoints, help text) with its own versioned notes and refusals;
+    then 6 (external consumer vs clean + upgraded schema), 7 (participants as collections, a members command/
+    tool); findings of slices 6-20.
+
+git status at journal time [REAL]: as FIX above (7 M, 2 ??), plus M progress.txt (this entry). spec.json unchanged
+  (idx 78 passes stays false).

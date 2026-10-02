@@ -72,8 +72,8 @@ func setString(q url.Values, param string, args map[string]interface{}, name str
 	}
 }
 
-// mcpSearch: an empty query sends no q (the API answers VALIDATION_ERROR); a legacy type
-// argument is not sent, so it never narrows the search (task idx 53).
+// mcpSearch: an empty query sends no q (the API answers VALIDATION_ERROR). It sends no type, so
+// nothing narrows the search to a legacy type (task idx 53); a 1.x type is refused (mcp_removed.go).
 func mcpSearch(c *mcpCall, args map[string]interface{}) (mcpResult, error) {
 	q := url.Values{}
 	setString(q, "q", args, "query")
@@ -163,7 +163,7 @@ func replyListLines(replies []mcpReplyData) []string {
 }
 
 // mcpPost creates the post with the caller's key. Without one it creates nothing and names
-// the canonical route (a legacy "type" argument is ignored: posts take no type).
+// the canonical route. Posts take no type (a 1.x type is refused: mcp_removed.go).
 func mcpPost(c *mcpCall, args map[string]interface{}) (mcpResult, error) {
 	title, _ := args["title"].(string)
 	description, _ := args["description"].(string)

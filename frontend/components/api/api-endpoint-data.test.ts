@@ -97,6 +97,26 @@ describe("api-endpoint-data completeness", () => {
       expect(ep.description).not.toMatch(/solvr_claim/); // never served by /v1/mcp
       expect(ep.description).toContain("solvr_answer was retired");
     });
+
+    // idx 78 step 5: /v1/mcp 2.0.0 refuses each removed 1.x tool and argument (handlers/mcp_removed.go).
+    it("documents that POST /v1/mcp refuses every removed 1.x tool and argument since its version", () => {
+      const src = readFileSync(
+        resolve(__dirname, "../../../backend/internal/api/handlers/mcp_removed.go"),
+        "utf8",
+      );
+      const version = src.match(/const MCPVersion = "([^"]+)"/)![1];
+      const tools = [...src.matchAll(/^\t"(solvr_\w+)": "/gm)].map((m) => m[1]);
+      const args = [...src.matchAll(/^\t"(solvr_\w+)":\s*\{\s*"(\w+)":/gm)].map((m) => `${m[2]} on ${m[1]}`);
+      expect(version).toBe("2.0.0");
+      expect(tools).toEqual(["solvr_answer"]);
+      expect(args).toEqual(["type on solvr_search", "type on solvr_post", "include on solvr_get"]);
+
+      const ep = findEndpoint("POST", "/mcp")!;
+      expect(ep.description).toContain(`Since ${version} a removed 1.x tool or argument (`);
+      for (const removed of [...tools, ...args]) expect(ep.description).toContain(removed);
+      expect(ep.description).toContain("is refused before any request, naming what replaces it");
+      expect(ep.description).toContain(`"Migrating /v1/mcp from 1.x to ${version}" in SPEC.md 18.2`);
+    });
   });
 
   describe("Stats group", () => {

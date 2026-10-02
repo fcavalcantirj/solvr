@@ -109,21 +109,30 @@ func TestSearchAnalyticsRepository_Insert_Anonymous(t *testing.T) {
 	_, _ = pool.Exec(ctx, "DELETE FROM search_queries WHERE query LIKE 'test_%'")
 }
 
+// The trending list is a platform-wide top-N, so it runs on its own database: no row of another
+// test can push these queries out of it (spec.json idx 98).
 func TestSearchAnalyticsRepository_GetTrending(t *testing.T) {
-	pool, repo := setupSearchAnalyticsTest(t)
-	defer pool.Close()
-
+	pool, _ := newMigratedScratchDatabase(t)
+	repo := NewSearchAnalyticsRepository(pool)
 	ctx := context.Background()
-	now := time.Now()
 
-	// Insert queries with different frequencies
+	// The window is NOW() - 7 days on the database's clock, so the rows are placed against that
+	// clock: inside it by an hour to six days, outside it by a day. Neither the Go clock nor the
+	// time the test takes moves a row across the boundary.
+	var dbNow time.Time
+	if err := pool.QueryRow(ctx, "SELECT NOW()").Scan(&dbNow); err != nil {
+		t.Fatalf("read the database clock: %v", err)
+	}
+	const day = 24 * time.Hour
 	queries := []struct {
 		query string
 		count int
+		at    time.Time
 	}{
-		{"test_popular query", 5},
-		{"test_medium query", 3},
-		{"test_rare query", 1},
+		{"test_popular query", 5, dbNow.Add(-time.Hour)},
+		{"test_medium query", 3, dbNow.Add(-day)},
+		{"test_rare query", 1, dbNow.Add(-6 * day)},
+		{"test_stale query", 9, dbNow.Add(-8 * day)}, // outside the window: it would lead the list if counted
 	}
 
 	for _, q := range queries {
@@ -136,7 +145,7 @@ func TestSearchAnalyticsRepository_GetTrending(t *testing.T) {
 				DurationMs:      100,
 				SearcherType:    "anonymous",
 				Page:            1,
-				SearchedAt:      now.Add(-time.Duration(i) * time.Minute),
+				SearchedAt:      q.at.Add(-time.Duration(i) * time.Minute),
 			})
 			if err != nil {
 				t.Fatalf("Insert() error = %v", err)
@@ -149,35 +158,23 @@ func TestSearchAnalyticsRepository_GetTrending(t *testing.T) {
 		t.Fatalf("GetTrending() error = %v", err)
 	}
 
-	// Find our test queries in results
-	testResults := map[string]int{}
-	for _, tr := range trending {
-		if tr.Query == "test_popular query" || tr.Query == "test_medium query" || tr.Query == "test_rare query" {
-			testResults[tr.Query] = tr.Count
+	// Exactly the in-window queries, most searched first.
+	want := []struct {
+		query string
+		count int
+	}{
+		{"test_popular query", 5},
+		{"test_medium query", 3},
+		{"test_rare query", 1},
+	}
+	if len(trending) != len(want) {
+		t.Fatalf("expected %d trending results, got %d: %+v", len(want), len(trending), trending)
+	}
+	for i, w := range want {
+		if trending[i].Query != w.query || trending[i].Count != w.count {
+			t.Errorf("trending[%d] = %q count=%d, want %q count=%d", i, trending[i].Query, trending[i].Count, w.query, w.count)
 		}
 	}
-
-	if len(testResults) < 3 {
-		t.Fatalf("expected 3 test trending results, got %d", len(testResults))
-	}
-
-	if testResults["test_popular query"] != 5 {
-		t.Errorf("expected 'test_popular query' count=5, got %d", testResults["test_popular query"])
-	}
-
-	// Verify ordering: popular > medium > rare
-	var prevCount int = 999
-	for _, tr := range trending {
-		if tr.Query == "test_popular query" || tr.Query == "test_medium query" || tr.Query == "test_rare query" {
-			if tr.Count > prevCount {
-				t.Errorf("trending not sorted: %s (%d) should be after previous (%d)", tr.Query, tr.Count, prevCount)
-			}
-			prevCount = tr.Count
-		}
-	}
-
-	// Cleanup
-	_, _ = pool.Exec(ctx, "DELETE FROM search_queries WHERE query LIKE 'test_%'")
 }
 
 func TestSearchAnalyticsRepository_GetZeroResults(t *testing.T) {

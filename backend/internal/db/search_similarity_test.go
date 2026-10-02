@@ -106,9 +106,11 @@ func TestSearch_Similarity_PopulatedAndTopSimilarity(t *testing.T) {
 
 // TestSearch_MinSimilarity_HonestFilter verifies the opt-in floor drops below-bar results
 // while still reporting the true best top similarity (computed pre-filter). BART-155.
+// It counts every post above the bar, so it runs on its own database: a post another test left
+// with a matching vector would be counted too (spec.json idx 98). The search has no time input
+// (no date filter is set and the query reads no clock), so nothing here depends on when it runs.
 func TestSearch_MinSimilarity_HonestFilter(t *testing.T) {
-	pool := setupTestDB(t)
-	defer pool.Close()
+	pool, _ := newMigratedScratchDatabase(t)
 	ctx := context.Background()
 
 	queryVec := vec1024(1024, 0)
@@ -123,8 +125,8 @@ func TestSearch_MinSimilarity_HonestFilter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("search failed: %v", err)
 	}
-	if total != 1 {
-		t.Fatalf("expected exactly 1 result above bar, got total=%d", total)
+	if total != 1 || len(results) != 1 {
+		t.Fatalf("expected exactly 1 result above bar, got total=%d len=%d", total, len(results))
 	}
 	if findResult(results, idA) == nil {
 		t.Error("expected post A (similarity 1.0) to survive the filter")

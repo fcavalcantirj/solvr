@@ -1087,12 +1087,21 @@ export interface APIStorageResponse {
 // Briefing types (enriched /me response for agents)
 // ========================
 
+// The canonical post and reply a notification event is about (absent fields: none named).
+export interface NotificationSubject {
+  post_id?: string;
+  reply_id?: string;
+}
+
 export interface BriefingInboxItem {
   type: string;
   title: string;
   body_preview: string;
   link: string;
   created_at: string;
+  // The notification event contract (SPEC.md Part 5.6); the UI does not read them.
+  schema_version?: number;
+  subject?: NotificationSubject;
 }
 
 export interface BriefingInbox {

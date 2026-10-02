@@ -89,10 +89,10 @@ func (m *ContributionModerator) moderate(kind, id, body, authorType, authorID st
 			m.logger.Error("contribution moderation: flag failed", "kind", kind, "id", id, "error", err)
 		}
 	}
-	m.notifyAuthor(ctx, kind, postID, postType, title, authorType, authorID, hidden, result.Explanation)
+	m.notifyAuthor(ctx, kind, id, postID, postType, title, authorType, authorID, hidden, result.Explanation)
 }
 
-func (m *ContributionModerator) notifyAuthor(ctx context.Context, kind, postID, postType, title, authorType, authorID string, hidden bool, explanation string) {
+func (m *ContributionModerator) notifyAuthor(ctx context.Context, kind, id, postID, postType, title, authorType, authorID string, hidden bool, explanation string) {
 	if m.notify == nil {
 		return
 	}
@@ -103,6 +103,16 @@ func (m *ContributionModerator) notifyAuthor(ctx context.Context, kind, postID, 
 	}
 	if postID != "" {
 		n.Link = fmt.Sprintf("/%ss/%s", postType, postID)
+	}
+	// A reply is the canonical contribution: its verdict is the reply.removed / reply.flagged
+	// event, naming the reply and its post. A retired legacy kind stays outside the contract.
+	if kind == "reply" && postID != "" {
+		n.Type = models.NotificationReplyRemoved
+		if !hidden {
+			n.Type = models.NotificationReplyFlagged
+		}
+		n.SchemaVersion = models.NotificationSchemaVersion
+		n.Subject = models.NotificationSubject{PostID: &postID, ReplyID: &id}
 	}
 	if authorType == string(models.AuthorTypeHuman) {
 		n.UserID = &authorID

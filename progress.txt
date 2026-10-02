@@ -9874,3 +9874,161 @@ git status at journal time [REAL]: M backend/internal/api/handlers/connect.go, M
   connect_prompts.go, M frontend/components/connect/connect-fixture.ts, ?? backend/internal/api/handlers/
   connect_prompts_http_only_test.go, ?? backend/internal/api/router_connect_http_only_test.go, plus M progress.txt
   (this entry). spec.json unchanged (idx 78 passes stays false).
+
+================================================================================
+2026-10-01 21:40 — Task idx 78 (spec.json, category functional) — IN PROGRESS, passes STAYS false
+"Keep SDKs, CLI, MCP, skills, and webhooks consistent with the redesigned product"
+SLICE 13: step 4, notification half — "Map webhook and notification events to canonical post/reply/room
+identifiers with documented schema versions". Every notification an agent or human reads now carries
+schema_version and a typed "subject" {post_id, reply_id} naming the canonical post and reply; the reply moderation
+verdict is the reply.removed / reply.flagged event. Webhooks (storage, mounting, delivery IDs, retry) are NOT in
+this slice: they are the next slices (REMAINING below).
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 78-95, 97, 98; URGENT idx 96 already
+  true. 24/67 acceptance (skipped as in every earlier entry); 68 waits on the owner (as journaled). idx 78 first
+  buildable; continued from slice 12 (HEAD ddd5496d), REMAINING item "13.. step 4". Tree clean at start.
+
+STATE FOUND [REAL, code read this session]:
+  - Webhooks: models/webhook.go, handlers/webhooks.go (CRUD), services/webhook.go (delivery, signature, retry
+    schedule) exist; NO db repository implements WebhookRepositoryInterface (no file in internal/db reads the
+    webhooks table), NewWebhooksHandler is mounted by no router, NewWebhookDeliveryService is constructed by no
+    production code. Event names are the legacy answer.created/comment.created/approach.stuck/problem.solved/mention,
+    none produced anywhere. discovery.go still advertises "webhooks".
+  - Notifications: live producers are post moderation (post.approved/post.rejected via services.
+    NotifyOnModerationResult, also the translation trigger), reply moderation (handlers/contribution_moderation.go,
+    type contribution_removed/contribution_flagged; the legacy contribution routes are 410 so only kind "reply"
+    reaches it through the router) and blog moderation (blog_post_rejected). Stale-content/auto-solve jobs are
+    retired (main.go:141). A notification had only type/title/body/link: no identifier of its target, no version.
+    SPEC.md:206 already claimed "notifications about a reply reference its canonical id" — untrue until now.
+
+SPIKE [REAL] (throwaway DB spike_s13 on docker solvr-postgres, dropped after): notifications.post_id ->
+  posts ON DELETE SET NULL + reply FK + CHECK (reply_id IS NULL OR post_id IS NOT NULL): a hard DELETE of a post with
+  a reply event FAILS ("violates check constraint", the post FK clears post_id before the cascaded reply clears
+  reply_id) — it would block purges. Without the CHECK, using reply_id -> replies(id) ON DELETE SET NULL +
+  post_id -> posts(id) ON DELETE SET NULL + FK (reply_id, post_id) -> replies(id, post_id) (NO ACTION; replies has
+  UNIQUE (id, post_id)): a reply under the wrong post is refused, a reply delete clears reply_id, a post delete
+  clears both and keeps the row. That design is migration 000133; "reply without post" (MATCH SIMPLE lets it pass)
+  is refused by the repository.
+
+DESIGN:
+  - schema_version: 1 = written under the contract (type from the documented set, subject complete for it);
+    0 = outside it (rows recorded before the contract, retired producers, legacy contribution kinds). No backfill
+    of historical rows: they stay 0 with an empty subject (nothing is inferred from old links). Column default 0,
+    so raw inserts (existing tests, any writer that states no version) are honestly 0.
+  - Schema 1 events: post.approved / post.rejected {post_id}; reply.removed / reply.flagged {post_id, reply_id};
+    blog_post_rejected {} (a blog post is not a post/reply; its link names it). Room events: none produced today,
+    so no room_id column was added (a dormant field would be unverified); it comes with the webhook room events.
+  - No dedupe/event-id yet: that belongs with webhook delivery IDs (next slice).
+
+TESTS FIRST (RED, logs /tmp/solvr_idx78_s13/red_*.log; model fields added first so RED shows behavior, not compile):
+  ?? backend/internal/db/notification_event_contract_test.go (174, own scratch DB each): _EveryReadReturnsTheSchema
+    VersionAndSubject (Create/FindByID/GetNotificationsForAgent/GetRecentUnreadForAgent/MarkRead; post-only event),
+    _RowsOutsideTheContractAreVersionZero, _TheSubjectMustExistAndBelongTogether (missing post, missing reply, reply
+    of another post, reply without post: all refused, 0 rows), _DeletingTheSubjectKeepsTheNotification.
+  ?? backend/internal/api/router_notification_events_test.go (137, real router + solvr_test): _PostModerationNames
+    ThePost (approve + reject via POST /v1/posts), _ReplyModerationNamesThePostAndTheReply, _BlogModerationIsUnder
+    TheContractWithNoSubject — each reads GET /v1/notifications AND the GET /v1/me inbox.
+  ?? backend/internal/api/handlers/contribution_moderation_events_test.go (67, pure): reply -> reply.removed /
+    reply.flagged (hide refused) with subject; legacy kinds stay contribution_*, version 0, no subject.
+  ?? backend/internal/services/notification_event_contract_test.go (49, pure).
+  ?? backend/internal/api/openapi_notification_event_test.go (35, pure): Notification schema has schema_version
+    (integer, enum [0,1], described), subject {post_id, reply_id}, schema-1 types in the type description.
+  ?? frontend/components/api/api-endpoint-data-notifications.test.ts (43, vitest): API docs examples show the
+    contract and no retired type (answer.created, answer_created, auto_solve_warning).
+  [TEST] RED: db 3 FAIL/1 PASS (version-0 guard), api 4 FAIL, handlers 1 FAIL/1 PASS (legacy guard), services
+    1 FAIL/1 PASS (version-0 guard), frontend 2 FAIL — each on the missing contract ("expected 1 actual 0",
+    "expected reply.removed actual contribution_removed", "An error is expected but got nil").
+
+FIX (GREEN) [git status --porcelain + git diff --stat this session: 16 tracked files 222+/159-, 9 new]:
+  ?? backend/migrations/000133_notification_event_contract.{up,down}.sql (26/8): notifications + schema_version
+    SMALLINT NOT NULL DEFAULT 0 CHECK IN (0,1), post_id, reply_id, the composite FK, partial indexes on post_id/
+    reply_id (for the ON DELETE actions). Down drops them.
+  M backend/internal/models/notification.go (+30): NotificationSchemaVersion = 1, NotificationPostApproved/
+    PostRejected/ReplyRemoved/ReplyFlagged, NotificationSubject, Notification.SchemaVersion + Subject.
+  M backend/internal/db/notifications.go (356 -> 315): one notificationColumns + scanNotification for all 5
+    reads; Create writes schema_version/post_id/reply_id, refuses a reply without its post
+    (ErrNotificationReplyWithoutPost).
+  M backend/internal/services/notification.go (+35/-): NotificationInput/CreateNotificationParams carry
+    SchemaVersion + Subject; NotifyOnModerationResult writes version 1 + subject.post_id. Other NotifyOn* untouched
+    (version 0).
+  M backend/internal/api/moderation_adapter.go: passes them to models.Notification.
+  M backend/internal/api/handlers/contribution_moderation.go (+14): kind "reply" -> reply.removed/reply.flagged,
+    version 1, subject {post_id, reply_id}; notifyAuthor takes the contribution id. Legacy kinds unchanged.
+  M backend/internal/api/handlers/blog_moderation.go (+1): blog_post_rejected written as version 1, no subject.
+  M backend/internal/models/briefing.go, backend/internal/services/briefing.go, backend/internal/api/handlers/me.go:
+    inbox items (both /me paths) carry schema_version + subject.
+  M backend/internal/api/openapi_schemas.go (817 -> 790: the 2 notification schemas moved out) + ?? backend/
+    internal/api/openapi_notification_schemas.go (47): Notification documents schema_version, subject, the types.
+  M SPEC.md (+48/-2): Part 5.6 Notifications "Event contract (schema version 1)" (example, type/subject table,
+    version 0 meaning, versioning rule); briefing inbox fields; reference notifications DDL.
+  M frontend/components/api/api-endpoint-data-user.ts, api-endpoint-data-core.ts: examples use reply.removed /
+    post.approved / post.rejected with schema_version + subject; type filter example. M frontend/lib/api-types.ts:
+    NotificationSubject + optional schema_version/subject on BriefingInboxItem (optional so existing fixtures type-
+    check; the UI reads neither).
+
+EXISTING TESTS CHANGED (protocol):
+  1. backend/internal/api/router_moderation_contrib_test.go TestModeration_RejectedContributions asserted
+     `notifType := "contribution_removed"; if !c.hideable { notifType = "contribution_flagged" }` for the reply case
+     (the only contributionCases entry). This slice replaces that behavior: now "reply.removed"/"reply.flagged".
+     The same assertion now expects the new names (not loosened); covered further by NEW TestNotificationEvents_
+     ReplyModerationNamesThePostAndTheReply and TestContributionModeration_RejectedReplyIsTheReplyRemovedEvent —
+     all PASS [TEST] (moderation_api.log: the 8 TestModeration_* PASS).
+  2. backend/internal/db/cutover_rollback_test.go asserted `require.Equal(t, 48, applied, "down migrations
+     000132..000085")`; the full run failed it with actual 49 because 000133.down now runs too (it ran clean).
+     Now `49, "down migrations 000133..000085"` — the same per-migration bump commit f803d727 made 47 -> 48 for
+     000132. TestCutoverRollback_DownPathKeepsOrArchivesEveryPostCutoverWrite PASS [TEST] (rollback.log).
+  Nothing deleted, skipped or loosened.
+
+VERIFICATION [this session; logs /tmp/solvr_idx78_s13/; DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/
+  solvr_test?sslmode=disable (local docker solvr-postgres); scratch-DB tests make and drop their own DBs]:
+  [REAL] `migrate up` on solvr_test 132 -> 133 (migrate_up.log), schema_migrations 133 dirty=f. Scratch DB
+    s13_migcheck: up to 133, down 1 (columns 0), up again (columns 3, 133 dirty=f); dropped.
+  [TEST] GREEN: green_db.log 4 PASS; green_api.log 4 PASS; green_handlers.log 2 PASS; green_services.log 2 PASS;
+    green_frontend.log 2 passed. 0 SKIP in every green log.
+  MUTATIONS [TEST] (mut/mut.py, each alone, source restored, `shasum -c mut/orig.sha` OK): m1 repo writes no
+    subject -> db + api FAIL; m2 repo accepts reply without post -> db FAIL; m3 reply keeps legacy type -> handlers
+    + api FAIL; m4 post moderation without subject -> services + api FAIL; m5 briefing inbox drops subject -> api
+    FAIL; m6 post moderation version 0 -> services + api FAIL.
+  [TEST] existing notification/me/briefing tests run -v: db 'Notification' 33 PASS, handlers 'Notification|TestMe|
+    Briefing|Inbox' 50 PASS, services 'Notif|Briefing|Moderation' 67 PASS, 0 FAIL/SKIP.
+  [TEST] FRONTEND (once, frontend_full.log): npm test 201 files, 1752 tests passed; npm run typecheck exit 0.
+  [TEST] FULL BACKEND (once, backend_full.log, `go test ./...`) -> exit 1: FAIL in internal/api, internal/api/
+    handlers, internal/db; 86 failing names (names.mine). Against slices 10-12 baselines (base.all) 5 are new:
+    TestCutoverRollback_DownPath... (count pin, fixed above) and TestNAgentRoom_ConcurrentFirstMessagesOnTwo
+    InstancesActivateOnce, _PrivateAdmissionAndIndividualRevocationAcrossInstances, TestRoomPrivateConnect_Outsiders
+    StillForbidden, _OwnerGetsHandshakePrompt with the shared-DB interference signatures journaled before
+    (handshake 500, "account no longer exists", 401 for 403, "failed to connect to database"). Run ALONE
+    (alone_api.log) all 4 PASS; no room code was touched. No notification/moderation/openapi name is in the
+    failures; the TestBriefing_* failures are all in the baseline.
+  [REAL] go vet (models, services, db, api, api/handlers) clean; gofmt -l lists none of the files this slice made
+    or that were clean before (me.go, models/briefing.go, services/briefing.go, services/notification.go were
+    already gofmt-dirty at HEAD and were not reformatted). check-file-size.sh: 32 files over 800 (was 33:
+    openapi_schemas.go now 790); none of them touched.
+  NOT RUN: packages/*, cli/, mcp-server, skill suites (untouched); golangci-lint (environment mismatch, as before).
+
+UAT: owner applies migration 000133_notification_event_contract.up.sql on production (prod has no
+  schema_migrations; migrations are manual) before deploying this API — the API reads the new columns on every
+  notification query. Existing rows become schema_version 0, nothing else changes.
+
+FINDINGS, NOT FIXED:
+  - [REAL] The skill's `inbox ls` (skill/scripts/solvr-helpers.sh:1144) prints type/title/id/body, not
+    schema_version or subject; the MCP servers and SDKs have no notification tool at all. Step 1/2 consistency
+    item if agents should act on subjects from those clients.
+  - [REAL] Language-only post rejections (sent to translation) still emit post.rejected (existing behavior,
+    posts_moderation.go); unchanged.
+  - [INFERRED] reply.flagged happens only when hiding a reply fails (replies are hideable); the router test covers
+    reply.removed, the pure test covers reply.flagged.
+
+REMAINING FOR idx 78 (next slices, in order):
+  14.. step 4 webhook half: a real db WebhookRepository; mount the CRUD routes; subscription event names = the
+    schema-1 notification types (legacy names answered with a migration error naming the replacement); durable
+    deliveries with a delivery_id preserved across retries (X-Solvr-Delivery-ID + payload id, schema_version),
+    unique per (webhook, event) so a retry never produces a second user-visible action; retry worker; discovery
+    "webhooks" capability true only once delivery runs. Room events (and room_id in the subject) if delivered.
+  then steps 5 (migration notes, deprecation errors, legacy choices out of first-party clients: both CLIs' --type,
+    npm and skill search --type, skill.json legacy endpoints), 6 (external consumer vs clean + upgraded schema),
+    7 (participants as collections, a members command/tool); findings of slices 6-13.
+
+git status at journal time [REAL]: as FIX + EXISTING TESTS CHANGED above (16 M incl. the 2 test files, 9 ??), plus
+  M progress.txt (this entry). spec.json unchanged (idx 78 passes stays false).

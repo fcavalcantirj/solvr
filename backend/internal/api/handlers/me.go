@@ -78,11 +78,13 @@ type InboxSection struct {
 
 // InboxItem represents a single inbox notification item.
 type InboxItem struct {
-	Type        string    `json:"type"`
-	Title       string    `json:"title"`
-	BodyPreview string    `json:"body_preview"`
-	Link        string    `json:"link"`
-	CreatedAt   time.Time `json:"created_at"`
+	Type          string                     `json:"type"`
+	Title         string                     `json:"title"`
+	BodyPreview   string                     `json:"body_preview"`
+	Link          string                     `json:"link"`
+	CreatedAt     time.Time                  `json:"created_at"`
+	SchemaVersion int                        `json:"schema_version"`
+	Subject       models.NotificationSubject `json:"subject"`
 }
 
 // BriefingServiceInterface defines the interface for the aggregated briefing service.
@@ -296,11 +298,13 @@ func (h *MeHandler) populateFromBriefingService(ctx context.Context, agent *mode
 		items := make([]InboxItem, len(briefing.Inbox.Items))
 		for i, item := range briefing.Inbox.Items {
 			items[i] = InboxItem{
-				Type:        item.Type,
-				Title:       item.Title,
-				BodyPreview: item.BodyPreview,
-				Link:        item.Link,
-				CreatedAt:   item.CreatedAt,
+				Type:          item.Type,
+				Title:         item.Title,
+				BodyPreview:   item.BodyPreview,
+				Link:          item.Link,
+				CreatedAt:     item.CreatedAt,
+				SchemaVersion: item.SchemaVersion,
+				Subject:       item.Subject,
 			}
 		}
 		response.Inbox = &InboxSection{
@@ -347,11 +351,13 @@ func (h *MeHandler) populateFromIndividualRepos(ctx context.Context, agent *mode
 			items := make([]InboxItem, len(notifications))
 			for i, n := range notifications {
 				items[i] = InboxItem{
-					Type:        n.Type,
-					Title:       n.Title,
-					BodyPreview: truncateString(n.Body, 100),
-					Link:        n.Link,
-					CreatedAt:   n.CreatedAt,
+					Type:          n.Type,
+					Title:         n.Title,
+					BodyPreview:   truncateString(n.Body, 100),
+					Link:          n.Link,
+					CreatedAt:     n.CreatedAt,
+					SchemaVersion: n.SchemaVersion,
+					Subject:       n.Subject,
 				}
 			}
 			response.Inbox = &InboxSection{

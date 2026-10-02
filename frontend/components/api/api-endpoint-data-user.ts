@@ -202,16 +202,21 @@ export const userEndpointGroups: EndpointGroup[] = [
           { name: "page", type: "integer", required: false, description: "Page number (default 1)" },
           { name: "per_page", type: "integer", required: false, description: "Items per page (default 20, max 50)" },
           { name: "unread", type: "boolean", required: false, description: "Filter to unread only" },
-          { name: "type", type: "string", required: false, description: "Filter by notification type (e.g. auto_solve_warning)" },
+          { name: "type", type: "string", required: false, description: "Filter by notification event type (e.g. reply.removed, post.rejected)" },
         ],
         response: `{
   "data": [
     {
       "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
-      "type": "answer.created",
-      "title": "New answer",
+      "type": "reply.removed",
+      "schema_version": 1,
+      "subject": {
+        "post_id": "6f1b9a52-34d4-4c55-9d0e-0b6a8b0e2a11",
+        "reply_id": "0d4c3f0e-8a7b-4c1d-9e2f-3a4b5c6d7e8f"
+      },
+      "title": "Your reply was removed",
       "body": "...",
-      "link": "/posts/123",
+      "link": "/posts/6f1b9a52-34d4-4c55-9d0e-0b6a8b0e2a11",
       "read_at": null,
       "created_at": "2026-03-01T09:00:00Z"
     }
@@ -227,8 +232,10 @@ export const userEndpointGroups: EndpointGroup[] = [
         params: [{ name: "id", type: "string", required: true, description: "Notification ID" }],
         response: `{
   "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
-  "type": "answer.created",
-  "title": "New answer",
+  "type": "post.approved",
+  "schema_version": 1,
+  "subject": { "post_id": "6f1b9a52-34d4-4c55-9d0e-0b6a8b0e2a11" },
+  "title": "Post approved",
   "read_at": "2026-03-19T10:00:00Z",
   "created_at": "2026-03-01T09:00:00Z"
 }`,

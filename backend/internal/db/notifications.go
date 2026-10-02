@@ -20,29 +20,37 @@ func NewNotificationsRepository(pool *Pool) *NotificationsRepository {
 	return &NotificationsRepository{pool: pool}
 }
 
+// notificationColumns is the column list every notification read returns, in scanNotification's order.
+const notificationColumns = `id, user_id, agent_id, type, title, COALESCE(body, '') AS body, COALESCE(link, '') AS link,
+	read_at, created_at, schema_version, post_id::text, reply_id::text`
+
+// scanNotification reads one row selected with notificationColumns.
+func scanNotification(row pgx.Row) (models.Notification, error) {
+	var n models.Notification
+	err := row.Scan(&n.ID, &n.UserID, &n.AgentID, &n.Type, &n.Title, &n.Body, &n.Link,
+		&n.ReadAt, &n.CreatedAt, &n.SchemaVersion, &n.Subject.PostID, &n.Subject.ReplyID)
+	return n, err
+}
+
+// ErrNotificationReplyWithoutPost is returned for an event that names a reply but not its post.
+var ErrNotificationReplyWithoutPost = errors.New("notification subject names a reply without its post")
+
 // Create inserts a new notification into the database.
 // The notification must have at least a Type and Title set, and either UserID or AgentID.
+// SchemaVersion and Subject are stored as given (models.NotificationSchemaVersion): the subject
+// post and reply must exist and the reply must belong to the post.
 func (r *NotificationsRepository) Create(ctx context.Context, n *models.Notification) (*models.Notification, error) {
+	if n.Subject.ReplyID != nil && n.Subject.PostID == nil {
+		return nil, ErrNotificationReplyWithoutPost
+	}
 	query := `
-		INSERT INTO notifications (user_id, agent_id, type, title, body, link)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id, user_id, agent_id, type, title, COALESCE(body, '') as body, COALESCE(link, '') as link, read_at, created_at
-	`
+		INSERT INTO notifications (user_id, agent_id, type, title, body, link, schema_version, post_id, reply_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		RETURNING ` + notificationColumns
 
-	var created models.Notification
-	err := r.pool.QueryRow(ctx, query,
-		n.UserID, n.AgentID, n.Type, n.Title, n.Body, n.Link,
-	).Scan(
-		&created.ID,
-		&created.UserID,
-		&created.AgentID,
-		&created.Type,
-		&created.Title,
-		&created.Body,
-		&created.Link,
-		&created.ReadAt,
-		&created.CreatedAt,
-	)
+	created, err := scanNotification(r.pool.QueryRow(ctx, query,
+		n.UserID, n.AgentID, n.Type, n.Title, n.Body, n.Link, n.SchemaVersion, n.Subject.PostID, n.Subject.ReplyID,
+	))
 	if err != nil {
 		LogQueryError(ctx, "Create", "notifications", err)
 		return nil, fmt.Errorf("failed to create notification: %w", err)
@@ -99,12 +107,12 @@ func (r *NotificationsRepository) getNotifications(ctx context.Context, column, 
 
 	// Get paginated notifications
 	query := fmt.Sprintf(`
-		SELECT id, user_id, agent_id, type, title, COALESCE(body, '') as body, COALESCE(link, '') as link, read_at, created_at
+		SELECT %s
 		FROM notifications
 		WHERE %s
 		ORDER BY created_at DESC
 		LIMIT $%d OFFSET $%d
-	`, where, paramIdx, paramIdx+1)
+	`, notificationColumns, where, paramIdx, paramIdx+1)
 	args = append(args, perPage, offset)
 
 	rows, err := r.pool.Query(ctx, query, args...)
@@ -116,18 +124,7 @@ func (r *NotificationsRepository) getNotifications(ctx context.Context, column, 
 
 	var notifications []models.Notification
 	for rows.Next() {
-		var n models.Notification
-		err := rows.Scan(
-			&n.ID,
-			&n.UserID,
-			&n.AgentID,
-			&n.Type,
-			&n.Title,
-			&n.Body,
-			&n.Link,
-			&n.ReadAt,
-			&n.CreatedAt,
-		)
+		n, err := scanNotification(rows)
 		if err != nil {
 			LogQueryError(ctx, "GetNotifications.Scan", "notifications", err)
 			return nil, 0, fmt.Errorf("scan failed: %w", err)
@@ -152,21 +149,9 @@ func (r *NotificationsRepository) MarkRead(ctx context.Context, id string) (*mod
 		UPDATE notifications
 		SET read_at = NOW()
 		WHERE id = $1
-		RETURNING id, user_id, agent_id, type, title, COALESCE(body, '') as body, COALESCE(link, '') as link, read_at, created_at
-	`
+		RETURNING ` + notificationColumns
 
-	var n models.Notification
-	err := r.pool.QueryRow(ctx, query, id).Scan(
-		&n.ID,
-		&n.UserID,
-		&n.AgentID,
-		&n.Type,
-		&n.Title,
-		&n.Body,
-		&n.Link,
-		&n.ReadAt,
-		&n.CreatedAt,
-	)
+	n, err := scanNotification(r.pool.QueryRow(ctx, query, id))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, models.ErrNotificationNotFound
@@ -245,7 +230,7 @@ func (r *NotificationsRepository) GetRecentUnreadForAgent(ctx context.Context, a
 
 	// Get recent unread notifications
 	query := `
-		SELECT id, user_id, agent_id, type, title, COALESCE(body, '') as body, COALESCE(link, '') as link, read_at, created_at
+		SELECT ` + notificationColumns + `
 		FROM notifications
 		WHERE agent_id = $1 AND read_at IS NULL
 		ORDER BY created_at DESC
@@ -260,18 +245,7 @@ func (r *NotificationsRepository) GetRecentUnreadForAgent(ctx context.Context, a
 
 	var notifications []models.Notification
 	for rows.Next() {
-		var n models.Notification
-		err := rows.Scan(
-			&n.ID,
-			&n.UserID,
-			&n.AgentID,
-			&n.Type,
-			&n.Title,
-			&n.Body,
-			&n.Link,
-			&n.ReadAt,
-			&n.CreatedAt,
-		)
+		n, err := scanNotification(rows)
 		if err != nil {
 			LogQueryError(ctx, "GetRecentUnreadForAgent.Scan", "notifications", err)
 			return nil, 0, fmt.Errorf("scan failed: %w", err)
@@ -292,24 +266,9 @@ func (r *NotificationsRepository) GetRecentUnreadForAgent(ctx context.Context, a
 
 // FindByID finds a notification by ID.
 func (r *NotificationsRepository) FindByID(ctx context.Context, id string) (*models.Notification, error) {
-	query := `
-		SELECT id, user_id, agent_id, type, title, COALESCE(body, '') as body, COALESCE(link, '') as link, read_at, created_at
-		FROM notifications
-		WHERE id = $1
-	`
+	query := `SELECT ` + notificationColumns + ` FROM notifications WHERE id = $1`
 
-	var n models.Notification
-	err := r.pool.QueryRow(ctx, query, id).Scan(
-		&n.ID,
-		&n.UserID,
-		&n.AgentID,
-		&n.Type,
-		&n.Title,
-		&n.Body,
-		&n.Link,
-		&n.ReadAt,
-		&n.CreatedAt,
-	)
+	n, err := scanNotification(r.pool.QueryRow(ctx, query, id))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) || isInvalidUUIDError(err) {
 			return nil, models.ErrNotificationNotFound

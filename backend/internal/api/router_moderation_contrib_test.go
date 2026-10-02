@@ -83,9 +83,10 @@ func TestModeration_RejectedContributions(t *testing.T) {
 			deleted = "false"
 		}
 		waitForValue(t, pool, deleted, `SELECT (to_jsonb(x) ->> 'deleted_at' IS NOT NULL)::text FROM `+c.table+` x WHERE id = $1::uuid`, got.id)
-		notifType := "contribution_removed"
+		// A reply's verdict is the reply.removed / reply.flagged event (idx 78 step 4).
+		notifType := "reply.removed"
 		if !c.hideable {
-			notifType = "contribution_flagged"
+			notifType = "reply.flagged"
 		}
 		waitForValue(t, pool, notifType, `SELECT string_agg(type, ',') FROM notifications WHERE agent_id = $1`, agentID)
 	}

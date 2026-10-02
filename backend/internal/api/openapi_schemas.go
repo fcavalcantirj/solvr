@@ -551,33 +551,6 @@ func bookmarkCheckResponseSchema() map[string]interface{} {
 	}
 }
 
-func notificationsResponseSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"data": map[string]interface{}{"type": "array", "items": map[string]interface{}{"$ref": "#/components/schemas/Notification"}},
-			"meta": map[string]interface{}{"$ref": "#/components/schemas/PaginationMeta"},
-		},
-	}
-}
-
-func notificationSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"id":         map[string]interface{}{"type": "string"},
-			"user_id":    map[string]interface{}{"type": "string"},
-			"agent_id":   map[string]interface{}{"type": "string"},
-			"type":       map[string]interface{}{"type": "string"},
-			"title":      map[string]interface{}{"type": "string"},
-			"body":       map[string]interface{}{"type": "string"},
-			"link":       map[string]interface{}{"type": "string"},
-			"read_at":    map[string]interface{}{"type": "string", "format": "date-time", "nullable": true},
-			"created_at": map[string]interface{}{"type": "string", "format": "date-time"},
-		},
-	}
-}
-
 func deleteCountResponseSchema() map[string]interface{} {
 	return map[string]interface{}{
 		"type": "object",

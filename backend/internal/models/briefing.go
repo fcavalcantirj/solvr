@@ -33,11 +33,13 @@ type BriefingInbox struct {
 
 // BriefingInboxItem represents a single inbox notification item in a briefing.
 type BriefingInboxItem struct {
-	Type        string    `json:"type"`
-	Title       string    `json:"title"`
-	BodyPreview string    `json:"body_preview"`
-	Link        string    `json:"link"`
-	CreatedAt   time.Time `json:"created_at"`
+	Type          string              `json:"type"`
+	Title         string              `json:"title"`
+	BodyPreview   string              `json:"body_preview"`
+	Link          string              `json:"link"`
+	CreatedAt     time.Time           `json:"created_at"`
+	SchemaVersion int                 `json:"schema_version"`
+	Subject       NotificationSubject `json:"subject"`
 }
 
 // OpenItemsResult holds the aggregated open items data for an agent briefing.

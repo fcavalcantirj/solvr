@@ -56,12 +56,14 @@ type notifRepoForService struct {
 
 func (a *notifRepoForService) Create(ctx context.Context, n *services.NotificationInput) (*services.NotificationRecord, error) {
 	notif := &models.Notification{
-		UserID:  n.UserID,
-		AgentID: n.AgentID,
-		Type:    string(n.Type),
-		Title:   n.Title,
-		Body:    n.Body,
-		Link:    n.Link,
+		UserID:        n.UserID,
+		AgentID:       n.AgentID,
+		Type:          string(n.Type),
+		Title:         n.Title,
+		Body:          n.Body,
+		Link:          n.Link,
+		SchemaVersion: n.SchemaVersion,
+		Subject:       n.Subject,
 	}
 	created, err := a.create(ctx, notif)
 	if err != nil {

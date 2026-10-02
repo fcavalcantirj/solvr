@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"regexp"
 	"time"
+
+	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
 // NotificationType represents the type of notification.
@@ -40,6 +42,11 @@ type NotificationInput struct {
 	Title   string
 	Body    string
 	Link    string
+
+	// SchemaVersion and Subject are the event contract (models.NotificationSchemaVersion);
+	// both stay zero for an event written outside it.
+	SchemaVersion int
+	Subject       models.NotificationSubject
 }
 
 // NotificationRecord represents a stored notification.
@@ -63,6 +70,10 @@ type CreateNotificationParams struct {
 	Title   string
 	Body    string
 	Link    string
+
+	// SchemaVersion and Subject: see NotificationInput.
+	SchemaVersion int
+	Subject       models.NotificationSubject
 }
 
 // NewAnswerEvent represents an event when a new answer is created.
@@ -231,12 +242,14 @@ func (s *NotificationService) CreateNotification(ctx context.Context, params *Cr
 	}
 
 	input := &NotificationInput{
-		UserID:  params.UserID,
-		AgentID: params.AgentID,
-		Type:    params.Type,
-		Title:   params.Title,
-		Body:    params.Body,
-		Link:    params.Link,
+		UserID:        params.UserID,
+		AgentID:       params.AgentID,
+		Type:          params.Type,
+		Title:         params.Title,
+		Body:          params.Body,
+		Link:          params.Link,
+		SchemaVersion: params.SchemaVersion,
+		Subject:       params.Subject,
 	}
 
 	return s.repo.Create(ctx, input)
@@ -508,10 +521,12 @@ func (s *NotificationService) NotifyOnModerationResult(ctx context.Context, post
 	link := fmt.Sprintf("/%ss/%s", postType, postID)
 
 	params := &CreateNotificationParams{
-		Type:  notifType,
-		Title: title,
-		Body:  body,
-		Link:  link,
+		Type:          notifType,
+		Title:         title,
+		Body:          body,
+		Link:          link,
+		SchemaVersion: models.NotificationSchemaVersion,
+		Subject:       models.NotificationSubject{PostID: &postID},
 	}
 
 	if authorType == "human" {

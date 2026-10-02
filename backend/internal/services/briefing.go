@@ -195,11 +195,13 @@ func (s *BriefingService) GetBriefingForAgent(ctx context.Context, agent *models
 		items := make([]models.BriefingInboxItem, len(notifications))
 		for i, n := range notifications {
 			items[i] = models.BriefingInboxItem{
-				Type:        n.Type,
-				Title:       n.Title,
-				BodyPreview: truncateBriefingString(n.Body, briefingBodyPreviewLen),
-				Link:        n.Link,
-				CreatedAt:   n.CreatedAt,
+				Type:          n.Type,
+				Title:         n.Title,
+				BodyPreview:   truncateBriefingString(n.Body, briefingBodyPreviewLen),
+				Link:          n.Link,
+				CreatedAt:     n.CreatedAt,
+				SchemaVersion: n.SchemaVersion,
+				Subject:       n.Subject,
 			}
 		}
 		briefing.Inbox = &models.BriefingInbox{

@@ -200,9 +200,6 @@ func runWriteProbe(t *testing.T, router http.Handler, tracer *dbErrorTracer, s *
 // writeProbeValidationOnly are the canonical write routes no call can complete in this
 // harness, so the probe runs them only up to validation or an external dependency.
 var writeProbeValidationOnly = map[string]string{
-	// Pre-existing, not a legacy dependency: router.go mounts the route outside every auth
-	// middleware, so no JWT ever reaches the handler's claims check and every caller is 401.
-	"POST /v1/auth/claim-referral":     "mounted without auth middleware: a valid JWT is still answered 401",
 	"POST /v1/auth/oauth/exchange":     "a login code is minted only by the OAuth callback round trip with the provider",
 	"POST /v1/auth/moltbook":           "a valid identity token is verified against the external Moltbook service",
 	"POST /v1/add":                     "uploads go straight to IPFS, which the probe points at a closed port",

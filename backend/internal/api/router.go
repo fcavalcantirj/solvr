@@ -810,6 +810,9 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 				agentsHandler.RegenerateAPIKey(w, req, agentID)
 			})
 
+			// SPEC.md Part 12.3: the agent's webhooks, managed by the agent or its owner.
+			mountWebhookRoutes(r, pool)
+
 			// PRD-v5 Task 22: DELETE /v1/agents/me - agent self-deletion
 			// Requires API key auth (agents only, not humans with JWT)
 			r.Delete("/agents/me", agentsHandler.DeleteMe)

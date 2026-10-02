@@ -152,6 +152,21 @@ var writeProbeSteps = []func(s *writeProbeState) []writeProbeCall{
 		}
 	},
 
+	// The agent's webhooks (SPEC.md Part 12.3), managed with its own key.
+	func(s *writeProbeState) []writeProbeCall {
+		c := call("POST /v1/agents/{id}/webhooks", "agent", "/v1/agents/"+s.agentID+"/webhooks",
+			j(map[string]any{"url": "https://receiver.example/probe", "events": []string{"reply.removed"}, "secret": "probe-secret"}))
+		c.keep = func(s *writeProbeState, v jsonValue) bool {
+			s.created["webhook"] = v.first([]string{"data", "id"})
+			return s.created["webhook"] != ""
+		}
+		return []writeProbeCall{c}
+	},
+	func(s *writeProbeState) []writeProbeCall {
+		return []writeProbeCall{call("PATCH /v1/agents/{id}/webhooks/{wh_id}", "agent",
+			"/v1/agents/"+s.agentID+"/webhooks/"+or(s.created["webhook"]), j(map[string]any{"status": "paused"}))}
+	},
+
 	// Canonical posts and replies.
 	func(s *writeProbeState) []writeProbeCall {
 		var calls []writeProbeCall
@@ -405,6 +420,7 @@ var writeProbeSteps = []func(s *writeProbeState) []writeProbeCall{
 		}
 		return append(calls,
 			call("DELETE /v1/users/me/api-keys/{id}", "human", "/v1/users/me/api-keys/"+or(s.apiKeyID), ""),
+			call("DELETE /v1/agents/{id}/webhooks/{wh_id}", "agent", "/v1/agents/"+s.agentID+"/webhooks/"+or(s.created["webhook"]), ""),
 			rotate)
 	},
 	// Storage runs last: a pin finishes in the background seconds later (the closed IPFS

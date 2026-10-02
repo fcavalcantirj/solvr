@@ -31,11 +31,17 @@ func hashClaimToken(token string) string {
 type claimTokenSealer struct{ aead cipher.AEAD }
 
 func newClaimTokenSealer(secret string) *claimTokenSealer {
+	return newSealerForDomain(secret, claimTokenSealDomain)
+}
+
+// newSealerForDomain derives a sealing key for one domain from the server secret; the
+// webhook signing secrets use it with their own domain (webhookSecretSealDomain).
+func newSealerForDomain(secret, domain string) *claimTokenSealer {
 	if secret == "" {
 		return nil
 	}
 	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write([]byte(claimTokenSealDomain))
+	mac.Write([]byte(domain))
 	block, _ := aes.NewCipher(mac.Sum(nil)) // a 32-byte key: cannot fail
 	aead, _ := cipher.NewGCM(block)         // the standard nonce size: cannot fail
 	return &claimTokenSealer{aead: aead}

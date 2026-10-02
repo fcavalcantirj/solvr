@@ -84,7 +84,7 @@ func createTestWebhook(agentID string) *models.Webhook {
 		ID:        uuid.New(),
 		AgentID:   agentID,
 		URL:       "https://example.com/webhook",
-		Events:    []string{"answer.created", "problem.solved"},
+		Events:    []string{"reply.removed", "post.approved"},
 		Status:    models.WebhookStatusActive,
 		CreatedAt: now,
 		UpdatedAt: now,
@@ -120,7 +120,7 @@ func TestCreateWebhook_Success(t *testing.T) {
 
 	handler := NewWebhooksHandler(repo)
 
-	body := `{"url": "https://example.com/webhook", "events": ["answer.created"], "secret": "mysecret"}`
+	body := `{"url": "https://example.com/webhook", "events": ["reply.removed"], "secret": "mysecret"}`
 	req := httptest.NewRequest(http.MethodPost, "/v1/agents/test_agent/webhooks", bytes.NewBufferString(body))
 	req = addWebhookAuthContext(req, userID, "user")
 	w := httptest.NewRecorder()
@@ -143,7 +143,7 @@ func TestCreateWebhook_NoAuth(t *testing.T) {
 	repo := &MockWebhookRepository{}
 	handler := NewWebhooksHandler(repo)
 
-	body := `{"url": "https://example.com/webhook", "events": ["answer.created"], "secret": "mysecret"}`
+	body := `{"url": "https://example.com/webhook", "events": ["reply.removed"], "secret": "mysecret"}`
 	req := httptest.NewRequest(http.MethodPost, "/v1/agents/test_agent/webhooks", bytes.NewBufferString(body))
 	w := httptest.NewRecorder()
 
@@ -167,7 +167,7 @@ func TestCreateWebhook_NotOwner(t *testing.T) {
 
 	handler := NewWebhooksHandler(repo)
 
-	body := `{"url": "https://example.com/webhook", "events": ["answer.created"], "secret": "mysecret"}`
+	body := `{"url": "https://example.com/webhook", "events": ["reply.removed"], "secret": "mysecret"}`
 	req := httptest.NewRequest(http.MethodPost, "/v1/agents/test_agent/webhooks", bytes.NewBufferString(body))
 	req = addWebhookAuthContext(req, userID, "user")
 	w := httptest.NewRecorder()
@@ -190,7 +190,7 @@ func TestCreateWebhook_AgentNotFound(t *testing.T) {
 
 	handler := NewWebhooksHandler(repo)
 
-	body := `{"url": "https://example.com/webhook", "events": ["answer.created"], "secret": "mysecret"}`
+	body := `{"url": "https://example.com/webhook", "events": ["reply.removed"], "secret": "mysecret"}`
 	req := httptest.NewRequest(http.MethodPost, "/v1/agents/nonexistent/webhooks", bytes.NewBufferString(body))
 	req = addWebhookAuthContext(req, userID, "user")
 	w := httptest.NewRecorder()
@@ -235,7 +235,7 @@ func TestCreateWebhook_MissingURL(t *testing.T) {
 
 	handler := NewWebhooksHandler(repo)
 
-	body := `{"events": ["answer.created"], "secret": "mysecret"}`
+	body := `{"events": ["reply.removed"], "secret": "mysecret"}`
 	req := httptest.NewRequest(http.MethodPost, "/v1/agents/test_agent/webhooks", bytes.NewBufferString(body))
 	req = addWebhookAuthContext(req, userID, "user")
 	w := httptest.NewRecorder()
@@ -258,7 +258,7 @@ func TestCreateWebhook_InvalidURLNotHTTPS(t *testing.T) {
 
 	handler := NewWebhooksHandler(repo)
 
-	body := `{"url": "http://example.com/webhook", "events": ["answer.created"], "secret": "mysecret"}`
+	body := `{"url": "http://example.com/webhook", "events": ["reply.removed"], "secret": "mysecret"}`
 	req := httptest.NewRequest(http.MethodPost, "/v1/agents/test_agent/webhooks", bytes.NewBufferString(body))
 	req = addWebhookAuthContext(req, userID, "user")
 	w := httptest.NewRecorder()
@@ -341,7 +341,7 @@ func TestCreateWebhook_MissingSecret(t *testing.T) {
 
 	handler := NewWebhooksHandler(repo)
 
-	body := `{"url": "https://example.com/webhook", "events": ["answer.created"]}`
+	body := `{"url": "https://example.com/webhook", "events": ["reply.removed"]}`
 	req := httptest.NewRequest(http.MethodPost, "/v1/agents/test_agent/webhooks", bytes.NewBufferString(body))
 	req = addWebhookAuthContext(req, userID, "user")
 	w := httptest.NewRecorder()
@@ -368,7 +368,7 @@ func TestCreateWebhook_AllEventTypes(t *testing.T) {
 
 	handler := NewWebhooksHandler(repo)
 
-	body := `{"url": "https://example.com/webhook", "events": ["answer.created", "comment.created", "approach.stuck", "problem.solved", "mention"], "secret": "mysecret"}`
+	body := `{"url": "https://example.com/webhook", "events": ["post.approved", "post.rejected", "reply.removed", "reply.flagged", "blog_post_rejected"], "secret": "mysecret"}`
 	req := httptest.NewRequest(http.MethodPost, "/v1/agents/test_agent/webhooks", bytes.NewBufferString(body))
 	req = addWebhookAuthContext(req, userID, "user")
 	w := httptest.NewRecorder()
@@ -394,7 +394,7 @@ func TestCreateWebhook_DatabaseError(t *testing.T) {
 
 	handler := NewWebhooksHandler(repo)
 
-	body := `{"url": "https://example.com/webhook", "events": ["answer.created"], "secret": "mysecret"}`
+	body := `{"url": "https://example.com/webhook", "events": ["reply.removed"], "secret": "mysecret"}`
 	req := httptest.NewRequest(http.MethodPost, "/v1/agents/test_agent/webhooks", bytes.NewBufferString(body))
 	req = addWebhookAuthContext(req, userID, "user")
 	w := httptest.NewRecorder()
@@ -521,14 +521,20 @@ func TestIsValidWebhookEventType(t *testing.T) {
 		event string
 		valid bool
 	}{
-		{"answer.created", true},
-		{"comment.created", true},
-		{"approach.stuck", true},
-		{"problem.solved", true},
-		{"mention", true},
+		{"post.approved", true},
+		{"post.rejected", true},
+		{"reply.removed", true},
+		{"reply.flagged", true},
+		{"blog_post_rejected", true},
+		// The names of the problem/question/idea model are retired (EVENT_RETIRED).
+		{"answer.created", false},
+		{"comment.created", false},
+		{"approach.stuck", false},
+		{"problem.solved", false},
+		{"mention", false},
 		{"invalid.event", false},
 		{"", false},
-		{"ANSWER.CREATED", false}, // case-sensitive
+		{"REPLY.REMOVED", false}, // case-sensitive
 	}
 
 	for _, tt := range tests {

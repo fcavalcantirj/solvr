@@ -326,6 +326,19 @@ var RouteFamilies = []RouteFamily{
 		},
 	},
 	{
+		// SPEC.md Part 12.3: subscriptions to the notification events of schema version 1,
+		// delivered by the webhook delivery job.
+		Name:        "agent-webhooks",
+		Disposition: DispositionKeep,
+		Routes: []string{
+			"POST /v1/agents/{id}/webhooks",
+			"GET /v1/agents/{id}/webhooks",
+			"GET /v1/agents/{id}/webhooks/{wh_id}",
+			"PATCH /v1/agents/{id}/webhooks/{wh_id}",
+			"DELETE /v1/agents/{id}/webhooks/{wh_id}",
+		},
+	},
+	{
 		Name:        "agent-status",
 		Disposition: DispositionKeep,
 		Routes: []string{

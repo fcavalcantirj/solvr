@@ -39,27 +39,49 @@ func IsValidWebhookStatus(status string) bool {
 // WebhookEventType represents the type of webhook event.
 type WebhookEventType string
 
-// Webhook event type constants per SPEC.md Part 12.3.
+// The events a webhook subscribes to are the notification events of schema version 1
+// (NotificationSchemaVersion, SPEC.md Part 5.6 and 12.3): a webhook delivers the agent's
+// notifications of the subscribed types as they are recorded.
 const (
-	WebhookEventAnswerCreated  WebhookEventType = "answer.created"
-	WebhookEventCommentCreated WebhookEventType = "comment.created"
-	WebhookEventApproachStuck  WebhookEventType = "approach.stuck"
-	WebhookEventProblemSolved  WebhookEventType = "problem.solved"
-	WebhookEventMention        WebhookEventType = "mention"
+	WebhookEventPostApproved     WebhookEventType = NotificationPostApproved
+	WebhookEventPostRejected     WebhookEventType = NotificationPostRejected
+	WebhookEventReplyRemoved     WebhookEventType = NotificationReplyRemoved
+	WebhookEventReplyFlagged     WebhookEventType = NotificationReplyFlagged
+	WebhookEventBlogPostRejected WebhookEventType = NotificationBlogPostRejected
 )
 
 // ValidWebhookEventTypes lists all valid webhook event types.
 var ValidWebhookEventTypes = []WebhookEventType{
-	WebhookEventAnswerCreated,
-	WebhookEventCommentCreated,
-	WebhookEventApproachStuck,
-	WebhookEventProblemSolved,
-	WebhookEventMention,
+	WebhookEventPostApproved,
+	WebhookEventPostRejected,
+	WebhookEventReplyRemoved,
+	WebhookEventReplyFlagged,
+	WebhookEventBlogPostRejected,
+}
+
+// RetiredWebhookEventTypes are the event names of the problem/question/idea model. Nothing
+// produces them: a subscription to one is refused with a migration error, never stored.
+var RetiredWebhookEventTypes = []WebhookEventType{
+	"answer.created",
+	"comment.created",
+	"approach.stuck",
+	"problem.solved",
+	"mention",
 }
 
 // IsValidWebhookEventType checks if an event type is valid.
 func IsValidWebhookEventType(eventType string) bool {
 	for _, e := range ValidWebhookEventTypes {
+		if string(e) == eventType {
+			return true
+		}
+	}
+	return false
+}
+
+// IsRetiredWebhookEventType reports whether eventType is a retired event name.
+func IsRetiredWebhookEventType(eventType string) bool {
+	for _, e := range RetiredWebhookEventTypes {
 		if string(e) == eventType {
 			return true
 		}
@@ -88,6 +110,11 @@ type Webhook struct {
 
 	// Secret hash is never included in JSON responses
 	SecretHash string `json:"-"`
+
+	// Secret is the signing secret in the clear: set by a create or a secret change, and by
+	// the delivery queue for the send. The repository stores it only sealed; it is never
+	// included in JSON responses.
+	Secret string `json:"-"`
 
 	// Failure tracking
 	ConsecutiveFailures int        `json:"consecutive_failures"`

@@ -8,7 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fcavalcantirj/solvr/internal/api/response"
 	"github.com/fcavalcantirj/solvr/internal/auth"
+	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
@@ -16,7 +18,7 @@ import (
 
 // Error types for webhook operations
 var (
-	ErrWebhookNotFound = errors.New("webhook not found")
+	ErrWebhookNotFound = db.ErrWebhookNotFound // one sentinel, so a repository miss is a 404
 )
 
 // WebhookRepositoryInterface defines the database operations for webhooks.
@@ -42,29 +44,9 @@ func NewWebhooksHandler(repo WebhookRepositoryInterface) *WebhooksHandler {
 }
 
 // CreateWebhook handles POST /v1/agents/:id/webhooks - create a new webhook.
-// Per SPEC.md Part 12.3.
+// Per SPEC.md Part 12.3. The agent itself or its owner may call it.
 func (h *WebhooksHandler) CreateWebhook(w http.ResponseWriter, r *http.Request, agentID string) {
-	// Require JWT authentication
-	claims := auth.ClaimsFromContext(r.Context())
-	if claims == nil {
-		writeWebhookUnauthorized(w, "authentication required")
-		return
-	}
-
-	// Verify agent exists and caller is owner
-	agent, err := h.repo.FindAgent(r.Context(), agentID)
-	if err != nil {
-		if errors.Is(err, ErrAgentNotFound) {
-			writeWebhookError(w, http.StatusNotFound, "NOT_FOUND", "agent not found")
-			return
-		}
-		writeWebhookError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get agent")
-		return
-	}
-
-	// Verify ownership
-	if agent.HumanID == nil || *agent.HumanID != claims.UserID {
-		writeWebhookError(w, http.StatusForbidden, "FORBIDDEN", "you do not own this agent")
+	if !h.authorizeAgentWebhooks(w, r, agentID) {
 		return
 	}
 
@@ -92,8 +74,7 @@ func (h *WebhooksHandler) CreateWebhook(w http.ResponseWriter, r *http.Request, 
 	}
 
 	// Validate each event type
-	if invalid := models.ValidateWebhookEvents(req.Events); invalid != "" {
-		writeWebhookError(w, http.StatusBadRequest, "INVALID_EVENT_TYPE", "invalid event type: "+invalid)
+	if !validWebhookEvents(w, req.Events) {
 		return
 	}
 
@@ -117,6 +98,7 @@ func (h *WebhooksHandler) CreateWebhook(w http.ResponseWriter, r *http.Request, 
 		URL:        req.URL,
 		Events:     req.Events,
 		SecretHash: string(secretHash),
+		Secret:     req.Secret, // sealed by the repository: it signs every delivery
 		Status:     models.WebhookStatusActive,
 		CreatedAt:  now,
 		UpdatedAt:  now,
@@ -138,27 +120,7 @@ func (h *WebhooksHandler) CreateWebhook(w http.ResponseWriter, r *http.Request, 
 // ListWebhooks handles GET /v1/agents/:id/webhooks - list all webhooks.
 // Per SPEC.md Part 12.3.
 func (h *WebhooksHandler) ListWebhooks(w http.ResponseWriter, r *http.Request, agentID string) {
-	// Require JWT authentication
-	claims := auth.ClaimsFromContext(r.Context())
-	if claims == nil {
-		writeWebhookUnauthorized(w, "authentication required")
-		return
-	}
-
-	// Verify agent exists and caller is owner
-	agent, err := h.repo.FindAgent(r.Context(), agentID)
-	if err != nil {
-		if errors.Is(err, ErrAgentNotFound) {
-			writeWebhookError(w, http.StatusNotFound, "NOT_FOUND", "agent not found")
-			return
-		}
-		writeWebhookError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get agent")
-		return
-	}
-
-	// Verify ownership
-	if agent.HumanID == nil || *agent.HumanID != claims.UserID {
-		writeWebhookError(w, http.StatusForbidden, "FORBIDDEN", "you do not own this agent")
+	if !h.authorizeAgentWebhooks(w, r, agentID) {
 		return
 	}
 
@@ -184,27 +146,7 @@ func (h *WebhooksHandler) ListWebhooks(w http.ResponseWriter, r *http.Request, a
 // GetWebhook handles GET /v1/agents/:id/webhooks/:wh_id - get single webhook.
 // Per SPEC.md Part 12.3.
 func (h *WebhooksHandler) GetWebhook(w http.ResponseWriter, r *http.Request, agentID, webhookID string) {
-	// Require JWT authentication
-	claims := auth.ClaimsFromContext(r.Context())
-	if claims == nil {
-		writeWebhookUnauthorized(w, "authentication required")
-		return
-	}
-
-	// Verify agent exists and caller is owner
-	agent, err := h.repo.FindAgent(r.Context(), agentID)
-	if err != nil {
-		if errors.Is(err, ErrAgentNotFound) {
-			writeWebhookError(w, http.StatusNotFound, "NOT_FOUND", "agent not found")
-			return
-		}
-		writeWebhookError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get agent")
-		return
-	}
-
-	// Verify ownership
-	if agent.HumanID == nil || *agent.HumanID != claims.UserID {
-		writeWebhookError(w, http.StatusForbidden, "FORBIDDEN", "you do not own this agent")
+	if !h.authorizeAgentWebhooks(w, r, agentID) {
 		return
 	}
 
@@ -242,27 +184,7 @@ func (h *WebhooksHandler) GetWebhook(w http.ResponseWriter, r *http.Request, age
 // UpdateWebhook handles PATCH /v1/agents/:id/webhooks/:wh_id - update webhook.
 // Per SPEC.md Part 12.3.
 func (h *WebhooksHandler) UpdateWebhook(w http.ResponseWriter, r *http.Request, agentID, webhookID string) {
-	// Require JWT authentication
-	claims := auth.ClaimsFromContext(r.Context())
-	if claims == nil {
-		writeWebhookUnauthorized(w, "authentication required")
-		return
-	}
-
-	// Verify agent exists and caller is owner
-	agent, err := h.repo.FindAgent(r.Context(), agentID)
-	if err != nil {
-		if errors.Is(err, ErrAgentNotFound) {
-			writeWebhookError(w, http.StatusNotFound, "NOT_FOUND", "agent not found")
-			return
-		}
-		writeWebhookError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get agent")
-		return
-	}
-
-	// Verify ownership
-	if agent.HumanID == nil || *agent.HumanID != claims.UserID {
-		writeWebhookError(w, http.StatusForbidden, "FORBIDDEN", "you do not own this agent")
+	if !h.authorizeAgentWebhooks(w, r, agentID) {
 		return
 	}
 
@@ -311,8 +233,7 @@ func (h *WebhooksHandler) UpdateWebhook(w http.ResponseWriter, r *http.Request, 
 			writeWebhookValidationError(w, "events must not be empty")
 			return
 		}
-		if invalid := models.ValidateWebhookEvents(req.Events); invalid != "" {
-			writeWebhookError(w, http.StatusBadRequest, "INVALID_EVENT_TYPE", "invalid event type: "+invalid)
+		if !validWebhookEvents(w, req.Events) {
 			return
 		}
 		webhook.Events = req.Events
@@ -325,6 +246,7 @@ func (h *WebhooksHandler) UpdateWebhook(w http.ResponseWriter, r *http.Request, 
 			return
 		}
 		webhook.SecretHash = string(secretHash)
+		webhook.Secret = *req.Secret
 	}
 
 	if req.Status != nil {
@@ -352,27 +274,7 @@ func (h *WebhooksHandler) UpdateWebhook(w http.ResponseWriter, r *http.Request, 
 // DeleteWebhook handles DELETE /v1/agents/:id/webhooks/:wh_id - delete webhook.
 // Per SPEC.md Part 12.3.
 func (h *WebhooksHandler) DeleteWebhook(w http.ResponseWriter, r *http.Request, agentID, webhookID string) {
-	// Require JWT authentication
-	claims := auth.ClaimsFromContext(r.Context())
-	if claims == nil {
-		writeWebhookUnauthorized(w, "authentication required")
-		return
-	}
-
-	// Verify agent exists and caller is owner
-	agent, err := h.repo.FindAgent(r.Context(), agentID)
-	if err != nil {
-		if errors.Is(err, ErrAgentNotFound) {
-			writeWebhookError(w, http.StatusNotFound, "NOT_FOUND", "agent not found")
-			return
-		}
-		writeWebhookError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get agent")
-		return
-	}
-
-	// Verify ownership
-	if agent.HumanID == nil || *agent.HumanID != claims.UserID {
-		writeWebhookError(w, http.StatusForbidden, "FORBIDDEN", "you do not own this agent")
+	if !h.authorizeAgentWebhooks(w, r, agentID) {
 		return
 	}
 
@@ -407,6 +309,69 @@ func (h *WebhooksHandler) DeleteWebhook(w http.ResponseWriter, r *http.Request, 
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// authorizeAgentWebhooks lets the agent itself (its API key) or the human who owns it manage
+// the agent's webhooks. It answers 401 without a caller, 404 for an unknown agent and 403 for
+// anyone else, and reports whether the request may go on.
+func (h *WebhooksHandler) authorizeAgentWebhooks(w http.ResponseWriter, r *http.Request, agentID string) bool {
+	claims := auth.ClaimsFromContext(r.Context())
+	caller := auth.AgentFromContext(r.Context())
+	if claims == nil && caller == nil {
+		writeWebhookUnauthorized(w, "authentication required")
+		return false
+	}
+
+	// Verify agent exists and caller is the agent or its owner
+	agent, err := h.repo.FindAgent(r.Context(), agentID)
+	if err != nil {
+		if errors.Is(err, ErrAgentNotFound) {
+			writeWebhookError(w, http.StatusNotFound, "NOT_FOUND", "agent not found")
+			return false
+		}
+		writeWebhookError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get agent")
+		return false
+	}
+	if caller != nil && caller.ID == agent.ID {
+		return true
+	}
+	if claims != nil && agent.HumanID != nil && *agent.HumanID == claims.UserID {
+		return true
+	}
+	writeWebhookError(w, http.StatusForbidden, "FORBIDDEN", "you do not own this agent")
+	return false
+}
+
+// webhookEventDetails is error.details of EVENT_RETIRED: the retired name, its replacement
+// (null: nothing produces one) and the names a webhook can subscribe to.
+type webhookEventDetails struct {
+	RetiredEvent    string   `json:"retired_event"`
+	Replacement     *string  `json:"replacement"`
+	SupportedEvents []string `json:"supported_events"`
+}
+
+// validWebhookEvents refuses a subscription naming an event outside the notification
+// contract: 400 EVENT_RETIRED for a name of the problem/question/idea model, 400
+// INVALID_EVENT_TYPE for any other, each listing the supported names.
+func validWebhookEvents(w http.ResponseWriter, events []string) bool {
+	invalid := models.ValidateWebhookEvents(events)
+	if invalid == "" {
+		return true
+	}
+	supported := make([]string, len(models.ValidWebhookEventTypes))
+	for i, e := range models.ValidWebhookEventTypes {
+		supported[i] = string(e)
+	}
+	if models.IsRetiredWebhookEventType(invalid) {
+		response.WriteErrorWithDetails(w, http.StatusBadRequest, "EVENT_RETIRED",
+			invalid+" was retired with the problem/question/idea model and is never delivered; subscribe to the "+
+				"notification events of schema version 1: "+strings.Join(supported, ", "),
+			webhookEventDetails{RetiredEvent: invalid, SupportedEvents: supported})
+		return false
+	}
+	response.WriteErrorWithDetails(w, http.StatusBadRequest, "INVALID_EVENT_TYPE", "invalid event type: "+invalid,
+		map[string][]string{"supported_events": supported})
+	return false
 }
 
 // writeWebhookError writes an error response.

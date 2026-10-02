@@ -24,6 +24,8 @@ const (
 	NotificationPostRejected = "post.rejected"
 	NotificationReplyRemoved = "reply.removed"
 	NotificationReplyFlagged = "reply.flagged"
+	// NotificationBlogPostRejected is the blog moderation verdict; it names no subject.
+	NotificationBlogPostRejected = "blog_post_rejected"
 )
 
 // NotificationSubject names the canonical post and reply a notification event is about.

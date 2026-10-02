@@ -252,6 +252,18 @@ func main() {
 	}
 
 	// Start server in goroutine
+	// Start the webhook delivery job if database is available: it sends the queued webhook
+	// deliveries (the agent's notification events, queued with them) on every instance, each
+	// delivery by one instance at a time, retried with the same delivery ID (SPEC.md Part 12.3).
+	var webhookDeliveryCancel context.CancelFunc
+	if pool != nil {
+		webhookDeliveryJob := api.NewWebhookDeliveryJob(pool, services.NewWebhookHTTPClient())
+		var webhookDeliveryCtx context.Context
+		webhookDeliveryCtx, webhookDeliveryCancel = context.WithCancel(context.Background())
+		go webhookDeliveryJob.RunScheduled(webhookDeliveryCtx, jobs.DefaultWebhookDeliveryInterval)
+		log.Println("Webhook delivery job started (runs every 10 seconds)")
+	}
+
 	go func() {
 		log.Printf("Starting Solvr API server on port %s", port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -281,6 +293,9 @@ func main() {
 	}
 	if counterReconcileCancel != nil {
 		counterReconcileCancel()
+	}
+	if webhookDeliveryCancel != nil {
+		webhookDeliveryCancel()
 	}
 	if healthCheckCancel != nil {
 		healthCheckCancel()

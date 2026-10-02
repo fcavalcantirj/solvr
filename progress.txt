@@ -10032,3 +10032,194 @@ REMAINING FOR idx 78 (next slices, in order):
 
 git status at journal time [REAL]: as FIX + EXISTING TESTS CHANGED above (16 M incl. the 2 test files, 9 ??), plus
   M progress.txt (this entry). spec.json unchanged (idx 78 passes stays false).
+
+================================================================================
+2026-10-01 22:09 — Task idx 78 (spec.json, category functional) — IN PROGRESS, passes STAYS false
+"Keep SDKs, CLI, MCP, skills, and webhooks consistent with the redesigned product"
+SLICE 14: step 4, webhook half — "preserved delivery IDs; retry delivery without producing duplicate user-visible
+actions". Webhooks now exist end to end: a real db repository, mounted CRUD routes (agent key or owner JWT), the
+schema-1 notification types as the only subscribable events (retired names answer 400 EVENT_RETIRED), a durable
+delivery queue written in the same statement as the notification, a delivery job on every instance with leases,
+and one delivery ID per (webhook, event) that every retry preserves. OpenAPI for the webhook routes and room events
+are NOT in this slice (REMAINING below).
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 78-95, 97, 98. 24/67 acceptance
+  (skipped as in every earlier entry); 68 waits on the owner (as journaled). idx 78 first buildable; continued from
+  slice 13 (HEAD c627d3d1), REMAINING item "14.. step 4 webhook half". Tree clean at start.
+
+STATE FOUND [REAL, code read this session]: webhooks table (migration 000010) stored only a bcrypt secret_hash,
+  which cannot sign an HMAC: no delivery was possible even with a repository. No db repository, no mounted route,
+  no caller of NewWebhookDeliveryService; event names were the legacy answer.created/comment.created/approach.stuck/
+  problem.solved/mention, produced nowhere. db/claim_token_seal.go already seals a server-recoverable secret
+  (AES-256-GCM, key = HMAC(JWT secret, domain)), reused here with its own domain.
+
+DESIGN:
+  - Events = the schema-1 notification types: post.approved, post.rejected, reply.removed, reply.flagged,
+    blog_post_rejected (new const models.NotificationBlogPostRejected; blog_moderation.go now uses it). The legacy
+    names are models.RetiredWebhookEventTypes: create/update naming one answers 400 EVENT_RETIRED with details
+    {retired_event, replacement: null (nothing produces one), supported_events}; another unknown name keeps
+    400 INVALID_EVENT_TYPE, now with details.supported_events. Nothing is stored on a refusal.
+  - Signing secret: webhooks.signing_secret BYTEA, sealed under HMAC(JWT secret, "solvr/webhook-signing-secret/v1")
+    with the webhook id as AEAD data. A repository without a seal secret refuses to store a webhook
+    (ErrWebhookSecretUnsealable). secret_hash is still written (column NOT NULL), unused.
+  - Outbox: NotificationsRepository.Create is now `WITH created AS (INSERT ... RETURNING *), queued AS (INSERT INTO
+    webhook_deliveries ... SELECT FROM created JOIN webhooks ...) SELECT ... FROM created` — one statement, so an
+    event is never recorded without its deliveries. Queued only when schema_version = 1, addressed to an agent,
+    webhook status active/failing, type in events, signing_secret present. UNIQUE (webhook_id, notification_id).
+    data JSONB fixed at enqueue: {notification_id, agent_id, subject{post_id, reply_id} (nulls stripped), title,
+    body, link}; occurred_at = notification created_at.
+  - Payload {id: delivery id, event, schema_version: 1, timestamp: occurred_at RFC3339, data}; headers
+    X-Solvr-Delivery-ID, X-Solvr-Event, X-Solvr-Delivery-Attempt, X-Solvr-Webhook-ID, X-Solvr-Signature
+    (sha256= HMAC of the body). Same delivery => same bytes => same signature on every attempt.
+  - Claim: UPDATE ... SET leased_until = NOW()+2m WHERE id IN (SELECT ... due, unleased, webhook active/failing
+    ... FOR UPDATE OF q SKIP LOCKED LIMIT n); a lease that runs out (sender died) is claimable again with the same
+    id. A seal this server cannot open fails the delivery (never sent unsigned).
+  - Job (jobs.WebhookDeliveryJob, every 10s, batch 20 sent concurrently): delivered on 2xx; else retry at the SPEC
+    ladder (attempt 2 +1m, 3 +5m, 4 +30m, 5 +2h) via the service's ShouldRetry/GetNextRetryDelay; failed after the
+    5th. Webhook health (consecutive_failures/failing/disabled) reuses the existing recordFailure/recordSuccess; a
+    health-write error after a 2xx is logged, not turned into a retry (that would deliver twice).
+  - Delivery client (services.NewWebhookHTTPClient): 10s timeout, no redirects (3xx = failed), dialer Control
+    refuses non-public addresses (loopback, RFC1918, link-local incl. 169.254.169.254, 100.64/10, ULA, multicast,
+    unspecified, v4-mapped) on the dialed address, after DNS. Registration does not check addresses (tests use
+    127.0.0.1 TLS receivers with an injected client).
+  - Who manages: the agent itself (its API key) or the human owner; others 403, no caller 401 (before: owner JWT only).
+
+TESTS FIRST [logs /tmp/solvr_idx78_s14/]: the new test files were written before the repository, service, job and
+  routes existed; their RED was compile-level (undefined: WebhookRepository, ClaimDueDeliveries, SendQueued,
+  NewWebhookDeliveryJob, NewWebhookHTTPClient — editor diagnostics), not a behavior run. Behavior is pinned by the
+  mutations below instead.
+  ?? backend/internal/db/webhook_deliveries_test.go (308, own scratch DB each): _StoresTheSigningSecretSealedAnd
+    ManagesSubscriptions, _AnEventQueuesOneDeliveryPerSubscribedWebhook (active+failing only; paused/disabled/
+    other event/other agent/version 0/human: none; data JSON; duplicate refused), _TwoInstancesNeverClaimTheSame
+    Delivery (two pools x 10 rounds over 30 deliveries: each claimed once; leased not reclaimed; expired lease
+    reclaimed with same ids), _AttemptsKeepTheIDAndDataUntilDeliveredOrFailed, _ASecretThisServerCannotOpenFails
+    TheDelivery.
+  ?? backend/internal/services/webhook_queued_test.go (146, pure, TLS receiver): _EveryAttemptSendsTheSameIDBody
+    AndSignature (503 then 204), TestWebhookHTTPClient_RefusesPrivateAddressesAndRedirects.
+  ?? backend/internal/jobs/webhook_delivery_test.go (106, pure fakes): _RecordsEachOutcomeOnTheRetryLadder.
+  ?? backend/internal/api/router_webhooks_test.go (287, real router + solvr_test + TLS receiver):
+    TestWebhooks_TheAgentsEventIsDeliveredOnceWithOneDeliveryIDAcrossRetriesAndInstances (agent subscribes with
+    its key; moderator rejects its reply -> reply.removed queued; 2 instances run concurrently: 1 request (500);
+    retry due: 1 more request, same id/body, attempts 1,2; 3rd pass nothing; receiver acted once; signature
+    verifies; data.subject = canonical post/reply; data.notification_id = the notification GET /v1/notifications
+    shows), _RetiredAndUnknownEventNamesAreRefusedWithTheSupportedNames (all 5 retired names; request_id in the
+    envelope; nothing stored), _OnlyTheAgentAndItsOwnerManageItsWebhooks (another agent and a non-owner human:
+    403 on all 5 routes; anonymous 401), _DiscoveryAdvertisesServedAndDeliveredWebhooks (capability "webhooks" +
+    the 5 routes mounted + main.go calls NewWebhookDeliveryJob).
+  ?? backend/internal/api/handlers/webhooks_events_test.go (92, pure): agent self-subscribe keeps the secret for
+    sealing and another agent is 403; EVENT_RETIRED on create and update.
+
+FIX (GREEN) [git status --porcelain + git diff --stat this session: 16 tracked files 311+/197-, 13 new]:
+  ?? backend/migrations/000134_webhook_deliveries.{up,down}.sql (44/3): webhooks.signing_secret, events comment,
+    webhook_deliveries (+ due partial index, notification index, status/version/attempts checks). Down drops them
+    and restores the old comment.
+  ?? backend/internal/models/webhook_delivery.go (57): WebhookDelivery, WebhookDeliveryAttempt, WebhookDelivery
+    Payload, statuses. M backend/internal/models/webhook.go (+49/-): schema-1 event constants, RetiredWebhookEvent
+    Types, IsRetiredWebhookEventType, Webhook.Secret (json:"-"). M models/notification.go (+2).
+  ?? backend/internal/db/webhooks.go (200): WebhookRepository CRUD + FindAgent + FindByAgentAndEvent + Update
+    DeliveryStatus; ErrWebhookNotFound, ErrWebhookSecretUnsealable. ?? backend/internal/db/webhook_deliveries.go
+    (122): queueWebhookDeliveries CTE part, ClaimDueDeliveries, RecordDeliveryAttempt.
+  M backend/internal/db/notifications.go (+13/-): Create is the outbox statement. M db/claim_token_seal.go (+8/-):
+    newSealerForDomain extracted; newClaimTokenSealer calls it (behavior unchanged).
+  ?? backend/internal/services/webhook_queued.go (112): NewWebhookHTTPClient, isPublicWebhookIP, ErrWebhookAddress
+    NotPublic, BuildDeliveryPayload, SendQueued. services/webhook.go untouched (DeliverWebhook kept for its tests).
+  ?? backend/internal/jobs/webhook_delivery.go (134): WebhookDeliveryJob, RunOnce, RunScheduled, defaults.
+  M backend/internal/api/handlers/webhooks.go (432 -> 397): handlers.ErrWebhookNotFound = db.ErrWebhookNotFound;
+    the 5 copied auth blocks became authorizeAgentWebhooks (agent self or owner); validWebhookEvents; Secret passed
+    to the repository. M handlers/blog_moderation.go (1 line: the constant).
+  ?? backend/internal/api/router_webhooks.go (56): mountWebhookRoutes, webhookSealSecret (JWT_SECRET, router's test
+    fallback), NewWebhookDeliveryJob(pool, client). M api/router.go (+3, 1127 -> 1130, already over 800): mounted
+    in the UnifiedAuth group. M api/route_families.go (+13): family "agent-webhooks" keep.
+  M backend/cmd/api/main.go (+15): starts the job with services.NewWebhookHTTPClient(), cancels it on shutdown.
+  M backend/internal/db/legacy_dependency_registry.go (+1): "job:WebhookDeliveryJob" keep.
+  M SPEC.md (+151/- in 12.3, 5.6, 26): 12.3 rewritten (who manages, events table, EVENT_RETIRED, payload, delivery
+    ID, headers, exactly-once-per-receiver rule, network rules, retry ladder incl. "failed after the 5th",
+    paused/disabled behavior); 5.6 notes webhook delivery of schema-1 events; 26 family row + route list.
+    REMOVED from 12.3: "After 5 failures: Agent notified via in-app notification" — it was never implemented
+    (nothing produced it); not built here.
+
+EXISTING TESTS CHANGED (protocol):
+  1. handlers/webhooks_test.go TestIsValidWebhookEventType asserted {"answer.created", true}, {"comment.created",
+     true}, {"approach.stuck", true}, {"problem.solved", true}, {"mention", true}, {"ANSWER.CREATED", false}. This
+     slice replaces that: the same table now asserts the 5 schema-1 names true, the 5 legacy names false,
+     "REPLY.REMOVED" false (case). Covered further by NEW TestCreateWebhook_ARetiredEventNameAnswersTheMigration
+     Error and TestWebhooks_RetiredAndUnknownEventNamesAreRefusedWithTheSupportedNames — PASS [TEST].
+  2. handlers/webhooks_test.go TestCreateWebhook_AllEventTypes posted the 5 legacy names expecting 201; now the 5
+     schema-1 names, same 201 assertion. 8 other create bodies (`"events": ["answer.created"]`) and the
+     createTestWebhook fixture now use reply.removed (/post.approved); assertions unchanged. Before the change the
+     run failed TestCreateWebhook_Success with 400 EVENT_RETIRED and panicked (handlers_before.log).
+  3. handlers/webhooks_crud_test.go TestUpdateWebhook_ChangeEvents patched ["mention","comment.created"] expecting
+     200 + 2 events; now ["post.approved","reply.flagged"], same assertions.
+  4. db/cutover_rollback_test.go `49, "down migrations 000133..000085"` -> `50, "down migrations 000134..000085"`
+     (000134.down runs too; same per-migration bump as slices 12/13). PASS [TEST] (rollback.log).
+  5. ADDED (not loosened): jobs/legacy_dropped_workers_test.go scheduledWorkers gets the "job:WebhookDeliveryJob"
+     probe; jobs/legacy_dropped_write_steps_test.go gets POST/PATCH/DELETE webhook calls — the write probe failed
+     alone with "write routes the probe never calls: POST /v1/agents/{id}/webhooks ..." until then.
+  Nothing deleted, skipped or loosened.
+
+VERIFICATION [this session; DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test?sslmode=disable
+  (local docker solvr-postgres); scratch-DB tests make and drop their own DBs]:
+  [REAL] `migrate up` on solvr_test 133 -> 134 (migrate_up.log), schema_migrations 134 dirty=f. Scratch DB
+    s14_migcheck: up to 134, down 1 (table gone, column gone), up again (134 dirty=f); dropped (migcheck.log).
+  [TEST] GREEN: green_db.log 5 PASS; green_services.log 2 PASS; green_jobs.log 1 PASS; green_handlers.log 57 PASS
+    (all 'Webhook' handler tests incl. the changed ones); green_api.log the 4 TestWebhooks_* PASS + TestRoute
+    Families_* (PublishedInSpec PASS after the SPEC row); jobs_probe.log TestLegacyDroppedDatabase_WriteRoutes/
+    ScheduledJobs + TestJudgeWriteProbe PASS; alone_api2.log TestStatusContract_* (incl. NoRouteAnswers5xxFor
+    AnUnknownID and MalformedJSONBody over the new routes), TestNotificationEvents_*, TestOpenAPIOperations_Every
+    DocumentedOperationIsAServedRoute PASS. 0 SKIP among the tests this slice wrote.
+  MUTATIONS [TEST] (mut/mut.py, each alone, source restored, `shasum -c mut/orig.sha` OK; every FAIL is an
+    assertion, m7 re-run after its first form did not compile): m1 queue version-0 events -> db FAIL; m2 queue
+    paused/disabled -> db FAIL; m3 claim ignores leases -> db + api FAIL; m4 delivered never recorded -> db + api
+    FAIL; m5 timestamp = send time -> services + api FAIL; m6 fresh delivery-id header -> services + api FAIL;
+    m7 private addresses allowed -> services FAIL; m8 retries forever -> jobs FAIL; m9 retired names not answered
+    -> handlers + api FAIL; m10 agent cannot manage itself -> handlers + api FAIL.
+  [TEST] FULL BACKEND (once, backend_full.log, `go test ./...`) -> exit 1: FAIL in internal/api, internal/api/
+    handlers, internal/db, internal/jobs; 90 failing names (names.mine). Against slice 13's baseline (/tmp/
+    solvr_idx78_s13/base.all) 14 are new: 11 failed with "FATAL: sorry, too many clients already (SQLSTATE 53300)"
+    (32 such lines in this run vs 10 in slice 13's; max_connections 100; [INFERRED] the extra pools of the new
+    two-instance tests add to it), 3 on shared-data assertions (TestAPIUsagePulse_... expected 5 actual 52;
+    TestApprovePublication_RetryCannotRepublish "published" vs "draft"; TestSaveAsPost_Idempotency... 201 vs 500).
+    Run ALONE (alone.log, alone_api2.log): 13 PASS; the 14th, TestLegacyDroppedDatabase_WriteRoutesExposeOnly
+    LegacyRouteFamilies, failed alone on the uncalled webhook write routes — fixed (item 5 above), PASS.
+  [REAL] SMOKE: built cmd/api, ran it on :18099 against solvr_test (env given inline; no .env read): log "Webhook
+    delivery job started (runs every 10 seconds)"; agent key POST webhook -> 201, no secret in the answer;
+    answer.created -> 400 EVENT_RETIRED {retired_event, replacement:null, supported_events} with request_id;
+    anonymous list 401; discovery capabilities [search, read, write, webhooks]; a delivery queued by SQL to
+    https://127.0.0.1:9 was claimed within 10s: status pending, attempts 1, no status code, last_error "...webhook
+    address is not a public internet address: 127.0.0.1:9", next attempt +1m, lease released, webhook
+    consecutive_failures 1; server log "1 claimed, 0 delivered, 1 retrying, 0 failed". Server killed; smoke
+    agents (cascading webhooks, deliveries) and their notifications deleted.
+  [REAL] go vet (models, db, services, jobs, api, api/handlers, cmd/api) exit 0. gofmt -l: none of the new files;
+    cmd/api/main.go and models/webhook.go were already gofmt-dirty at HEAD (checked with git show) and were not
+    reformatted. check-file-size.sh: 32 files over 800 (same count as slice 13); router.go 1127 -> 1130 is one.
+  NOT RUN: frontend (no frontend file changed), packages/*, cli/, mcp-server, skill suites (untouched),
+    golangci-lint (environment mismatch, as before). A delivery to a real public HTTPS endpoint was not made
+    (offline); the 2xx path is proven by the TLS-receiver tests with an injected client.
+
+UAT: owner applies migration 000134_webhook_deliveries.up.sql on production (manual migrations) before deploying
+  this API — NotificationsRepository.Create now writes webhook_deliveries in every notification insert, so without
+  the table every notification write fails. JWT_SECRET must stay stable: rotating it makes stored webhook secrets
+  unopenable (their deliveries fail until the agent PATCHes a new secret).
+
+FINDINGS, NOT FIXED:
+  - [REAL] recordFailure's "24h of continuous failure" check measures now - last_failure_at (the previous failure),
+    not the start of the failure run: with retries <= 2h apart a failing webhook is never disabled; one is disabled
+    only when its next failure comes 24h+ after the last. Existing behavior, pinned by services webhook tests.
+  - [REAL] OpenAPI (/v1/openapi.json) does not document the webhook routes or the delivery payload; the frontend
+    API docs (components/api/api-endpoint-data-*.ts) have no webhook section; SDKs/CLIs/MCP/skill have no webhook
+    command.
+  - [INFERRED] A paused webhook keeps its already-queued deliveries pending indefinitely (documented in 12.3); no
+    cleanup of old delivered/failed rows exists (webhook_deliveries grows with events).
+  - [REAL] Registration accepts private https URLs (only the send refuses them); the agent learns it from the
+    delivery's failure, not at create time.
+
+REMAINING FOR idx 78 (next slices, in order):
+  15.. step 4 rest: OpenAPI paths for the 5 webhook routes + a WebhookDelivery payload schema (and frontend API
+    docs); room events (and room_id in the subject) if delivered.
+  then steps 5 (migration notes, deprecation errors, legacy choices out of first-party clients: both CLIs' --type,
+    npm and skill search --type, skill.json legacy endpoints), 6 (external consumer vs clean + upgraded schema),
+    7 (participants as collections, a members command/tool); findings of slices 6-14.
+
+git status at journal time [REAL]: as FIX + EXISTING TESTS CHANGED above (16 M incl. 5 test files, 13 ??), plus
+  M progress.txt (this entry). spec.json unchanged (idx 78 passes stays false).

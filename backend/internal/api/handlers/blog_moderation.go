@@ -45,7 +45,7 @@ func (h *BlogHandler) moderatePublished(post *models.BlogPost) {
 			return
 		}
 		// Under the event contract with no subject: a blog post is not a post or a reply.
-		n := &models.Notification{Type: "blog_post_rejected", Title: "Blog post needs changes",
+		n := &models.Notification{Type: models.NotificationBlogPostRejected, Title: "Blog post needs changes",
 			Body: fmt.Sprintf("Your blog post %q was returned to draft: %s. Edit and publish again.", p.Title, result.Explanation),
 			Link: "/blog/" + p.Slug, SchemaVersion: models.NotificationSchemaVersion}
 		authorID := p.PostedByID

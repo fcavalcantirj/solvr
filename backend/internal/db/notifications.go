@@ -38,15 +38,20 @@ var ErrNotificationReplyWithoutPost = errors.New("notification subject names a r
 // Create inserts a new notification into the database.
 // The notification must have at least a Type and Title set, and either UserID or AgentID.
 // SchemaVersion and Subject are stored as given (models.NotificationSchemaVersion): the subject
-// post and reply must exist and the reply must belong to the post.
+// post and reply must exist and the reply must belong to the post. The same statement queues
+// the event for the agent's subscribed webhooks (queueWebhookDeliveries), so an event is never
+// recorded without its deliveries.
 func (r *NotificationsRepository) Create(ctx context.Context, n *models.Notification) (*models.Notification, error) {
 	if n.Subject.ReplyID != nil && n.Subject.PostID == nil {
 		return nil, ErrNotificationReplyWithoutPost
 	}
 	query := `
-		INSERT INTO notifications (user_id, agent_id, type, title, body, link, schema_version, post_id, reply_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		RETURNING ` + notificationColumns
+		WITH created AS (
+			INSERT INTO notifications (user_id, agent_id, type, title, body, link, schema_version, post_id, reply_id)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			RETURNING *
+		), queued AS (` + queueWebhookDeliveries + `)
+		SELECT ` + notificationColumns + ` FROM created`
 
 	created, err := scanNotification(r.pool.QueryRow(ctx, query,
 		n.UserID, n.AgentID, n.Type, n.Title, n.Body, n.Link, n.SchemaVersion, n.Subject.PostID, n.Subject.ReplyID,

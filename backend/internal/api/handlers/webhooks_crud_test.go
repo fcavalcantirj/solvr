@@ -317,7 +317,7 @@ func TestUpdateWebhook_ChangeEvents(t *testing.T) {
 
 	handler := NewWebhooksHandler(repo)
 
-	body := `{"events": ["mention", "comment.created"]}`
+	body := `{"events": ["post.approved", "reply.flagged"]}`
 	req := httptest.NewRequest(http.MethodPatch, "/v1/agents/test_agent/webhooks/"+webhook.ID.String(), bytes.NewBufferString(body))
 	req = addWebhookAuthContext(req, userID, "user")
 	w := httptest.NewRecorder()

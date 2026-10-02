@@ -1247,7 +1247,7 @@
       "Add a router-level test with a real JWT: a human who signed up through OAuth claims a referral code and the referral row is recorded; the same call without a JWT returns 401.",
       "Verify the call made by frontend/app/auth/callback/page.tsx after OAuth signup succeeds against the real router."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",
@@ -1257,6 +1257,6 @@
       "Pin their time windows so the result does not depend on the wall clock when they run.",
       "Run each three times in a row with every run passing, then drop them from the known-failure baseline in the journal."
     ],
-    "passes": false
+    "passes": true
   }
 ]

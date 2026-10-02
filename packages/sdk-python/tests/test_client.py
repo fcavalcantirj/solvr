@@ -66,31 +66,27 @@ class TestSearch:
         """Should search with options."""
         responses.add(
             responses.GET,
-            f"{BASE_URL}/v1/search?q=test&type=problem&per_page=5&page=2",
+            f"{BASE_URL}/v1/search?q=test&per_page=5&page=2&sort=newest",
             json={"data": [], "meta": {"total": 0, "page": 2, "per_page": 5}},
             status=200,
         )
 
         client = Solvr(api_key=API_KEY)
-        result = client.search("test", type="problem", limit=5, page=2)
+        result = client.search("test", limit=5, page=2, sort="newest")
 
+        assert responses.calls[0].request.url == f"{BASE_URL}/v1/search?q=test&per_page=5&page=2&sort=newest"
         assert result.data == []
         assert result.meta.page == 2
 
     @responses.activate
-    def test_search_with_enum(self):
-        """Should accept PostType enum."""
-        responses.add(
-            responses.GET,
-            f"{BASE_URL}/v1/search?q=test&type=question",
-            json={"data": [], "meta": {"total": 0, "page": 1, "per_page": 10}},
-            status=200,
-        )
-
+    def test_search_rejects_the_legacy_type_enum(self):
+        """1.x filtered by PostType; 2.0.0 removed the filter (tests/test_migration.py)."""
         client = Solvr(api_key=API_KEY)
-        client.search("test", type=PostType.QUESTION)
 
-        assert len(responses.calls) == 1
+        with pytest.raises(TypeError):
+            client.search("test", type=PostType.QUESTION)
+
+        assert len(responses.calls) == 0
 
 
 class TestGet:

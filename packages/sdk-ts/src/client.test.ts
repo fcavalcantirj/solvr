@@ -79,27 +79,20 @@ describe('Solvr', () => {
       });
 
       const solvr = new Solvr({ apiKey });
-      await solvr.search('test', { type: 'problem', limit: 5, page: 2 });
+      await solvr.search('test', { limit: 5, page: 2, sort: 'newest' });
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.solvr.dev/v1/search?q=test&type=problem&per_page=5&page=2',
+        'https://api.solvr.dev/v1/search?q=test&per_page=5&page=2&sort=newest',
         expect.any(Object)
       );
     });
 
-    it('should not include type=all in query', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ data: [], meta: { total: 0, page: 1, per_page: 10 } }),
-      });
-
+    // 1.x sent type (and dropped type 'all'); 2.0.0 rejects the removed option (migration.test.ts).
+    it('should reject the removed type option, all included, without a request', async () => {
       const solvr = new Solvr({ apiKey });
-      await solvr.search('test', { type: 'all' });
+      await expect(solvr.search('test', { type: 'all' } as never)).rejects.toThrow(TypeError);
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.solvr.dev/v1/search?q=test',
-        expect.any(Object)
-      );
+      expect(mockFetch).not.toHaveBeenCalled();
     });
   });
 

@@ -32,6 +32,22 @@
 //	stream, err := room.StreamRoom(ctx, "planner-executor", nil)
 //
 // Every method is named after the operationId it calls in GET /v1/openapi.json.
+//
+// # Migrating from 1.x to 2.0.0
+//
+// 2.0.0 follows the API's canonical knowledge model: a post has no type, and
+// every contribution to a post is a reply. These 1.x members are gone:
+//
+//   - CreateAnswer and CreateApproach: call CreateReply (POST /v1/posts/{id}/replies)
+//     with the answer or the approach as one Markdown Body; ListReplies reads them.
+//   - CreatePostRequest.Type and CreatePostRequest.SuccessCriteria: a post has no
+//     type; say in the Title and Description what it is and what success means.
+//   - SearchOptions.Type and SearchOptions.Status: Search and ListPosts no longer
+//     filter by the legacy post type or status; narrow a search with its query,
+//     Tags and Sort.
+//
+// A 1.x call that reaches a retired legacy route answers an *APIError whose Code
+// is "ENDPOINT_RETIRED"; Details["replacement"] names the route to call instead.
 package solvr
 
 import (
@@ -121,12 +137,6 @@ func (c *Client) Search(ctx context.Context, query string, opts *SearchOptions) 
 	}
 
 	if opts != nil {
-		if opts.Type != "" {
-			params.Set("type", opts.Type)
-		}
-		if opts.Status != "" {
-			params.Set("status", opts.Status)
-		}
 		// Pagination: API is page-based (page + per_page). Prefer PerPage/Page; fall back
 		// to the legacy Limit/Offset (Offset quantized to a page). Previously limit/offset
 		// were sent verbatim and silently ignored by the API.
@@ -178,12 +188,6 @@ func (c *Client) GetPost(ctx context.Context, id string) (*PostResponse, error) 
 func (c *Client) ListPosts(ctx context.Context, opts *SearchOptions) (*PostsResponse, error) {
 	params := url.Values{}
 	if opts != nil {
-		if opts.Type != "" {
-			params.Set("type", opts.Type)
-		}
-		if opts.Status != "" {
-			params.Set("status", opts.Status)
-		}
 		if opts.Limit > 0 {
 			params.Set("per_page", strconv.Itoa(opts.Limit))
 		}
@@ -282,7 +286,7 @@ func (c *Client) newRequest(ctx context.Context, method, path string, header map
 	if c.apiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	}
-	req.Header.Set("User-Agent", "solvr-go/1.0.0")
+	req.Header.Set("User-Agent", "solvr-go/"+Version)
 	for name, value := range header {
 		if value != "" {
 			req.Header.Set(name, value)

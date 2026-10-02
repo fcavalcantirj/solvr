@@ -7,6 +7,11 @@ import "time"
 // DefaultBaseURL is the default Solvr API base URL.
 const DefaultBaseURL = "https://api.solvr.dev"
 
+// Version is this SDK's version. Every request names it in its User-Agent
+// (solvr-go/<Version>); the package documentation's migration notes are
+// written for it.
+const Version = "2.0.0"
+
 // Vote directions
 const (
 	VoteUp   = "up"
@@ -181,8 +186,6 @@ type AgentsResponse struct {
 // per_page and Offset is quantized to a page number (Offset/PerPage + 1). Previously
 // Limit/Offset were sent as-is and silently ignored by the API (a no-op); this now works.
 type SearchOptions struct {
-	Type    string   // Filter by post type
-	Status  string   // Filter by status
 	Tags    []string // Filter by tags
 	Sort    string   // relevance (default), newest, votes or activity
 	PerPage int      // Results per page (default 20, max 50)

@@ -89,8 +89,9 @@ func TestSearch(t *testing.T) {
 func TestSearchWithOptions(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Verify query params. Legacy Limit maps to the API's per_page (not limit).
-		if r.URL.Query().Get("type") != "problem" {
-			t.Errorf("expected type 'problem', got '%s'", r.URL.Query().Get("type"))
+		// The legacy type filter is gone in 2.0 (TestSearchAndListPosts_SendNoLegacyFilter).
+		if r.URL.Query().Has("type") {
+			t.Errorf("the legacy type filter must not be sent, got '%s'", r.URL.Query().Get("type"))
 		}
 		if r.URL.Query().Get("per_page") != "10" {
 			t.Errorf("expected per_page '10' (from legacy Limit), got '%s'", r.URL.Query().Get("per_page"))
@@ -106,7 +107,6 @@ func TestSearchWithOptions(t *testing.T) {
 
 	client := NewClient("test-api-key", WithBaseURL(server.URL))
 	opts := &SearchOptions{
-		Type:  "problem",
 		Limit: 10,
 	}
 	_, err := client.Search(context.Background(), "query", opts)
@@ -406,11 +406,9 @@ func TestListPosts(t *testing.T) {
 
 func TestListPostsWithOptions(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("type") != "problem" {
-			t.Errorf("expected type 'problem', got '%s'", r.URL.Query().Get("type"))
-		}
-		if r.URL.Query().Get("status") != "open" {
-			t.Errorf("expected status 'open', got '%s'", r.URL.Query().Get("status"))
+		// The legacy type and status filters are gone in 2.0 (TestSearchAndListPosts_SendNoLegacyFilter).
+		if r.URL.Query().Has("type") || r.URL.Query().Has("status") {
+			t.Errorf("legacy filters must not be sent, got type '%s' status '%s'", r.URL.Query().Get("type"), r.URL.Query().Get("status"))
 		}
 		if r.URL.Query().Get("per_page") != "10" {
 			t.Errorf("expected per_page '10', got '%s'", r.URL.Query().Get("per_page"))
@@ -423,8 +421,6 @@ func TestListPostsWithOptions(t *testing.T) {
 
 	client := NewClient("test-api-key", WithBaseURL(server.URL))
 	opts := &SearchOptions{
-		Type:   "problem",
-		Status: "open",
 		Limit:  10,
 		Offset: 20,
 	}
@@ -520,8 +516,9 @@ func TestRetryOnNetworkError(t *testing.T) {
 func TestSearchWithAllOptions(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		if q.Get("status") != "open" {
-			t.Errorf("expected status 'open', got '%s'", q.Get("status"))
+		// The legacy status filter is gone in 2.0 (TestSearchAndListPosts_SendNoLegacyFilter).
+		if q.Has("status") {
+			t.Errorf("the legacy status filter must not be sent, got '%s'", q.Get("status"))
 		}
 		// API is page-based: PerPage/Page must serialize to per_page/page (never limit/offset).
 		if q.Get("per_page") != "25" {
@@ -545,7 +542,6 @@ func TestSearchWithAllOptions(t *testing.T) {
 
 	client := NewClient("test-api-key", WithBaseURL(server.URL))
 	opts := &SearchOptions{
-		Status:  "open",
 		PerPage: 25,
 		Page:    2,
 		Tags:    []string{"go", "testing"},

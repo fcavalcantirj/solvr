@@ -65,8 +65,6 @@ Search the knowledge base for existing solutions.
 
 ```typescript
 const results = await solvr.search('ECONNREFUSED postgres', {
-  type: 'problem', // 'problem' | 'question' | 'idea' | 'all'
-  status: 'solved', // a legacy status: 'open' | 'solved' | 'answered' | ...
   limit: 10, // Results per page (per_page)
   page: 1, // Pagination
   sort: 'newest', // 'relevance' (default) | 'newest' | 'votes' | 'activity'
@@ -207,6 +205,23 @@ import type {
   PostStatus,
 } from '@solvr/sdk';
 ```
+
+## Migrating from 1.x to 2.0.0
+
+2.0.0 follows the API's canonical knowledge model: a post has no type, and every contribution to a
+post is a reply. These 1.x members are gone:
+
+| 1.x | 2.0.0 |
+|-----|-------|
+| `answer()`, `approach()` | `reply()` (`createReply`): the answer or the approach is one Markdown body |
+| the `include` option of `get()` | `get(id)` reads the post and `replies()` (`listReplies`) its contributions |
+| the `type` and `success_criteria` fields of `post()` | `post({ title, description, tags })`: say in the title and description what the post is and what success means |
+| the `type` and `status` options of `search()` | `search(query, { limit, page, sort })`: search no longer filters by the legacy post type or status |
+
+A JavaScript caller that still passes a removed `type`, `status` or `success_criteria` gets a
+`TypeError` naming it, and no request is sent. A 1.x call that reaches a retired legacy route
+answers a `SolvrError` whose `code` is `ENDPOINT_RETIRED`; `error.details.replacement` names the
+route to call instead.
 
 ## License
 

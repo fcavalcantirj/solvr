@@ -10504,3 +10504,158 @@ UAT: owner applies migration 000135_room_notification_events.up.sql on productio
 
 git status at journal time [REAL]: as FIX above (23 M, 5 ??), plus M progress.txt (this entry). spec.json unchanged
   (idx 78 passes stays false).
+
+2026-10-01 23:35 — Task idx 78 (spec.json, category functional) — IN PROGRESS, passes STAYS false
+"Keep SDKs, CLI, MCP, skills, and webhooks consistent with the redesigned product"
+SLICE 17: step 5, SDK half — "Publish versioned migration notes and meaningful deprecation errors; remove legacy
+user-facing problem/idea/answer choices from first-party clients". The three SDKs drop the last legacy choice they
+still offered (search/list by legacy post type and status), move to 2.0.0, and each carries "Migrating from 1.x to
+2.0.0" notes that a test holds to the code (every member the notes call removed must be gone). A 1.x call that
+still uses a removed choice fails loudly before any request.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 78-95, 97, 98. 24/67 acceptance
+  (skipped as in every earlier entry); 68 waits on the owner (as journaled). idx 78 first buildable; continued from
+  slice 16 (HEAD 71c63229), REMAINING item "17.. step 5". Tree clean at start.
+
+STATE FOUND [REAL, code read this session]:
+  - Go SDK SearchOptions.Type/Status were sent by Search AND ListPosts (type=problem etc.); TS SearchOptions
+    type ('problem'|'question'|'idea'|'all') + status; Python search(query, type, status, limit, page, sort)
+    POSITIONAL. All three at version 1.0.0 (package.json, pyproject + __version__, Go User-Agent solvr-go/1.0.0).
+  - TS createPost sends JSON.stringify(input): a JS 1.x caller passing {type:'problem', success_criteria} still
+    reached POST /v1/posts, which still accepts a legacy type (handlers/posts.go) -> a legacy-typed post. Python
+    post(type=) already raised TypeError; Go CreatePostRequest has no Type.
+  - 1.x surface (git show of the first SDK commits 585df8b5 TS, c1a691ef Py, 6c9d80cc Go): answer()/approach()
+    (Go CreateAnswer/CreateApproach), get(id, include), post(type, success_criteria), search type/status. All but
+    search type/status were already gone; no SDK had migration notes.
+  - The API keeps serving search/list `type`/`status` as documented legacy filters (GET /v1/posts?type=problem is
+    SPEC 26.7's replacement for the retired /v1/problems) — NOT changed by this slice.
+
+DESIGN:
+  - Each SDK removes the search (and Go ListPosts) type/status choice and is 2.0.0. The language's own boundary
+    stops a 1.x caller: Go compile error (fields gone); Python TypeError (arguments gone; the options after the
+    query are now keyword-only so search("q", "problem") cannot bind "problem" to limit); TS compile error, plus a
+    runtime TypeError for JavaScript callers (rejectRemoved: search type/status, createPost type/success_criteria;
+    message "<method>: '<name>' was removed in @solvr/sdk 2.0.0; see "Migrating from 1.x to 2.0.0" in the README";
+    an option left undefined is not rejected). No request is sent in any of these cases.
+  - Versioned notes: TS/Python README "## Migrating from 1.x to 2.0.0" (table 1.x -> 2.0.0: answer()/approach()
+    -> reply(); include -> get + replies(); post type/success_criteria; search type/status; ENDPOINT_RETIRED +
+    details.replacement); Go package doc "# Migrating from 1.x to 2.0.0" (go doc renders it). The heading is built
+    from the SDK's own version constant in each test, so a version bump without new notes fails.
+
+TESTS FIRST [logs /tmp/solvr_idx78_s17/]:
+  ?? packages/sdk-go/migration_test.go (140): TestSearchOptions_OfferNoLegacyTypeOrStatusFilter (reflect),
+    TestSearchAndListPosts_SendNoLegacyFilter (every remaining option set; neither request has type/status),
+    TestVersion_IsTheMajorTheMigrationNotesDescribeAndTheUserAgentNamesIt (Version 2.0.0, User-Agent
+    solvr-go/2.0.0 seen by an httptest server), TestMigrationNotes_NameEveryRemovedMemberAndEachIsGone (go/parser
+    reads the package doc; each of CreateAnswer, CreateApproach, CreatePostRequest.Type/.SuccessCriteria,
+    SearchOptions.Type/.Status named AND absent by reflection; notes name CreateReply, ENDPOINT_RETIRED,
+    Details["replacement"]).
+  ?? packages/sdk-ts/src/migration.test.ts (96, 10 tests): search rejects type 'problem', type 'all', status
+    (TypeError, message, fetch never called); createPost/post reject type, success_criteria; an undefined option is
+    not rejected (exact URL); get sends no include; types.ts SearchOptions/CreatePostInput declare none of them and
+    Solvr.prototype has no approach/answer; VERSION === '2.0.0' === package.json version; README notes name each
+    removed member and reply()/replies()/ENDPOINT_RETIRED/details.replacement.
+  ?? packages/sdk-python/tests/test_migration.py (82, 7 tests): search(type=problem|all, status=open) raise
+    TypeError naming the argument with 0 requests; positional search("q", "problem") raises TypeError;
+    approach/answer absent, inspect.signature of search/post/create_post/get/get_post has none of the removed
+    arguments and no **kwargs; __version__ 2.0.0 == pyproject version; README notes name each removed member and
+    reply()/replies()/ENDPOINT_RETIRED/details["replacement"].
+  Before the Go test, a no-behavior refactor so it compiles: `const Version = "1.0.0"` (types.go) used by the
+    User-Agent instead of the literal.
+  RED [TEST] red_go.log (3 FAIL: fields still offered, Version/User-Agent 1.0.0, no notes section; the
+    send-no-legacy guard PASSED), red_ts.log (8 failed / 2 guard tests passed), red_py.log (7 failed: e.g.
+    "ConnectionError ... GET https://api.solvr.dev/v1/search?q=postgres&type=problem" — the 1.x SDK sent it).
+    Every failure an assertion, none a compile error.
+
+EXISTING TESTS CHANGED (protocol; each pinned sending the legacy filter, the behavior this slice removes):
+  1. sdk-go client_test.go TestSearchWithOptions: asserted `if r.URL.Query().Get("type") != "problem" { t.Errorf(
+     "expected type 'problem'...` with `Type: "problem"` in the options. Now asserts `type` is NOT sent; the
+     per_page-from-Limit and no-`limit` assertions unchanged. Covered by NEW TestSearchAndListPosts_SendNoLegacy
+     Filter + TestSearchOptions_OfferNoLegacyTypeOrStatusFilter. PASS [TEST] green_go.log.
+  2. sdk-go TestListPostsWithOptions: asserted type 'problem' and status 'open' sent (`Type: "problem", Status:
+     "open"`). Now asserts neither is sent; per_page assertion unchanged. Same covering tests. PASS [TEST].
+  3. sdk-go TestSearchWithAllOptions: asserted `q.Get("status") != "open"` -> error, with `Status: "open"`. Now
+     asserts status is NOT sent; per_page/page/no limit-offset/2 tags unchanged. Same covering tests. PASS [TEST].
+  4. sdk-ts client.test.ts 'should search with options': `search('test', { type: 'problem', limit: 5, page: 2 })`
+     expected URL `...?q=test&type=problem&per_page=5&page=2`. Now `{ limit: 5, page: 2, sort: 'newest' }` ->
+     `...?q=test&per_page=5&page=2&sort=newest` (sort now pinned too). Covered by NEW migration.test.ts search
+     rejection tests. PASS [TEST] green_ts3.log.
+  5. sdk-ts 'should not include type=all in query' (search(..., { type: 'all' }) -> URL `?q=test`) -> renamed
+     'should reject the removed type option, all included, without a request' (TypeError, fetch not called).
+     Covered by NEW migration.test.ts `search rejects the removed type option` ({ type: 'all' } row). PASS [TEST].
+  6. sdk-python test_client.py test_search_with_options: mock URL `...?q=test&type=problem&per_page=5&page=2`,
+     `client.search("test", type="problem", limit=5, page=2)`. Now limit/page/sort with the exact request URL
+     asserted (stronger: responses' URL match alone did not prove the query). PASS [TEST] green_py.log.
+  7. sdk-python test_search_with_enum ("Should accept PostType enum": search(type=PostType.QUESTION) sent
+     type=question) -> test_search_rejects_the_legacy_type_enum (TypeError, 0 requests). Covered by NEW
+     test_migration.py test_search_rejects_the_removed_filter_without_calling_the_api. PASS [TEST].
+  frontend api-sdk-examples.test.tsx NOT changed: it went RED on its own after the SDK change (fe_red.log:
+    "client.search(type=...): expected [ 'query', 'limit', 'page', 'sort' ] to include 'type'" and
+    "solvr.SearchOptions.Type: expected ... to match /\n\s*Type\s/") and GREEN once the samples were fixed.
+  Nothing deleted, skipped or loosened.
+
+FIX (GREEN) [git status --porcelain + git diff --stat this session: 16 tracked files 107+/86-, 4 new]:
+  M packages/sdk-go/types.go (Version const "2.0.0"; SearchOptions without Type/Status), client.go (Search and
+    ListPosts stop sending type/status; User-Agent "solvr-go/"+Version; package doc + "# Migrating from 1.x to
+    2.0.0"), client_test.go (changes 1-3); ?? migration_test.go.
+  M packages/sdk-ts/src/types.ts (SearchOptions without type/status), src/client.ts (rejectRemoved + its two
+    calls; search no longer sends type/status), src/index.ts (export VERSION), package.json + package-lock.json
+    (2.0.0, the lock's two root version lines only), README.md (search example without type/status; migration
+    section before License), src/client.test.ts (changes 4-5); ?? src/version.ts (VERSION), src/migration.test.ts.
+  M packages/sdk-python/solvr/client.py (search(query, *, limit, page, sort); PostType/PostStatus imports dropped
+    from client.py, still exported by the package for reading legacy posts), solvr/__init__.py + pyproject.toml
+    (2.0.0), README.md (search signature/example; migration section before License), tests/test_client.py
+    (changes 6-7); ?? tests/test_migration.py.
+  M frontend/components/api/api-sdks.tsx: the /api-docs Python and Go search samples drop type="problem" /
+    Type: "problem" (the CLI sample's `--type problem` is the CLI's own current flag: next slice).
+  No backend, migration, SPEC.md, contract fixture, packages/cli, cli/, mcp-server or skill change.
+
+VERIFICATION [this session]:
+  [TEST] baselines before any change: base_go.log ok; base_ts.log 63 passed; base_py.log 73 passed.
+  [TEST] GREEN: green_go.log `go test ./...` (packages/sdk-go) ok, 0 SKIP lines; green_ts3.log 4 files 73 passed
+    (63 + 10 new); green_py.log 80 passed (73 + 7 new), 0 skipped. `tsc --noEmit` (sdk-ts) exit 0; gofmt -l
+    sdk-go clean, go vet ok.
+  [TEST] frontend: components/api 10 files 100 passed (fe_green_api.log); FULL `npm test` once
+    (frontend_full.log) exit 0, 202 files, 1758 tests (= slice 16; no frontend test added); `npm run typecheck`
+    exit 0; eslint api-sdks.tsx exit 0.
+  [REAL] the /api-docs Go sample, extracted from api-sdks.tsx with its import pointed at the local module (go.mod
+    replace), `go vet` + `go build` exit 0 (gosample/).
+  [REAL] SMOKE: the real API binary (go build ./cmd/api; env -i, DATABASE_URL local docker solvr_test, throwaway
+    JWT_SECRET, PORT 18097, no env file read), one registered agent: Go SDK 2.0.0 Search(PerPage 3, Sort newest)
+    -> 3 results, total 2188, method fulltext, GetPost(missing) -> "NOT_FOUND: post not found"; Python SDK 2.0.0
+    search(limit=3, sort=newest) -> the same; search(type="problem") -> "Solvr.search() got an unexpected keyword
+    argument 'type'"; TS SDK (tsup to /tmp, not dist/) 2.0.0 search -> the same, search({type}) and
+    post({type,...}) -> TypeError "...'type' was removed in @solvr/sdk 2.0.0; see "Migrating from 1.x to 2.0.0" in
+    the README". API killed (0 listeners on 18097); smoke agent deleted from solvr_test (DELETE 1).
+  MUTATIONS [TEST] (mut/, each alone, restored, `shasum -c` 4/4 OK): m1 TS search stops rejecting status -> FAIL;
+    m2 TS VERSION 1.9.0 -> 2 FAIL (version, notes heading); m3 Python search regains a `type` argument -> 4 FAIL;
+    m4 Go notes drop SearchOptions.Status -> "the migration notes do not name the removed SearchOptions.Status".
+  [REAL] check-file-size.sh: 32 files over 800 (same as slice 16), none under packages/ or touched here.
+  NOT RUN: backend (no backend file touched); packages/cli, cli/, mcp-server, skill suites (none depends on the
+    SDKs — grep of their package.json/go.mod this session); sdk-ts eslint (no eslint installed in the package:
+    `npx eslint` fetched eslint 10 with no config — pre-existing); mypy (`mypy solvr` reports the same 2
+    missing-requests-stubs errors before and after: mypy_base.log vs mypy_solvr.log).
+
+FINDINGS, NOT FIXED:
+  - [REAL code read] The API still accepts a legacy `type` (problem|question|idea) on POST /v1/posts and serves
+    search/list `type`/`status` as legacy filters; only the first-party SDKs stopped offering them. Whether the API
+    answers a deprecation error for them is an API decision (GET /v1/posts?type= is SPEC 26.7's documented
+    replacement for the retired typed lists).
+  - [REAL code read] Go SDK Search sends tags as repeated `tags=a&tags=b`, while the API reads
+    r.URL.Query().Get("tags") and splits on commas: only the first tag filters (pre-existing; TS/Python offer no
+    tags option).
+  - [REAL] Versions are now 2.0.0 in the code; nothing was published or tagged. A Go tag v2.x.x would require the
+    module path to end in /v2 (go.mod is github.com/fcavalcantirj/solvr/packages/sdk-go) — owner's release call,
+    with the /api-docs import path github.com/fcavalcantirj/solvr-go (already different from go.mod, slice 8 of
+    idx 52).
+  - Slices 6-16 findings stand.
+
+REMAINING FOR idx 78 (next slices, in order):
+  18.. step 5 rest: both CLIs' search --type/--status (and the Go CLI's problem-only get output), the npm
+    mcp-server and skill search --type, skill.json legacy endpoints, each with its own migration notes; then 6
+    (external consumer vs clean + upgraded schema), 7 (participants as collections, a members command/tool);
+    findings of slices 6-17.
+
+git status at journal time [REAL]: as FIX above (16 M, 4 ??), plus M progress.txt (this entry). spec.json
+  unchanged (idx 78 passes stays false).

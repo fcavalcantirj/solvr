@@ -68,6 +68,7 @@ import type {
 } from './types.js';
 import { SolvrError } from './types.js';
 import { RoomStream } from './stream.js';
+import { VERSION } from './version.js';
 
 const DEFAULT_BASE_URL = 'https://api.solvr.dev';
 const DEFAULT_TIMEOUT = 30000;
@@ -83,6 +84,18 @@ function queryString(params: Record<string, string | number | undefined>): strin
   }
   const text = query.toString();
   return text ? `?${text}` : '';
+}
+
+// A JavaScript caller still passing an option 1.x accepted and 2.0.0 removed
+// gets a TypeError naming it, never a request the API would read the old way.
+function rejectRemoved(method: string, input: object, removed: readonly string[]): void {
+  for (const name of removed) {
+    if ((input as Record<string, unknown>)[name] !== undefined) {
+      throw new TypeError(
+        `${method}: '${name}' was removed in @solvr/sdk ${VERSION}; see "Migrating from 1.x to ${VERSION}" in the README`,
+      );
+    }
+  }
 }
 
 function roomPath(slug: string, rest: string): string {
@@ -169,10 +182,9 @@ export class Solvr {
    * ```
    */
   async search(query: string, options: SearchOptions = {}): Promise<SearchResponse> {
+    rejectRemoved('search', options, ['type', 'status']);
     const params = queryString({
       q: query,
-      type: options.type === 'all' ? undefined : options.type,
-      status: options.status,
       per_page: options.limit || undefined,
       page: options.page || undefined,
       sort: options.sort,
@@ -211,6 +223,7 @@ export class Solvr {
    * ```
    */
   async createPost(input: CreatePostInput): Promise<PostResponse> {
+    rejectRemoved('createPost', input, ['type', 'success_criteria']);
     return this.request<PostResponse>('/v1/posts', {
       method: 'POST',
       body: JSON.stringify(input),

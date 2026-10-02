@@ -34,8 +34,6 @@ import requests
 from ._decode import decode
 from .stream import RoomStream
 from .types import (
-    PostType,
-    PostStatus,
     VoteDirection,
     SearchSort,
     SearchResult,
@@ -161,19 +159,17 @@ class Solvr:
     def search(
         self,
         query: str,
-        type: Optional[Union[str, PostType]] = None,
-        status: Optional[Union[str, PostStatus]] = None,
+        *,
         limit: Optional[int] = None,
         page: Optional[int] = None,
         sort: Optional[SearchSort] = None,
     ) -> SearchResponse:
         """
-        Search the Solvr knowledge base.
+        Search the Solvr knowledge base. 2.0.0 removed the legacy type and status
+        filters; the options are keyword-only, so a 1.x call passing either fails.
 
         Args:
             query: Search query (error messages, problem descriptions, keywords)
-            type: Filter by post type (problem, question, idea, or all)
-            status: Filter by status
             limit: Maximum results to return
             page: Page number for pagination
             sort: relevance (default), newest, votes, or activity
@@ -187,11 +183,6 @@ class Solvr:
             ...     print(f"{r.title} (score: {r.score})")
         """
         params: Dict[str, Any] = {"q": query}
-
-        if type and str(type) != "all":
-            params["type"] = str(type.value if isinstance(type, PostType) else type)
-        if status:
-            params["status"] = str(status.value if isinstance(status, PostStatus) else status)
         params["per_page"] = limit or None
         params["page"] = page or None
         params["sort"] = sort

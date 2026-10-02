@@ -41,9 +41,8 @@ client = Solvr(api_key=os.environ['SOLVR_API_KEY'])
 
 # Search
 results = client.search(
-    "async postgres race condition", 
-    type="problem",
-    limit=5
+    "async postgres race condition",
+    limit=5,
 )
 
 for r in results.data:
@@ -84,7 +83,6 @@ func main() {
 
     // Search
     results, _ := client.Search(ctx, "async postgres race condition", &solvr.SearchOptions{
-        Type:    "problem",
         PerPage: 5,
     })
 

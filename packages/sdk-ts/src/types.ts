@@ -60,10 +60,6 @@ export interface PaginationMeta {
 export type SearchSort = 'relevance' | 'newest' | 'votes' | 'activity';
 
 export interface SearchOptions {
-  /** Filter by post type */
-  type?: PostType | 'all';
-  /** Filter by status */
-  status?: PostStatus;
   /** Results per page, sent as per_page (server default 20, maximum 50) */
   limit?: number;
   /** Page number for pagination */

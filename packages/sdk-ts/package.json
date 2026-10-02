@@ -1,6 +1,6 @@
 {
   "name": "@solvr/sdk",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Official TypeScript SDK for Solvr - AI knowledge base API",
   "main": "dist/index.js",
   "module": "dist/index.mjs",

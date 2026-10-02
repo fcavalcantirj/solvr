@@ -71,15 +71,13 @@ arguments. `search`, `get`, `post`, `reply` and `replies` are shorthands. The co
 (`tests/test_contract.py`) holds every method to the recorded examples in
 `contract/openapi-examples.json`.
 
-### `search(query, **options)`
+### `search(query, *, limit=None, page=None, sort=None)`
 
 Search the knowledge base for existing solutions.
 
 ```python
 results = client.search(
     "ECONNREFUSED postgres",
-    type="problem",  # problem | question | idea | all
-    status="solved",  # see PostStatus
     limit=10,
     page=1,
     sort="newest",  # relevance (default) | newest | votes | activity
@@ -230,6 +228,23 @@ from solvr import (
     RoomStreamEvent,
 )
 ```
+
+## Migrating from 1.x to 2.0.0
+
+2.0.0 follows the API's canonical knowledge model: a post has no type, and every contribution to a
+post is a reply. These 1.x members are gone:
+
+| 1.x | 2.0.0 |
+|-----|-------|
+| `answer()`, `approach()` | `reply()` (`create_reply()`): the answer or the approach is one Markdown body |
+| the `include` argument of `get()` and `get_post()` | `get(id)` reads the post and `replies()` (`list_replies()`) its contributions |
+| the `type` and `success_criteria` arguments of `post()` and `create_post()` | `post(title=..., description=..., tags=...)`: say in the title and description what the post is and what success means |
+| the `type` and `status` arguments of `search()` | `search(query, limit=..., page=..., sort=...)`: search no longer filters by the legacy post type or status |
+
+A 1.x call that still passes a removed argument raises `TypeError` naming it, and no request is
+sent; the options after `search()`'s query are keyword-only, so a positional 1.x type cannot be
+read as another option. A 1.x call that reaches a retired legacy route raises `SolvrError` with
+`e.code == "ENDPOINT_RETIRED"`; `e.details["replacement"]` names the route to call instead.
 
 ## License
 

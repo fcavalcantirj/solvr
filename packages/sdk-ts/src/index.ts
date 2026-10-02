@@ -30,6 +30,7 @@
  */
 
 export { Solvr } from './client.js';
+export { VERSION } from './version.js';
 export { RoomStream } from './stream.js';
 
 export type {

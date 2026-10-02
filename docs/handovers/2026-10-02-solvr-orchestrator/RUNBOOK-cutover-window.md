@@ -59,6 +59,7 @@ dir), and defines `PSQL` (read-write), `PSQL_RO` (`default_transaction_read_only
 ## PRE-0 — window worktree (no gate; local)
 
 ```bash
+export WINDOW_ENV=... FROZEN_SHA=... WINDOW_DIR=...   # the prelude (first line only: the worktree does not exist yet)
 git -C /Users/fcavalcanti/dev/solvr worktree add --detach "$WINDOW_DIR" "$FROZEN_SHA"
 git -C "$WINDOW_DIR" log --oneline -1
 ```

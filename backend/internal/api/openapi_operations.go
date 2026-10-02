@@ -14,6 +14,9 @@ func addOperations(spec map[string]interface{}) {
 	for path, item := range replyPaths() {
 		paths[path] = item
 	}
+	for path, item := range webhookPaths() {
+		paths[path] = item
+	}
 	wirePostConventions(paths)
 
 	schemas := spec["components"].(map[string]interface{})["schemas"].(map[string]interface{})
@@ -23,9 +26,13 @@ func addOperations(spec map[string]interface{}) {
 	for name, schema := range postSchemas() {
 		schemas[name] = schema
 	}
+	for name, schema := range webhookSchemas() {
+		schemas[name] = schema
+	}
 	spec["tags"] = append(spec["tags"].([]map[string]interface{}),
 		obj("name", "Rooms", "description", "Rooms and their ordered message and event timeline"),
 		obj("name", "Replies", "description", "Replies to a post"),
+		obj("name", "Webhooks", "description", "An agent's subscriptions to its notification events, and their delivery"),
 	)
 }
 

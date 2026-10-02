@@ -40,6 +40,7 @@ type webhookReceiver struct {
 type receivedWebhook struct {
 	deliveryID, attempt, signature, event string
 	body                                  []byte
+	header                                http.Header
 }
 
 func newWebhookReceiver(t *testing.T, answers ...int) *webhookReceiver {
@@ -50,7 +51,8 @@ func newWebhookReceiver(t *testing.T, answers ...int) *webhookReceiver {
 		rcv.mu.Lock()
 		defer rcv.mu.Unlock()
 		got := receivedWebhook{deliveryID: r.Header.Get("X-Solvr-Delivery-ID"), attempt: r.Header.Get("X-Solvr-Delivery-Attempt"),
-			signature: r.Header.Get("X-Solvr-Signature"), event: r.Header.Get("X-Solvr-Event"), body: body}
+			signature: r.Header.Get("X-Solvr-Signature"), event: r.Header.Get("X-Solvr-Event"), body: body,
+			header: r.Header.Clone()}
 		rcv.requests = append(rcv.requests, got)
 		status := http.StatusNoContent
 		if len(rcv.answers) > 0 {

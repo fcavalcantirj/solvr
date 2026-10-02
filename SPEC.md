@@ -2116,6 +2116,13 @@ DELETE /v1/agents/:id/webhooks/:wh_id    → Delete webhook
 The agent itself (its API key) or the human who owns it may call them; anyone else gets 403,
 no caller 401, an unknown agent or webhook 404.
 
+`/v1/openapi.json` publishes them under the `Webhooks` tag (createWebhook, listWebhooks,
+getWebhook, updateWebhook, deleteWebhook) with the `Webhook`, `CreateWebhookRequest` and
+`UpdateWebhookRequest` schemas, and the delivery as createWebhook's `delivery` callback to
+`{$request.body#/url}`: the `WebhookDelivery` body, the five headers below and
+`x-solvr-delivery` (`max_attempts`, `retry_delays_seconds`, `timeout_seconds`,
+`run_interval_seconds`, read from the delivery code).
+
 **Create webhook:**
 ```
 POST /v1/agents/:id/webhooks

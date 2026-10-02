@@ -10223,3 +10223,119 @@ REMAINING FOR idx 78 (next slices, in order):
 
 git status at journal time [REAL]: as FIX + EXISTING TESTS CHANGED above (16 M incl. 5 test files, 13 ??), plus
   M progress.txt (this entry). spec.json unchanged (idx 78 passes stays false).
+
+2026-10-01 22:40 — Task idx 78 (spec.json, category functional) — IN PROGRESS, passes STAYS false
+"Keep SDKs, CLI, MCP, skills, and webhooks consistent with the redesigned product"
+SLICE 15: step 4, publication half — the webhook routes and their delivery are in the OpenAPI document and the
+API docs page. /v1/openapi.json now publishes the 5 webhook routes (tag Webhooks) with their schemas, error rows
+and refusal codes, and the delivery as a callback of createWebhook: WebhookDelivery body, the 5 X-Solvr-* headers
+and x-solvr-delivery (ladder, attempts, timeout, run interval) read from the delivery code. Room events are NOT
+in this slice (REMAINING below).
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 78-95, 97, 98; no URGENT marker. 24/67
+  acceptance (skipped as in every earlier entry); 68 waits on the owner (as journaled). idx 78 first buildable;
+  continued from slice 14 (HEAD 956aa98b), REMAINING item "15.. OpenAPI paths for the 5 webhook routes + a
+  WebhookDelivery payload schema (and frontend API docs)". Tree clean at start.
+
+STATE FOUND [REAL, code read this session]: buildPaths (discovery.go) + addOperations (openapi_operations.go) had no
+  /agents/{id}/webhooks path and no webhook schema; the spec is OpenAPI 3.0.3 (no top-level "webhooks" object, so a
+  delivery is described as an operation callback). The frontend /api-docs data had no webhook group.
+
+DESIGN:
+  - New backend/internal/api/openapi_webhook_paths.go (188): webhookPaths() — createWebhook/listWebhooks (POST/GET
+    /agents/{id}/webhooks), getWebhook/updateWebhook/deleteWebhook (/agents/{id}/webhooks/{wh_id}), all bearer-only;
+    error rows post/get-one/patch/delete 400 401 403 404, list 401 403 404 (the handler's INVALID_ID, VALIDATION_ERROR,
+    EVENT_RETIRED, INVALID_EVENT_TYPE, FORBIDDEN, NOT_FOUND); descriptions name who may call (agent itself or owner),
+    the retired names (from models.RetiredWebhookEventTypes) and the error.details of EVENT_RETIRED. webhookSchemas():
+    Webhook, WebhookResponse, WebhookList, CreateWebhookRequest (url/events/secret required), UpdateWebhookRequest,
+    WebhookDelivery, WebhookDeliveryData (notification_id, agent_id, subject{post_id, reply_id}, title, body, link).
+    Event enums come from models.ValidWebhookEventTypes, status enums from models.ValidWebhookStatuses,
+    schema_version enum [models.NotificationSchemaVersion].
+  - Delivery = callbacks.delivery["{$request.body#/url}"].post: requestBody WebhookDelivery; 5 required header params
+    (X-Solvr-Event enum, X-Solvr-Delivery-ID uuid "same on every attempt", X-Solvr-Delivery-Attempt 1..max,
+    X-Solvr-Webhook-ID, X-Solvr-Signature pattern ^sha256=[0-9a-f]{64}$); responses 2XX/default;
+    x-solvr-delivery {max_attempts (counted from svc.ShouldRetry), retry_delays_seconds (svc.GetRetryDelays),
+    timeout_seconds (services.NewWebhookHTTPClient().Timeout), run_interval_seconds (jobs.DefaultWebhookDelivery
+    Interval)} — the numbers are read from the code that enforces them.
+  - Frontend: a "Webhooks" EndpointGroup inside userEndpointGroups (after Notifications; a separate file would have
+    changed the "combines all endpoint groups" count test), 5 endpoints, group description with the payload,
+    headers, retry ladder and a pointer to the createWebhook callback in /v1/openapi.json.
+
+TESTS FIRST [logs /tmp/solvr_idx78_s15/]:
+  ?? backend/internal/api/openapi_webhooks_test.go (302): _TheFiveRoutesArePublishedWithWhoMayCallAndTheirErrors,
+    _TheEventListRefusalsAreDocumented, _SchemasDescribeTheJSONTheHandlersAndTheDeliveryUse (property sets pinned
+    to models.Webhook / CreateWebhookRequest / UpdateWebhookRequest / WebhookDeliveryPayload via jsonFields; enums
+    = model lists), _TheDeliveryIsACallbackOfTheCreate (headers, ladder [0,60,300,1800,7200], 5 attempts, also
+    literal), _EveryDocumentedOperationIsAServedRoute (chi.Walk of a production-built router),
+    _TheRunningAPIAnswersAndSendsWhatIsPublished (real router + solvr_test + TLS receiver: create/list/get/patch
+    answers validate against WebhookResponse/WebhookList via schemaProblems, the EVENT_RETIRED answer against Error,
+    a real moderation-triggered delivery body against WebhookDelivery + WebhookDeliveryData, every documented
+    callback header present on the received request; delete 204).
+    RED [TEST] red.log: all 6 FAIL on behavior ("spec has no paths./agents/{id}/webhooks.post", "unresolvable
+    #/components/schemas/WebhookDeliveryData"), not on compilation.
+  ?? frontend/components/api/api-endpoint-data-webhooks.test.ts (70): 4 tests (5 routes, auth both, not retired;
+    create params name the 5 schema-1 events, secret required, example never shows secret, EVENT_RETIRED named;
+    delivery headers / "same on every retry" / HMAC-SHA256 / openapi.json named; no retired name in any example).
+    RED [TEST] fe_red.log: 4 failed (group absent).
+
+FIX (GREEN) [git status --porcelain + git diff --stat this session: 4 tracked files 108+/1-, 3 new]:
+  ?? backend/internal/api/openapi_webhook_paths.go (188) as DESIGN.
+  M backend/internal/api/openapi_operations.go (+7): addOperations merges webhookPaths/webhookSchemas, adds tag
+    Webhooks.
+  M backend/internal/api/router_webhooks_test.go (+3/-1): test helper only — receivedWebhook gains `header
+    http.Header` (r.Header.Clone()) so the new live test can read every received header. No assertion changed.
+  M frontend/components/api/api-endpoint-data-user.ts (+91, 362 -> 453): the Webhooks group.
+  M SPEC.md (+7, Part 12.3): where /v1/openapi.json publishes the routes, schemas, the delivery callback and
+    x-solvr-delivery.
+  ?? the two test files above.
+
+EXISTING TESTS CHANGED: none deleted, skipped or loosened. router_webhooks_test.go: helper struct gains a field
+  (above); its tests' assertions untouched and still PASS (green_api.log).
+
+VERIFICATION [this session; DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test?sslmode=disable
+  (local docker solvr-postgres)]:
+  [TEST] GREEN green_api.log (-v): TestOpenAPIWebhooks_* (6), TestWebhooks_*, TestOpenAPIOperations_*,
+    TestOpenAPIExamples_*, TestOpenAPIConventions_*, TestRouteFamilies_*, TestOpenAPI_* — 47 PASS, 0 FAIL, 0 SKIP.
+  MUTATIONS [TEST] (mut/, each alone, sources restored, `shasum -c mut/orig.sha` OK; every FAIL an assertion):
+    m1 sender header X-Solvr-Delivery-Attempt renamed -> _TheRunningAPI... FAIL ("the delivery carries the documented
+    header"); m2 Webhook.SecretHash json:"secret_hash" -> _Schemas... + _TheRunningAPI... FAIL ("field secret_hash is
+    not documented" on create and list); m3 delivery SQL adds data.room_id -> _TheRunningAPI... FAIL ("delivery.data:
+    field room_id is not documented"); m4 retry ladder 1m -> 2m -> _TheDeliveryIsACallback... FAIL.
+  [TEST] frontend: components/api 9 files 94 PASS (fe_green_api.log); FULL `npm test` once (frontend_full.log) exit 0,
+    202 files, 1756 tests passed. `npm run typecheck` exit 0; eslint on the 2 changed files exit 0.
+  [TEST] FULL BACKEND (once, backend_full.log, `go test ./...`) -> exit 1: FAIL in internal/api, api/handlers, db,
+    jobs (same 4 packages as slice 14); 92 failing names vs slice 14's 90 (/tmp/solvr_idx78_s14/names.mine): 16 of
+    those now pass, 18 newly fail — all on shared-data/connection collisions with other packages running at once:
+    "FATAL: sorry, too many clients already (SQLSTATE 53300)" (10 lines), ROOM_ARCHIVED 409 on a join, INVALID_AGENT
+    / INVALID_API_KEY for an agent deleted mid-test, an API-usage counter 80531 vs 80529. Run ALONE (alone_api.log,
+    alone_db.log): the 9 api tests PASS, both TestAccountBans_* PASS; TestRoomRepository_List FAILs alone
+    ("Create() error = room slug already exists", fixed slug left in shared solvr_test) — it was already in slice
+    14's failing list. No db/handler/job code changed this slice.
+  [REAL] SMOKE: built cmd/api, ran on :18099 against solvr_test (env inline, no .env read): GET /v1/openapi.json has
+    both webhook paths with the 5 operationIds, the callback's 5 headers, x-solvr-delivery {max_attempts 5,
+    retry_delays_seconds [0,60,300,1800,7200], run_interval_seconds 10, timeout_seconds 10}, WebhookDelivery
+    [data, event, id, schema_version, timestamp]; /v1/openapi.yaml carries x-solvr-delivery. Server killed (port
+    free).
+  [REAL] gofmt -l on the changed Go files: none. go vet ./internal/api/ exit 0. check-file-size.sh: 32 files over
+    800 (same count as slice 14); none of this slice's files.
+  NOT RUN: packages/*, cli/, mcp-server, skill suites (untouched); golangci-lint (environment mismatch, as before).
+
+FINDINGS, NOT FIXED:
+  - [REAL] writeWebhookError (handlers/webhooks.go) writes {"error":{code,message}}; the request_id comes from the
+    ErrorEnvelope middleware (the live test's Error-schema check passed on EVENT_RETIRED only, which uses
+    response.WriteErrorWithDetails). Not separately checked for the writeWebhookError paths.
+  - [REAL] /api-docs renders endpoints keyed `${group.name}-${endpoint.path}`: GET and POST /agents/{id}/webhooks
+    share a key, as GET and DELETE /notifications already did (React duplicate-key warning; existing pattern).
+  - Slice 14's findings stand (24h-disable measure, paused-webhook queue growth, private URLs accepted at create).
+
+REMAINING FOR idx 78 (next slices, in order):
+  16.. step 4 rest: room events (and room_id in the subject) if delivered — today no notification names a room.
+  then steps 5 (migration notes, deprecation errors, legacy choices out of first-party clients: both CLIs' --type,
+    npm and skill search --type, skill.json legacy endpoints), 6 (external consumer vs clean + upgraded schema),
+    7 (participants as collections, a members command/tool); findings of slices 6-15.
+
+UAT: none for this slice (documentation of already-served routes; no migration).
+
+git status at journal time [REAL]: as FIX above (4 M, 3 ??), plus M progress.txt (this entry). spec.json unchanged
+  (idx 78 passes stays false).

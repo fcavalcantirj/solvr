@@ -225,6 +225,11 @@ func main() {
 		healthCheckCtx, healthCheckCancel = context.WithCancel(context.Background())
 		go healthCheckJob.RunScheduled(healthCheckCtx, jobs.DefaultHealthCheckInterval)
 		log.Println("Health check monitoring job started (runs every 5 minutes)")
+
+		// Queue-lag alarm (spec.json idx 79): WARN when a due webhook delivery waits too long.
+		opsAlarmJob := jobs.NewOpsAlarmJob(db.NewOpsSLORepository(pool), slog.Default())
+		go opsAlarmJob.RunScheduled(healthCheckCtx, jobs.DefaultOpsAlarmInterval)
+		log.Println("Ops queue-lag alarm job started (runs every 5 minutes)")
 	}
 
 	// 7. Presence reaper job (D-26: every 60s, evicts expired agents and rooms)

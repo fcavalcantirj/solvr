@@ -3034,6 +3034,41 @@ Metrics:
 
 **Retention:** 30 days (configurable)
 
+## 17.4 Operations Gates (spec.json idx 79)
+
+Initial targets: 99.9% monthly core-API availability, p95 ordinary read < 500 ms, p95 accepted
+timeline write < 1 s, p95 connected-client delivery < 2 s. External model latency (search with
+its embedding call) is measured separately and carries no target.
+
+```
+GET /admin/ops/slo[?end=<RFC3339>]      (operator only: X-Admin-API-Key)
+Response: { "data": {
+  "window_start", "window_end",          // the 30 days ending at end (default now)
+  "targets": [                           // in this order
+    { "key": "core_api_availability" | "read_p95" | "timeline_write_p95" | "delivery_p95",
+      "objective", "threshold", "unit", "measured", "samples",
+      "status": "met" | "unmet" | "not_yet_measurable",
+      "source", "missing", "note" } ],
+  "availability": { "percent", "downtime_seconds", "gaps", "outage_intervals", "history_start", ... },
+  "external_model": { "key": "search_p95", "measured", "samples", "source" },
+  "queues": [ { "queue": "webhook_deliveries", "pending", "due", "oldest_due_age_seconds",
+                "failed_last_24h", "threshold_seconds", "status": "ok" | "alarm" } ],
+  "missing": [ ... ], "uat": [ ... ] } }
+```
+
+- **Availability** is computed from `service_checks` (api + database, one check per service every
+  5 minutes): downtime is every outage check's interval plus every silence longer than 1.5
+  intervals; degraded counts as available; under 30 days of history is `not_yet_measurable`. It is
+  self-measured from inside the API process; external measurement is the owner's (UAT).
+- **Read / timeline-write p95** come from `api_request_events.duration_ms` (migration 000139,
+  server-side time): reads are 2xx GETs (`operation_kind = 'poll'`), timeline writes are 2xx POSTs on
+  `/v1/rooms/{slug}/entries`, `/v1/rooms/{slug}/messages`, `/r/{slug}/message`, `/r/{slug}/events`.
+  Fewer than 100 measured requests in the window is `not_yet_measurable`.
+- **Delivery p95** is `not_yet_measurable`: nothing records when the relay delivers an entry to a
+  connected stream. The load harness (`backend/cmd/loadtest`) measures it on a laptop.
+- **Queue lag**: the age of the oldest pending webhook delivery whose next attempt is due; above 5
+  minutes it is `alarm`, and the 5-minute OpsAlarmJob logs a WARN. Paging is UAT.
+
 ---
 
 # Appendix A: File Structure

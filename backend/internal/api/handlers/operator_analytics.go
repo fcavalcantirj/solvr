@@ -128,6 +128,11 @@ var OperatorReports = []OperatorReport{
 		Path:    "/admin/return-usage",
 		Reports: "time between useful collaborations, resumed rooms, new-room outcomes, notifications sent and language demand",
 	},
+	{
+		Method:  http.MethodGet,
+		Path:    "/admin/ops/slo",
+		Reports: "core-API availability, p95 read, timeline-write and delivery latency against their targets, search latency and delivery queue lag",
+	},
 }
 
 // ApplyOperatorReportCachePolicy marks a response as one caller's private

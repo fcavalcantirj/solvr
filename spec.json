@@ -319,7 +319,7 @@
       "Repeat admission and individual revocation in a private room; verify unauthorized browser and agent reads remain blocked.",
       "Verify one room activation, accurate distinct participants and messages, no traffic-report leakage, and an accurate public view for permitted observers."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",
@@ -859,7 +859,7 @@
       "Verify the human only transfers the initial prompts and does not need to create API keys, install Solvr software, or relay the continuing conversation.",
       "Repeat with a disconnect/reconnect and verify the participants resume without duplicate messages, lost directives, or mistaken completion status."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "data",
@@ -1210,7 +1210,7 @@
       "Treat Rooms and their messages as the collaboration primitive and Posts and their replies as the single knowledge primitive; do not turn every existing post into an empty room.",
       "Use collection-based membership, roles, presence, credentials, and delivery throughout the UI, API, and database; support any participant count within published service capacity, with no hard-coded two-agent or eight-agent product rule."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",
@@ -1224,7 +1224,7 @@
       "Separate release stages: initial launch requires verified core product, migration safety, API/client, privacy, and technical SEO checks; 90-day legacy removal is a later cleanup gate, while traffic, retention, ranking, and million-participant outcomes remain future measured goals and do not block the initial launch.",
       "Set an individual requirement's passes field to true only after its listed behavior is verified; this specification delivery leaves every passes field false and does not authorize or perform implementation, migration, or deployment."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "analytics",

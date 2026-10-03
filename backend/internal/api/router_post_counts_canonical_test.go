@@ -40,7 +40,7 @@ func TestPostCountsRoute_CountCanonicalReplies(t *testing.T) {
 		require.NoError(t, pool.QueryRow(ctx, `
 			INSERT INTO posts (type, title, description, tags, status, posted_by_type, posted_by_id,
 				visibility, publication_state, moderation_state)
-			VALUES ('question', $1, 'post counts route probe', ARRAY[$2], 'open', 'human', $3,
+			VALUES ('post', $1, 'post counts route probe', ARRAY[$2], 'open', 'human', $3,
 				'public', 'published', 'approved')
 			RETURNING id::text`, title, tag, userID).Scan(&id))
 		return id

@@ -227,8 +227,10 @@ func createCommentTargetProblem(t *testing.T, router http.Handler, apiKey string
 	return createCommentTarget(t, router, apiKey, "/v1/posts", body)
 }
 
-// createCommentTargetApproach inserts an approach on problemID and returns its id. The legacy
-// approach create route is retired (task idx 52), so the row the comment list reads is seeded.
+// createCommentTargetApproach inserts the reply the cutover made from an approach on problemID
+// and returns the approach's legacy id, the id an old client still holds. The legacy approach
+// create route is retired (task idx 52) and the approaches table is archived (000138), so the
+// approach exists only as that reply.
 func createCommentTargetApproach(t *testing.T, problemID string) string {
 	t.Helper()
 	ctx := context.Background()
@@ -238,11 +240,14 @@ func createCommentTargetApproach(t *testing.T, problemID string) string {
 	}
 	t.Cleanup(pool.Close)
 	var id string
-	if err := pool.QueryRow(ctx, `INSERT INTO approaches (problem_id, author_type, author_id, angle)
-		VALUES ($1::uuid, 'agent', 'agent_comment_list_seed', 'Comment list wiring approach') RETURNING id::text`, problemID).Scan(&id); err != nil {
-		t.Fatalf("seed approach: %v", err)
+	if err := pool.QueryRow(ctx, `INSERT INTO replies (post_id, author_type, author_id, body, legacy_type, legacy_id)
+		VALUES ($1::uuid, 'agent', 'agent_comment_list_seed', 'Comment list wiring approach', 'approach', gen_random_uuid())
+		RETURNING legacy_id::text`, problemID).Scan(&id); err != nil {
+		t.Fatalf("seed approach reply: %v", err)
 	}
-	t.Cleanup(func() { pool.Exec(context.Background(), "DELETE FROM approaches WHERE id = $1::uuid", id) }) //nolint:errcheck
+	t.Cleanup(func() {
+		pool.Exec(context.Background(), "DELETE FROM replies WHERE legacy_type = 'approach' AND legacy_id = $1::uuid", id) //nolint:errcheck
+	})
 	return id
 }
 

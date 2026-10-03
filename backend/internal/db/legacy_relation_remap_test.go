@@ -103,7 +103,7 @@ func countRows(t *testing.T, pool *Pool, ctx context.Context, query string, args
 // onto its canonical reply without losing the target's identity, sends nothing, reports
 // what it could not resolve, and changes nothing on a second run (task idx 76 step 2).
 func TestRemapLegacyRelations_RetargetsEveryDependentAndSendsNothing(t *testing.T) {
-	pool := setupTestDB(t)
+	pool, _ := newPreArchiveScratchDatabase(t) // the cutover tool runs below the legacy archive
 	defer pool.Close()
 	ctx := context.Background()
 
@@ -277,13 +277,15 @@ func TestRemapLegacyRelations_RetargetsEveryDependentAndSendsNothing(t *testing.
 }
 
 // The registry marks done exactly the remaps TestRemapLegacyRelations_RetargetsEvery
-// DependentAndSendsNothing verifies; everything else that remaps stays open.
+// DependentAndSendsNothing verifies; everything else that remaps stays open. The remapped
+// posts.accepted_answer_id column itself left the schema with the legacy archive migration
+// (its values are kept in legacy_archive.post_fields), so it has no entry any more.
 func TestLegacyDependencyRegistry_RemapsDoneAreTheVerifiedOnes(t *testing.T) {
 	verified := map[string]bool{
 		"relation:votes": true, "relation:reports": true, "relation:notifications": true,
 		"relation:accepted-answer-provenance": true, "relation:approach-relationships": true,
 		"relation:progress-notes": true, "relation:verification-records": true,
-		"relation:archived-cids": true, "column:posts.accepted_answer_id": true,
+		"relation:archived-cids": true,
 	}
 	for key, d := range LegacyDependencyDispositions {
 		if d.Action == LegacyActionRemap {
@@ -293,4 +295,5 @@ func TestLegacyDependencyRegistry_RemapsDoneAreTheVerifiedOnes(t *testing.T) {
 	for key := range verified {
 		assert.Contains(t, LegacyDependencyDispositions, key)
 	}
+	assert.NotContains(t, LegacyDependencyDispositions, "column:posts.accepted_answer_id")
 }

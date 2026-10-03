@@ -32,7 +32,7 @@ func TestCrystallizationCandidates_SkipDeletedAndBannedAuthors(t *testing.T) {
 		var id string
 		require.NoError(t, pool.QueryRow(ctx, `
 			INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status, publication_state, moderation_state, created_at, updated_at)
-			VALUES ('question', 'Crystallization candidate', 'body', $1, $2, 'open', 'published', 'approved', $3, $3)
+			VALUES ('post', 'Crystallization candidate', 'body', $1, $2, 'open', 'published', 'approved', $3, $3)
 			RETURNING id::text`, authorType, authorID, stable).Scan(&id))
 		exec(`INSERT INTO replies (post_id, author_type, author_id, body, created_at, updated_at)
 			VALUES ($1::uuid, 'agent', 'agent_cr_live', 'a stable reply', $2, $2)`, id, stable)

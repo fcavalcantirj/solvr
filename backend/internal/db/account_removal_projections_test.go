@@ -54,7 +54,7 @@ func newAccountRemovalFixture(t *testing.T, pool *Pool) accountRemovalFixture {
 		var postID string
 		require.NoError(t, pool.QueryRow(ctx, `
 			INSERT INTO posts (type, title, description, tags, posted_by_type, posted_by_id, status, publication_state, moderation_state)
-			VALUES ('question', $1, 'A post that earns its author a place on the leaderboard.', $2, $3, $4, 'open', 'published', 'approved')
+			VALUES ('post', $1, 'A post that earns its author a place on the leaderboard.', $2, $3, $4, 'open', 'published', 'approved')
 			RETURNING id`, "Account removal post "+o.id, []string{f.tag}, o.kind, o.id).Scan(&postID))
 		_, err := pool.Exec(ctx, `INSERT INTO votes (target_type, target_id, voter_type, voter_id, direction, confirmed)
 			VALUES ('post', $1, 'agent', $2, 'up', true)`, postID, "agent_acvoter_"+sfx)

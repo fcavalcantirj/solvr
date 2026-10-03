@@ -36,7 +36,7 @@ func insertTestPostWithRawEmbedding(t *testing.T, pool *Pool, ctx context.Contex
 	var id string
 	err := pool.QueryRow(ctx, `
 		INSERT INTO posts (type, title, description, tags, status, posted_by_type, posted_by_id, embedding)
-		VALUES ('problem', $1, $2, ARRAY[]::text[], 'open', 'human', $4, $3::vector)
+		VALUES ('post', $1, $2, ARRAY[]::text[], 'open', 'human', $4, $3::vector)
 		RETURNING id::text
 	`, title, desc, formatVectorLiteral(embedding), testUser(ctx, t, pool)).Scan(&id)
 	if err != nil {

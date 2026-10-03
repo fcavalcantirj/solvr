@@ -245,9 +245,9 @@ func TestCreateFlag_InvalidTargetType(t *testing.T) {
 	}
 }
 
-// TestCreateFlag_ValidTargetTypes tests all valid target types.
+// TestCreateFlag_ValidTargetTypes tests all valid target types (post and reply since idx 68).
 func TestCreateFlag_ValidTargetTypes(t *testing.T) {
-	validTypes := []string{"post", "comment", "answer", "approach", "response"}
+	validTypes := []string{"post", "reply"} // the legacy contribution types are refused (TestCreateFlag_LegacyTargetTypeIsLegacyFieldRetired)
 
 	for _, targetType := range validTypes {
 		t.Run(targetType, func(t *testing.T) {
@@ -657,10 +657,11 @@ func TestIsValidFlagTargetType(t *testing.T) {
 		expected bool
 	}{
 		{"post", true},
-		{"comment", true},
-		{"answer", true},
-		{"approach", true},
-		{"response", true},
+		{"reply", true},
+		{"comment", false}, // the legacy contribution types are retired (idx 68)
+		{"answer", false},
+		{"approach", false},
+		{"response", false},
 		{"invalid", false},
 		{"", false},
 		{"POST", false}, // Case sensitive

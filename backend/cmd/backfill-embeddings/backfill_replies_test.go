@@ -137,7 +137,7 @@ func TestPGBackfillDB_EmbedsLiveHumanAndAgentRepliesOnly(t *testing.T) {
 	var postID string
 	if err := pool.QueryRow(ctx, `
 		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ('question', 'Backfill replies probe', 'A post whose replies the backfill embeds',
+		VALUES ('post', 'Backfill replies probe', 'A post whose replies the backfill embeds',
 		        'agent', $1, 'open')
 		RETURNING id`, agentID).Scan(&postID); err != nil {
 		t.Fatalf("seed post: %v", err)

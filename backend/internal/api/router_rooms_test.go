@@ -135,16 +135,10 @@ func handshakeRoomToken(t *testing.T, ts *httptest.Server, slug, agentKey string
 const roomTestRepliesCleanup = `DELETE FROM replies WHERE author_agent_id LIKE 'agent_roomtest_%'
 	OR author_human_id IN (SELECT id FROM users WHERE username LIKE 'roomtest_%')`
 
-// roomTestPostsCleanup deletes the posts the room test accounts wrote, with the legacy
-// approaches, answers and responses on them: an account that posts name cannot be deleted
-// either (000117).
-const roomTestPostsCleanup = `
-	DELETE FROM approach_relationships WHERE from_approach_id IN (SELECT id FROM approaches WHERE problem_id IN (` + roomTestPosts + `))
-		OR to_approach_id IN (SELECT id FROM approaches WHERE problem_id IN (` + roomTestPosts + `));
-	DELETE FROM approaches WHERE problem_id IN (` + roomTestPosts + `);
-	DELETE FROM answers WHERE question_id IN (` + roomTestPosts + `);
-	DELETE FROM responses WHERE idea_id IN (` + roomTestPosts + `);
-	DELETE FROM posts WHERE id IN (` + roomTestPosts + `);`
+// roomTestPostsCleanup deletes the posts the room test accounts wrote: an account that posts
+// name cannot be deleted either (000117). The legacy contribution tables are archived (000138),
+// so nothing else hangs off a post here.
+const roomTestPostsCleanup = `DELETE FROM posts WHERE id IN (` + roomTestPosts + `)`
 
 const roomTestPosts = `SELECT id FROM posts WHERE author_agent_id LIKE 'agent_roomtest_%'
 	OR author_human_id IN (SELECT id FROM users WHERE username LIKE 'roomtest_%')`

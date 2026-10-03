@@ -285,7 +285,7 @@ func TestLegacyDroppedDatabase_WriteRoutesExposeOnlyLegacyRouteFamilies(t *testi
 	t.Setenv("RESEND_API_KEY", "")                 // never send email
 	t.Setenv("IPFS_API_URL", "http://127.0.0.1:9") // refuse IPFS at once on both databases
 
-	presentURL := newMigratedScratchURL(t, "solvr_legacy_present_")
+	presentURL := newPreArchiveScratchURL(t, "solvr_legacy_present_")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	presentTracer := &dbErrorTracer{}

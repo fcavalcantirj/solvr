@@ -47,7 +47,7 @@ func TestCounterReconcileJob_DriftIsRepairedOnceAcrossInstances(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		exec(`WITH p AS (
 			INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
-			VALUES ('question', 'Reconcile post ' || $1::int, 'A post whose view count drifts', 'agent', 'reconcile_agent', 'open')
+			VALUES ('post', 'Reconcile post ' || $1::int, 'A post whose view count drifts', 'agent', 'reconcile_agent', 'open')
 			RETURNING id)
 			INSERT INTO post_views (post_id, viewer_type, viewer_id) SELECT id, 'agent', 'viewer' FROM p`, i)
 	}

@@ -68,7 +68,7 @@ func (f *participantFixture) post(kind, id string, at time.Time) string {
 	var postID string
 	require.NoError(f.t, f.pool.QueryRow(f.ctx, `
 		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status, created_at)
-		VALUES ('question', $1, 'A post written by a participant fixture.', $2, $3, 'open', $4)
+		VALUES ('post', $1, 'A post written by a participant fixture.', $2, $3, 'open', $4)
 		RETURNING id`, "Participant post "+id, kind, id, at).Scan(&postID))
 	return postID
 }
@@ -104,8 +104,8 @@ func (f *participantFixture) funnel(flow any, event, channel, actorType string, 
 }
 
 func TestParticipantActivity_CountsVerifiedIdentitiesOnce(t *testing.T) {
-	pool, dropLegacy := newMigratedScratchDatabase(t)
-	dropLegacy()
+	pool, archiveLegacy := newPreArchiveScratchDatabase(t)
+	archiveLegacy()
 	ctx := context.Background()
 	f := &participantFixture{t: t, ctx: ctx, pool: pool,
 		end: time.Now().UTC().Add(time.Minute).Truncate(time.Second), n: time.Now().UnixNano() % 1_000_000_000}

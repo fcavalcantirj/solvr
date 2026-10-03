@@ -158,22 +158,18 @@ func TestPostRepository_List_SortByHot_EngagementMatters(t *testing.T) {
 		t.Fatalf("failed to update dead post: %v", err)
 	}
 
-	// Add comments to the engaged post
-	_, err = pool.Exec(ctx, `INSERT INTO comments (id, target_type, target_id, content, author_type, author_id)
-		VALUES (gen_random_uuid(), 'post', $1, 'Great post!', 'agent', 'test_agent_hot_engage'),
-		       (gen_random_uuid(), 'post', $1, 'Very helpful', 'agent', 'test_agent_hot_engage')`, postEngaged.ID)
+	// Add two comments to the engaged post: replies shaped like the ones the contribution
+	// cutover made from legacy comments (post counts are read from replies, task idx 76).
+	_, err = pool.Exec(ctx, `INSERT INTO replies (post_id, author_type, author_id, body, legacy_type, legacy_id)
+		VALUES ($1, 'agent', 'test_agent_hot_engage', 'Great post!', 'comment', gen_random_uuid()),
+		       ($1, 'agent', 'test_agent_hot_engage', 'Very helpful', 'comment', gen_random_uuid())`, postEngaged.ID)
 	if err != nil {
 		t.Fatalf("failed to add comments: %v", err)
 	}
 
 	defer func() {
-		_, _ = pool.Exec(ctx, "DELETE FROM comments WHERE target_id = $1", postEngaged.ID)
 		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id IN ($1, $2)", postEngaged.ID, postDead.ID)
 	}()
-
-	// The replies the contribution cutover makes from these legacy rows (task idx 76): post
-	// counts are read from replies.
-	cutoverRepliesFor(t, pool, ctx, postEngaged.ID)
 
 	// Execute: List with sort="hot"
 	posts, _, err := repo.List(ctx, models.PostListOptions{

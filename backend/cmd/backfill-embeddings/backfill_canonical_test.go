@@ -57,7 +57,7 @@ func TestParseContentTypes_RejectsRetiredLegacyTypes(t *testing.T) {
 //
 //	DATABASE_URL="postgres://solvr:solvr_dev@localhost:5435/solvr_test" go test ./cmd/backfill-embeddings/ -count=1 -v
 func TestBackfill_EmbedsMigratedContributionsOnceTheLegacyTablesAreGone(t *testing.T) {
-	pool, dropLegacy := newBackfillScratchDatabase(t)
+	pool, archiveLegacy := newBackfillScratchDatabase(t)
 	ctx := context.Background()
 	scan := func(sql string, args ...any) string {
 		t.Helper()
@@ -137,7 +137,7 @@ func TestBackfill_EmbedsMigratedContributionsOnceTheLegacyTablesAreGone(t *testi
 	answerReply, answerBody := replyOf("answer", answer)
 	bareReply, bareBody := replyOf("approach", bare)
 	embeddedReply, _ := replyOf("approach", embedded)
-	dropLegacy()
+	archiveLegacy()
 
 	result, err = worker(false).run(ctx)
 	if err != nil {
@@ -177,9 +177,10 @@ func TestBackfill_EmbedsMigratedContributionsOnceTheLegacyTablesAreGone(t *testi
 	}
 }
 
-// newBackfillScratchDatabase creates an empty database next to DATABASE_URL's, applies every
-// up migration and returns a pool on it; the database is dropped when the test ends.
-// dropLegacy drops the legacy contribution tables (db.LegacyTables) the way schema cleanup will.
+// newBackfillScratchDatabase creates an empty database next to DATABASE_URL's, applies the up
+// migrations below the legacy archive migration and returns a pool on it; the database is
+// dropped when the test ends. archiveLegacy applies the legacy archive migration and every
+// later one, which move the legacy contribution tables (db.LegacyTables) out of public.
 func newBackfillScratchDatabase(t *testing.T) (*db.Pool, func()) {
 	t.Helper()
 	base := os.Getenv("DATABASE_URL")
@@ -221,16 +222,29 @@ func newBackfillScratchDatabase(t *testing.T) (*db.Pool, func()) {
 		t.Fatalf("list migrations: %d files, %v", len(files), err)
 	}
 	sort.Strings(files)
-	for _, f := range files {
-		sql, err := os.ReadFile(f)
-		if err == nil {
-			_, err = conn.Exec(ctx, string(sql))
-		}
-		if err != nil {
-			conn.Close(ctx)
-			t.Fatalf("apply %s: %v", filepath.Base(f), err)
+	split := len(files)
+	for i, f := range files {
+		if strings.HasSuffix(f, "_legacy_archive.up.sql") {
+			split = i
 		}
 	}
+	if split == len(files) {
+		conn.Close(ctx)
+		t.Fatal("no *_legacy_archive.up.sql migration")
+	}
+	apply := func(conn *pgx.Conn, files []string) {
+		t.Helper()
+		for _, f := range files {
+			sql, err := os.ReadFile(f)
+			if err == nil {
+				_, err = conn.Exec(context.Background(), string(sql))
+			}
+			if err != nil {
+				t.Fatalf("apply %s: %v", filepath.Base(f), err)
+			}
+		}
+	}
+	apply(conn, files[:split])
 	conn.Close(ctx)
 
 	pool, err := db.NewPool(ctx, u.String())
@@ -238,10 +252,14 @@ func newBackfillScratchDatabase(t *testing.T) (*db.Pool, func()) {
 		t.Fatalf("pool on scratch database: %v", err)
 	}
 	t.Cleanup(pool.Close) // registered after the drop, so it runs before it
+	scratchURL := u.String()
 	return pool, func() {
 		t.Helper()
-		if _, err := pool.Exec(context.Background(), "DROP TABLE "+strings.Join(db.LegacyTables, ", ")+" CASCADE"); err != nil {
-			t.Fatalf("drop the legacy tables: %v", err)
+		conn, err := pgx.Connect(context.Background(), scratchURL)
+		if err != nil {
+			t.Fatalf("connect scratch: %v", err)
 		}
+		defer conn.Close(context.Background())
+		apply(conn, files[split:])
 	}
 }

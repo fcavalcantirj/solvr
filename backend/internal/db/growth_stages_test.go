@@ -29,8 +29,8 @@ type stageFixture struct {
 }
 
 func newStageFixture(t *testing.T) *stageFixture {
-	pool, dropLegacy := newMigratedScratchDatabase(t)
-	dropLegacy()
+	pool, archiveLegacy := newPreArchiveScratchDatabase(t)
+	archiveLegacy()
 	return &stageFixture{t: t, ctx: context.Background(), pool: pool,
 		end: time.Now().UTC().Add(time.Minute).Truncate(time.Second), n: time.Now().UnixNano() % 1_000_000_000}
 }
@@ -178,7 +178,7 @@ func TestGrowthStages_WeeklyRoomsOwnersWorkflowsReliabilityModeration(t *testing
 	f.exec(`INSERT INTO reports (target_type, target_id, reporter_type, reporter_id, reason, status, created_at)
 		VALUES ('post', $1, 'agent', 'r3', 'spam', 'pending', $2)`, target, f.ago(2*day))
 	f.exec(`INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status, moderation_state, created_at)
-		VALUES ('question', 'Awaiting moderation', 'A post still waiting for a moderator.', 'human', $1, 'pending_review', 'pending', $2)`,
+		VALUES ('post', 'Awaiting moderation', 'A post still waiting for a moderator.', 'human', $1, 'pending_review', 'pending', $2)`,
 		human, f.ago(9*day))
 
 	m, err := NewGrowthStageRepository(f.pool).Measure(f.ctx, f.end)

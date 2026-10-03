@@ -52,7 +52,7 @@ func TestGetAllStats_ExcludesFamilyPrivatePosts(t *testing.T) {
 		t.Fatalf("GetAllStats() baseline error = %v", err)
 	}
 
-	insertVisibilityTestPost(t, pool, ctx, "problem", "Public problem counted in public stats", "open", "public", 0)
+	insertVisibilityTestPost(t, pool, ctx, "post", "Public problem counted in public stats", "open", "public", 0)
 
 	afterPublic, err := repo.GetAllStats(ctx)
 	if err != nil {
@@ -68,7 +68,7 @@ func TestGetAllStats_ExcludesFamilyPrivatePosts(t *testing.T) {
 		t.Fatalf("PostedToday after public post = %d, want %d", got, want)
 	}
 
-	insertVisibilityTestPost(t, pool, ctx, "problem", "Family problem must stay out of public stats", "open", "family", 0)
+	insertVisibilityTestPost(t, pool, ctx, "post", "Family problem must stay out of public stats", "open", "family", 0)
 
 	afterFamily, err := repo.GetAllStats(ctx)
 	if err != nil {
@@ -102,7 +102,7 @@ func TestGetAllStats_ReflectsCurrentDatabaseState(t *testing.T) {
 		t.Fatalf("GetAllStats() baseline error = %v", err)
 	}
 
-	id := insertVisibilityTestPost(t, pool, ctx, "idea", "Live counter fixture idea", "open", "public", 0)
+	id := insertVisibilityTestPost(t, pool, ctx, "post", "Live counter fixture idea", "open", "public", 0)
 
 	after, err := repo.GetAllStats(ctx)
 	if err != nil {

@@ -10,7 +10,8 @@ import (
 
 // Task idx 76 step 3: GET /v1/homepage/overview's reusable posts count canonical replies. A
 // live human or agent reply makes a post reusable and counts, a child reply too; a system
-// verdict, a deleted reply and a legacy approach that was never migrated do not.
+// verdict and a deleted reply do not, and a post without replies is not reusable. (The case of
+// a legacy approach that was never migrated is gone: the legacy tables are archived, 000138.)
 func TestHomepageOverviewReusablePosts_CountCanonicalReplies(t *testing.T) {
 	t.Setenv("HOMEPAGE_PREVIEW_ROOM_SLUGS", hpoSlug("none"))
 
@@ -24,10 +25,8 @@ func TestHomepageOverviewReusablePosts_CountCanonicalReplies(t *testing.T) {
 		require.NoError(t, err, sql)
 	}
 
-	approachOnly := hpoInsertPostWithReply(t, pool, "hpo canonical post with an unmigrated approach", "public")
-	exec(`DELETE FROM replies WHERE post_id = $1`, approachOnly)
-	exec(`INSERT INTO approaches (problem_id, author_type, author_id, angle, status)
-		VALUES ($1, 'agent', 'agent_hpotest', 'unmigrated approach', 'working')`, approachOnly)
+	noReplies := hpoInsertPostWithReply(t, pool, "hpo canonical post without replies", "public")
+	exec(`DELETE FROM replies WHERE post_id = $1`, noReplies)
 	verdictOnly := hpoInsertPostWithReply(t, pool, "hpo canonical post with a verdict only", "public")
 	exec(`DELETE FROM replies WHERE post_id = $1`, verdictOnly)
 	exec(`INSERT INTO replies (post_id, author_type, author_id, body) VALUES ($1, 'system', 'moderation', 'approved')`, verdictOnly)
@@ -44,7 +43,7 @@ func TestHomepageOverviewReusablePosts_CountCanonicalReplies(t *testing.T) {
 
 	assert.Equal(t, "Public posts that already carry at least one reply from a person or an agent, "+
 		"most recently worked on first.", ov.Posts.Definition)
-	assert.NotContains(t, raw, "hpo canonical post with an unmigrated approach", "a legacy approach is not a reply")
+	assert.NotContains(t, raw, "hpo canonical post without replies", "a post without replies is not reusable")
 	assert.NotContains(t, raw, "hpo canonical post with a verdict only", "a moderation verdict is not a contribution")
 	require.NotEmpty(t, ov.Posts.Items)
 	item := ov.Posts.Items[0]

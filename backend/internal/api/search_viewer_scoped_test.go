@@ -36,11 +36,11 @@ func TestSearch_ViewerScoped_HumanCaller(t *testing.T) {
 	// each carrying a per-visibility needle so we can assert exactly what a caller sees.
 	require.NoError(t, pool.QueryRow(ctx,
 		`INSERT INTO posts (type,title,description,posted_by_type,posted_by_id,status,visibility,owner_human_id)
-		 VALUES ('question',$1,$2,'human',$3,'open','family',$4::uuid) RETURNING id::text`,
+		 VALUES ('post',$1,$2,'human',$3,'open','family',$4::uuid) RETURNING id::text`,
 		"PRIV VIEWER "+marker, "private "+kw+" PRIVNEEDLE "+marker, userA, userA).Scan(new(string)))
 	require.NoError(t, pool.QueryRow(ctx,
 		`INSERT INTO posts (type,title,description,posted_by_type,posted_by_id,status,visibility)
-		 VALUES ('question',$1,$2,'human',$3,'open','public') RETURNING id::text`,
+		 VALUES ('post',$1,$2,'human',$3,'open','public') RETURNING id::text`,
 		"PUB VIEWER "+marker, "public "+kw+" PUBNEEDLE "+marker, userA).Scan(new(string)))
 	t.Cleanup(func() { pool.Exec(context.Background(), "DELETE FROM posts WHERE title LIKE '%"+marker+"%'") }) //nolint:errcheck
 

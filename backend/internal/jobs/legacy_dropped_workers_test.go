@@ -85,12 +85,23 @@ func (tr *dbErrorTracer) saw(fragment string) bool {
 
 var droppedLegacyObjectRe = regexp.MustCompile(`\b(` + strings.Join(db.LegacyTables, "|") + `)\b`)
 
-// missingLegacyObject reports whether an error is a statement reaching for a dropped
-// legacy table (or its row type, or a function that went with it).
+// archivedPostColumns are the posts columns the legacy archive migration moved into
+// legacy_archive.post_fields.
+var archivedPostColumns = map[string]bool{"success_criteria": true, "weight": true, "accepted_answer_id": true, "evolved_into": true}
+
+var undefinedColumnRe = regexp.MustCompile(`column (?:"?\w+"?\.)?"?(\w+)"? does not exist`)
+
+// missingLegacyObject reports whether an error is a statement reaching for dropped legacy
+// storage: a legacy table (or its row type, or a function that went with it), or a posts
+// column the archive moved out.
 func missingLegacyObject(e tracedError) (string, bool) {
 	switch e.Code {
 	case "42P01", "42704", "42883": // undefined_table, undefined_object, undefined_function
 		if m := droppedLegacyObjectRe.FindStringSubmatch(e.Message); m != nil {
+			return m[1], true
+		}
+	case "42703": // undefined_column
+		if m := undefinedColumnRe.FindStringSubmatch(e.Message); m != nil && archivedPostColumns[m[1]] {
 			return m[1], true
 		}
 	}
@@ -101,15 +112,52 @@ type legacyDroppedDatabase struct {
 	pool   *db.Pool
 	tracer *dbErrorTracer
 	url    string
-	// dependents are the objects outside the legacy tables that a plain DROP TABLE named
-	// as depending on them (the DETAIL of SQLSTATE 2BP01).
+	// dependents are the objects outside the legacy tables the legacy archive migration had
+	// to drop to move them out of public, as it recorded them in legacy_archive.dropped_objects
+	// (and its down migration restores them), worded like a refused DROP TABLE's DETAIL.
 	dependents []string
 }
 
-// newMigratedScratchURL creates a scratch database named <prefix><nanos>, applies every up
-// migration in order, checks the legacy tables are there and returns its URL. The
-// database is dropped when the test ends.
-func newMigratedScratchURL(t *testing.T, prefix string) string {
+// legacyArchiveSplit returns the up migrations below *_legacy_archive.up.sql and the rest, in
+// order.
+func legacyArchiveSplit(t *testing.T) (before, after []string) {
+	t.Helper()
+	files, err := filepath.Glob("../../migrations/*.up.sql")
+	if err != nil || len(files) == 0 {
+		t.Fatalf("list migrations: %d files, %v", len(files), err)
+	}
+	sort.Strings(files)
+	for i, f := range files {
+		if strings.HasSuffix(f, "_legacy_archive.up.sql") {
+			return files[:i], files[i:]
+		}
+	}
+	t.Fatal("no *_legacy_archive.up.sql migration")
+	return nil, nil
+}
+
+// applyMigrationFiles runs each file on the database at scratchURL, in order.
+func applyMigrationFiles(ctx context.Context, t *testing.T, scratchURL string, files []string) {
+	t.Helper()
+	conn, err := pgx.Connect(ctx, scratchURL)
+	if err != nil {
+		t.Fatalf("connect scratch: %v", err)
+	}
+	defer conn.Close(ctx)
+	for _, f := range files {
+		sql, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatalf("read %s: %v", f, err)
+		}
+		if _, err := conn.Exec(ctx, string(sql)); err != nil {
+			t.Fatalf("apply %s: %v", filepath.Base(f), err)
+		}
+	}
+}
+
+// newScratchURL creates a scratch database named <prefix><nanos>, applies files in order and
+// returns its URL. The database is dropped when the test ends.
+func newScratchURL(t *testing.T, prefix string, files []string) string {
 	t.Helper()
 	base := os.Getenv("DATABASE_URL")
 	if base == "" {
@@ -141,42 +189,45 @@ func newMigratedScratchURL(t *testing.T, prefix string) string {
 		t.Fatalf("parse DATABASE_URL: %v", err)
 	}
 	u.Path = "/" + name
-	scratchURL := u.String()
+	applyMigrationFiles(ctx, t, u.String(), files)
+	return u.String()
+}
 
+// newMigratedScratchURL is a scratch database with every up migration applied.
+func newMigratedScratchURL(t *testing.T, prefix string) string {
+	t.Helper()
+	before, after := legacyArchiveSplit(t)
+	return newScratchURL(t, prefix, append(before, after...))
+}
+
+// newPreArchiveScratchURL is a scratch database migrated below the legacy archive migration,
+// checked to hold the legacy tables: the state before the cutover and the archive.
+func newPreArchiveScratchURL(t *testing.T, prefix string) string {
+	t.Helper()
+	before, _ := legacyArchiveSplit(t)
+	scratchURL := newScratchURL(t, prefix, before)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	conn, err := pgx.Connect(ctx, scratchURL)
 	if err != nil {
 		t.Fatalf("connect scratch: %v", err)
 	}
 	defer conn.Close(ctx)
-
-	files, err := filepath.Glob("../../migrations/*.up.sql")
-	if err != nil || len(files) == 0 {
-		t.Fatalf("list migrations: %d files, %v", len(files), err)
-	}
-	sort.Strings(files)
-	for _, f := range files {
-		sql, err := os.ReadFile(f)
-		if err != nil {
-			t.Fatalf("read %s: %v", f, err)
-		}
-		if _, err := conn.Exec(ctx, string(sql)); err != nil {
-			t.Fatalf("apply %s: %v", filepath.Base(f), err)
-		}
-	}
 	for _, table := range db.LegacyTables {
 		var present bool
 		if err := conn.QueryRow(ctx, "SELECT to_regclass('public.'||$1) IS NOT NULL", table).Scan(&present); err != nil || !present {
-			t.Fatalf("migrated scratch database must hold legacy table %s before the drop (present=%v, err=%v)", table, present, err)
+			t.Fatalf("pre-archive scratch database must hold legacy table %s (present=%v, err=%v)", table, present, err)
 		}
 	}
 	return scratchURL
 }
 
-// newMigratedDatabase returns a traced pool on a scratch database migrated to head that
-// still holds the legacy tables: the state between the cutover deploy and schema cleanup.
+// newMigratedDatabase returns a traced pool on a scratch database below the legacy archive
+// migration, which still holds the legacy tables: the state between the cutover deploy and
+// the archive.
 func newMigratedDatabase(t *testing.T) (*db.Pool, *dbErrorTracer) {
 	t.Helper()
-	scratchURL := newMigratedScratchURL(t, "solvr_legacy_present_")
+	scratchURL := newPreArchiveScratchURL(t, "solvr_legacy_present_")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	tracer := &dbErrorTracer{}
@@ -188,13 +239,14 @@ func newMigratedDatabase(t *testing.T) (*db.Pool, *dbErrorTracer) {
 	return pool, tracer
 }
 
-// newLegacyDroppedDatabase creates a scratch database, applies every up migration in
-// order, runs beforeDrop on the fully migrated schema, drops the legacy tables and returns
-// a traced pool on it. The database is dropped when the test ends.
+// newLegacyDroppedDatabase creates a scratch database below the legacy archive migration, runs
+// beforeDrop on it, then takes it where production goes: the knowledge cutover, then the legacy
+// archive migration and every later one, which move the legacy tables out of public. It
+// returns a traced pool on it. The database is dropped when the test ends.
 func newLegacyDroppedDatabase(t *testing.T, beforeDrop ...func(ctx context.Context, conn *pgx.Conn)) *legacyDroppedDatabase {
 	t.Helper()
-	scratchURL := newMigratedScratchURL(t, "solvr_legacy_dropped_")
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	scratchURL := newPreArchiveScratchURL(t, "solvr_legacy_dropped_")
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 
 	conn, err := pgx.Connect(ctx, scratchURL)
@@ -202,33 +254,42 @@ func newLegacyDroppedDatabase(t *testing.T, beforeDrop ...func(ctx context.Conte
 		t.Fatalf("connect scratch: %v", err)
 	}
 	defer conn.Close(ctx)
-
 	for _, hook := range beforeDrop {
 		hook(ctx, conn)
 	}
 
-	d := &legacyDroppedDatabase{tracer: &dbErrorTracer{}, url: scratchURL}
-	list := strings.Join(db.LegacyTables, ", ")
-	_, err = conn.Exec(ctx, "DROP TABLE "+list)
-	var pgErr *pgconn.PgError
-	switch {
-	case err == nil:
-	case errors.As(err, &pgErr) && pgErr.Code == "2BP01": // dependent_objects_still_exist
-		for line := range strings.SplitSeq(pgErr.Detail, "\n") {
-			if line = strings.TrimSpace(line); line != "" {
-				d.dependents = append(d.dependents, line)
-			}
-		}
-		if _, err := conn.Exec(ctx, "DROP TABLE "+list+" CASCADE"); err != nil {
-			t.Fatalf("drop legacy tables with cascade: %v", err)
-		}
-	default:
-		t.Fatalf("drop legacy tables: %v", err)
+	cutoverPool, err := db.NewPool(ctx, scratchURL)
+	if err != nil {
+		t.Fatalf("open cutover pool: %v", err)
 	}
+	if _, err := db.RunKnowledgeCutover(ctx, cutoverPool, db.KnowledgeCutoverOptions{}); err != nil {
+		cutoverPool.Close()
+		t.Fatalf("knowledge cutover before the archive: %v", err)
+	}
+	cutoverPool.Close()
+	_, after := legacyArchiveSplit(t)
+	applyMigrationFiles(ctx, t, scratchURL, after)
+
+	d := &legacyDroppedDatabase{tracer: &dbErrorTracer{}, url: scratchURL}
+	rows, err := conn.Query(ctx, `SELECT CASE kind
+			WHEN 'function' THEN 'function ' || name || ' depends on a legacy row type'
+			ELSE 'constraint ' || name || ' on table ' || on_table || ' depends on table ' || ref_table END
+		FROM legacy_archive.dropped_objects WHERE kind <> 'check' ORDER BY ord`)
+	if err != nil {
+		t.Fatalf("read legacy_archive.dropped_objects: %v", err)
+	}
+	for rows.Next() {
+		var line string
+		if err := rows.Scan(&line); err != nil {
+			t.Fatalf("scan dropped object: %v", err)
+		}
+		d.dependents = append(d.dependents, line)
+	}
+	rows.Close()
 	for _, table := range db.LegacyTables {
 		var present bool
 		if err := conn.QueryRow(ctx, "SELECT to_regclass('public.'||$1) IS NOT NULL", table).Scan(&present); err != nil || present {
-			t.Fatalf("legacy table %s must be gone (present=%v, err=%v)", table, present, err)
+			t.Fatalf("legacy table %s must be out of public (present=%v, err=%v)", table, present, err)
 		}
 	}
 
@@ -240,7 +301,7 @@ func newLegacyDroppedDatabase(t *testing.T, beforeDrop ...func(ctx context.Conte
 	return d
 }
 
-// dependentKeyRes map one DETAIL line of a refused DROP TABLE to a registry key.
+// dependentKeyRes map one dependent line (a refused DROP TABLE's DETAIL wording) to a key.
 var dependentKeyRes = []struct {
 	re     *regexp.Regexp
 	format func(m []string) string
@@ -367,7 +428,7 @@ func seedScheduledWorkerData(ctx context.Context, t *testing.T, pool *db.Pool) s
 	}
 	if _, err := pool.Exec(ctx, `
 		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status, original_language)
-		VALUES ('question', 'Titulo da pergunta de teste', 'Descricao longa o bastante para a pergunta de teste',
+		VALUES ('post', 'Titulo da pergunta de teste', 'Descricao longa o bastante para a pergunta de teste',
 		        'agent', $1, 'draft', 'pt')`, agentID); err != nil {
 		t.Fatalf("seed translation draft: %v", err)
 	}
@@ -410,26 +471,27 @@ func scheduledJobKeys(t *testing.T) map[string]bool {
 // Every scheduled job runs against a database without the legacy tables. A job that
 // reaches for a dropped legacy relation must carry a pending (non-keep, not done)
 // disposition: that is the dependency the migration still owes. A job recorded as keep
-// or done must run clean. Objects a plain DROP TABLE refuses to drop without CASCADE
-// must already be replaced (done) or reviewed (keep).
+// or done must run clean. The objects the legacy archive migration had to drop to move the
+// tables are only functions typed by a legacy row and foreign keys to a live table, each
+// recorded in legacy_archive.dropped_objects for its down migration, and none of them is
+// still in the live catalog's registry.
 func TestLegacyDroppedDatabase_ScheduledJobsExposeOnlyRegisteredDependencies(t *testing.T) {
 	d := newLegacyDroppedDatabase(t)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	t.Logf("plain DROP TABLE refused because of: %q", d.dependents)
+	t.Logf("the archive recorded and dropped: %q", d.dependents)
+	if len(d.dependents) == 0 {
+		t.Error("the archive recorded no dropped dependent: hybrid_search_answers/approaches and the foreign keys to posts must be there")
+	}
 	for _, line := range d.dependents {
 		key, ok := dependentKey(line)
-		if !ok {
-			t.Errorf("DROP TABLE named a dependent this probe cannot map to a registry key: %q", line)
+		if !ok || !(strings.HasPrefix(key, "function:") || strings.HasPrefix(key, "fk:")) {
+			t.Errorf("the archive dropped a dependent that is neither a function nor a foreign key: %q", line)
 			continue
 		}
-		disp, ok := db.LegacyDependencyDispositions[key]
-		switch {
-		case !ok:
-			t.Errorf("dropping the legacy tables destroys %s (%q), which has no disposition", key, line)
-		case disp.Action != db.LegacyActionKeep && !disp.Done:
-			t.Errorf("dropping the legacy tables destroys %s, whose %s is still pending", key, disp.Action)
+		if _, listed := db.LegacyDependencyDispositions[key]; listed {
+			t.Errorf("%s left the live catalog with the archive but the registry still lists it", key)
 		}
 	}
 

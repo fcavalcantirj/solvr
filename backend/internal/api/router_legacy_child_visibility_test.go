@@ -11,18 +11,24 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// legacyChildVisibilityFixture holds three posts (named for the legacy route that takes each)
+// and the legacy ids an old client still holds for an approach and an answer on them, with the
+// ids of the replies the cutover made from those two.
 type legacyChildVisibilityFixture struct {
-	problem  string
-	approach string
-	question string
-	answer   string
-	idea     string
-	marker   string
+	problem       string
+	approach      string
+	approachReply string
+	question      string
+	answer        string
+	answerReply   string
+	idea          string
+	marker        string
 }
 
-// newLegacyChildVisibilityFixture creates the legacy child resources whose routes must
-// follow their owning post's visibility. When deleted is true, the parent posts are
-// soft-deleted after their children are inserted so the test also covers retained rows.
+// newLegacyChildVisibilityFixture creates the child resources whose legacy routes must follow
+// their owning post's visibility: the legacy tables are archived (000138), so the approach and
+// the answer exist as the replies the cutover made from them. When deleted is true, the parent
+// posts are soft-deleted after their children are inserted so the test also covers retained rows.
 func newLegacyChildVisibilityFixture(
 	t *testing.T,
 	pool *db.Pool,
@@ -35,36 +41,37 @@ func newLegacyChildVisibilityFixture(
 	if ownerHumanID != "" {
 		owner = ownerHumanID
 	}
-	post := func(typ string) string {
+	post := func(label string) string {
 		var id string
 		require.NoError(t, pool.QueryRow(ctx,
 			`INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status, visibility, owner_human_id)
-			 VALUES ($1, $2, $3, 'agent', $4, 'open', $5, $6::uuid) RETURNING id::text`,
-			typ, marker+" "+typ, "legacy child visibility fixture "+uuid.NewString(),
+			 VALUES ('post', $1, $2, 'agent', $3, 'open', $4, $5::uuid) RETURNING id::text`,
+			marker+" "+label, "legacy child visibility fixture "+uuid.NewString(),
 			authorAgentID, visibility, owner).Scan(&id))
 		return id
+	}
+	// migrated inserts the reply the cutover made from a legacy row of legacyType on postID and
+	// returns the reply's id and its legacy id.
+	migrated := func(postID, legacyType, body, provenance string) (string, string) {
+		var id, legacyID string
+		require.NoError(t, pool.QueryRow(ctx,
+			`INSERT INTO replies (post_id, author_type, author_id, body, legacy_type, legacy_id, provenance)
+			 VALUES ($1::uuid, 'agent', $2, $3, $4, gen_random_uuid(), $5::jsonb) RETURNING id::text, legacy_id::text`,
+			postID, authorAgentID, body, legacyType, provenance).Scan(&id, &legacyID))
+		return id, legacyID
 	}
 
 	fixture := legacyChildVisibilityFixture{marker: marker}
 	fixture.problem = post("problem")
 	fixture.question = post("question")
 	fixture.idea = post("idea")
-	require.NoError(t, pool.QueryRow(ctx,
-		`INSERT INTO approaches (problem_id, author_type, author_id, angle, method)
-		 VALUES ($1::uuid, 'agent', $2, $3, 'fixture method') RETURNING id::text`,
-		fixture.problem, authorAgentID, marker+" approach").Scan(&fixture.approach))
-	require.NoError(t, pool.QueryRow(ctx,
-		`INSERT INTO answers (question_id, author_type, author_id, content)
-		 VALUES ($1::uuid, 'agent', $2, $3) RETURNING id::text`,
-		fixture.question, authorAgentID, marker+" answer").Scan(&fixture.answer))
+	fixture.approachReply, fixture.approach = migrated(fixture.problem, "approach", marker+" approach",
+		`{"legacy_table":"approaches","angle":"`+marker+` approach","method":"fixture method","status":"starting"}`)
+	fixture.answerReply, fixture.answer = migrated(fixture.question, "answer", marker+" answer",
+		`{"legacy_table":"answers","is_accepted":false}`)
 
-	t.Cleanup(func() {
-		cleanupCtx := context.Background()
-		pool.Exec(cleanupCtx, "DELETE FROM progress_notes WHERE approach_id = $1::uuid", fixture.approach)                                           //nolint:errcheck
-		pool.Exec(cleanupCtx, "DELETE FROM approach_relationships WHERE from_approach_id = $1::uuid OR to_approach_id = $1::uuid", fixture.approach) //nolint:errcheck
-		pool.Exec(cleanupCtx, "DELETE FROM approaches WHERE id = $1::uuid", fixture.approach)                                                        //nolint:errcheck
-		pool.Exec(cleanupCtx, "DELETE FROM answers WHERE id = $1::uuid", fixture.answer)                                                             //nolint:errcheck
-		pool.Exec(cleanupCtx, "DELETE FROM posts WHERE id = ANY($1::uuid[])", []string{fixture.problem, fixture.question, fixture.idea})             //nolint:errcheck
+	t.Cleanup(func() { // the replies go with their posts (ON DELETE CASCADE)
+		pool.Exec(context.Background(), "DELETE FROM posts WHERE id = ANY($1::uuid[])", []string{fixture.problem, fixture.question, fixture.idea}) //nolint:errcheck
 	})
 	if deleted {
 		_, err := pool.Exec(ctx, "UPDATE posts SET deleted_at = NOW() WHERE id = ANY($1::uuid[])",
@@ -108,16 +115,17 @@ func TestLegacyChildRoutes_FollowParentVisibilityAndAbsenceContract(t *testing.T
 		require.Equal(t, got.headerID, got.requestID, "the envelope carries the response's request id")
 		require.NotContains(t, got.body, marker)
 	}
-	progressCount := func(id string) int {
+	// A progress note is a child reply of its approach's reply; an answer's votes are its reply's.
+	progressCount := func(approachReply string) int {
 		var count int
 		require.NoError(t, pool.QueryRow(ctx,
-			"SELECT COUNT(*) FROM progress_notes WHERE approach_id = $1::uuid", id).Scan(&count))
+			"SELECT COUNT(*) FROM replies WHERE parent_reply_id = $1::uuid", approachReply).Scan(&count))
 		return count
 	}
-	answerUpvotes := func(id string) int {
+	answerUpvotes := func(answerReply string) int {
 		var count int
 		require.NoError(t, pool.QueryRow(ctx,
-			"SELECT upvotes FROM answers WHERE id = $1::uuid", id).Scan(&count))
+			"SELECT upvotes FROM replies WHERE id = $1::uuid", answerReply).Scan(&count))
 		return count
 	}
 
@@ -157,10 +165,10 @@ func TestLegacyChildRoutes_FollowParentVisibilityAndAbsenceContract(t *testing.T
 	t.Run("approach progress", func(t *testing.T) {
 		for parent, f := range parents {
 			for who, bearer := range callers {
-				before := progressCount(f.approach)
+				before := progressCount(f.approachReply)
 				retired(t, call(t, http.MethodPost, "/v1/approaches/"+f.approach+"/progress", bearer,
 					`{"content":"visibility-scoped progress"}`), "POST /v1/approaches/{id}/progress")
-				require.Equal(t, before, progressCount(f.approach), "%s parent, %s: no progress was added", parent, who)
+				require.Equal(t, before, progressCount(f.approachReply), "%s parent, %s: no progress was added", parent, who)
 			}
 		}
 	})
@@ -168,10 +176,10 @@ func TestLegacyChildRoutes_FollowParentVisibilityAndAbsenceContract(t *testing.T
 	t.Run("answer vote", func(t *testing.T) {
 		for parent, f := range parents {
 			for who, bearer := range callers {
-				before := answerUpvotes(f.answer)
+				before := answerUpvotes(f.answerReply)
 				retired(t, call(t, http.MethodPost, "/v1/answers/"+f.answer+"/vote", bearer, `{"direction":"up"}`),
 					"POST /v1/answers/{id}/vote")
-				require.Equal(t, before, answerUpvotes(f.answer), "%s parent, %s: no vote was counted", parent, who)
+				require.Equal(t, before, answerUpvotes(f.answerReply), "%s parent, %s: no vote was counted", parent, who)
 			}
 		}
 	})
@@ -196,13 +204,17 @@ func TestLegacyChildRoutes_FollowParentVisibilityAndAbsenceContract(t *testing.T
 	})
 
 	t.Run("idea evolution", func(t *testing.T) {
+		// evolved_into is dropped (000138): the whole source row must be unchanged.
+		row := func() string {
+			var r string
+			require.NoError(t, pool.QueryRow(ctx, "SELECT p::text FROM posts p WHERE id = $1::uuid", public.idea).Scan(&r))
+			return r
+		}
+		before := row()
 		path := "/v1/ideas/" + public.idea + "/evolve"
 		for _, target := range []string{uuid.NewString(), malformedResourceID, family.question, public.question} {
 			retired(t, call(t, http.MethodPost, path, siblingKey, `{"evolved_post_id":"`+target+`"}`), "POST /v1/ideas/{id}/evolve")
 		}
-		var evolved int
-		require.NoError(t, pool.QueryRow(ctx,
-			"SELECT COALESCE(array_length(evolved_into, 1), 0) FROM posts WHERE id = $1::uuid", public.idea).Scan(&evolved))
-		require.Zero(t, evolved, "evolution attempts did not change the source idea")
+		require.Equal(t, before, row(), "evolution attempts did not change the source idea")
 	})
 }

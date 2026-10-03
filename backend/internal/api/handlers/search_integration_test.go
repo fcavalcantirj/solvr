@@ -777,7 +777,7 @@ func TestSearchIntegration_ExactTitleMatch(t *testing.T) {
 
 	for _, title := range titles {
 		insertSearchTestPost(t, pool, ctx,
-			"problem", title, "Test description", []string{"go"}, "open")
+			"post", title, "Test description", []string{"go"}, "open")
 	}
 
 	handler := NewSearchHandler(repo)
@@ -814,10 +814,10 @@ func TestSearchIntegration_MultiWordQuery(t *testing.T) {
 	ctx := context.Background()
 
 	// Create posts with only ONE of the search terms
-	insertSearchTestPost(t, pool, ctx, "problem",
+	insertSearchTestPost(t, pool, ctx, "post",
 		"Race detection in programs", "About race", []string{}, "open")
 
-	insertSearchTestPost(t, pool, ctx, "problem",
+	insertSearchTestPost(t, pool, ctx, "post",
 		"Conditional logic patterns", "About conditions", []string{}, "open")
 
 	handler := NewSearchHandler(repo)
@@ -849,7 +849,7 @@ func TestSearchIntegration_PartialWordMatch(t *testing.T) {
 	repo, pool := setupDBBackedSearchRepo(t)
 	ctx := context.Background()
 
-	insertSearchTestPost(t, pool, ctx, "problem",
+	insertSearchTestPost(t, pool, ctx, "post",
 		"Race conditions in Go", "Description", []string{}, "open")
 
 	handler := NewSearchHandler(repo)

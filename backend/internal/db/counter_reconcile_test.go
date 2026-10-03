@@ -47,7 +47,7 @@ func seedReconcileFixture(ctx context.Context, t *testing.T, pool *Pool) reconci
 	var f reconcileFixture
 	post := func(title string) uuid.UUID {
 		return id(`INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
-			VALUES ('question', $1, 'A post the counter reconciler reads', 'agent', 'cr-agent', 'open') RETURNING id`, title)
+			VALUES ('post', $1, 'A post the counter reconciler reads', 'agent', 'cr-agent', 'open') RETURNING id`, title)
 	}
 	f.driftedPost, f.quietPost = post("Reconcile drifted post"), post("Reconcile quiet post")
 	reply := func(p uuid.UUID) uuid.UUID {

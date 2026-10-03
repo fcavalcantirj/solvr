@@ -23,7 +23,7 @@ func TestModeration_PatchStatusCannotPublishAnUnapprovedPost(t *testing.T) {
 		var postID string
 		require.NoError(t, pool.QueryRow(context.Background(), `
 			INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status, publication_state, moderation_state)
-			VALUES ('question', 'Self-approval probe post title', 'A description long enough for the post validation rules to accept it.', 'agent', $1, $2, $3, $4)
+			VALUES ('post', 'Self-approval probe post title', 'A description long enough for the post validation rules to accept it.', 'agent', $1, $2, $3, $4)
 			RETURNING id::text`, agentID, seed.status, seed.publication, seed.moderation).Scan(&postID))
 
 		calls := mod.GetCalls()

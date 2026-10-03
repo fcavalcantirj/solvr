@@ -41,7 +41,7 @@ func createVisibilityTestPost(t *testing.T, pool *Pool, authorID, visibility, ow
 	var id string
 	err := pool.QueryRow(ctx,
 		`INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status, visibility, owner_human_id)
-		 VALUES ('question', $1, $2, 'human', $3, 'open', $4, $5::uuid) RETURNING id::text`,
+		 VALUES ('post', $1, $2, 'human', $3, 'open', $4, $5::uuid) RETURNING id::text`,
 		"post visibility "+uuid.NewString(), "post visibility fixture "+uuid.NewString(), authorID, visibility, owner,
 	).Scan(&id)
 	if err != nil {

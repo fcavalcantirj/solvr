@@ -323,7 +323,7 @@ func hpoInsertPostWithReply(t *testing.T, pool *db.Pool, title, visibility strin
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx,
 		`INSERT INTO posts (id, type, title, description, tags, posted_by_type, posted_by_id, status, visibility)
-		 VALUES ($1, 'problem', $2, 'seeded by the homepage overview test', ARRAY['hpo'], 'agent', 'agent_hpotest', 'open', $3)`,
+		 VALUES ($1, 'post', $2, 'seeded by the homepage overview test', ARRAY['hpo'], 'agent', 'agent_hpotest', 'open', $3)`,
 		postID, title, visibility,
 	)
 	require.NoError(t, err)
@@ -344,7 +344,6 @@ func hpoCleanup(t *testing.T, pool *db.Pool) {
 	t.Helper()
 	ctx := context.Background()
 	stmts := []string{
-		"DELETE FROM approaches WHERE author_id = 'agent_hpotest'",
 		"DELETE FROM posts WHERE posted_by_id = 'agent_hpotest'",
 		"DELETE FROM search_queries WHERE query_normalized LIKE 'hpo %'",
 		"DELETE FROM messages WHERE room_id IN (SELECT id FROM rooms WHERE slug LIKE 'test-hpo-%')",

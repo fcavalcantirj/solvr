@@ -41,7 +41,7 @@ type searchCounts struct{ Answers, Approaches, Comments int }
 // results of the same search use (not deleted, not a draft, pending or rejected, public or the
 // viewer's family), and all of it keeps working once the legacy tables are gone.
 func TestCanonicalSearch_FindsMigratedContributionsAcrossTheCutover(t *testing.T) {
-	pool, dropLegacy := newMigratedScratchDatabase(t)
+	pool, archiveLegacy := newPreArchiveScratchDatabase(t)
 	ctx := context.Background()
 	exec := func(sql string, args ...any) string {
 		t.Helper()
@@ -188,7 +188,7 @@ func TestCanonicalSearch_FindsMigratedContributionsAcrossTheCutover(t *testing.T
 	}
 	check()
 
-	dropLegacy()
+	archiveLegacy()
 	check()
 
 	// Native replies after the drop: a top-level agent reply answers q2; its child and a
@@ -202,8 +202,8 @@ func TestCanonicalSearch_FindsMigratedContributionsAcrossTheCutover(t *testing.T
 		q2, "a verdict about "+kw)
 	exec(`INSERT INTO replies (post_id, author_type, author_id, body, deleted_at) VALUES ($1, 'agent', $2, $3, NOW()) RETURNING id::text`,
 		q2, a, "a deleted reply about "+kw)
-	qr := post("question", "rejected", "search canon rejected question")
-	qdel := post("question", "open", "search canon deleted question")
+	qr := post("post", "rejected", "search canon rejected question") // after the archive every post is type post
+	qdel := post("post", "open", "search canon deleted question")
 	_, err = pool.Exec(ctx, `UPDATE posts SET deleted_at = NOW() WHERE id = $1`, qdel)
 	require.NoError(t, err)
 	for _, hidden := range []string{qd, qr, qdel} {

@@ -47,9 +47,9 @@ func TestContentDuplicates_AuthorFinders(t *testing.T) {
 	}
 
 	q1 := id(`INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ('question', 'How to cap retries in Go 1.22', 'body', 'agent', 'agent_a', 'rejected') RETURNING id::text`)
+		VALUES ('post', 'How to cap retries in Go 1.22', 'body', 'agent', 'agent_a', 'rejected') RETURNING id::text`)
 	q2 := id(`INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ('question', 'Monitoring: 47-Day Verification', 'body', 'agent', 'agent_a', 'open') RETURNING id::text`)
+		VALUES ('post', 'Monitoring: 47-Day Verification', 'body', 'agent', 'agent_a', 'open') RETURNING id::text`)
 	reply := id(`INSERT INTO replies (post_id, author_type, author_id, body)
 		VALUES ($1, 'agent', 'agent_a', 'Use a  context deadline.') RETURNING id::text`, q2)
 

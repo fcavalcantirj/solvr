@@ -12,11 +12,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestSearch_FamilyPrivate_OwnerScoped is the BART-152 guarantee: an answer or approach
-// on a family-private post must be searchable (via content_types) by the owning family —
-// the author and a sibling agent (same human) — and MUST NOT surface for a foreign agent
-// or an anonymous caller. Posts search was already family-scoped by BART-151; this locks
-// the same scoping onto the answer/approach search surfaces.
+// TestSearch_FamilyPrivate_OwnerScoped is the BART-152 guarantee: a reply in the answer or
+// approach bucket of a family-private post must be searchable (via content_types) by the
+// owning family — the author and a sibling agent (same human) — and MUST NOT surface for a
+// foreign agent or an anonymous caller. Posts search was already family-scoped by BART-151;
+// this locks the same scoping onto the answer/approach search surfaces.
 //
 // setupRoomTestServer wires NO embedding service, so /v1/search runs the full-text path
 // (searchReplies over the answer and approach reply buckets) — no Voyage key required.
@@ -42,43 +42,28 @@ func TestSearch_FamilyPrivate_OwnerScoped(t *testing.T) {
 	claimAgentToUser(t, pool, agentCID, userB)
 	_ = agentCID
 
-	// Private question post + a family answer carrying kw + a per-surface needle.
-	var privQID, privAnsID string
+	// Two private posts (one per surface), each carrying kw + a per-surface needle.
+	var privQID, privPID string
 	require.NoError(t, pool.QueryRow(ctx,
 		`INSERT INTO posts (type,title,description,posted_by_type,posted_by_id,status,visibility,owner_human_id)
-		 VALUES ('question',$1,$2,'agent',$3,'open','family',$4::uuid) RETURNING id::text`,
+		 VALUES ('post',$1,$2,'agent',$3,'open','family',$4::uuid) RETURNING id::text`,
 		"PRIVATE Q "+marker, "private question desc "+kw+" "+marker, agentAID, userA).Scan(&privQID))
 	require.NoError(t, pool.QueryRow(ctx,
-		`INSERT INTO answers (question_id, author_type, author_id, content)
-		 VALUES ($1::uuid,'agent',$2,$3) RETURNING id::text`,
-		privQID, agentAID, "family answer "+kw+" ANSWERNEEDLE "+marker).Scan(&privAnsID))
-
-	// Private problem post + a family approach carrying kw + a per-surface needle.
-	// approaches.status has no 'open' value — CHECK = starting|working|stuck|failed|succeeded|abandoned.
-	var privPID, privApprID string
-	require.NoError(t, pool.QueryRow(ctx,
 		`INSERT INTO posts (type,title,description,posted_by_type,posted_by_id,status,visibility,owner_human_id)
-		 VALUES ('problem',$1,$2,'agent',$3,'solved','family',$4::uuid) RETURNING id::text`,
+		 VALUES ('post',$1,$2,'agent',$3,'open','family',$4::uuid) RETURNING id::text`,
 		"PRIVATE PROBLEM "+marker, "private problem desc "+kw+" "+marker, agentAID, userA).Scan(&privPID))
-	require.NoError(t, pool.QueryRow(ctx,
-		`INSERT INTO approaches (problem_id, author_type, author_id, angle, status)
-		 VALUES ($1::uuid,'agent',$2,$3,'working') RETURNING id::text`,
-		privPID, agentAID, "family approach "+kw+" APPROACHNEEDLE "+marker).Scan(&privApprID))
 
-	// The replies the contribution cutover makes from the answer and the approach: answer and
-	// approach search read replies (task idx 76). They go with their posts (ON DELETE CASCADE).
+	// A family reply migrated from an answer and one migrated from an approach: answer and
+	// approach search read replies (task idx 76), and the legacy tables are archived (000138).
+	// They go with their posts (ON DELETE CASCADE).
 	_, err := pool.Exec(ctx, `INSERT INTO replies (post_id, author_type, author_id, body, legacy_type, legacy_id)
-		VALUES ($1::uuid, 'agent', $2, $3, 'answer', $4::uuid), ($5::uuid, 'agent', $2, $6, 'approach', $7::uuid)`,
-		privQID, agentAID, "family answer "+kw+" ANSWERNEEDLE "+marker, privAnsID,
-		privPID, "family approach "+kw+" APPROACHNEEDLE "+marker, privApprID)
+		VALUES ($1::uuid, 'agent', $2, $3, 'answer', gen_random_uuid()), ($4::uuid, 'agent', $2, $5, 'approach', gen_random_uuid())`,
+		privQID, agentAID, "family answer "+kw+" ANSWERNEEDLE "+marker,
+		privPID, "family approach "+kw+" APPROACHNEEDLE "+marker)
 	require.NoError(t, err)
 
-	// FK-safe cleanup: children (no ON DELETE) before parents.
 	t.Cleanup(func() {
-		c := context.Background()
-		pool.Exec(c, "DELETE FROM answers WHERE content LIKE '%"+marker+"%'")   //nolint:errcheck
-		pool.Exec(c, "DELETE FROM approaches WHERE angle LIKE '%"+marker+"%'")   //nolint:errcheck
-		pool.Exec(c, "DELETE FROM posts WHERE title LIKE '%"+marker+"%'")        //nolint:errcheck
+		pool.Exec(context.Background(), "DELETE FROM posts WHERE title LIKE '%"+marker+"%'") //nolint:errcheck
 	})
 
 	// bodyContains does GET url (optional bearer) and reports whether the body contains needle.

@@ -154,8 +154,7 @@ func TestMigrations_PostsTable(t *testing.T) {
 	columns := []string{
 		"id", "type", "title", "description", "tags",
 		"posted_by_type", "posted_by_id", "status",
-		"upvotes", "downvotes", "success_criteria", "weight",
-		"accepted_answer_id", "evolved_into",
+		"upvotes", "downvotes",
 		"created_at", "updated_at", "deleted_at",
 	}
 	for _, col := range columns {
@@ -167,6 +166,18 @@ func TestMigrations_PostsTable(t *testing.T) {
 		`, col).Scan(&colName)
 		if err != nil {
 			t.Errorf("Column %s does not exist in posts table: %v", col, err)
+		}
+	}
+
+	// The problem-only columns moved to legacy_archive.post_fields (idx 68).
+	for _, col := range []string{"success_criteria", "weight", "accepted_answer_id", "evolved_into"} {
+		var n int
+		err = pool.QueryRow(ctx, `
+			SELECT count(*) FROM information_schema.columns
+			WHERE table_schema = 'public' AND table_name = 'posts' AND column_name = $1
+		`, col).Scan(&n)
+		if err != nil || n != 0 {
+			t.Errorf("column %s must be gone from posts (count %d, err %v)", col, n, err)
 		}
 	}
 
@@ -193,6 +204,8 @@ func TestMigrations_PostsTable(t *testing.T) {
 
 // TestMigrations_ApproachesTable tests that the approaches migration creates the tables correctly.
 func TestMigrations_ApproachesTable(t *testing.T) {
+	// The legacy archive migration (idx 68) moved the table, with its columns and indexes, into
+	// legacy_archive, from where its down migration restores it.
 	url := getTestDatabaseURL(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -208,7 +221,7 @@ func TestMigrations_ApproachesTable(t *testing.T) {
 	err = pool.QueryRow(ctx, `
 		SELECT table_name
 		FROM information_schema.tables
-		WHERE table_schema = 'public' AND table_name = 'approaches'
+		WHERE table_schema = 'legacy_archive' AND table_name = 'approaches'
 	`).Scan(&tableName)
 	if err != nil {
 		t.Fatalf("Approaches table does not exist: %v", err)
@@ -226,7 +239,7 @@ func TestMigrations_ApproachesTable(t *testing.T) {
 		err = pool.QueryRow(ctx, `
 			SELECT column_name
 			FROM information_schema.columns
-			WHERE table_schema = 'public' AND table_name = 'approaches' AND column_name = $1
+			WHERE table_schema = 'legacy_archive' AND table_name = 'approaches' AND column_name = $1
 		`, col).Scan(&colName)
 		if err != nil {
 			t.Errorf("Column %s does not exist in approaches table: %v", col, err)
@@ -237,7 +250,7 @@ func TestMigrations_ApproachesTable(t *testing.T) {
 	err = pool.QueryRow(ctx, `
 		SELECT table_name
 		FROM information_schema.tables
-		WHERE table_schema = 'public' AND table_name = 'progress_notes'
+		WHERE table_schema = 'legacy_archive' AND table_name = 'progress_notes'
 	`).Scan(&tableName)
 	if err != nil {
 		t.Fatalf("Progress_notes table does not exist: %v", err)
@@ -250,7 +263,7 @@ func TestMigrations_ApproachesTable(t *testing.T) {
 		err = pool.QueryRow(ctx, `
 			SELECT column_name
 			FROM information_schema.columns
-			WHERE table_schema = 'public' AND table_name = 'progress_notes' AND column_name = $1
+			WHERE table_schema = 'legacy_archive' AND table_name = 'progress_notes' AND column_name = $1
 		`, col).Scan(&colName)
 		if err != nil {
 			t.Errorf("Column %s does not exist in progress_notes table: %v", col, err)
@@ -260,6 +273,8 @@ func TestMigrations_ApproachesTable(t *testing.T) {
 
 // TestMigrations_AnswersTable tests that the answers migration creates the table correctly.
 func TestMigrations_AnswersTable(t *testing.T) {
+	// The legacy archive migration (idx 68) moved the table, with its columns and indexes, into
+	// legacy_archive, from where its down migration restores it.
 	url := getTestDatabaseURL(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -275,7 +290,7 @@ func TestMigrations_AnswersTable(t *testing.T) {
 	err = pool.QueryRow(ctx, `
 		SELECT table_name
 		FROM information_schema.tables
-		WHERE table_schema = 'public' AND table_name = 'answers'
+		WHERE table_schema = 'legacy_archive' AND table_name = 'answers'
 	`).Scan(&tableName)
 	if err != nil {
 		t.Fatalf("Answers table does not exist: %v", err)
@@ -292,7 +307,7 @@ func TestMigrations_AnswersTable(t *testing.T) {
 		err = pool.QueryRow(ctx, `
 			SELECT column_name
 			FROM information_schema.columns
-			WHERE table_schema = 'public' AND table_name = 'answers' AND column_name = $1
+			WHERE table_schema = 'legacy_archive' AND table_name = 'answers' AND column_name = $1
 		`, col).Scan(&colName)
 		if err != nil {
 			t.Errorf("Column %s does not exist in answers table: %v", col, err)
@@ -302,6 +317,8 @@ func TestMigrations_AnswersTable(t *testing.T) {
 
 // TestMigrations_ResponsesTable tests that the responses migration creates the table correctly.
 func TestMigrations_ResponsesTable(t *testing.T) {
+	// The legacy archive migration (idx 68) moved the table, with its columns and indexes, into
+	// legacy_archive, from where its down migration restores it.
 	url := getTestDatabaseURL(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -317,7 +334,7 @@ func TestMigrations_ResponsesTable(t *testing.T) {
 	err = pool.QueryRow(ctx, `
 		SELECT table_name
 		FROM information_schema.tables
-		WHERE table_schema = 'public' AND table_name = 'responses'
+		WHERE table_schema = 'legacy_archive' AND table_name = 'responses'
 	`).Scan(&tableName)
 	if err != nil {
 		t.Fatalf("Responses table does not exist: %v", err)
@@ -333,7 +350,7 @@ func TestMigrations_ResponsesTable(t *testing.T) {
 		err = pool.QueryRow(ctx, `
 			SELECT column_name
 			FROM information_schema.columns
-			WHERE table_schema = 'public' AND table_name = 'responses' AND column_name = $1
+			WHERE table_schema = 'legacy_archive' AND table_name = 'responses' AND column_name = $1
 		`, col).Scan(&colName)
 		if err != nil {
 			t.Errorf("Column %s does not exist in responses table: %v", col, err)
@@ -343,6 +360,8 @@ func TestMigrations_ResponsesTable(t *testing.T) {
 
 // TestMigrations_CommentsTable tests that the comments migration creates the table correctly.
 func TestMigrations_CommentsTable(t *testing.T) {
+	// The legacy archive migration (idx 68) moved the table, with its columns and indexes, into
+	// legacy_archive, from where its down migration restores it.
 	url := getTestDatabaseURL(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -358,7 +377,7 @@ func TestMigrations_CommentsTable(t *testing.T) {
 	err = pool.QueryRow(ctx, `
 		SELECT table_name
 		FROM information_schema.tables
-		WHERE table_schema = 'public' AND table_name = 'comments'
+		WHERE table_schema = 'legacy_archive' AND table_name = 'comments'
 	`).Scan(&tableName)
 	if err != nil {
 		t.Fatalf("Comments table does not exist: %v", err)
@@ -375,7 +394,7 @@ func TestMigrations_CommentsTable(t *testing.T) {
 		err = pool.QueryRow(ctx, `
 			SELECT column_name
 			FROM information_schema.columns
-			WHERE table_schema = 'public' AND table_name = 'comments' AND column_name = $1
+			WHERE table_schema = 'legacy_archive' AND table_name = 'comments' AND column_name = $1
 		`, col).Scan(&colName)
 		if err != nil {
 			t.Errorf("Column %s does not exist in comments table: %v", col, err)
@@ -387,7 +406,7 @@ func TestMigrations_CommentsTable(t *testing.T) {
 	err = pool.QueryRow(ctx, `
 		SELECT indexname
 		FROM pg_indexes
-		WHERE schemaname = 'public' AND tablename = 'comments' AND indexname = 'idx_comments_target'
+		WHERE schemaname = 'legacy_archive' AND tablename = 'comments' AND indexname = 'idx_comments_target'
 	`).Scan(&idxName)
 	if err != nil {
 		t.Error("Index idx_comments_target does not exist on comments table")
@@ -709,11 +728,6 @@ func TestMigrations_AllTablesExist(t *testing.T) {
 		"users",
 		"agents",
 		"posts",
-		"approaches",
-		"progress_notes",
-		"answers",
-		"responses",
-		"comments",
 		"votes",
 		"notifications",
 		"webhooks",
@@ -737,6 +751,16 @@ func TestMigrations_AllTablesExist(t *testing.T) {
 		`, table).Scan(&tableName)
 		if err != nil {
 			t.Errorf("Table %s does not exist: %v", table, err)
+		}
+	}
+
+	// The legacy contribution tables live in legacy_archive, not in public (idx 68).
+	for _, table := range db.LegacyTables {
+		var public, archived bool
+		err = pool.QueryRow(ctx, `SELECT to_regclass('public.' || $1) IS NOT NULL, to_regclass('legacy_archive.' || $1) IS NOT NULL`,
+			table).Scan(&public, &archived)
+		if err != nil || public || !archived {
+			t.Errorf("table %s: public=%v archived=%v (err %v), want it in legacy_archive only", table, public, archived, err)
 		}
 	}
 }

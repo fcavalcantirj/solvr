@@ -46,7 +46,7 @@ func insertLegacyPost(t *testing.T, pool *Pool, ctx context.Context, i int, sfx,
 // soft-deleted and family rows stay out of public eligibility (task BART: migrate every
 // legacy post; steps 3, 5, 6).
 func TestPostMigration_RemapFixesStatesAndPreservesContent(t *testing.T) {
-	pool := setupTestDB(t)
+	pool, _ := newPreArchiveScratchDatabase(t) // the cutover tool runs below the legacy archive
 	defer pool.Close()
 	ctx := context.Background()
 
@@ -184,7 +184,7 @@ func TestPostMigration_RemapFixesStatesAndPreservesContent(t *testing.T) {
 // certify a lossless migration reacts to real content changes but ignores the migration's
 // own publication_state/moderation_state writes (task BART step 6).
 func TestPostContentFingerprint_SensitiveToContentNotStates(t *testing.T) {
-	pool := setupTestDB(t)
+	pool, _ := newPreArchiveScratchDatabase(t) // the cutover tool runs below the legacy archive
 	defer pool.Close()
 	ctx := context.Background()
 

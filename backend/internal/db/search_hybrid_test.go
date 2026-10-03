@@ -41,7 +41,7 @@ func TestSearchRepository_HybridSearch_WithEmbeddingService(t *testing.T) {
 	ctx := context.Background()
 
 	// Insert a test post with a known keyword
-	postID := insertTestPost(t, pool, ctx, "problem",
+	postID := insertTestPost(t, pool, ctx, "post",
 		"Golang concurrency patterns for microservices",
 		"Using goroutines and channels for concurrent processing in microservice architecture.",
 		[]string{"golang", "concurrency"}, "open")
@@ -93,7 +93,7 @@ func TestSearchRepository_HybridSearch_FallbackWithoutEmbeddingService(t *testin
 	ctx := context.Background()
 
 	// Insert a test post
-	postID := insertTestPost(t, pool, ctx, "problem",
+	postID := insertTestPost(t, pool, ctx, "post",
 		"Testing fallback search behavior",
 		"This post should be found via full-text search without embeddings.",
 		[]string{"testing"}, "open")
@@ -137,12 +137,12 @@ func TestSearchRepository_HybridSearch_FiltersWork(t *testing.T) {
 	ctx := context.Background()
 
 	// Insert posts of different types
-	insertTestPost(t, pool, ctx, "problem",
+	insertTestPost(t, pool, ctx, "post",
 		"Hybrid filter test problem",
 		"A problem to test filtering in hybrid search mode.",
 		[]string{"hybrid"}, "open")
 
-	insertTestPost(t, pool, ctx, "question",
+	insertTestPost(t, pool, ctx, "post",
 		"Hybrid filter test question",
 		"A question to test filtering in hybrid search mode.",
 		[]string{"hybrid"}, "open")
@@ -153,7 +153,7 @@ func TestSearchRepository_HybridSearch_FiltersWork(t *testing.T) {
 
 	// Search with type filter
 	results, _, _, _, err := repo.Search(ctx, "hybrid filter test", models.SearchOptions{
-		Type:    "problem",
+		Type:    "post",
 		Page:    1,
 		PerPage: 20,
 	})
@@ -163,8 +163,8 @@ func TestSearchRepository_HybridSearch_FiltersWork(t *testing.T) {
 	}
 
 	for _, r := range results {
-		if r.Type != "problem" {
-			t.Errorf("expected type 'problem' with filter, got '%s'", r.Type)
+		if r.Type != "post" {
+			t.Errorf("expected type 'post' with filter, got '%s'", r.Type)
 		}
 	}
 }
@@ -178,7 +178,7 @@ func TestSearchRepository_HybridSearch_EmbeddingErrorFallback(t *testing.T) {
 	ctx := context.Background()
 
 	// Insert a test post
-	postID := insertTestPost(t, pool, ctx, "problem",
+	postID := insertTestPost(t, pool, ctx, "post",
 		"Embedding error graceful fallback test",
 		"This post should be found even when embeddings fail.",
 		[]string{"fallback"}, "open")

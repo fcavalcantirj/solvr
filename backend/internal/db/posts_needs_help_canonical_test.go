@@ -36,7 +36,7 @@ func TestLegacyNeedsHelpAndVisibility_ServedCanonically(t *testing.T) {
 // native reply: replies have no status workflow. The in_progress status is retired (idx 68):
 // such a post (open after the legacy archive migration) needs help only through a stuck approach.
 func TestCanonicalNeedsHelp_KeepsTheLegacyFilterAcrossTheCutover(t *testing.T) {
-	pool, dropLegacy := newMigratedScratchDatabase(t)
+	pool, archiveLegacy := newPreArchiveScratchDatabase(t)
 	ctx := context.Background()
 	exec := func(sql string, args ...any) {
 		t.Helper()
@@ -112,7 +112,7 @@ func TestCanonicalNeedsHelp_KeepsTheLegacyFilterAcrossTheCutover(t *testing.T) {
 	assert.ElementsMatch(t, want, list(), "a live reply migrated from a stuck approach")
 	assert.ElementsMatch(t, want, filter())
 
-	dropLegacy()
+	archiveLegacy()
 	assert.ElementsMatch(t, want, filter(), "the needs-help filter needs no legacy table")
 
 	// Native replies carry no status: the database refuses provenance on them (000118).

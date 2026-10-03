@@ -12,17 +12,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// commentTargets is one post of each legacy type with one contribution each, keyed by the
-// comment route's path segment: posts -> the question, approaches/answers/responses -> the
-// contribution. views is the post whose view routes are checked.
+// commentTargets is one post with a migrated reply of each legacy contribution kind, keyed
+// by the retired comment route's path segment: posts -> the post, approaches/answers/responses
+// -> the legacy id the contribution's reply carries (the id an old client still holds). views
+// is the post itself, whose view routes are checked.
 type commentTargets struct {
 	ids   map[string]string
 	views string
 }
 
-// commentVisibilityFixture inserts a problem, a question and an idea by agentID with an
-// approach, an answer and a response, and one comment holding secret on each of the four
-// targets. deleted soft-deletes the three posts afterwards (their children stay).
+// commentVisibilityFixture inserts a post by agentID with the replies the cutover made from an
+// approach, an answer and a response on it, and one reply migrated from a comment holding
+// secret on each of the four targets: the legacy tables are archived (000138). deleted
+// soft-deletes the post afterwards (its replies stay).
 func commentVisibilityFixture(t *testing.T, pool *db.Pool, agentID, visibility, ownerID, secret string, deleted bool) commentTargets {
 	t.Helper()
 	ctx := context.Background()
@@ -30,47 +32,41 @@ func commentVisibilityFixture(t *testing.T, pool *db.Pool, agentID, visibility, 
 	if ownerID != "" {
 		owner = ownerID
 	}
-	post := func(typ string) string {
-		var id string
-		require.NoError(t, pool.QueryRow(ctx,
-			`INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status, visibility, owner_human_id)
-			 VALUES ($1, $2, $3, 'agent', $4, 'open', $5, $6::uuid) RETURNING id::text`,
-			typ, "comment visibility "+typ+" "+uuid.NewString(), "comment visibility fixture "+uuid.NewString(),
-			agentID, visibility, owner).Scan(&id))
-		return id
-	}
-	problem, question, idea := post("problem"), post("question"), post("idea")
-	var approach, answer, response string
+	var post string
 	require.NoError(t, pool.QueryRow(ctx,
-		`INSERT INTO approaches (problem_id, author_type, author_id, angle, method) VALUES ($1::uuid, 'agent', $2, 'fixture angle', 'fixture method') RETURNING id::text`,
-		problem, agentID).Scan(&approach))
-	require.NoError(t, pool.QueryRow(ctx,
-		`INSERT INTO answers (question_id, author_type, author_id, content) VALUES ($1::uuid, 'agent', $2, 'fixture answer') RETURNING id::text`,
-		question, agentID).Scan(&answer))
-	require.NoError(t, pool.QueryRow(ctx,
-		`INSERT INTO responses (idea_id, author_type, author_id, content, response_type) VALUES ($1::uuid, 'agent', $2, 'fixture response', 'support') RETURNING id::text`,
-		idea, agentID).Scan(&response))
-	ids := map[string]string{"posts": question, "approaches": approach, "answers": answer, "responses": response}
-	singular := map[string]string{"posts": "post", "approaches": "approach", "answers": "answer", "responses": "response"}
-	for route, id := range ids {
-		_, err := pool.Exec(ctx,
-			`INSERT INTO comments (target_type, target_id, author_type, author_id, content) VALUES ($1, $2::uuid, 'agent', $3, $4)`,
-			singular[route], id, agentID, secret+" on "+route)
-		require.NoError(t, err)
-	}
+		`INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status, visibility, owner_human_id)
+		 VALUES ('post', $1, $2, 'agent', $3, 'open', $4, $5::uuid) RETURNING id::text`,
+		"comment visibility "+uuid.NewString(), "comment visibility fixture "+uuid.NewString(),
+		agentID, visibility, owner).Scan(&post))
 	t.Cleanup(func() {
-		c := context.Background()
-		pool.Exec(c, "DELETE FROM comments WHERE target_id = ANY($1::uuid[])", []string{question, approach, answer, response}) //nolint:errcheck
-		pool.Exec(c, "DELETE FROM approaches WHERE id = $1::uuid", approach)                                                   //nolint:errcheck
-		pool.Exec(c, "DELETE FROM answers WHERE id = $1::uuid", answer)                                                        //nolint:errcheck
-		pool.Exec(c, "DELETE FROM responses WHERE id = $1::uuid", response)                                                    //nolint:errcheck
-		pool.Exec(c, "DELETE FROM posts WHERE id = ANY($1::uuid[])", []string{problem, question, idea})                        //nolint:errcheck
+		pool.Exec(context.Background(), "DELETE FROM posts WHERE id = $1::uuid", post) //nolint:errcheck
 	})
+	// reply inserts a reply on the post migrated from a legacy row of legacyType, under parent
+	// when it is set, and returns its id and its legacy id.
+	reply := func(parent any, legacyType, body, provenance string) (string, string) {
+		var id, legacyID string
+		require.NoError(t, pool.QueryRow(ctx,
+			`INSERT INTO replies (post_id, parent_reply_id, author_type, author_id, body, legacy_type, legacy_id, provenance)
+			 VALUES ($1::uuid, $2::uuid, 'agent', $3, $4, $5, gen_random_uuid(), $6::jsonb) RETURNING id::text, legacy_id::text`,
+			post, parent, agentID, body, legacyType, provenance).Scan(&id, &legacyID))
+		return id, legacyID
+	}
+	singular := map[string]string{"posts": "post", "approaches": "approach", "answers": "answer", "responses": "response"}
+	ids := map[string]string{"posts": post}
+	parents := map[string]any{"posts": nil}
+	for _, route := range []string{"approaches", "answers", "responses"} {
+		replyID, legacyID := reply(nil, singular[route], "fixture "+singular[route], `{"legacy_table":"`+route+`"}`)
+		ids[route], parents[route] = legacyID, replyID
+	}
+	for route, id := range ids {
+		reply(parents[route], "comment", secret+" on "+route,
+			`{"legacy_table":"comments","target_type":"`+singular[route]+`","target_id":"`+id+`"}`)
+	}
 	if deleted {
-		_, err := pool.Exec(ctx, "UPDATE posts SET deleted_at = NOW() WHERE id = ANY($1::uuid[])", []string{problem, question, idea})
+		_, err := pool.Exec(ctx, "UPDATE posts SET deleted_at = NOW() WHERE id = $1::uuid", post)
 		require.NoError(t, err)
 	}
-	return commentTargets{ids: ids, views: question}
+	return commentTargets{ids: ids, views: post}
 }
 
 // View counts live under a post, so they answer what GET /v1/posts/{id} answers: a
@@ -115,9 +111,9 @@ func TestCommentAndViewSurfaces_FollowTheParentPostVisibility(t *testing.T) {
 		require.NotContains(t, got.body, secret)
 		require.NotContains(t, got.body, "view_count")
 	}
-	comments := func(id string) int {
+	replies := func(post string) int {
 		var n int
-		require.NoError(t, pool.QueryRow(ctx, "SELECT COUNT(*) FROM comments WHERE target_id = $1::uuid", id).Scan(&n))
+		require.NoError(t, pool.QueryRow(ctx, "SELECT COUNT(*) FROM replies WHERE post_id = $1::uuid", post).Scan(&n))
 		return n
 	}
 	views := func(id string) int {
@@ -139,22 +135,22 @@ func TestCommentAndViewSurfaces_FollowTheParentPostVisibility(t *testing.T) {
 		require.Equal(t, got.headerID, got.requestID, "the envelope carries the response's request id")
 		require.NotContains(t, got.body, secret)
 	}
-	retiredComment := func(t *testing.T, route, id, bearer, body string) {
+	retiredComment := func(t *testing.T, set commentTargets, route, bearer, body string) {
 		t.Helper()
-		before := comments(id)
-		got := call(t, "POST", "/v1/"+route+"/"+id+"/comments", bearer, body)
+		before := replies(set.views)
+		got := call(t, "POST", "/v1/"+route+"/"+set.ids[route]+"/comments", bearer, body)
 		require.Equal(t, http.StatusGone, got.status, "%s: %s", route, got.body)
 		require.Equal(t, ErrCodeEndpointRetired, got.code, got.body)
 		require.Equal(t, got.headerID, got.requestID, "the envelope carries the response's request id")
 		require.NotContains(t, got.body, secret)
-		require.Equal(t, before, comments(id), "no comment was written on %s", route)
+		require.Equal(t, before, replies(set.views), "no comment was written on %s", route)
 	}
 	refused := func(t *testing.T, set commentTargets, bearer string, write bool) {
 		t.Helper()
 		for route, id := range set.ids {
 			retiredList(t, route, id, bearer)
 			if write {
-				retiredComment(t, route, id, bearer, newComment)
+				retiredComment(t, set, route, bearer, newComment)
 			}
 		}
 		notFound(t, call(t, "GET", "/v1/posts/"+set.views+"/views", bearer, ""))
@@ -178,7 +174,7 @@ func TestCommentAndViewSurfaces_FollowTheParentPostVisibility(t *testing.T) {
 		t.Run("family post, member/"+who, func(t *testing.T) {
 			for route, id := range family.ids {
 				retiredList(t, route, id, bearer)
-				retiredComment(t, route, id, bearer, newComment)
+				retiredComment(t, family, route, bearer, newComment)
 			}
 			got := call(t, "GET", "/v1/posts/"+family.views+"/views", bearer, "")
 			require.Equal(t, http.StatusOK, got.status, got.body)
@@ -192,7 +188,7 @@ func TestCommentAndViewSurfaces_FollowTheParentPostVisibility(t *testing.T) {
 	t.Run("public post, anyone", func(t *testing.T) {
 		for route, id := range public.ids {
 			retiredList(t, route, id, "")
-			retiredComment(t, route, id, foreignKey, newComment)
+			retiredComment(t, public, route, foreignKey, newComment)
 		}
 		got := call(t, "GET", "/v1/posts/"+public.views+"/views", "", "")
 		require.Equal(t, http.StatusOK, got.status, got.body)

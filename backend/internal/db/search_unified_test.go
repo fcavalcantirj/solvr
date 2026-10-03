@@ -17,26 +17,24 @@ func TestSearchUnified_PostsAndAnswers(t *testing.T) {
 	ctx := context.Background()
 
 	// Insert a post about golang concurrency
-	postID := insertTestPost(t, pool, ctx, "problem",
+	postID := insertTestPost(t, pool, ctx, "post",
 		"Golang concurrency patterns for web servers",
 		"How to use goroutines and channels effectively in Go web applications.",
 		[]string{"golang", "concurrency"}, "open")
 
 	// Insert an answer about golang concurrency on a different question
-	questionID := insertTestPost(t, pool, ctx, "question",
+	questionID := insertTestPost(t, pool, ctx, "post",
 		"Best practices for Go APIs",
 		"What are the best practices for building APIs in Go?",
 		[]string{"golang", "api"}, "open")
-	answerID := insertTestAnswer(t, pool, ctx, questionID,
-		"Use goroutines for concurrent request handling in your Golang web server. Channels are great for coordination.",
-		"human", "test-user")
-	// The reply the contribution cutover makes from the answer: answer search reads replies
-	// and returns the reply's id (task idx 76).
-	cutoverRepliesFor(t, pool, ctx, questionID)
-	var answerReplyID string
-	if err := pool.QueryRow(ctx, `SELECT id::text FROM replies WHERE legacy_type = 'answer' AND legacy_id = $1`,
-		answerID).Scan(&answerReplyID); err != nil {
-		t.Fatalf("failed to find the reply migrated from the answer: %v", err)
+	// A reply shaped like the one the contribution cutover made from a legacy answer: answer
+	// search reads replies and returns the reply's id (task idx 76).
+	var answerID, answerReplyID string
+	if err := pool.QueryRow(ctx, `INSERT INTO replies (post_id, author_type, author_id, body, legacy_type, legacy_id)
+		VALUES ($1, 'human', 'test-user', $2, 'answer', gen_random_uuid()) RETURNING legacy_id::text, id::text`,
+		questionID, "Use goroutines for concurrent request handling in your Golang web server. Channels are great for coordination.",
+	).Scan(&answerID, &answerReplyID); err != nil {
+		t.Fatalf("failed to insert the reply migrated from an answer: %v", err)
 	}
 
 	// Search with content_types=posts,answers — should find both
@@ -92,12 +90,12 @@ func TestSearchUnified_PostsOnly(t *testing.T) {
 	ctx := context.Background()
 
 	// Insert a post and an answer with the same keyword
-	insertTestPost(t, pool, ctx, "problem",
+	insertTestPost(t, pool, ctx, "post",
 		"Database optimization techniques",
 		"How to optimize PostgreSQL queries for better performance.",
 		[]string{"postgresql"}, "open")
 
-	questionID := insertTestPost(t, pool, ctx, "question",
+	questionID := insertTestPost(t, pool, ctx, "post",
 		"Query performance help",
 		"Need help with query performance.",
 		[]string{"postgresql"}, "open")
@@ -133,7 +131,7 @@ func TestSearchUnified_SourceMetadata(t *testing.T) {
 	ctx := context.Background()
 
 	// Insert a post
-	insertTestPost(t, pool, ctx, "problem",
+	insertTestPost(t, pool, ctx, "post",
 		"Microservices communication patterns",
 		"How to implement reliable communication between microservices.",
 		[]string{"microservices"}, "open")
@@ -159,30 +157,17 @@ func TestSearchUnified_SourceMetadata(t *testing.T) {
 	}
 }
 
-// Helper: insertTestAnswer inserts a test answer and returns its ID.
+// Helper: insertTestAnswer inserts the reply the contribution cutover made from a legacy
+// answer on questionID (the answers table left live storage, idx 68) and returns its id.
 func insertTestAnswer(t *testing.T, pool *Pool, ctx context.Context, questionID, content, authorType, authorID string) string {
 	var id string
 	err := pool.QueryRow(ctx, `
-		INSERT INTO answers (question_id, content, author_type, author_id)
-		VALUES ($1::uuid, $2, $3, $4)
+		INSERT INTO replies (post_id, body, author_type, author_id, legacy_type, legacy_id)
+		VALUES ($1::uuid, $2, $3, $4, 'answer', gen_random_uuid())
 		RETURNING id::text
 	`, questionID, content, authorType, authorID).Scan(&id)
 	if err != nil {
-		t.Fatalf("failed to insert test answer: %v", err)
-	}
-	return id
-}
-
-// Helper: insertTestApproach inserts a test approach and returns its ID.
-func insertTestApproach(t *testing.T, pool *Pool, ctx context.Context, problemID, angle, method, authorType, authorID string) string {
-	var id string
-	err := pool.QueryRow(ctx, `
-		INSERT INTO approaches (problem_id, angle, method, author_type, author_id, status)
-		VALUES ($1::uuid, $2, $3, $4, $5, 'starting')
-		RETURNING id::text
-	`, problemID, angle, method, authorType, authorID).Scan(&id)
-	if err != nil {
-		t.Fatalf("failed to insert test approach: %v", err)
+		t.Fatalf("failed to insert test answer reply: %v", err)
 	}
 	return id
 }

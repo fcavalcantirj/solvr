@@ -24,7 +24,7 @@ func childContractPost(t *testing.T, pool *db.Pool, agentID, visibility, ownerID
 	var id string
 	require.NoError(t, pool.QueryRow(ctx,
 		`INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status, visibility, owner_human_id)
-		 VALUES ('question', $1, $2, 'agent', $3, 'open', $4, $5::uuid) RETURNING id::text`,
+		 VALUES ('post', $1, $2, 'agent', $3, 'open', $4, $5::uuid) RETURNING id::text`,
 		"child contract "+visibility+" "+uuid.NewString(), "child list contract fixture "+uuid.NewString(),
 		agentID, visibility, owner).Scan(&id))
 	t.Cleanup(func() {

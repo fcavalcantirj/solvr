@@ -60,8 +60,10 @@ func TestLegacyWriteRetirements_CoverEveryLegacyWriteRouteAndNameAServedReplacem
 	}
 }
 
-// retirementFixture is one agent whose own legacy rows and posts are the retired calls'
-// targets, so the old handlers would have been authorized to change every one of them.
+// retirementFixture is one agent whose own posts and contributions are the retired calls'
+// targets, so the old handlers would have been authorized to change every one of them. The
+// legacy tables are archived (000138): its approach, answer, response and comment exist as the
+// replies the cutover made from them, and each is addressed by the legacy id its reply carries.
 type retirementFixture struct {
 	agentID, key                        string
 	problem, question, idea, post       string
@@ -76,27 +78,33 @@ func seedRetirementFixture(t *testing.T, pool *db.Pool, agentID string) retireme
 	t.Helper()
 	ctx := context.Background()
 	f := retirementFixture{agentID: agentID}
-	seedPost := func(postType string) string {
+	seedPost := func() string {
 		var id string
 		require.NoError(t, pool.QueryRow(ctx, `
 			INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status, publication_state, moderation_state, created_at)
-			VALUES ($1, $2, 'A retirement target post owned by the calling agent.', 'agent', $3, 'open', 'published', 'approved', `+seededEarlier+`)
-			RETURNING id::text`, postType, "Retirement target "+uuid.NewString(), agentID).Scan(&id))
+			VALUES ('post', $1, 'A retirement target post owned by the calling agent.', 'agent', $2, 'open', 'published', 'approved', `+seededEarlier+`)
+			RETURNING id::text`, "Retirement target "+uuid.NewString(), agentID).Scan(&id))
 		return id
 	}
-	f.problem, f.question, f.idea, f.post = seedPost("problem"), seedPost("question"), seedPost("idea"), seedPost("post")
+	f.problem, f.question, f.idea, f.post = seedPost(), seedPost(), seedPost(), seedPost()
 	t.Cleanup(func() {
 		pool.Exec(context.Background(), "DELETE FROM votes WHERE voter_id = $1", agentID)     //nolint:errcheck
 		pool.Exec(context.Background(), "DELETE FROM posts WHERE posted_by_id = $1", agentID) //nolint:errcheck
 	})
-	f.approach = seedLegacy(t, pool, `INSERT INTO approaches (problem_id, author_type, author_id, angle, status, created_at)
-		VALUES ($1, 'agent', $2, 'seed angle', 'working', `+seededEarlier+`) RETURNING id::text`, f.problem, agentID)
-	f.answer = seedLegacy(t, pool, `INSERT INTO answers (question_id, author_type, author_id, content, created_at)
-		VALUES ($1, 'agent', $2, 'seed answer content', `+seededEarlier+`) RETURNING id::text`, f.question, agentID)
-	f.response = seedLegacy(t, pool, `INSERT INTO responses (idea_id, author_type, author_id, content, response_type, created_at)
-		VALUES ($1, 'agent', $2, 'seed response content', 'build', `+seededEarlier+`) RETURNING id::text`, f.idea, agentID)
-	f.comment = seedLegacy(t, pool, `INSERT INTO comments (target_type, target_id, author_type, author_id, content, created_at)
-		VALUES ('answer', $1, 'agent', $2, 'seed comment on the answer', `+seededEarlier+`) RETURNING id::text`, f.answer, agentID)
+	// migrated inserts the reply the cutover made from a legacy row and returns its legacy id.
+	migrated := func(postID string, parentLegacyType, parentLegacyID any, legacyType, body, provenance string) string {
+		return seedLegacy(t, pool, `INSERT INTO replies (post_id, parent_reply_id, author_type, author_id, body,
+				legacy_type, legacy_id, provenance, created_at, updated_at)
+			VALUES ($1::uuid, (SELECT id FROM replies WHERE legacy_type = $2 AND legacy_id = $3::uuid), 'agent', $4, $5,
+				$6, gen_random_uuid(), $7::jsonb, `+seededEarlier+`, `+seededEarlier+`)
+			RETURNING legacy_id::text`, postID, parentLegacyType, parentLegacyID, agentID, body, legacyType, provenance)
+	}
+	f.approach = migrated(f.problem, nil, nil, "approach", "**Approach:** seed angle\n\n**Status:** working",
+		`{"legacy_table":"approaches","angle":"seed angle","status":"working"}`)
+	f.answer = migrated(f.question, nil, nil, "answer", "seed answer content", `{"legacy_table":"answers","is_accepted":false}`)
+	f.response = migrated(f.idea, nil, nil, "response", "seed response content", `{"legacy_table":"responses","response_type":"build"}`)
+	f.comment = migrated(f.question, "answer", f.answer, "comment", "seed comment on the answer",
+		`{"legacy_table":"comments","target_type":"answer","target_id":"`+f.answer+`"}`)
 	return f
 }
 
@@ -130,7 +138,9 @@ func (f retirementFixture) oldClientBody(method, path string) string {
 		uuid.NewString(), f.post)
 }
 
-// retirementSnapshot is every row an old legacy handler could create or change for the fixture.
+// retirementSnapshot is every row an old legacy handler could create or change for the fixture:
+// the agent's posts, replies and votes, and the state of the replies migrated from its approach
+// (with the progress notes under it), answer and comment and of the posts they sit on.
 func retirementSnapshot(t *testing.T, pool *db.Pool, f retirementFixture) string {
 	t.Helper()
 	var snap string
@@ -138,17 +148,16 @@ func retirementSnapshot(t *testing.T, pool *db.Pool, f retirementFixture) string
 		SELECT concat_ws(' | ',
 		  'posts=' || (SELECT count(*) FROM posts WHERE posted_by_id = $1),
 		  'replies=' || (SELECT count(*) FROM replies WHERE author_id = $1),
-		  'approaches=' || (SELECT count(*) FROM approaches WHERE author_id = $1),
-		  'answers=' || (SELECT count(*) FROM answers WHERE author_id = $1),
-		  'responses=' || (SELECT count(*) FROM responses WHERE author_id = $1),
-		  'comments=' || (SELECT count(*) FROM comments WHERE author_id = $1),
-		  'progress=' || (SELECT count(*) FROM progress_notes WHERE approach_id = $2::uuid),
+		  'progress=' || (SELECT count(*) FROM replies c JOIN replies a ON a.id = c.parent_reply_id
+		                  WHERE a.legacy_type = 'approach' AND a.legacy_id = $2::uuid),
 		  'votes=' || (SELECT count(*) FROM votes WHERE voter_id = $1),
-		  'approach=' || (SELECT status || '/' || (deleted_at IS NULL) FROM approaches WHERE id = $2::uuid),
-		  'answer=' || (SELECT content || '/' || is_accepted || '/' || (deleted_at IS NULL) FROM answers WHERE id = $3::uuid),
-		  'comment=' || (SELECT (deleted_at IS NULL)::text FROM comments WHERE id = $4::uuid),
-		  'question=' || (SELECT status || '/' || coalesce(accepted_answer_id::text, '-') FROM posts WHERE id = $5::uuid),
-		  'idea=' || (SELECT status || '/' || coalesce(array_to_string(evolved_into, ','), '-') FROM posts WHERE id = $6::uuid))`,
+		  'approach=' || (SELECT (provenance->>'status') || '/' || (deleted_at IS NULL)
+		                  FROM replies WHERE legacy_type = 'approach' AND legacy_id = $2::uuid),
+		  'answer=' || (SELECT body || '/' || (provenance->>'is_accepted') || '/' || upvotes || '/' || (deleted_at IS NULL)
+		                FROM replies WHERE legacy_type = 'answer' AND legacy_id = $3::uuid),
+		  'comment=' || (SELECT (deleted_at IS NULL)::text FROM replies WHERE legacy_type = 'comment' AND legacy_id = $4::uuid),
+		  'question=' || (SELECT status FROM posts WHERE id = $5::uuid),
+		  'idea=' || (SELECT status FROM posts WHERE id = $6::uuid))`,
 		f.agentID, f.approach, f.answer, f.comment, f.question, f.idea).Scan(&snap))
 	return snap
 }
@@ -217,23 +226,21 @@ func TestLegacyWriteRetirement_NewClientCreatesCanonicalPostsAndReplies(t *testi
 		fmt.Sprintf(`{"body":"Confirmed: the deadline fixed the hang %s.","parent_reply_id":%q}`, marker, answer.id))
 	require.Equal(t, http.StatusCreated, comment.status, comment.body)
 
-	var onQuestion, threaded, answersRows int
+	var onQuestion, threaded, answerRows int
 	require.NoError(t, pool.QueryRow(context.Background(), `
-		SELECT (SELECT count(*) FROM replies WHERE post_id = $1::uuid AND author_id = $2),
+		SELECT (SELECT count(*) FROM replies WHERE post_id = $1::uuid AND author_id = $2 AND legacy_id IS NULL),
 		       (SELECT count(*) FROM replies WHERE id = $3::uuid AND parent_reply_id = $4::uuid),
-		       (SELECT count(*) FROM answers WHERE author_id = $2)`,
-		f.question, agentID, comment.id, answer.id).Scan(&onQuestion, &threaded, &answersRows))
-	require.Equal(t, 2, onQuestion, "both replies are canonical replies on the question")
+		       (SELECT count(*) FROM replies WHERE author_id = $2 AND legacy_type = 'answer')`,
+		f.question, agentID, comment.id, answer.id).Scan(&onQuestion, &threaded, &answerRows))
+	require.Equal(t, 2, onQuestion, "both replies are canonical replies on the question (beside the fixture's migrated ones)")
 	require.Equal(t, 1, threaded, "the comment-shaped reply is threaded under the answer-shaped reply")
-	require.Equal(t, 1, answersRows, "only the seeded legacy answer exists: nothing new reached the legacy table")
+	require.Equal(t, 1, answerRows, "only the seeded migrated answer carries legacy_type answer: a new reply is not a legacy row")
 
 	// The retired routes' instructions: a migrated contribution is found in the post's reply
 	// list by legacy_type and legacy_id, and a new client threads under that reply.
 	var migrated string
-	require.NoError(t, pool.QueryRow(context.Background(), `
-		INSERT INTO replies (post_id, author_type, author_id, body, legacy_type, legacy_id, created_at, updated_at)
-		VALUES ($1::uuid, 'agent', $2, 'seed answer content', 'answer', $3::uuid, now() - interval '2 hours', now() - interval '2 hours')
-		RETURNING id::text`, f.question, agentID, f.answer).Scan(&migrated))
+	require.NoError(t, pool.QueryRow(context.Background(),
+		`SELECT id::text FROM replies WHERE legacy_type = 'answer' AND legacy_id = $1::uuid`, f.answer).Scan(&migrated))
 	list, err := callStatusContract(http.DefaultClient, http.MethodGet, ts.URL+"/v1/posts/"+f.question+"/replies", "", "")
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, list.status, list.body)

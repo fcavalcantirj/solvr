@@ -14,11 +14,11 @@ func TestGetTrendingPosts_ExcludesDraft(t *testing.T) {
 	ctx := context.Background()
 
 	// Insert a draft post (should NOT appear in trending)
-	draftID := insertTestPost(t, pool, ctx, "problem", "Draft trending problem about Go performance",
+	draftID := insertTestPost(t, pool, ctx, "post", "Draft trending problem about Go performance",
 		"This is a draft and should not appear in trending.", []string{"go"}, "draft")
 
 	// Insert an open post (should appear in trending)
-	openID := insertTestPost(t, pool, ctx, "problem", "Open trending problem about Go performance",
+	openID := insertTestPost(t, pool, ctx, "post", "Open trending problem about Go performance",
 		"This is open and should appear in trending.", []string{"go"}, "open")
 
 	posts, err := statsRepo.GetTrendingPosts(ctx, 10)
@@ -60,11 +60,11 @@ func TestGetTrendingPosts_ExcludesPendingReview(t *testing.T) {
 	ctx := context.Background()
 
 	// Insert a pending_review post (should NOT appear in trending)
-	pendingID := insertTestPost(t, pool, ctx, "question", "Pending review trending question about databases",
+	pendingID := insertTestPost(t, pool, ctx, "post", "Pending review trending question about databases",
 		"This is pending review and should not appear in trending.", []string{"databases"}, "pending_review")
 
 	// Insert an open post (should appear in trending)
-	openID := insertTestPost(t, pool, ctx, "question", "Open trending question about databases",
+	openID := insertTestPost(t, pool, ctx, "post", "Open trending question about databases",
 		"This is open and should appear in trending.", []string{"databases"}, "open")
 
 	posts, err := statsRepo.GetTrendingPosts(ctx, 10)
@@ -106,11 +106,11 @@ func TestGetTrendingPosts_ExcludesRejected(t *testing.T) {
 	ctx := context.Background()
 
 	// Insert a rejected post (should NOT appear in trending)
-	rejectedID := insertTestPost(t, pool, ctx, "idea", "Rejected trending idea about AI agents",
+	rejectedID := insertTestPost(t, pool, ctx, "post", "Rejected trending idea about AI agents",
 		"This idea was rejected and should not appear in trending.", []string{"ai"}, "rejected")
 
 	// Insert an open post (should appear in trending)
-	openID := insertTestPost(t, pool, ctx, "idea", "Open trending idea about AI agents",
+	openID := insertTestPost(t, pool, ctx, "post", "Open trending idea about AI agents",
 		"This idea is open and should appear in trending.", []string{"ai"}, "open")
 
 	posts, err := statsRepo.GetTrendingPosts(ctx, 10)

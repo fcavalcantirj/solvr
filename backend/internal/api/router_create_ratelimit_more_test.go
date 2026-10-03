@@ -49,7 +49,7 @@ func postWithHeaders(t *testing.T, url, bearer, body, idempotencyKey string) lim
 func TestCreateRateLimit_AgentContributionsRefusedPastHourlyLimit(t *testing.T) {
 	ts, _, pool := newStatusContractServer(t)
 	_, key := contribAgent(t, ts, pool)
-	question := seedOpenPost(t, pool, "question")
+	question := seedOpenPost(t, pool, "post")
 	limit := loadRateLimitConfig(pool).AgentAnswersPerHour / 2
 
 	// Contributions are replies: the legacy answer route is retired (task idx 52).

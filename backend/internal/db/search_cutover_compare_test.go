@@ -50,7 +50,7 @@ func cmpAxis(i int) []float32 {
 //     a post's own embedding matches exactly as before;
 //   - each result's reply counts are its live replies (a deleted answer is not counted).
 func TestCanonicalSearch_RepresentativeQueriesBeforeAndAfterCutover(t *testing.T) {
-	pool, _ := newMigratedScratchDatabase(t)
+	pool, _ := newPreArchiveScratchDatabase(t)
 	ctx := context.Background()
 	scan := func(sql string, args ...any) string {
 		t.Helper()

@@ -19,7 +19,7 @@ func cleanupWhats(cleanups []LegacySchemaCleanup) []string {
 }
 
 // The scan reports only up-migration statements that remove legacy runtime storage: a legacy
-// table dropped or renamed away, a column dropped from a legacy table, a column carrying a
+// table dropped, renamed away or moved out of public, a column dropped from a legacy table, a column carrying a
 // legacy identity dropped, a legacy function dropped, a named check narrowed so it no longer
 // admits a legacy type it admitted before. The shapes the real history uses to widen checks,
 // drop constraints on legacy tables or drop unrelated columns are not cleanup; neither are
@@ -45,6 +45,8 @@ ALTER TABLE rooms DROP COLUMN IF EXISTS owner_id;
 DROP FUNCTION IF EXISTS hybrid_search(text, vector(1024), int, float, float, int);
 DROP TABLE IF EXISTS comments_archive;
 CREATE OR REPLACE FUNCTION f() RETURNS int AS $$ SELECT 1; $$ LANGUAGE sql;
+ALTER TABLE rooms SET SCHEMA archive;
+ALTER TABLE legacy_archive.answers SET SCHEMA public;
 `)
 	writeSource(t, dir, "000003_cleanup.up.sql", `DROP TABLE IF EXISTS public.approaches, "answers" CASCADE;
 DROP FUNCTION IF EXISTS hybrid_search_answers(text, vector(1024), int, float, float, int), legacy_fn(int);
@@ -53,6 +55,7 @@ ALTER TABLE posts DROP CONSTRAINT posts_type_check;
 ALTER TABLE posts ADD CONSTRAINT posts_type_check CHECK (type = 'post');
 ALTER TABLE comments RENAME TO comments_old;
 ALTER TABLE ONLY progress_notes DROP note;
+ALTER TABLE public.approach_relationships SET SCHEMA legacy_archive;
 `)
 	writeSource(t, dir, "000003_cleanup.down.sql", "DROP TABLE responses;\n")
 
@@ -68,6 +71,7 @@ ALTER TABLE ONLY progress_notes DROP note;
 		"000003_cleanup.up.sql:5 narrows posts_type_check (no longer admits 'idea', 'problem', 'question')",
 		"000003_cleanup.up.sql:6 renames table comments",
 		"000003_cleanup.up.sql:7 drops column progress_notes.note",
+		"000003_cleanup.up.sql:8 moves table approach_relationships out of public",
 	}, cleanupWhats(cleanups))
 }
 
@@ -150,5 +154,30 @@ func TestLegacySchemaCleanupGate_TheRealMigrations(t *testing.T) {
 	assert.Contains(t, err.Error(), "999999_drop_legacy.up.sql:1 drops table approaches")
 	for _, b := range blockers {
 		assert.Contains(t, err.Error(), b)
+	}
+}
+
+// The legacy archive migration moves every legacy table out of public and narrows the target
+// checks: the gate sees it, so it holds only once every disposition is done (idx 68).
+func TestScanLegacySchemaCleanup_SeesTheLegacyArchiveMigration(t *testing.T) {
+	cleanups, err := ScanLegacySchemaCleanup(filepath.Join(backendRoot(t), "migrations"), nil)
+	require.NoError(t, err)
+	var archive []string
+	for _, c := range cleanups {
+		if strings.HasSuffix(c.Migration, "_legacy_archive.up.sql") {
+			archive = append(archive, c.What)
+		}
+	}
+	for _, table := range LegacyTables {
+		assert.Contains(t, archive, "moves table "+table+" out of public")
+	}
+	for _, want := range []string{
+		"drops column posts.accepted_answer_id",
+		"narrows posts_type_check (no longer admits 'idea', 'problem', 'question')",
+		"narrows votes_target_type_check (no longer admits 'answer', 'approach', 'response')",
+		"narrows reports_target_type_check (no longer admits 'answer', 'approach', 'comment', 'response')",
+		"narrows flags_target_type_check (no longer admits 'answer', 'approach', 'comment', 'response')",
+	} {
+		assert.Contains(t, archive, want)
 	}
 }

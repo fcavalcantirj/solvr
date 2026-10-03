@@ -57,7 +57,7 @@ func TestHomepageOverview_AllTimeTotalsDoNotMoveWithTheActivityWindow(t *testing
 	} {
 		_, err := pool.Exec(ctx,
 			`INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status, visibility)
-			 VALUES ('problem', $1, 'seeded by the all-time overview test', 'agent', 'agent_hpotest', $2, $3)`,
+			 VALUES ('post', $1, 'seeded by the all-time overview test', 'agent', 'agent_hpotest', $2, $3)`,
 			unpublished.title, unpublished.status, unpublished.visibility)
 		require.NoError(t, err)
 	}

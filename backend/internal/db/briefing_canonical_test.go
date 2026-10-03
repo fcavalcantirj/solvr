@@ -296,11 +296,10 @@ func TestCanonicalBriefing_ReputationChanges(t *testing.T) {
 	cbInsertVote(t, pool, ctx, "post", myPost, voters[0], "up", true, 30*time.Minute)
 	cbInsertVote(t, pool, ctx, "reply", myReply, voters[1], "down", true, 20*time.Minute)
 	cbInsertVote(t, pool, ctx, "reply", myReply, voters[2], "up", true, 10*time.Minute)
-	cbInsertVote(t, pool, ctx, "reply", myReply, voters[0], "up", false, 5*time.Minute)   // unconfirmed
-	cbInsertVote(t, pool, ctx, "post", myPost, voters[1], "up", true, 3*time.Hour)        // before since
-	cbInsertVote(t, pool, ctx, "reply", theirReply, voters[0], "up", true, time.Minute)   // not mine
-	cbInsertVote(t, pool, ctx, "post", theirPost, voters[0], "up", true, time.Minute)     // not mine
-	cbInsertVote(t, pool, ctx, "approach", myReply, voters[2], "down", true, time.Minute) // legacy target type
+	cbInsertVote(t, pool, ctx, "reply", myReply, voters[0], "up", false, 5*time.Minute) // unconfirmed
+	cbInsertVote(t, pool, ctx, "post", myPost, voters[1], "up", true, 3*time.Hour)      // before since
+	cbInsertVote(t, pool, ctx, "reply", theirReply, voters[0], "up", true, time.Minute) // not mine
+	cbInsertVote(t, pool, ctx, "post", theirPost, voters[0], "up", true, time.Minute)   // not mine
 
 	got, err := NewCanonicalBriefingRepository(pool).GetReputationChangesSince(ctx, me, since)
 	require.NoError(t, err)

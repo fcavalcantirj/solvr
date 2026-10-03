@@ -87,7 +87,7 @@ func TestReplyAuthors_ANativeReplyNamesExactlyOneExistingAccount(t *testing.T) {
 }
 
 func TestReplyAuthors_AMigratedReplyWithoutAnAccountKeepsItsLabel(t *testing.T) {
-	pool, _ := newMigratedScratchDatabase(t)
+	pool, _ := newPreArchiveScratchDatabase(t)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 

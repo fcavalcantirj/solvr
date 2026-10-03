@@ -19,12 +19,12 @@ func TestListPosts_ExcludesPendingReview(t *testing.T) {
 	ctx := context.Background()
 
 	// Insert a post with pending_review status
-	insertTestPost(t, pool, ctx, "question", "Pending review question about Go testing",
+	insertTestPost(t, pool, ctx, "post", "Pending review question about Go testing",
 		"This question is pending moderation review and should not appear in listings.",
 		[]string{"go", "testing"}, "pending_review")
 
 	// Also insert a visible post to confirm listing works
-	insertTestPost(t, pool, ctx, "question", "Visible question about Go testing",
+	insertTestPost(t, pool, ctx, "post", "Visible question about Go testing",
 		"This question is open and should appear in listings.",
 		[]string{"go", "testing"}, "open")
 
@@ -58,12 +58,12 @@ func TestListPosts_ExcludesRejected(t *testing.T) {
 	ctx := context.Background()
 
 	// Insert a rejected post
-	insertTestPost(t, pool, ctx, "idea", "Rejected idea about AI agents",
+	insertTestPost(t, pool, ctx, "post", "Rejected idea about AI agents",
 		"This idea was rejected by moderation and should not appear in listings.",
 		[]string{"ai", "agents"}, "rejected")
 
 	// Insert a visible post
-	insertTestPost(t, pool, ctx, "idea", "Visible idea about AI agents",
+	insertTestPost(t, pool, ctx, "post", "Visible idea about AI agents",
 		"This idea is open and should appear in listings.",
 		[]string{"ai", "agents"}, "open")
 
@@ -96,12 +96,12 @@ func TestListPosts_ExcludesDraft(t *testing.T) {
 	ctx := context.Background()
 
 	// Insert a draft post
-	insertTestPost(t, pool, ctx, "problem", "Draft problem about performance",
+	insertTestPost(t, pool, ctx, "post", "Draft problem about performance",
 		"This problem is a draft and should not appear in public listings.",
 		[]string{"performance"}, "draft")
 
 	// Insert a visible post
-	insertTestPost(t, pool, ctx, "problem", "Visible problem about performance",
+	insertTestPost(t, pool, ctx, "post", "Visible problem about performance",
 		"This problem is open and should appear in listings.",
 		[]string{"performance"}, "open")
 
@@ -137,7 +137,7 @@ func TestListPosts_AuthorSeesOwnHidden(t *testing.T) {
 	authorID := authorHuman(ctx, t, pool, "test-hidden-author")
 
 	// Insert a pending_review post by specific author
-	insertTestPostWithAuthor(t, pool, ctx, "question", "My pending review question",
+	insertTestPostWithAuthor(t, pool, ctx, "post", "My pending review question",
 		"This question is pending review but the author should see it.",
 		[]string{"go"}, "pending_review", authorType, authorID)
 
@@ -179,12 +179,12 @@ func TestSearchPosts_ExcludesPendingReview(t *testing.T) {
 	ctx := context.Background()
 
 	// Insert a pending_review post with searchable content
-	insertTestPost(t, pool, ctx, "problem", "Pending review database optimization techniques",
+	insertTestPost(t, pool, ctx, "post", "Pending review database optimization techniques",
 		"Advanced database optimization techniques for PostgreSQL pending moderation review.",
 		[]string{"postgresql", "optimization"}, "pending_review")
 
 	// Insert a visible post with similar content
-	insertTestPost(t, pool, ctx, "problem", "Open database optimization techniques for PostgreSQL",
+	insertTestPost(t, pool, ctx, "post", "Open database optimization techniques for PostgreSQL",
 		"Standard database optimization techniques that are publicly visible.",
 		[]string{"postgresql", "optimization"}, "open")
 

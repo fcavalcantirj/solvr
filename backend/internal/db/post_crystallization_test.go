@@ -77,7 +77,7 @@ func TestPostCrystallizationRepository_ListCandidates(t *testing.T) {
 
 	oldest := post("oldest", eligible)
 	reply(oldest, "agent", 10*day, false)
-	idea := post("idea", with(func(s *crystalPostSeed) { s.postType, s.status, s.age = "idea", "active", 8*day }))
+	idea := post("idea", with(func(s *crystalPostSeed) { s.age = 8 * day })) // any post qualifies; the legacy idea type is retired (idx 68)
 	reply(idea, "agent", 8*day, false)
 	systemActivity := post("recent-system-reply", with(func(s *crystalPostSeed) { s.age = 9 * day }))
 	reply(systemActivity, "agent", 9*day, false)
@@ -154,7 +154,7 @@ func TestPostCrystallizationRepository_FindSnapshotPost(t *testing.T) {
 	const day = 24 * time.Hour
 	title := "crystal snapshot " + uuid.NewString()
 	id := insertCrystalPost(t, pool, ctx, author, title, crystalPostSeed{
-		postType: "problem", status: "solved", publication: "published", moderation: "approved",
+		postType: "post", status: "open", publication: "published", moderation: "approved",
 		visibility: "public", age: 10 * day, cid: "bafyseen",
 	})
 

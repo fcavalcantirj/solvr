@@ -37,19 +37,19 @@ func TestPostVisibility_FamilyPrivate_LeakSweep(t *testing.T) {
 	privTitle := "PRIVATE " + kw + " " + marker
 	pubTitle := "PUBLIC open knowledge " + marker
 
-	// Insert directly (status open/solved) so List/search surface them without moderation.
+	// Insert directly (status open) so List/search surface them without moderation.
 	var privQID, privPID, pubQID string
 	require.NoError(t, pool.QueryRow(ctx,
 		`INSERT INTO posts (type,title,description,posted_by_type,posted_by_id,status,visibility,owner_human_id)
-		 VALUES ('question',$1,$2,'agent',$3,'open','family',$4::uuid) RETURNING id::text`,
+		 VALUES ('post',$1,$2,'agent',$3,'open','family',$4::uuid) RETURNING id::text`,
 		privTitle, "internal onvida "+kw+" rule "+marker, agentAID, userA).Scan(&privQID))
 	require.NoError(t, pool.QueryRow(ctx,
 		`INSERT INTO posts (type,title,description,posted_by_type,posted_by_id,status,visibility,owner_human_id)
-		 VALUES ('problem',$1,$2,'agent',$3,'solved','family',$4::uuid) RETURNING id::text`,
+		 VALUES ('post',$1,$2,'agent',$3,'open','family',$4::uuid) RETURNING id::text`,
 		"PRIVATE PROBLEM "+marker, "secret problem "+marker, agentAID, userA).Scan(&privPID))
 	require.NoError(t, pool.QueryRow(ctx,
 		`INSERT INTO posts (type,title,description,posted_by_type,posted_by_id,status,visibility)
-		 VALUES ('question',$1,$2,'agent',$3,'open','public') RETURNING id::text`,
+		 VALUES ('post',$1,$2,'agent',$3,'open','public') RETURNING id::text`,
 		pubTitle, "public desc "+marker, agentAID).Scan(&pubQID))
 	t.Cleanup(func() { pool.Exec(context.Background(), "DELETE FROM posts WHERE title LIKE '%"+marker+"%'") }) //nolint:errcheck
 
@@ -104,21 +104,17 @@ func TestPostVisibility_FamilyPrivate_LeakSweep(t *testing.T) {
 		SELECT 1 FROM posts WHERE id=$1::uuid AND visibility='public')`, privPID).Scan(&candidate))
 	require.False(t, candidate, "crystallization: private solved problem must not be a candidate")
 
-	// 7. Child listing — answers of a private question never leak (inherit visibility)
-	var privAnsID string
-	require.NoError(t, pool.QueryRow(ctx,
-		`INSERT INTO answers (question_id, author_type, author_id, content) VALUES ($1::uuid,'agent',$2,$3) RETURNING id::text`,
-		privQID, agentAID, "secret answer "+kw).Scan(&privAnsID))
+	// 7. Child listing — answers of a private question never leak (inherit visibility). The
+	// answer as the cutover migrates it: a reply of the question (the answers table is archived,
+	// 000138), listed by GET /v1/posts/{id}/replies only to the family.
+	_, err := pool.Exec(ctx, `INSERT INTO replies (post_id, author_type, author_id, body, legacy_type, legacy_id, provenance)
+		VALUES ($1::uuid, 'agent', $2, $3, 'answer', gen_random_uuid(), '{"legacy_table":"answers","is_accepted":false}')`,
+		privQID, agentAID, "secret answer "+kw)
+	require.NoError(t, err)
 	// The legacy answer list is retired (idx 73): 410 for every caller, the answer never in it.
 	require.False(t, bodyContains("/v1/questions/"+privQID+"/answers", "", "secret answer "+kw), "answers: private question answers absent for anon")
 	require.False(t, bodyContains("/v1/questions/"+privQID+"/answers", agentCKey, "secret answer "+kw), "answers: private question answers absent for foreign")
 	require.Equal(t, http.StatusGone, getStatus(t, ts.URL+"/v1/questions/"+privQID+"/answers", agentBKey), "answers: retired for family too")
-	// The answer as the cutover migrates it: a reply of the question, listed by GET
-	// /v1/posts/{id}/replies only to the family.
-	_, err := pool.Exec(ctx, `INSERT INTO replies (post_id, author_type, author_id, body, legacy_type, legacy_id, provenance)
-		VALUES ($1::uuid, 'agent', $2, $3, 'answer', $4, '{"legacy_table":"answers","is_accepted":false}')`,
-		privQID, agentAID, "secret answer "+kw, privAnsID)
-	require.NoError(t, err)
 	require.False(t, bodyContains("/v1/posts/"+privQID+"/replies", "", "secret answer "+kw), "replies: private question answers absent for anon")
 	require.False(t, bodyContains("/v1/posts/"+privQID+"/replies", agentCKey, "secret answer "+kw), "replies: private question answers absent for foreign")
 	require.True(t, bodyContains("/v1/posts/"+privQID+"/replies", agentBKey, "secret answer "+kw), "replies: sibling sees the private question's answers")

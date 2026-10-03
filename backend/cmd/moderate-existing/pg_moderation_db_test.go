@@ -34,7 +34,7 @@ func TestPGModerationDB_CreateSystemCommentRecordsAReply(t *testing.T) {
 	var postID string
 	if err := pool.QueryRow(ctx, `
 		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ('question', 'Moderate existing verdict probe', 'A post the moderate-existing tool rejects',
+		VALUES ('post', 'Moderate existing verdict probe', 'A post the moderate-existing tool rejects',
 		        'agent', $1, 'open')
 		RETURNING id`, agentID).Scan(&postID); err != nil {
 		t.Fatalf("seed post: %v", err)
@@ -61,11 +61,13 @@ func TestPGModerationDB_CreateSystemCommentRecordsAReply(t *testing.T) {
 		t.Errorf("reply = %s/%s %q, want system/%s %q", authorType, authorID, body, services.ModerationAuthorID, verdict)
 	}
 
-	var legacyComments int
-	if err := pool.QueryRow(ctx, "SELECT COUNT(*) FROM comments WHERE target_id = $1", postID).Scan(&legacyComments); err != nil {
-		t.Fatalf("count comments: %v", err)
+	// No legacy comment can be written: the legacy archive migration (idx 68) moved the
+	// comments table out of public.
+	var commentsLive bool
+	if err := pool.QueryRow(ctx, "SELECT to_regclass('public.comments') IS NOT NULL").Scan(&commentsLive); err != nil {
+		t.Fatalf("look up the comments table: %v", err)
 	}
-	if legacyComments != 0 {
-		t.Errorf("the verdict also wrote %d legacy comments", legacyComments)
+	if commentsLive {
+		t.Error("the legacy comments table is still live storage")
 	}
 }

@@ -13,7 +13,7 @@ import (
 // sequence was written, and the cutover never ran them.
 
 func TestKnowledgeCutover_ReconcilesEveryStoredCounter(t *testing.T) {
-	pool, _ := newMigratedScratchDatabase(t)
+	pool, _ := newPreArchiveScratchDatabase(t)
 	ctx := context.Background()
 	s := seedCutoverLegacy(t, pool)
 	exec := func(sql string, args ...any) {
@@ -67,7 +67,7 @@ func TestKnowledgeCutover_ReconcilesEveryStoredCounter(t *testing.T) {
 // embedding service (SearchDocumentJob, cmd/backfill-embeddings). The run reports how many
 // live rows still lack one and never fails on them (251 on the post-purge production copy).
 func TestKnowledgeCutover_ReportsSearchDocumentsWithoutAVector(t *testing.T) {
-	pool, _ := newMigratedScratchDatabase(t)
+	pool, _ := newPreArchiveScratchDatabase(t)
 	ctx := context.Background()
 	seedCutoverLegacy(t, pool)
 

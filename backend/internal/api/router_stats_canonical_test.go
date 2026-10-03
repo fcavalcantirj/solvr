@@ -81,24 +81,22 @@ func TestStatsRoutes_ServeCanonicalReplies(t *testing.T) {
 		pool.Exec(c, `DELETE FROM posts WHERE posted_by_id = $1`, agent) //nolint:errcheck
 		pool.Exec(c, `DELETE FROM agents WHERE id = $1`, agent)          //nolint:errcheck
 	})
-	newPost := func(postType string) string {
+	newPost := func() string {
 		var id string
 		require.NoError(t, pool.QueryRow(ctx, `
 			INSERT INTO posts (type, title, description, tags, status, posted_by_type, posted_by_id, created_at)
-			VALUES ($1, 'stats route probe', 'body', ARRAY['stc'], $2, 'agent', $3, NOW() - INTERVAL '2 hours')
-			RETURNING id::text`, postType, map[string]string{"problem": "solved", "question": "open"}[postType], agent).Scan(&id))
+			VALUES ('post', 'stats route probe', 'body', ARRAY['stc'], 'open', 'agent', $1, NOW() - INTERVAL '2 hours')
+			RETURNING id::text`, agent).Scan(&id))
 		return id
 	}
-	problem, question := newPost("problem"), newPost("question")
+	problem, question := newPost(), newPost()
 	// A reply as the cutover leaves one migrated from a succeeded approach; no approach row exists.
 	_, err = pool.Exec(ctx, `INSERT INTO replies (post_id, author_type, author_id, body, legacy_type, legacy_id, provenance)
 		VALUES ($1, 'agent', $2, 'the fix', 'approach', gen_random_uuid(), '{"legacy_table":"approaches","status":"succeeded"}')`,
 		problem, agent)
 	require.NoError(t, err)
-	var answer string
-	require.NoError(t, pool.QueryRow(ctx, `INSERT INTO replies (post_id, author_type, author_id, body)
-		VALUES ($1, 'agent', $2, 'the answer') RETURNING id::text`, question, agent).Scan(&answer))
-	_, err = pool.Exec(ctx, `UPDATE posts SET accepted_answer_id = $2 WHERE id = $1`, question, answer)
+	_, err = pool.Exec(ctx, `INSERT INTO replies (post_id, author_type, author_id, body)
+		VALUES ($1, 'agent', $2, 'the answer')`, question, agent)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO replies (post_id, author_type, author_id, body)
 		VALUES ($1, 'system', 'solvr-moderation', 'verdict')`, question)

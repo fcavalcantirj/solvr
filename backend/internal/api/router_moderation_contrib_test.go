@@ -35,12 +35,18 @@ func contributionCases(t *testing.T, pool *db.Pool) []contributionCase {
 }
 
 // retiredContributionPaths are the retired legacy contribution creates, on seeded open targets.
+// The legacy tables are archived (000138): the answer, approach and response targets are the
+// replies the cutover made from them, addressed by their legacy ids.
 func retiredContributionPaths(t *testing.T, pool *db.Pool) map[string]string {
 	t.Helper()
-	post, question, problem, idea := seedOpenPost(t, pool, "post"), seedOpenPost(t, pool, "question"), seedOpenPost(t, pool, "problem"), seedOpenPost(t, pool, "idea")
-	answer := seedLegacy(t, pool, `INSERT INTO answers (question_id, author_type, author_id, content) VALUES ($1, 'agent', 'agent_gate_seed', 'seed answer') RETURNING id::text`, question)
-	approach := seedLegacy(t, pool, `INSERT INTO approaches (problem_id, author_type, author_id, angle) VALUES ($1, 'agent', 'agent_gate_seed', 'seed angle') RETURNING id::text`, problem)
-	response := seedLegacy(t, pool, `INSERT INTO responses (idea_id, author_type, author_id, content, response_type) VALUES ($1, 'agent', 'agent_gate_seed', 'seed response', 'build') RETURNING id::text`, idea)
+	post, question, problem, idea := seedOpenPost(t, pool, "post"), seedOpenPost(t, pool, "post"), seedOpenPost(t, pool, "post"), seedOpenPost(t, pool, "post")
+	migrated := func(postID, legacyType, body string) string {
+		return seedLegacy(t, pool, `INSERT INTO replies (post_id, author_type, author_id, body, legacy_type, legacy_id)
+			VALUES ($1, 'agent', 'agent_gate_seed', $2, $3, gen_random_uuid()) RETURNING legacy_id::text`, postID, body, legacyType)
+	}
+	answer := migrated(question, "answer", "seed answer")
+	approach := migrated(problem, "approach", "seed angle")
+	response := migrated(idea, "response", "seed response")
 	return map[string]string{
 		"/v1/problems/" + problem + "/approaches":  `{"angle":"approach angle","method":"approach method"}`,
 		"/v1/questions/" + question + "/answers":   `{"content":"answer content"}`,

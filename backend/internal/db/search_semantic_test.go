@@ -61,25 +61,25 @@ func TestSearchHybrid_SemanticSimilarity(t *testing.T) {
 	ctx := context.Background()
 
 	// Post 1: Exact keyword match for "golang"
-	post1ID := insertTestPostWithEmbedding(t, pool, ctx, apiKey, "problem",
+	post1ID := insertTestPostWithEmbedding(t, pool, ctx, apiKey, "post",
 		"Concurrency Issues in Golang",
 		"When using goroutines in Golang, we encounter race conditions that cause data corruption. Multiple goroutines access shared memory without proper synchronization primitives like mutexes or channels.",
 		[]string{"golang", "concurrency"}, "open")
 
 	// Post 2: Semantic match - uses "Go" instead of "golang", discusses thread safety
-	post2ID := insertTestPostWithEmbedding(t, pool, ctx, apiKey, "problem",
+	post2ID := insertTestPostWithEmbedding(t, pool, ctx, apiKey, "post",
 		"Thread Safety Problems in Go",
 		"Our Go application has thread safety issues where concurrent goroutine access to shared state causes intermittent failures. We need proper synchronization to prevent data races.",
 		[]string{"go", "threading"}, "open")
 
 	// Post 3: Related concept - mutex and race conditions
-	post3ID := insertTestPostWithEmbedding(t, pool, ctx, apiKey, "problem",
+	post3ID := insertTestPostWithEmbedding(t, pool, ctx, apiKey, "post",
 		"Mutex and Race Condition Handling",
 		"Dealing with race conditions requires careful mutex usage. When multiple threads compete for resources, deadlocks and data races emerge. Proper lock ordering and atomic operations are essential.",
 		[]string{"concurrency", "mutex"}, "open")
 
 	// Post 4: Unrelated - Python async (should NOT appear or rank low)
-	insertTestPostWithEmbedding(t, pool, ctx, apiKey, "problem",
+	insertTestPostWithEmbedding(t, pool, ctx, apiKey, "post",
 		"Python Async Programming",
 		"Using asyncio in Python for asynchronous I/O operations. The event loop handles coroutines and futures for non-blocking network calls and file operations.",
 		[]string{"python", "async"}, "open")
@@ -173,7 +173,7 @@ func TestSearchHybrid_FallbackToFullText(t *testing.T) {
 	ctx := context.Background()
 
 	// Insert a post with the keyword "golang" (no embedding needed for full-text)
-	postID := insertTestPost(t, pool, ctx, "problem",
+	postID := insertTestPost(t, pool, ctx, "post",
 		"Advanced Golang concurrency patterns",
 		"Using goroutines channels and mutexes for concurrent programming in golang applications.",
 		[]string{"golang"}, "open")
@@ -220,7 +220,7 @@ func TestSearchHybrid_EmptyEmbeddings(t *testing.T) {
 	ctx := context.Background()
 
 	// Insert posts WITHOUT embeddings (standard insertTestPost doesn't set embedding)
-	postID := insertTestPost(t, pool, ctx, "problem",
+	postID := insertTestPost(t, pool, ctx, "post",
 		"Testing null embeddings in hybrid search",
 		"This post has no embedding vector but should still be found by full-text search in hybrid mode.",
 		[]string{"testing"}, "open")
@@ -270,14 +270,14 @@ func TestSearchHybrid_RRFWeighting(t *testing.T) {
 
 	// Post A: Strong keyword match for "database optimization" but weaker semantic relation
 	// to the query "improve database query performance"
-	postAID := insertTestPostWithEmbedding(t, pool, ctx, apiKey, "problem",
+	postAID := insertTestPostWithEmbedding(t, pool, ctx, apiKey, "post",
 		"Database Optimization Techniques for Query Performance",
 		"Database optimization and query performance tuning. Use indexes, query plans, and database optimization strategies to improve query execution speed.",
 		[]string{"database", "optimization"}, "open")
 
 	// Post B: Weaker keyword match but strong semantic relation
 	// Uses different vocabulary but means the same thing
-	postBID := insertTestPostWithEmbedding(t, pool, ctx, apiKey, "problem",
+	postBID := insertTestPostWithEmbedding(t, pool, ctx, apiKey, "post",
 		"Speeding Up Slow SQL Queries",
 		"When your SQL statements take too long to execute, analyze the execution plan, add proper indexing, denormalize where appropriate, and consider caching frequently accessed data.",
 		[]string{"sql", "performance"}, "open")

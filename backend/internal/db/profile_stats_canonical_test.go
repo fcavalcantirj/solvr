@@ -36,7 +36,7 @@ func TestLegacyProfileStats_ServedCanonically(t *testing.T) {
 // posts and replies (approach upvotes included). They survive dropping the legacy tables
 // unchanged, and native replies and votes move them. The per-type counters were retired.
 func TestCanonicalProfileStats_KeepsLegacyCountsAcrossTheCutover(t *testing.T) {
-	pool, dropLegacy := newMigratedScratchDatabase(t)
+	pool, archiveLegacy := newPreArchiveScratchDatabase(t)
 	ctx := context.Background()
 	exec := func(sql string, args ...any) {
 		t.Helper()
@@ -156,7 +156,7 @@ func TestCanonicalProfileStats_KeepsLegacyCountsAcrossTheCutover(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, &models.AgentStats{}, missing, "an unknown agent has zero stats, as before")
 
-	dropLegacy()
+	archiveLegacy()
 	assert.Equal(t, canonicalA, agentStats(agents, a), "the canonical agent stats need no legacy table")
 	assert.Equal(t, canonicalB, agentStats(agents, b))
 	assert.Equal(t, canonicalH, userStats(users), "the canonical user stats need no legacy table")

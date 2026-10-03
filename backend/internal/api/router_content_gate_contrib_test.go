@@ -16,7 +16,7 @@ import (
 // live — as a reply, answer, approach, response or comment, on any post — is a 409.
 
 // seedOpenPost inserts a published, approved post of postType by a throwaway author, the way
-// moderation leaves one, so contributions can target it.
+// moderation leaves one, so contributions can target it. Only type 'post' exists (000138).
 func seedOpenPost(t *testing.T, pool *db.Pool, postType string) string {
 	t.Helper()
 	// The post names an existing author (000117).
@@ -39,14 +39,11 @@ func seedLegacy(t *testing.T, pool *db.Pool, sql string, args ...any) string {
 	return id
 }
 
+// deleteContributionsBy removes the author's replies when the test ends: the legacy
+// contribution tables are archived (000138), so replies are all an author contributes.
 func deleteContributionsBy(t *testing.T, pool *db.Pool, authorID string) {
 	t.Cleanup(func() {
-		ctx := context.Background()
-		for _, table := range []string{"replies", "answers", "responses", "comments"} {
-			pool.Exec(ctx, "DELETE FROM "+table+" WHERE author_id = $1", authorID) //nolint:errcheck
-		}
-		pool.Exec(ctx, "DELETE FROM progress_notes WHERE approach_id IN (SELECT id FROM approaches WHERE author_id = $1)", authorID) //nolint:errcheck
-		pool.Exec(ctx, "DELETE FROM approaches WHERE author_id = $1", authorID)                                                      //nolint:errcheck
+		pool.Exec(context.Background(), "DELETE FROM replies WHERE author_id = $1", authorID) //nolint:errcheck
 	})
 }
 
@@ -74,7 +71,7 @@ func seedMigratedReply(t *testing.T, pool *db.Pool, postID, legacyType, authorID
 func TestContentGate_SameAuthorBodyOnADifferentPost(t *testing.T) {
 	ts, _, pool := newStatusContractServer(t)
 	agentID, key := contribAgent(t, ts, pool)
-	qa, post := seedOpenPost(t, pool, "question"), seedOpenPost(t, pool, "post")
+	qa, post := seedOpenPost(t, pool, "post"), seedOpenPost(t, pool, "post")
 	text := "Great question! Check out my service at example.dev for the full fix " + uuid.NewString()[:8]
 	answer := seedMigratedReply(t, pool, qa, "answer", agentID, text)
 
@@ -102,13 +99,13 @@ func TestContentGate_ReplyApproachResponseProgressRoutes(t *testing.T) {
 
 	// A reply migrated from an approach, repeated as a reply.
 	method := "Wrap the client in a retry budget " + marker + "."
-	approach := seedMigratedReply(t, pool, seedOpenPost(t, pool, "problem"), "approach", agentID, method)
+	approach := seedMigratedReply(t, pool, seedOpenPost(t, pool, "post"), "approach", agentID, method)
 	requireRefused(t, gateCall(t, ts, key, "/v1/posts/"+p2+"/replies", fmt.Sprintf(`{"body":%q}`, method)),
 		http.StatusConflict, "DUPLICATE_CONTENT", "", approach)
 
 	// A reply migrated from a response, repeated as a reply.
 	content := "This would pair well with a shared retry budget " + marker + "."
-	response := seedMigratedReply(t, pool, seedOpenPost(t, pool, "idea"), "response", agentID, content)
+	response := seedMigratedReply(t, pool, seedOpenPost(t, pool, "post"), "response", agentID, content)
 	requireRefused(t, gateCall(t, ts, key, "/v1/posts/"+p2+"/replies", fmt.Sprintf(`{"body":%q}`, content)),
 		http.StatusConflict, "DUPLICATE_CONTENT", "", response)
 }
@@ -119,7 +116,7 @@ func TestContentGate_ReplyApproachResponseProgressRoutes(t *testing.T) {
 func TestContentGate_CommentRoutes(t *testing.T) {
 	ts, _, pool := newStatusContractServer(t)
 	agentID, key := contribAgent(t, ts, pool)
-	q, post := seedOpenPost(t, pool, "question"), seedOpenPost(t, pool, "post")
+	q, post := seedOpenPost(t, pool, "post"), seedOpenPost(t, pool, "post")
 	for _, target := range []string{q, post} {
 		content := fmt.Sprintf("+1, same issue here since the upgrade (%s) %s", target, uuid.NewString()[:8])
 		comment := seedMigratedReply(t, pool, target, "comment", agentID, content)

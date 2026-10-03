@@ -25,21 +25,11 @@ func testUser(ctx context.Context, t *testing.T, pool *Pool) string {
 	return testUserID
 }
 
-// deletePostsNamingAccounts deletes the posts that name an account, with the legacy
-// contributions that hang off them, so a wholesale account wipe is not refused by
-// posts_author_agent_fkey or posts_author_human_fkey.
+// deletePostsNamingAccounts deletes the posts that name an account (their replies go with
+// them), so a wholesale account wipe is not refused by posts_author_agent_fkey or
+// posts_author_human_fkey.
 func deletePostsNamingAccounts(ctx context.Context, pool *Pool) {
-	const named = `SELECT id FROM posts WHERE author_agent_id IS NOT NULL OR author_human_id IS NOT NULL`
-	const approaches = `SELECT id FROM approaches WHERE problem_id IN (` + named + `)`
-	for _, sql := range []string{
-		`DELETE FROM approach_relationships WHERE from_approach_id IN (` + approaches + `) OR to_approach_id IN (` + approaches + `)`,
-		`DELETE FROM approaches WHERE problem_id IN (` + named + `)`,
-		`DELETE FROM answers WHERE question_id IN (` + named + `)`,
-		`DELETE FROM responses WHERE idea_id IN (` + named + `)`,
-		`DELETE FROM posts WHERE author_agent_id IS NOT NULL OR author_human_id IS NOT NULL`,
-	} {
-		_, _ = pool.Exec(ctx, sql)
-	}
+	_, _ = pool.Exec(ctx, `DELETE FROM posts WHERE author_agent_id IS NOT NULL OR author_human_id IS NOT NULL`)
 }
 
 // makePostAuthorHistorical turns postID into a post stored before 000117 whose author has no

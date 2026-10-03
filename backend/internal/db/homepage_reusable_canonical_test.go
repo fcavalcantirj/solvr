@@ -36,7 +36,7 @@ func TestLegacyReusablePosts_ServedCanonically(t *testing.T) {
 // survives dropping the legacy tables unchanged. Native replies move it: a human or agent reply
 // and a child reply count, a deleted reply and a system verdict do not.
 func TestCanonicalReusablePosts_KeepTheLegacyListAcrossTheCutover(t *testing.T) {
-	pool, dropLegacy := newMigratedScratchDatabase(t)
+	pool, archiveLegacy := newPreArchiveScratchDatabase(t)
 	ctx := context.Background()
 	exec := func(sql string, args ...any) {
 		t.Helper()
@@ -146,7 +146,10 @@ func TestCanonicalReusablePosts_KeepTheLegacyListAcrossTheCutover(t *testing.T) 
 	got := list(home, 50)
 	assert.Equal(t, want, got, "the legacy list as replies, plus the comments")
 
-	dropLegacy()
+	archiveLegacy()
+	for i := range got {
+		got[i].Type, got[i].Status = "post", archivedPostStatus(got[i].Status) // what the archive relabels
+	}
 	assert.Equal(t, got, list(home, 50), "the canonical reusable posts need no legacy table")
 	assert.Equal(t, got[:2], list(home, 2), "the limit keeps the newest")
 	assert.Len(t, list(home, 0), len(got), "no limit reads the default six")

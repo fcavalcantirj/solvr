@@ -44,8 +44,8 @@ func frozenEvents(t *testing.T, pool *Pool, ctx context.Context, ids ...string) 
 // with 0 points so their retargeted rows are never scored; votes on posts stay live and are
 // not frozen. A second run records nothing new.
 func TestFreezeLegacyReputation_RecordsEachEarnedEventOnce(t *testing.T) {
-	pool := setupTestDB(t)
-	t.Cleanup(pool.Close) // registered first, so it runs after the fixture cleanups
+	pool, _ := newPreArchiveScratchDatabase(t) // the cutover tool runs below the legacy archive
+	t.Cleanup(pool.Close)                      // registered first, so it runs after the fixture cleanups
 	ctx := context.Background()
 
 	sfx := time.Now().Format("150405.000000")

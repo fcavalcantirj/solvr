@@ -105,7 +105,7 @@ func TestTagsRepository_AddTagsToPost(t *testing.T) {
 	var postID string
 	err := pool.QueryRow(ctx, `
 		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ('idea', 'Test Post', 'Description', 'agent', 'test_agent', 'open')
+		VALUES ('post', 'Test Post', 'Description', 'agent', 'test_agent', 'open')
 		RETURNING id::text
 	`).Scan(&postID)
 	if err != nil {
@@ -170,7 +170,7 @@ func TestTagsRepository_GetTagsForPost(t *testing.T) {
 	var postID string
 	err := pool.QueryRow(ctx, `
 		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ('idea', 'Test Post', 'Description', 'agent', 'test_agent', 'open')
+		VALUES ('post', 'Test Post', 'Description', 'agent', 'test_agent', 'open')
 		RETURNING id::text
 	`).Scan(&postID)
 	if err != nil {

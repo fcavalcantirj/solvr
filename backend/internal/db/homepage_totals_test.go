@@ -122,7 +122,7 @@ func (f *allTimeFixture) post(name, status, visibility string, deleted bool) uui
 	var id uuid.UUID
 	err := f.pool.QueryRow(f.ctx, `
 		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status, visibility, deleted_at)
-		VALUES ('problem', $1, 'homepage totals fixture', 'agent', $2, $3, $4, $5)
+		VALUES ('post', $1, 'homepage totals fixture', 'agent', $2, $3, $4, $5)
 		RETURNING id
 	`, f.suffix+" "+name, f.author, status, visibility, deletedAt).Scan(&id)
 	require.NoError(f.t, err, "insert post %s/%s/%s", name, status, visibility)
@@ -199,7 +199,7 @@ func TestGetAllTimeTotals_CountsScaleAndExcludesWhatIsNotPublic(t *testing.T) {
 	// Posts: only what was actually published counts, and each post is ONE
 	// post no matter which legacy view (/problems, /questions, /ideas) reads it.
 	f.post("open", "open", "public", false)
-	f.post("solved", "solved", "public", false)
+	f.post("stale", "stale", "public", false)
 	f.post("draft", "draft", "public", false)
 	f.post("queued", "pending_review", "public", false)
 	f.post("rejected", "rejected", "public", false)
@@ -281,15 +281,15 @@ func TestGetAllTimeTotals_RepliesAreNotPosts(t *testing.T) {
 
 	for i := range 3 {
 		_, err := pool.Exec(ctx, `
-			INSERT INTO approaches (problem_id, angle, method, author_type, author_id)
-			VALUES ($1, $2, 'homepage totals fixture reply', 'agent', $3)
-		`, problem, fmt.Sprintf("%s reply %d", f.suffix, i), author)
+			INSERT INTO replies (post_id, author_type, author_id, body)
+			VALUES ($1, 'agent', $2, $3)
+		`, problem, author, fmt.Sprintf("%s reply %d", f.suffix, i))
 		require.NoError(t, err)
 	}
 	// Registered after f.cleanup so LIFO drops the replies before the post
 	// they hang off.
 	defer func() {
-		pool.Exec(ctx, `DELETE FROM approaches WHERE problem_id = $1`, problem) //nolint:errcheck
+		pool.Exec(ctx, `DELETE FROM replies WHERE post_id = $1`, problem) //nolint:errcheck
 	}()
 
 	after, err := repo.GetAllTimeTotals(ctx)

@@ -48,7 +48,7 @@ func seedCutoverLegacy(t *testing.T, pool *Pool) cutoverSeed {
 }
 
 func TestKnowledgeCutover_AppliesTheWholeSequenceAndASecondRunChangesNothing(t *testing.T) {
-	pool, _ := newMigratedScratchDatabase(t)
+	pool, _ := newPreArchiveScratchDatabase(t)
 	ctx := context.Background()
 	s := seedCutoverLegacy(t, pool)
 
@@ -88,7 +88,7 @@ func TestKnowledgeCutover_AppliesTheWholeSequenceAndASecondRunChangesNothing(t *
 }
 
 func TestKnowledgeCutover_DryRunReportsWithoutWriting(t *testing.T) {
-	pool, _ := newMigratedScratchDatabase(t)
+	pool, _ := newPreArchiveScratchDatabase(t)
 	ctx := context.Background()
 	s := seedCutoverLegacy(t, pool)
 
@@ -107,7 +107,7 @@ func TestKnowledgeCutover_DryRunReportsWithoutWriting(t *testing.T) {
 }
 
 func TestKnowledgeCutover_StopsBeforeConvertingWhenAPostCannotBeVerified(t *testing.T) {
-	pool, _ := newMigratedScratchDatabase(t)
+	pool, _ := newPreArchiveScratchDatabase(t)
 	ctx := context.Background()
 	authorAgent(ctx, t, pool, "kc-agent")
 	seedCutoverLegacy(t, pool)
@@ -138,4 +138,21 @@ func TestSchemaVersion_ReadsTheMigrateVersionTable(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t, 113, version)
 	require.True(t, dirty)
+}
+
+// Once the legacy archive migration has run the cutover has nothing live to convert: it
+// refuses, dry run included, and names the archive, instead of failing on a missing table
+// half way through or reporting zeros (idx 68).
+func TestKnowledgeCutover_RefusesOnceTheLegacyTablesAreArchived(t *testing.T) {
+	pool, _ := newMigratedScratchDatabase(t)
+	ctx := context.Background()
+	for _, dryRun := range []bool{true, false} {
+		_, err := RunKnowledgeCutover(ctx, pool, KnowledgeCutoverOptions{DryRun: dryRun})
+		require.Error(t, err, "dry run %v", dryRun)
+		require.ErrorIs(t, err, ErrLegacyTablesArchived, "dry run %v", dryRun)
+		require.Contains(t, err.Error(), "the cutover runs only below the legacy archive migration")
+	}
+	var ledger *string
+	require.NoError(t, pool.QueryRow(ctx, `SELECT to_regclass('cutover_ledger')::text`).Scan(&ledger))
+	require.Nil(t, ledger, "a refused run writes nothing, not even the ledger")
 }

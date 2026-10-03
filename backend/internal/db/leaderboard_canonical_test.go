@@ -105,7 +105,7 @@ func TestLegacyLeaderboards_ServedByTheCanonicalRepository(t *testing.T) {
 // votes on posts and replies score live, including new votes on migrated replies, while
 // writing a post or reply scores nothing by itself. A second cutover run changes nothing.
 func TestCanonicalLeaderboard_KeepsEarnedReputationAcrossTheCutover(t *testing.T) {
-	pool := setupTestDB(t)
+	pool, archiveLegacy := newPreArchiveScratchDatabase(t)
 	t.Cleanup(pool.Close) // registered first, so it runs after the fixture cleanups
 	ctx := context.Background()
 
@@ -336,4 +336,7 @@ func TestCanonicalLeaderboard_KeepsEarnedReputationAcrossTheCutover(t *testing.T
 	require.NoError(t, err)
 	assert.Zero(t, again.ReputationHistory, "a second cutover run freezes nothing new")
 	assert.Equal(t, live, fetchCanonical(), "a second cutover run changes no leaderboard")
+
+	archiveLegacy()
+	assert.Equal(t, live, fetchCanonical(), "the legacy archive changes no leaderboard")
 }

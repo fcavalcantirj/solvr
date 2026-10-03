@@ -62,12 +62,14 @@ func TestModerationReplyWriter_RecordsVerdictAsSystemReply(t *testing.T) {
 		t.Errorf("reply body = %q", body)
 	}
 
-	var legacyComments int
-	if err := pool.QueryRow(ctx, "SELECT COUNT(*) FROM comments WHERE target_id = $1", post.ID).Scan(&legacyComments); err != nil {
-		t.Fatalf("count comments: %v", err)
+	// No legacy comment can be written: the legacy archive migration (idx 68) moved the
+	// comments table out of public.
+	var commentsLive bool
+	if err := pool.QueryRow(ctx, "SELECT to_regclass('public.comments') IS NOT NULL").Scan(&commentsLive); err != nil {
+		t.Fatalf("look up the comments table: %v", err)
 	}
-	if legacyComments != 0 {
-		t.Errorf("the verdict also wrote %d legacy comments", legacyComments)
+	if commentsLive {
+		t.Error("the legacy comments table is still live storage")
 	}
 }
 

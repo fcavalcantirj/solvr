@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -16,9 +15,10 @@ import (
 
 // Task idx 73 step 3: the legacy typed reads are retired. A single-post read served the post GET
 // /v1/posts/{id} serves; the contribution reads served the approaches, progress notes, approach
-// relationships, answers and responses the cutover turns into replies (MigrateContributions,
+// relationships, answers and responses the cutover turned into replies (MigrateContributions,
 // RemapLegacyRelations). Following each route's instructions on GET /v1/posts/{id} and GET
 // /v1/posts/{id}/replies must find what the route served, with the fields the instructions name.
+// The legacy tables are archived (000138): the fixture seeds the replies as the cutover left them.
 
 type typedReplyRow struct {
 	migratedReplyRow
@@ -37,11 +37,11 @@ type typedReplyPage struct {
 	} `json:"meta"`
 }
 
-// legacyContribution is one legacy row as the retired route served it.
+// legacyContribution is one legacy row as the retired route served it, with the id of the
+// reply the cutover made from it.
 type legacyContribution struct {
-	id, body, author string
-	// votesUp and votesDown are the confirmed votes cast on the row; its own counters are seeded
-	// to other values, which the cutover's recount must not keep.
+	id, body, author, replyID string
+	// votesUp and votesDown are the confirmed votes cast on its reply.
 	votesUp, votesDown int
 	createdAt          time.Time
 	provenance         map[string]any
@@ -58,124 +58,120 @@ func TestRetiredTypedReads_CanonicalReadsServeWhatTheRouteServed(t *testing.T) {
 	require.NoError(t, pool.QueryRow(ctx, "SELECT display_name FROM agents WHERE id = $1", agentID).Scan(&agentName))
 
 	marker := uuid.NewString()
-	post := func(typ string) string {
+	post := func(label string) string {
 		var id string
 		require.NoError(t, pool.QueryRow(ctx,
 			`INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status, visibility)
-			 VALUES ($1, $2, $3, 'agent', $4, 'open', 'public') RETURNING id::text`,
-			typ, "retired typed reads "+typ+" "+marker, "retired typed reads fixture "+marker, agentID).Scan(&id))
+			 VALUES ('post', $1, $2, 'agent', $3, 'open', 'public') RETURNING id::text`,
+			"retired typed reads "+label+" "+marker, "retired typed reads fixture "+marker, agentID).Scan(&id))
 		return id
 	}
 	problem, question, idea := post("problem"), post("question"), post("idea")
 	posts := []string{problem, question, idea}
-	var approaches, answers, responses []string
 	t.Cleanup(func() {
 		c := context.Background()
-		pool.Exec(c, "DELETE FROM votes WHERE voter_type = 'human' AND voter_id = $1", userID)                  //nolint:errcheck
-		pool.Exec(c, "DELETE FROM replies WHERE post_id = ANY($1::uuid[])", posts)                              //nolint:errcheck
-		pool.Exec(c, "DELETE FROM approach_relationships WHERE from_approach_id = ANY($1::uuid[])", approaches) //nolint:errcheck
-		pool.Exec(c, "DELETE FROM progress_notes WHERE approach_id = ANY($1::uuid[])", approaches)              //nolint:errcheck
-		pool.Exec(c, "DELETE FROM approaches WHERE id = ANY($1::uuid[])", approaches)                           //nolint:errcheck
-		pool.Exec(c, "DELETE FROM answers WHERE id = ANY($1::uuid[])", answers)                                 //nolint:errcheck
-		pool.Exec(c, "DELETE FROM responses WHERE id = ANY($1::uuid[])", responses)                             //nolint:errcheck
-		pool.Exec(c, "DELETE FROM reputation_history WHERE owner_id IN ($1, $2)", agentID, userID)              //nolint:errcheck
-		pool.Exec(c, "UPDATE posts SET accepted_answer_id = NULL WHERE id = $1::uuid", question)                //nolint:errcheck
-		pool.Exec(c, "DELETE FROM posts WHERE id = ANY($1::uuid[])", posts)                                     //nolint:errcheck
+		pool.Exec(c, "DELETE FROM votes WHERE voter_type = 'human' AND voter_id = $1", userID)     //nolint:errcheck
+		pool.Exec(c, "DELETE FROM replies WHERE post_id = ANY($1::uuid[])", posts)                 //nolint:errcheck
+		pool.Exec(c, "DELETE FROM reputation_history WHERE owner_id IN ($1, $2)", agentID, userID) //nolint:errcheck
+		pool.Exec(c, "DELETE FROM posts WHERE id = ANY($1::uuid[])", posts)                        //nolint:errcheck
 	})
 
 	base := time.Now().UTC().Add(-5 * time.Hour).Truncate(time.Microsecond)
 	at := func(minutes int) time.Time { return base.Add(time.Duration(minutes) * time.Minute) }
 
-	// The problem: an older failed approach, a newer one that updates it with a progress note, and
-	// a deleted one the list never showed.
-	approach := func(angle, method, status, outcome string, assumptions []string, differsFrom []string,
-		created time.Time, deleted bool) legacyContribution {
+	// migrated inserts the reply the cutover made from a legacy row whose id is legacyID, under
+	// parent when it is set (nil for a top-level reply), soft-deleted at created when deleted.
+	migrated := func(postID string, parent any, author, authorID, body, legacyType, legacyID string,
+		provenance map[string]any, created time.Time, deleted bool) string {
 		var deletedAt *time.Time
 		if deleted {
 			deletedAt = &created
 		}
+		raw, err := json.Marshal(provenance)
+		require.NoError(t, err)
+		var id string
+		require.NoError(t, pool.QueryRow(ctx, `INSERT INTO replies (post_id, parent_reply_id, author_type, author_id, body,
+				legacy_type, legacy_id, provenance, created_at, updated_at, deleted_at)
+			VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7::uuid, $8::jsonb, $9, $9, $10) RETURNING id::text`,
+			postID, parent, author, authorID, body, legacyType, legacyID, string(raw), created, deletedAt).Scan(&id))
+		return id
+	}
+
+	// The problem: an older failed approach, a newer one that updates it with a progress note, and
+	// a deleted one the list never showed. The newer approach's relationship to the older one is
+	// in its reply's provenance, as RemapLegacyRelations records it.
+	approach := func(angle, method, status, outcome string, assumptions []string, differsFrom []string,
+		created time.Time, deleted bool, relationships ...map[string]any) legacyContribution {
 		if differsFrom == nil {
 			differsFrom = []string{}
 		}
 		if assumptions == nil {
 			assumptions = []string{}
 		}
-		row := legacyContribution{author: "agent", createdAt: created}
-		require.NoError(t, pool.QueryRow(ctx, `INSERT INTO approaches (problem_id, author_type, author_id, angle, method,
-				assumptions, differs_from, status, outcome, created_at, updated_at, deleted_at)
-			VALUES ($1::uuid, 'agent', $2, $3, $4, $5, $6::uuid[], $7, NULLIF($8, ''), $9, $9, $10) RETURNING id::text`,
-			problem, agentID, angle, method, assumptions, differsFrom, status, outcome, created, deletedAt).Scan(&row.id))
-		approaches = append(approaches, row.id)
+		var outcomeValue any // NULL when the approach had no outcome
+		if outcome != "" {
+			outcomeValue = outcome
+		}
+		prov := map[string]any{"legacy_table": "approaches", "angle": angle, "method": method,
+			"assumptions": assumptions, "differs_from": differsFrom, "status": status,
+			"outcome": outcomeValue, "solution": nil, "is_latest": true, "archived_cid": nil}
+		if len(relationships) > 0 {
+			prov["approach_relationships"] = relationships
+		}
+		row := legacyContribution{id: uuid.NewString(), author: "agent", createdAt: created}
+		row.replyID = migrated(problem, nil, "agent", agentID,
+			"**Approach:** "+angle+"\n\n**Method:** "+method+"\n\n**Status:** "+status,
+			"approach", row.id, prov, created, deleted)
 		row.provenance = map[string]any{"angle": angle, "method": method, "status": status}
 		return row
 	}
 	older := approach("older angle "+marker, "older method", "failed", "it did not hold", []string{"cache is cold"}, nil, at(0), false)
-	newer := approach("newer angle "+marker, "newer method", "working", "", nil, []string{older.id}, at(10), false)
+	relationshipID := uuid.NewString()
+	newer := approach("newer angle "+marker, "newer method", "working", "", nil, []string{older.id}, at(10), false,
+		map[string]any{"legacy_id": relationshipID, "relation_type": "updates", "to_reply_id": older.replyID,
+			"to_approach_id": older.id, "created_at": at(11).Format(time.RFC3339Nano)})
 	approach("deleted angle "+marker, "deleted method", "starting", "", nil, nil, at(20), true)
-	var relationshipID, noteID string
-	require.NoError(t, pool.QueryRow(ctx, `INSERT INTO approach_relationships (from_approach_id, to_approach_id, relation_type, created_at)
-		VALUES ($1::uuid, $2::uuid, 'updates', $3) RETURNING id::text`, newer.id, older.id, at(11)).Scan(&relationshipID))
-	noteContent := "progress note " + marker
-	require.NoError(t, pool.QueryRow(ctx, `INSERT INTO progress_notes (approach_id, content, created_at)
-		VALUES ($1::uuid, $2, $3) RETURNING id::text`, newer.id, noteContent, at(12)).Scan(&noteID))
+	noteID, noteContent := uuid.NewString(), "progress note "+marker
+	migrated(problem, newer.replyID, "agent", agentID, noteContent, "progress_note", noteID,
+		map[string]any{"legacy_table": "progress_notes", "approach_id": newer.id}, at(12), false)
 
 	// The question: an accepted answer by the human, a later one by the agent with votes, and a
 	// deleted one.
-	answer := func(author, authorID string, accepted bool, up, down int, created time.Time, deleted bool) legacyContribution {
-		var deletedAt *time.Time
-		if deleted {
-			deletedAt = &created
-		}
-		row := legacyContribution{author: author, createdAt: created,
+	answer := func(author, authorID string, accepted bool, created time.Time, deleted bool) legacyContribution {
+		row := legacyContribution{id: uuid.NewString(), author: author, createdAt: created,
 			body: author + " answer " + uuid.NewString(), provenance: map[string]any{"is_accepted": accepted}}
-		require.NoError(t, pool.QueryRow(ctx, `INSERT INTO answers (question_id, author_type, author_id, content, is_accepted,
-				upvotes, downvotes, created_at, deleted_at)
-			VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id::text`,
-			question, author, authorID, row.body, accepted, up, down, created, deletedAt).Scan(&row.id))
-		answers = append(answers, row.id)
+		row.replyID = migrated(question, nil, author, authorID, row.body, "answer", row.id,
+			map[string]any{"legacy_table": "answers", "is_accepted": accepted}, created, deleted)
 		return row
 	}
-	accepted := answer("human", userID, true, 0, 0, at(30), false)
-	voted := answer("agent", agentID, false, 3, 1, at(31), false)
-	answer("agent", agentID, false, 0, 0, at(32), true)
-	_, err := pool.Exec(ctx, "UPDATE posts SET accepted_answer_id = $1::uuid WHERE id = $2::uuid", accepted.id, question)
-	require.NoError(t, err)
+	accepted := answer("human", userID, true, at(30), false)
+	voted := answer("agent", agentID, false, at(31), false)
+	answer("agent", agentID, false, at(32), true)
 
-	// The idea: two responses of different types (responses have no soft delete).
-	response := func(author, authorID, responseType string, up, down int, created time.Time) legacyContribution {
-		row := legacyContribution{author: author, createdAt: created,
+	// The idea: two responses of different types (responses had no soft delete).
+	response := func(author, authorID, responseType string, created time.Time) legacyContribution {
+		row := legacyContribution{id: uuid.NewString(), author: author, createdAt: created,
 			body: author + " response " + uuid.NewString(), provenance: map[string]any{"response_type": responseType}}
-		require.NoError(t, pool.QueryRow(ctx, `INSERT INTO responses (idea_id, author_type, author_id, content, response_type,
-				upvotes, downvotes, created_at)
-			VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8) RETURNING id::text`,
-			idea, author, authorID, row.body, responseType, up, down, created).Scan(&row.id))
-		responses = append(responses, row.id)
+		row.replyID = migrated(idea, nil, author, authorID, row.body, "response", row.id,
+			map[string]any{"legacy_table": "responses", "response_type": responseType}, created, false)
 		return row
 	}
-	build := response("agent", agentID, "build", 2, 0, at(40))
-	critique := response("human", userID, "critique", 0, 1, at(41))
+	build := response("agent", agentID, "build", at(40))
+	critique := response("human", userID, "critique", at(41))
 
-	// The confirmed votes recorded on them, which the cutover moves to the replies and recounts:
-	// the human up-votes the voted answer and down-votes the build response, and casts an
-	// unconfirmed vote on the critique, which counts for nothing.
-	vote := func(targetType, targetID, direction string, confirmed bool) {
+	// The confirmed votes on the replies, where the cutover moved the legacy rows' votes: the
+	// human up-votes the voted answer and down-votes the build response, and casts an unconfirmed
+	// vote on the critique, which counts for nothing.
+	vote := func(replyID, direction string, confirmed bool) {
 		_, err := pool.Exec(ctx, `INSERT INTO votes (target_type, target_id, voter_type, voter_id, direction, confirmed)
-			VALUES ($1, $2::uuid, 'human', $3, $4, $5)`, targetType, targetID, userID, direction, confirmed)
+			VALUES ('reply', $1::uuid, 'human', $2, $3, $4)`, replyID, userID, direction, confirmed)
 		require.NoError(t, err)
 	}
-	vote("answer", voted.id, "up", true)
+	vote(voted.replyID, "up", true)
 	voted.votesUp = 1
-	vote("response", build.id, "down", true)
+	vote(build.replyID, "down", true)
 	build.votesDown = 1
-	vote("response", critique.id, "up", false)
-
-	_, err = db.MigrateContributions(ctx, pool)
-	require.NoError(t, err, "the cutover's contribution migration")
-	_, err = db.RemapLegacyRelations(ctx, pool)
-	require.NoError(t, err, "the cutover's relation remap")
-	// The cutover's vote_scores step (rebuild_vote_scores, 000113), scoped to the fixture replies.
-	_, err = pool.Exec(ctx, `SELECT rebuild_vote_scores('reply', id) FROM replies WHERE post_id = ANY($1::uuid[])`, posts)
-	require.NoError(t, err, "the cutover's vote recount")
+	vote(critique.replyID, "up", false)
 
 	retired := func(t *testing.T, path string) (replacement, instructions string) {
 		t.Helper()
@@ -258,7 +254,7 @@ func TestRetiredTypedReads_CanonicalReadsServeWhatTheRouteServed(t *testing.T) {
 			require.Contains(t, instructions, "every post is type post since the legacy types were retired", path)
 			p := readPost(t, want.id)
 			require.Equal(t, want.id, p.ID, path)
-			require.Equal(t, models.PostType(want.typ), p.Type, "%s: data.type names the legacy type", path)
+			require.Equal(t, models.PostTypePost, p.Type, "%s: data.type is post, the only type (000138)", path)
 			require.Equal(t, "retired typed reads "+want.typ+" "+marker, p.Title, path)
 			require.Equal(t, agentID, p.Author.ID, path)
 		}

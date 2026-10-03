@@ -26,7 +26,7 @@ type wantAnchor struct {
 // are never found: not as a result, not in the total, not in top_similarity. Both the full-text
 // and the hybrid path (fixed query vector) are checked.
 func TestCanonicalSearch_DefaultResolvesKnowledgeToPostsAndReplyAnchors(t *testing.T) {
-	pool, _ := newMigratedScratchDatabase(t)
+	pool, archiveLegacy := newPreArchiveScratchDatabase(t)
 	ctx := context.Background()
 	scan := func(sql string, args ...any) string {
 		t.Helper()
@@ -89,6 +89,7 @@ func TestCanonicalSearch_DefaultResolvesKnowledgeToPostsAndReplyAnchors(t *testi
 
 	_, err = RunKnowledgeCutover(ctx, pool, KnowledgeCutoverOptions{})
 	require.NoError(t, err)
+	archiveLegacy() // production order: seed, cutover, archive; search runs at head
 	replyOf := func(legacyType, legacyID string) string {
 		t.Helper()
 		return scan(`SELECT id::text FROM replies WHERE legacy_type = $1 AND legacy_id = $2`, legacyType, legacyID)

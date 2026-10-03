@@ -43,7 +43,7 @@ type resurrectionAttempt struct {
 // cutover kept in provenance. Native replies are never approaches. All of it keeps working
 // once the legacy tables are gone.
 func TestCanonicalResurrection_ServesEveryPostTypeAndMigratedApproachesAcrossTheCutover(t *testing.T) {
-	pool, dropLegacy := newMigratedScratchDatabase(t)
+	pool, archiveLegacy := newPreArchiveScratchDatabase(t)
 	ctx := context.Background()
 	exec := func(sql string, args ...any) string {
 		t.Helper()
@@ -137,6 +137,7 @@ func TestCanonicalResurrection_ServesEveryPostTypeAndMigratedApproachesAcrossThe
 
 	wantIdeas := []string{pIdea, pSolved, pProblem, pQuestion, pWorking, pEvolved, pDraft, pPost, pAnswered}
 	wantProblems := []string{pDraft, pPost, pQuestion, pProblem}
+	ideaStatus := "active"
 	checkPosts := func() {
 		t.Helper()
 		assert.Equal(t, wantIdeas, ideas(50), "every live public post of the agent, by net votes then newest")
@@ -145,7 +146,7 @@ func TestCanonicalResurrection_ServesEveryPostTypeAndMigratedApproachesAcrossThe
 		got, err := repo.GetAgentIdeas(ctx, a, 1)
 		require.NoError(t, err)
 		require.Len(t, got, 1)
-		assert.Equal(t, resurrectionPost{pIdea, "active", 5, 1, []string{"resur", "idea"}, true},
+		assert.Equal(t, resurrectionPost{pIdea, ideaStatus, 5, 1, []string{"resur", "idea"}, true},
 			resurrectionPost{got[0].ID, got[0].Status, got[0].Upvotes, got[0].Downvotes, got[0].Tags,
 				created[pIdea].Equal(got[0].CreatedAt)})
 	}
@@ -174,7 +175,11 @@ func TestCanonicalResurrection_ServesEveryPostTypeAndMigratedApproachesAcrossThe
 	}
 	check()
 
-	dropLegacy()
+	// The archive relabels the retired statuses as open: every live public post of the agent
+	// is open or a draft now, newest first; nothing else moves.
+	archiveLegacy()
+	wantProblems = []string{pAnswered, pEvolved, pDraft, pPost, pQuestion, pWorking, pProblem, pSolved, pIdea}
+	ideaStatus = "open"
 	check()
 
 	// Native replies after the drop are not approaches, top-level or not.

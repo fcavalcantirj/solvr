@@ -41,7 +41,7 @@ func sitemapPostIDs(posts []models.SitemapPost) (ids []string, types map[string]
 // listed. Everything keeps working once the legacy tables are gone and every post is the
 // canonical type.
 func TestCanonicalSitemap_ListsEveryPublicEligiblePostAcrossTheCutover(t *testing.T) {
-	pool, dropLegacy := newMigratedScratchDatabase(t)
+	pool, archiveLegacy := newPreArchiveScratchDatabase(t)
 	ctx := context.Background()
 	authorAgent(ctx, t, pool, "agent_sitemap_canon")
 	repo := NewSitemapRepository(pool)
@@ -125,15 +125,13 @@ func TestCanonicalSitemap_ListsEveryPublicEligiblePostAcrossTheCutover(t *testin
 	}
 
 	check("before the cutover", wantTypes)
-	dropLegacy()
-	check("legacy tables dropped", wantTypes)
 
-	// Schema cleanup narrows every post to the canonical type: the listing does not change.
-	_, err := pool.Exec(ctx, `UPDATE posts SET type = 'post'`)
-	require.NoError(t, err)
+	// The legacy archive moves the legacy tables out and narrows every post to the canonical
+	// type: the listing does not change, only the type each entry carries.
+	archiveLegacy()
 	allPost := map[string]string{}
 	for _, id := range want {
 		allPost[id] = "post"
 	}
-	check("every post the canonical type", allPost)
+	check("legacy tables archived, every post the canonical type", allPost)
 }

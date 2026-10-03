@@ -78,7 +78,7 @@ func takeStatsSnapshot(t *testing.T, ctx context.Context, r statsReader) statsSn
 // retired (no active approaches); a question's answers are its top-level replies. The canonical
 // figures then survive dropping the legacy tables unchanged, and native replies move them.
 func TestCanonicalStats_KeepsLegacyFiguresAcrossTheCutover(t *testing.T) {
-	pool, dropLegacy := newMigratedScratchDatabase(t)
+	pool, archiveLegacy := newPreArchiveScratchDatabase(t)
 	ctx := context.Background()
 	t0 := time.Now().UTC().Truncate(time.Second)
 	hoursAgo := func(h float64) time.Time { return t0.Add(-time.Duration(h * float64(time.Hour))) }
@@ -187,8 +187,21 @@ func TestCanonicalStats_KeepsLegacyFiguresAcrossTheCutover(t *testing.T) {
 	}
 	assert.Equal(t, wantTrending, after.Trending, "every live contributor reply is a response")
 
-	dropLegacy()
-	assert.Equal(t, after, takeStatsSnapshot(t, ctx, canonical), "the canonical statistics need no legacy table")
+	archiveLegacy()
+	// The archive relabels every post as type post and the solved p1, p2 and p3 as open; with
+	// the legacy tables gone nothing else moves.
+	archived := after
+	archived.All.ActivePosts += 3
+	archived.Trending = map[string]trendingStat{}
+	for id, st := range after.Trending {
+		st.Type = "post"
+		archived.Trending[id] = st
+	}
+	assert.Equal(t, archived, takeStatsSnapshot(t, ctx, canonical), "the canonical statistics need no legacy table")
+	for id, st := range wantTrending {
+		st.Type = "post"
+		wantTrending[id] = st
+	}
 
 	var native string
 	require.NoError(t, pool.QueryRow(ctx, `
@@ -201,6 +214,6 @@ func TestCanonicalStats_KeepsLegacyFiguresAcrossTheCutover(t *testing.T) {
 	live := takeStatsSnapshot(t, ctx, canonical)
 	assert.Equal(t, 14, live.All.TotalContributions, "the native reply and its child count")
 	assert.Equal(t, 14, live.Contributions)
-	wantTrending[q2] = trendingStat{"question", 0, 2}
+	wantTrending[q2] = trendingStat{"post", 0, 2}
 	assert.Equal(t, wantTrending, live.Trending)
 }

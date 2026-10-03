@@ -52,6 +52,22 @@ func consumerSchemaFiles(t *testing.T) []string {
 // database is dropped when the test ends.
 func newConsumerScratchSchema(t *testing.T, before int, seed func(ctx context.Context, conn *pgx.Conn)) string {
 	t.Helper()
+	return buildConsumerScratchSchema(t, before, seed, nil)
+}
+
+// newUpgradedConsumerSchema builds the schema the way production upgrades: the first
+// productionSchemaVersion migrations, then seed, then every migration below the legacy archive
+// (*_legacy_archive.up.sql), then cutover against the database URL (the knowledge cutover runs
+// there, while the legacy tables are live), then the archive migration and every later one.
+func newUpgradedConsumerSchema(t *testing.T, seed func(ctx context.Context, conn *pgx.Conn), cutover func(ctx context.Context, dbURL string)) string {
+	t.Helper()
+	return buildConsumerScratchSchema(t, productionSchemaVersion, seed, cutover)
+}
+
+// buildConsumerScratchSchema is newConsumerScratchSchema with an optional cutover step, run
+// right before the legacy archive migration.
+func buildConsumerScratchSchema(t *testing.T, before int, seed func(ctx context.Context, conn *pgx.Conn), cutover func(ctx context.Context, dbURL string)) string {
+	t.Helper()
 	base := os.Getenv("DATABASE_URL")
 	if base == "" {
 		t.Skip("DATABASE_URL not set, skipping integration test")
@@ -96,6 +112,18 @@ func newConsumerScratchSchema(t *testing.T, before int, seed func(ctx context.Co
 	apply(files[:before])
 	if seed != nil {
 		seed(ctx, conn)
+	}
+	if cutover != nil {
+		archive := -1
+		for i, f := range files {
+			if strings.HasSuffix(f, "_legacy_archive.up.sql") {
+				archive = i
+			}
+		}
+		require.Greater(t, archive, before, "the legacy archive migration comes after the seeded schema")
+		apply(files[before:archive])
+		cutover(ctx, u.String())
+		before = archive
 	}
 	apply(files[before:])
 	return u.String()

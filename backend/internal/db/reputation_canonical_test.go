@@ -41,7 +41,7 @@ func TestLegacyReputation_ServedByTheCanonicalRepositories(t *testing.T) {
 // equal the legacy repository's before the cutover (profile_stats_canonical.go counts them from
 // posts, replies and votes).
 func TestCanonicalReputation_ProfilesAndListsAgreeWithTheServedLeaderboard(t *testing.T) {
-	pool := setupTestDB(t)
+	pool, archiveLegacy := newPreArchiveScratchDatabase(t)
 	t.Cleanup(pool.Close) // registered first, so it runs after the fixture cleanups
 	ctx := context.Background()
 
@@ -208,4 +208,7 @@ func TestCanonicalReputation_ProfilesAndListsAgreeWithTheServedLeaderboard(t *te
 	_, err = RemapLegacyRelations(ctx, pool)
 	require.NoError(t, err)
 	assert.Equal(t, live, surfaces(), "a second cutover run changes no reputation")
+
+	archiveLegacy()
+	assert.Equal(t, live, surfaces(), "the legacy archive changes no reputation")
 }

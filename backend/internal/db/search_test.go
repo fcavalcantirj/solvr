@@ -21,8 +21,8 @@ func TestSearchRepository_Search(t *testing.T) {
 
 	// Insert test data
 	ctx := context.Background()
-	post1ID := insertTestPost(t, pool, ctx, "problem", "Race condition in PostgreSQL async queries",
-		"When running multiple async queries to PostgreSQL, I encounter race conditions.", []string{"postgresql", "async"}, "solved")
+	post1ID := insertTestPost(t, pool, ctx, "post", "Race condition in PostgreSQL async queries",
+		"When running multiple async queries to PostgreSQL, I encounter race conditions.", []string{"postgresql", "async"}, "open")
 
 	// Search for "race condition"
 	results, total, _, _, err := repo.Search(ctx, "race condition", models.SearchOptions{
@@ -50,8 +50,8 @@ func TestSearchRepository_Search(t *testing.T) {
 			if r.Title != "Race condition in PostgreSQL async queries" {
 				t.Errorf("expected title 'Race condition in PostgreSQL async queries', got '%s'", r.Title)
 			}
-			if r.Type != "problem" {
-				t.Errorf("expected type 'problem', got '%s'", r.Type)
+			if r.Type != "post" {
+				t.Errorf("expected type 'post', got '%s'", r.Type)
 			}
 		}
 	}
@@ -70,10 +70,10 @@ func TestSearchRepository_Search_RelevanceScore(t *testing.T) {
 	ctx := context.Background()
 
 	// Insert two posts, one more relevant than the other
-	postRel1ID := insertTestPost(t, pool, ctx, "problem",
+	postRel1ID := insertTestPost(t, pool, ctx, "post",
 		"PostgreSQL PostgreSQL PostgreSQL connection issues",
 		"Multiple mentions of PostgreSQL connection", []string{"postgresql"}, "open")
-	insertTestPost(t, pool, ctx, "question",
+	insertTestPost(t, pool, ctx, "post",
 		"How to connect to database",
 		"Generic database question", []string{"database"}, "open")
 
@@ -111,7 +111,7 @@ func TestSearchRepository_Search_Snippet(t *testing.T) {
 	repo := NewSearchRepository(pool)
 	ctx := context.Background()
 
-	postSnip1ID := insertTestPost(t, pool, ctx, "problem",
+	postSnip1ID := insertTestPost(t, pool, ctx, "post",
 		"Async error handling in Go",
 		"When handling errors in async Go code, you need to be careful with goroutines and channels.",
 		[]string{"go", "async"}, "open")
@@ -151,13 +151,13 @@ func TestSearchRepository_Search_TypeFilter(t *testing.T) {
 	repo := NewSearchRepository(pool)
 	ctx := context.Background()
 
-	insertTestPost(t, pool, ctx, "problem", "Test problem", "Description", []string{}, "open")
-	insertTestPost(t, pool, ctx, "question", "Test question", "Description", []string{}, "open")
-	insertTestPost(t, pool, ctx, "idea", "Test idea", "Description", []string{}, "open")
+	insertTestPost(t, pool, ctx, "post", "Test problem", "Description", []string{}, "open")
+	insertTestPost(t, pool, ctx, "post", "Test question", "Description", []string{}, "open")
+	insertTestPost(t, pool, ctx, "post", "Test idea", "Description", []string{}, "open")
 
-	// Search with type=problem filter
+	// Every post is type post (idx 68): the type filter keeps them all.
 	results, _, _, _, err := repo.Search(ctx, "test", models.SearchOptions{
-		Type:    "problem",
+		Type:    "post",
 		Page:    1,
 		PerPage: 20,
 	})
@@ -167,8 +167,8 @@ func TestSearchRepository_Search_TypeFilter(t *testing.T) {
 	}
 
 	for _, r := range results {
-		if r.Type != "problem" {
-			t.Errorf("expected only problem type, got %s", r.Type)
+		if r.Type != "post" {
+			t.Errorf("expected only post type, got %s", r.Type)
 		}
 	}
 }
@@ -181,11 +181,11 @@ func TestSearchRepository_Search_StatusFilter(t *testing.T) {
 	repo := NewSearchRepository(pool)
 	ctx := context.Background()
 
-	insertTestPost(t, pool, ctx, "problem", "Test open", "Description", []string{}, "open")
-	insertTestPost(t, pool, ctx, "problem", "Test solved", "Description", []string{}, "solved")
+	insertTestPost(t, pool, ctx, "post", "Test open", "Description", []string{}, "open")
+	insertTestPost(t, pool, ctx, "post", "Test closed", "Description", []string{}, "closed")
 
 	results, _, _, _, err := repo.Search(ctx, "test", models.SearchOptions{
-		Status:  "solved",
+		Status:  "closed",
 		Page:    1,
 		PerPage: 20,
 	})
@@ -195,8 +195,8 @@ func TestSearchRepository_Search_StatusFilter(t *testing.T) {
 	}
 
 	for _, r := range results {
-		if r.Status != "solved" {
-			t.Errorf("expected only solved status, got %s", r.Status)
+		if r.Status != "closed" {
+			t.Errorf("expected only closed status, got %s", r.Status)
 		}
 	}
 }
@@ -209,8 +209,8 @@ func TestSearchRepository_Search_TagsFilter(t *testing.T) {
 	repo := NewSearchRepository(pool)
 	ctx := context.Background()
 
-	insertTestPost(t, pool, ctx, "problem", "Go concurrency test", "Description", []string{"go", "concurrency"}, "open")
-	insertTestPost(t, pool, ctx, "problem", "Python test", "Description", []string{"python"}, "open")
+	insertTestPost(t, pool, ctx, "post", "Go concurrency test", "Description", []string{"go", "concurrency"}, "open")
+	insertTestPost(t, pool, ctx, "post", "Python test", "Description", []string{"python"}, "open")
 
 	results, _, _, _, err := repo.Search(ctx, "test", models.SearchOptions{
 		Tags:    []string{"go"},
@@ -237,8 +237,8 @@ func TestSearchRepository_Search_ExcludeDeleted(t *testing.T) {
 	repo := NewSearchRepository(pool)
 	ctx := context.Background()
 
-	insertTestPost(t, pool, ctx, "problem", "Active post searchable", "Description", []string{}, "open")
-	deletedID := insertTestPostDeleted(t, pool, ctx, "problem", "Deleted post not searchable", "Description", []string{}, "open")
+	insertTestPost(t, pool, ctx, "post", "Active post searchable", "Description", []string{}, "open")
+	deletedID := insertTestPostDeleted(t, pool, ctx, "post", "Deleted post not searchable", "Description", []string{}, "open")
 
 	results, _, _, _, err := repo.Search(ctx, "post searchable", models.SearchOptions{
 		Page:    1,
@@ -267,8 +267,8 @@ func TestSearchRepository_Search_SortNewest(t *testing.T) {
 	// Use a unique term to avoid interference from production data
 	uniqueTerm := fmt.Sprintf("xqzsortnewest%d", time.Now().UnixNano())
 
-	insertTestPostWithTime(t, pool, ctx, "problem", uniqueTerm+" old", "Description", []string{}, "open", time.Now().Add(-24*time.Hour))
-	postNewID := insertTestPostWithTime(t, pool, ctx, "problem", uniqueTerm+" new", "Description", []string{}, "open", time.Now())
+	insertTestPostWithTime(t, pool, ctx, "post", uniqueTerm+" old", "Description", []string{}, "open", time.Now().Add(-24*time.Hour))
+	postNewID := insertTestPostWithTime(t, pool, ctx, "post", uniqueTerm+" new", "Description", []string{}, "open", time.Now())
 
 	results, _, _, _, err := repo.Search(ctx, uniqueTerm, models.SearchOptions{
 		Sort:    "newest",
@@ -298,8 +298,8 @@ func TestSearchRepository_Search_SortVotes(t *testing.T) {
 	// Use a unique term to avoid interference from production data
 	uniqueTerm := fmt.Sprintf("xqzsortvotes%d", time.Now().UnixNano())
 
-	insertTestPostWithVotes(t, pool, ctx, "problem", uniqueTerm+" low votes", "Description", []string{}, "open", 5, 3)    // Score: 2
-	postHighID := insertTestPostWithVotes(t, pool, ctx, "problem", uniqueTerm+" high votes", "Description", []string{}, "open", 10, 1) // Score: 9
+	insertTestPostWithVotes(t, pool, ctx, "post", uniqueTerm+" low votes", "Description", []string{}, "open", 5, 3)    // Score: 2
+	postHighID := insertTestPostWithVotes(t, pool, ctx, "post", uniqueTerm+" high votes", "Description", []string{}, "open", 10, 1) // Score: 9
 
 	results, _, _, _, err := repo.Search(ctx, uniqueTerm, models.SearchOptions{
 		Sort:    "votes",
@@ -331,7 +331,7 @@ func TestSearchRepository_Search_Pagination(t *testing.T) {
 
 	// Insert 5 posts with the unique term
 	for range 5 {
-		insertTestPost(t, pool, ctx, "problem",
+		insertTestPost(t, pool, ctx, "post",
 			uniqueTerm+" post", "This post contains the unique term for pagination testing.", []string{}, "open")
 	}
 
@@ -388,8 +388,8 @@ func TestSearchRepository_Search_DateFilter(t *testing.T) {
 	oldDate := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	newDate := time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)
 
-	post2024ID := insertTestPostWithTime(t, pool, ctx, "problem", "Old post date filter", "Description", []string{}, "open", oldDate)
-	insertTestPostWithTime(t, pool, ctx, "problem", "New post date filter", "Description", []string{}, "open", newDate)
+	post2024ID := insertTestPostWithTime(t, pool, ctx, "post", "Old post date filter", "Description", []string{}, "open", oldDate)
+	insertTestPostWithTime(t, pool, ctx, "post", "New post date filter", "Description", []string{}, "open", newDate)
 
 	// Search only for posts in 2026
 	results, _, _, _, err := repo.Search(ctx, "post date filter", models.SearchOptions{
@@ -419,9 +419,9 @@ func TestSearchRepository_Search_AuthorFilter(t *testing.T) {
 	ctx := context.Background()
 	authorAgent(ctx, t, pool, "claude")
 
-	insertTestPostWithAuthor(t, pool, ctx, "problem", "Test author filter", "Description",
+	insertTestPostWithAuthor(t, pool, ctx, "post", "Test author filter", "Description",
 		[]string{}, "open", "human", testUser(ctx, t, pool))
-	insertTestPostWithAuthor(t, pool, ctx, "problem", "Test author filter", "Description",
+	insertTestPostWithAuthor(t, pool, ctx, "post", "Test author filter", "Description",
 		[]string{}, "open", "agent", "claude")
 
 	results, _, _, _, err := repo.Search(ctx, "test author filter", models.SearchOptions{
@@ -450,9 +450,9 @@ func TestSearchRepository_Search_AuthorTypeFilter(t *testing.T) {
 	ctx := context.Background()
 	authorAgent(ctx, t, pool, "bot-1")
 
-	insertTestPostWithAuthor(t, pool, ctx, "problem", "Test author type filter", "Description",
+	insertTestPostWithAuthor(t, pool, ctx, "post", "Test author type filter", "Description",
 		[]string{}, "open", "human", testUser(ctx, t, pool))
-	insertTestPostWithAuthor(t, pool, ctx, "problem", "Test author type filter", "Description",
+	insertTestPostWithAuthor(t, pool, ctx, "post", "Test author type filter", "Description",
 		[]string{}, "open", "agent", "bot-1")
 
 	results, _, _, _, err := repo.Search(ctx, "test author type filter", models.SearchOptions{
@@ -502,7 +502,6 @@ func cleanupTestData(t *testing.T, pool *Pool, ctx context.Context) {
 	// Clean up posts and agents created by inferred-specialties and stale-content test helpers.
 	// posted_by_id and author_id are text columns — prefix match is safe.
 	_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE posted_by_id LIKE 'ia_%' OR posted_by_id LIKE 'stale_agent_%'")
-	_, _ = pool.Exec(ctx, "DELETE FROM approaches WHERE author_id LIKE 'ia_%' OR author_id LIKE 'stale_agent_%'")
 	_, _ = pool.Exec(ctx, "DELETE FROM agents WHERE id LIKE 'ia_%' OR id LIKE 'stale_agent_%'")
 	_, _ = pool.Exec(ctx, "DELETE FROM users WHERE username LIKE 'iu%'")
 }
@@ -589,11 +588,11 @@ func TestSearchRepository_Search_PerformanceTarget(t *testing.T) {
 	// Insert a modest amount of test data to simulate realistic conditions
 	for i := 0; i < 50; i++ {
 		insertTestPost(t, pool, ctx,
-			[]string{"problem", "question", "idea"}[i%3],
+			"post",
 			"Performance test post about async programming and database optimization",
 			"This is a longer description that contains various keywords like PostgreSQL, async, Go, error handling, concurrency, and optimization. It simulates realistic post content for search performance testing.",
 			[]string{"go", "postgresql", "async", "performance"}[i%4:i%4+1],
-			[]string{"open", "solved", "answered"}[i%3],
+			[]string{"open", "closed", "stale"}[i%3],
 		)
 	}
 
@@ -616,7 +615,7 @@ func TestSearchRepository_Search_PerformanceTarget(t *testing.T) {
 		{
 			name:  "with type filter",
 			query: "performance",
-			opts:  models.SearchOptions{Type: "problem", Page: 1, PerPage: 20},
+			opts:  models.SearchOptions{Type: "post", Page: 1, PerPage: 20},
 		},
 		{
 			name:  "with tags filter",
@@ -626,7 +625,7 @@ func TestSearchRepository_Search_PerformanceTarget(t *testing.T) {
 		{
 			name:  "with status filter",
 			query: "error handling",
-			opts:  models.SearchOptions{Status: "solved", Page: 1, PerPage: 20},
+			opts:  models.SearchOptions{Status: "closed", Page: 1, PerPage: 20},
 		},
 		{
 			name:  "sort by votes",
@@ -641,7 +640,7 @@ func TestSearchRepository_Search_PerformanceTarget(t *testing.T) {
 		{
 			name:  "combined filters",
 			query: "programming",
-			opts:  models.SearchOptions{Type: "problem", Status: "open", Sort: "relevance", Page: 1, PerPage: 20},
+			opts:  models.SearchOptions{Type: "post", Status: "open", Sort: "relevance", Page: 1, PerPage: 20},
 		},
 	}
 
@@ -783,7 +782,7 @@ func TestSearchRepository_Search_ExactTitleMatch(t *testing.T) {
 	}
 
 	for _, title := range titles {
-		insertTestPost(t, pool, ctx, "problem", title,
+		insertTestPost(t, pool, ctx, "post", title,
 			"This is a test description", []string{"go"}, "open")
 	}
 
@@ -854,15 +853,15 @@ func TestSearchRepository_Search_MultiWordQuery(t *testing.T) {
 	ctx := context.Background()
 
 	// Create posts with only one of the search terms
-	insertTestPost(t, pool, ctx, "problem",
+	insertTestPost(t, pool, ctx, "post",
 		"Race detection in concurrent programs",
 		"This post is only about race detection", []string{}, "open")
 
-	insertTestPost(t, pool, ctx, "problem",
+	insertTestPost(t, pool, ctx, "post",
 		"Understanding conditional logic",
 		"This post is only about conditions", []string{}, "open")
 
-	postMW3ID := insertTestPost(t, pool, ctx, "problem",
+	postMW3ID := insertTestPost(t, pool, ctx, "post",
 		"Race condition debugging",
 		"This post has both race and condition", []string{}, "open")
 
@@ -910,15 +909,15 @@ func TestSearch_IdeasFoundAndVoteScorePresent(t *testing.T) {
 	ctx := context.Background()
 
 	// Insert idea with "Solvr" capitalized in title (simulates the production bug scenario)
-	postSolvrID := insertTestPostWithVotes(t, pool, ctx, "idea",
+	postSolvrID := insertTestPostWithVotes(t, pool, ctx, "post",
 		"Pattern: Solvr API Key Not in Environment",
 		"When SOLVR_API_KEY is not set, the agent fails silently with no helpful message.",
 		[]string{"solvr", "environment"}, "open", 5, 0) // upvotes=5, downvotes=0 → vote_score=5
 
-	// Search for "solvr" (lowercase) with type=idea filter
+	// Search for "solvr" (lowercase) with the type filter (every post is type post, idx 68)
 	// PostgreSQL tsvector normalizes case so "Solvr" and "solvr" are equivalent
 	results, total, _, _, err := repo.Search(ctx, "solvr", models.SearchOptions{
-		Type:    "idea",
+		Type:    "post",
 		Page:    1,
 		PerPage: 20,
 	})
@@ -939,8 +938,8 @@ func TestSearch_IdeasFoundAndVoteScorePresent(t *testing.T) {
 			if r.VoteScore != 5 {
 				t.Errorf("vote_score field missing or wrong: expected 5 (upvotes-downvotes), got %d — check SQL alias in search.go", r.VoteScore)
 			}
-			if r.Type != "idea" {
-				t.Errorf("expected type=idea, got %s", r.Type)
+			if r.Type != "post" {
+				t.Errorf("expected type=post, got %s", r.Type)
 			}
 			break
 		}
@@ -964,7 +963,7 @@ func TestSearchRepository_Search_PartialWordMatch(t *testing.T) {
 	repo := NewSearchRepository(pool)
 	ctx := context.Background()
 
-	insertTestPost(t, pool, ctx, "problem",
+	insertTestPost(t, pool, ctx, "post",
 		"Race conditions in Go",
 		"Description", []string{}, "open")
 

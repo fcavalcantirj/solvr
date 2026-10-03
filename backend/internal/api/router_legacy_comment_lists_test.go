@@ -7,16 +7,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 
 // Task idx 73 step 3: the legacy comment lists are retired. Their comments are the replies the
-// cutover makes (MigrateContributions), so following each route's instructions on GET
+// cutover made (MigrateContributions), so following each route's instructions on GET
 // /v1/posts/{id}/replies must find exactly the comments the route listed, with the fields the
-// instructions name.
+// instructions name. The legacy tables are archived (000138): the fixture seeds the replies as
+// the migration shaped them.
 
 // legacyCommentRow is one comment as the retired list served it.
 type legacyCommentRow struct {
@@ -64,69 +64,69 @@ func TestRetiredCommentLists_RepliesListWhatTheRouteListed(t *testing.T) {
 	authors := map[string]string{"agent": agentID, "human": userID}
 
 	marker := uuid.NewString()
-	post := func(typ string) string {
+	post := func(label string) string {
 		var id string
 		require.NoError(t, pool.QueryRow(ctx,
 			`INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status, visibility)
-			 VALUES ($1, $2, $3, 'agent', $4, 'open', 'public') RETURNING id::text`,
-			typ, "retired comment lists "+typ+" "+marker, "retired comment lists fixture "+marker, agentID).Scan(&id))
+			 VALUES ('post', $1, $2, 'agent', $3, 'open', 'public') RETURNING id::text`,
+			"retired comment lists "+label+" "+marker, "retired comment lists fixture "+marker, agentID).Scan(&id))
 		return id
 	}
 	problem, question, idea := post("problem"), post("question"), post("idea")
-	var approach, answer, response string
-	require.NoError(t, pool.QueryRow(ctx, `INSERT INTO approaches (problem_id, author_type, author_id, angle, method)
-		VALUES ($1::uuid, 'agent', $2, 'fixture angle', 'fixture method') RETURNING id::text`, problem, agentID).Scan(&approach))
-	require.NoError(t, pool.QueryRow(ctx, `INSERT INTO answers (question_id, author_type, author_id, content)
-		VALUES ($1::uuid, 'agent', $2, 'fixture answer') RETURNING id::text`, question, agentID).Scan(&answer))
-	require.NoError(t, pool.QueryRow(ctx, `INSERT INTO responses (idea_id, author_type, author_id, content, response_type)
-		VALUES ($1::uuid, 'agent', $2, 'fixture response', 'support') RETURNING id::text`, idea, agentID).Scan(&response))
-	t.Cleanup(func() {
-		c := context.Background()
-		targets := []string{question, approach, answer, response}
-		pool.Exec(c, "DELETE FROM comments WHERE target_id = ANY($1::uuid[])", targets)                        //nolint:errcheck
-		pool.Exec(c, "DELETE FROM replies WHERE post_id = ANY($1::uuid[])", []string{problem, question, idea}) //nolint:errcheck
-		pool.Exec(c, "DELETE FROM approaches WHERE id = $1::uuid", approach)                                   //nolint:errcheck
-		pool.Exec(c, "DELETE FROM answers WHERE id = $1::uuid", answer)                                        //nolint:errcheck
-		pool.Exec(c, "DELETE FROM responses WHERE id = $1::uuid", response)                                    //nolint:errcheck
-		pool.Exec(c, "DELETE FROM posts WHERE id = ANY($1::uuid[])", []string{problem, question, idea})        //nolint:errcheck
+	t.Cleanup(func() { // the replies go with their posts (ON DELETE CASCADE)
+		pool.Exec(context.Background(), "DELETE FROM posts WHERE id = ANY($1::uuid[])", []string{problem, question, idea}) //nolint:errcheck
 	})
+	// The replies the migration made from an approach, an answer and a response; each route's
+	// {id} is the contribution's legacy id.
+	contribution := func(postID, legacyType, body, provenance string) (replyID, legacyID string) {
+		require.NoError(t, pool.QueryRow(ctx, `INSERT INTO replies (post_id, author_type, author_id, body, legacy_type, legacy_id, provenance)
+			VALUES ($1::uuid, 'agent', $2, $3, $4, gen_random_uuid(), $5::jsonb) RETURNING id::text, legacy_id::text`,
+			postID, agentID, body, legacyType, provenance).Scan(&replyID, &legacyID))
+		return replyID, legacyID
+	}
+	approachReply, approach := contribution(problem, "approach", "**Angle:** fixture angle",
+		`{"legacy_table":"approaches","angle":"fixture angle","method":"fixture method","status":"starting"}`)
+	answerReply, answer := contribution(question, "answer", "fixture answer", `{"legacy_table":"answers","is_accepted":false}`)
+	responseReply, response := contribution(idea, "response", "fixture response", `{"legacy_table":"responses","response_type":"support"}`)
 
 	// Two live comments on each target (the human's written first) and a deleted one, which the
-	// retired list never showed.
+	// retired list never showed, each as the migration made it: a reply with the comment's id as
+	// legacy_id, top-level on a post and a child of the target contribution's reply otherwise.
 	base := time.Now().UTC().Add(-3 * time.Hour).Truncate(time.Microsecond)
 	listed := map[string][]legacyCommentRow{}
-	comment := func(targetType, targetID, author string, at time.Time, deleted bool) legacyCommentRow {
-		row := legacyCommentRow{targetType: targetType, targetID: targetID, authorType: author,
+	comment := func(targetType, targetID, postID string, parent any, author string, at time.Time, deleted bool) legacyCommentRow {
+		row := legacyCommentRow{id: uuid.NewString(), targetType: targetType, targetID: targetID, authorType: author,
 			authorID: authors[author], displayName: names[author], createdAt: at,
 			content: author + " comment on " + targetType + " " + uuid.NewString()}
 		var deletedAt *time.Time
 		if deleted {
 			deletedAt = &at
 		}
-		require.NoError(t, pool.QueryRow(ctx, `INSERT INTO comments (target_type, target_id, author_type, author_id, content, created_at, deleted_at)
-			VALUES ($1, $2::uuid, $3, $4, $5, $6, $7) RETURNING id::text`,
-			targetType, targetID, author, row.authorID, row.content, at, deletedAt).Scan(&row.id))
+		_, err := pool.Exec(ctx, `INSERT INTO replies (post_id, parent_reply_id, author_type, author_id, body,
+				legacy_type, legacy_id, provenance, created_at, updated_at, deleted_at)
+			VALUES ($1::uuid, $2::uuid, $3, $4, $5, 'comment', $6::uuid,
+				jsonb_build_object('legacy_table', 'comments', 'target_type', $7::text, 'target_id', $8::text), $9, $9, $10)`,
+			postID, parent, author, row.authorID, row.content, row.id, targetType, targetID, at, deletedAt)
+		require.NoError(t, err)
 		return row
 	}
 	routes := []struct {
 		path, targetType, targetID, postID string
+		parent                             any // the reply migrated from the target contribution; nil for a post
 	}{
-		{"/v1/posts/" + question + "/comments", "post", question, question},
-		{"/v1/approaches/" + approach + "/comments", "approach", approach, problem},
-		{"/v1/answers/" + answer + "/comments", "answer", answer, question},
-		{"/v1/responses/" + response + "/comments", "response", response, idea},
+		{"/v1/posts/" + question + "/comments", "post", question, question, nil},
+		{"/v1/approaches/" + approach + "/comments", "approach", approach, problem, approachReply},
+		{"/v1/answers/" + answer + "/comments", "answer", answer, question, answerReply},
+		{"/v1/responses/" + response + "/comments", "response", response, idea, responseReply},
 	}
 	for i, r := range routes {
 		at := base.Add(time.Duration(i) * time.Minute)
 		listed[r.targetID] = []legacyCommentRow{
-			comment(r.targetType, r.targetID, "human", at, false),
-			comment(r.targetType, r.targetID, "agent", at.Add(10*time.Second), false),
+			comment(r.targetType, r.targetID, r.postID, r.parent, "human", at, false),
+			comment(r.targetType, r.targetID, r.postID, r.parent, "agent", at.Add(10*time.Second), false),
 		}
-		comment(r.targetType, r.targetID, "agent", at.Add(20*time.Second), true)
+		comment(r.targetType, r.targetID, r.postID, r.parent, "agent", at.Add(20*time.Second), true)
 	}
-
-	_, err := db.MigrateContributions(ctx, pool)
-	require.NoError(t, err, "the cutover's contribution migration")
 
 	replies := func(postID, query string) replyListPage {
 		t.Helper()

@@ -99,8 +99,8 @@ func TestPostAuthors_TheMigrationLinksStoredPostsAndLabelsTheRest(t *testing.T) 
 
 	// Posts stored before 000117, one per kind of author.
 	stored := map[string]string{}
-	for _, a := range [][3]string{{"post", "agent", agent}, {"question", "human", human},
-		{"problem", "agent", "stored_agent_without_account"}, {"idea", "human", "stored-human-name"}} {
+	for _, a := range [][3]string{{"post", "agent", agent}, {"post", "human", human},
+		{"post", "agent", "stored_agent_without_account"}, {"post", "human", "stored-human-name"}} {
 		stored[a[2]] = insertTestPostWithAuthor(t, pool, ctx, a[0], "stored post", "a post stored before 000117", nil, "open", a[1], a[2])
 	}
 	_, err = pool.Exec(ctx, migration("up"))

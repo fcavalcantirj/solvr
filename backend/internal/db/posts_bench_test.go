@@ -24,13 +24,8 @@ func setupBenchmarkData(b *testing.B, pool *Pool, numPosts, answersPerPost, appr
 	var postIDs []string
 
 	for i := 0; i < numPosts; i++ {
-		postType := models.PostTypePost
-		if i%2 == 0 {
-			postType = models.PostTypePost
-		}
-
 		post, err := repo.Create(ctx, &models.Post{
-			Type:         postType,
+			Type:         models.PostTypePost,
 			Title:        fmt.Sprintf("Bench Post %d", i),
 			Description:  fmt.Sprintf("Benchmark post %d for perf testing", i),
 			Tags:         []string{"bench", "perf"},
@@ -43,33 +38,23 @@ func setupBenchmarkData(b *testing.B, pool *Pool, numPosts, answersPerPost, appr
 		}
 		postIDs = append(postIDs, post.ID)
 
-		// Insert answers (only for questions)
-		if postType == models.PostTypePost {
-			for j := 0; j < answersPerPost; j++ {
-				_, err := pool.Exec(ctx, `INSERT INTO answers (question_id, author_type, author_id, content)
-					VALUES ($1, 'agent', 'bench_agent', $2)`, post.ID, fmt.Sprintf("Answer %d", j))
-				if err != nil {
-					b.Fatalf("failed to insert benchmark answer: %v", err)
-				}
-			}
+		// Replies shaped like migrated answers on even posts and approaches on odd ones, so the
+		// listing's per-bucket counts have work to do.
+		legacyType, n := "answer", answersPerPost
+		if i%2 == 1 {
+			legacyType, n = "approach", approachesPerPost
 		}
-
-		// Insert approaches (only for problems)
-		if postType == models.PostTypePost {
-			for k := 0; k < approachesPerPost; k++ {
-				_, err := pool.Exec(ctx, `INSERT INTO approaches (problem_id, author_type, author_id, angle)
-					VALUES ($1, 'agent', 'bench_agent', $2)`, post.ID, fmt.Sprintf("Approach %d", k))
-				if err != nil {
-					b.Fatalf("failed to insert benchmark approach: %v", err)
-				}
+		for j := 0; j < n; j++ {
+			_, err := pool.Exec(ctx, `INSERT INTO replies (post_id, author_type, author_id, body, legacy_type, legacy_id)
+				VALUES ($1, 'agent', 'bench_agent', $2, $3, gen_random_uuid())`, post.ID, fmt.Sprintf("%s %d", legacyType, j), legacyType)
+			if err != nil {
+				b.Fatalf("failed to insert benchmark %s reply: %v", legacyType, err)
 			}
 		}
 	}
 
 	return func() {
 		for _, id := range postIDs {
-			_, _ = pool.Exec(ctx, "DELETE FROM answers WHERE question_id = $1", id)
-			_, _ = pool.Exec(ctx, "DELETE FROM approaches WHERE problem_id = $1", id)
 			_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id = $1", id)
 		}
 	}

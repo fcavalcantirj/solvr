@@ -18,8 +18,8 @@ import (
 // Activity uses the same qualifying-action definition as the participant counter.
 
 func TestAcquisitionModel_MonthlyFlowsPartitionEveryIdentityOnce(t *testing.T) {
-	pool, dropLegacy := newMigratedScratchDatabase(t)
-	dropLegacy()
+	pool, archiveLegacy := newPreArchiveScratchDatabase(t)
+	archiveLegacy()
 	ctx := context.Background()
 	f := &participantFixture{t: t, ctx: ctx, pool: pool, n: time.Now().UnixNano() % 1_000_000_000}
 

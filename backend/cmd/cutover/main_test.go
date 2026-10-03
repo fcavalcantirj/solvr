@@ -7,35 +7,49 @@ import (
 	"testing"
 )
 
-// highestMigration is the highest NNNNNN prefix among backend/migrations/*.up.sql: the version
-// `migrate up` leaves a database at, and so the version the cutover must expect by default.
-func highestMigration(t *testing.T) int64 {
+// lastMigrationBeforeLegacyArchive is the highest NNNNNN prefix among backend/migrations/
+// *.up.sql below *_legacy_archive.up.sql: the last schema where the legacy tables are live,
+// and so the only version the cutover may run at. Migrations added after the archive do not
+// move it.
+func lastMigrationBeforeLegacyArchive(t *testing.T) int64 {
 	t.Helper()
 	files, err := filepath.Glob(filepath.Join("..", "..", "migrations", "*.up.sql"))
 	if err != nil || len(files) == 0 {
 		t.Fatalf("no up migrations found in backend/migrations (%v)", err)
 	}
-	var highest int64
-	for _, f := range files {
+	version := func(f string) int64 {
 		prefix, _, _ := strings.Cut(filepath.Base(f), "_")
 		n, err := strconv.ParseInt(prefix, 10, 64)
 		if err != nil {
 			t.Fatalf("migration %s: prefix %q is not a version number", f, prefix)
 		}
-		if n > highest {
-			highest = n
+		return n
+	}
+	var archive int64
+	for _, f := range files {
+		if strings.HasSuffix(f, "_legacy_archive.up.sql") {
+			archive = version(f)
 		}
 	}
-	return highest
+	if archive == 0 {
+		t.Fatal("no *_legacy_archive.up.sql migration")
+	}
+	var last int64
+	for _, f := range files {
+		if n := version(f); n < archive && n > last {
+			last = n
+		}
+	}
+	return last
 }
 
-func TestParseOptions_ExpectsTheHighestMigrationByDefault(t *testing.T) {
+func TestParseOptions_ExpectsTheLastMigrationBeforeTheLegacyArchive(t *testing.T) {
 	opts, err := parseOptions([]string{"--database-url", "postgres://x/db", "--dry-run"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if want := highestMigration(t); opts.expectVersion != want {
-		t.Fatalf("--expect-version defaults to %d, the highest migration is %d: bump the default with every migration", opts.expectVersion, want)
+	if want := lastMigrationBeforeLegacyArchive(t); opts.expectVersion != want {
+		t.Fatalf("--expect-version defaults to %d, the last migration before the legacy archive is %d: the cutover runs only there", opts.expectVersion, want)
 	}
 }
 
@@ -62,8 +76,8 @@ func TestParseOptions_GuardsTheProductionRun(t *testing.T) {
 				if opts.databaseURL != "postgres://x/db" {
 					t.Fatalf("database url %q, want the flag's value", opts.databaseURL)
 				}
-				if want := highestMigration(t); opts.expectVersion != want {
-					t.Fatalf("expect version %d, want the default, the highest migration %d", opts.expectVersion, want)
+				if want := lastMigrationBeforeLegacyArchive(t); opts.expectVersion != want {
+					t.Fatalf("expect version %d, want the default, the last migration before the legacy archive %d", opts.expectVersion, want)
 				}
 				return
 			}

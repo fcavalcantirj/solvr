@@ -78,7 +78,7 @@ func insertApproach(t *testing.T, pool *Pool, ctx context.Context, problemID, au
 // genuine orphans and contributions on non-live posts are reported (step 5), and a second
 // run duplicates nothing (step 6).
 func TestContributionMigration_ConvertsAllTypesAndIsResumable(t *testing.T) {
-	pool := setupTestDB(t)
+	pool, _ := newPreArchiveScratchDatabase(t) // the cutover tool runs below the legacy archive
 	defer pool.Close()
 	ctx := context.Background()
 

@@ -60,7 +60,7 @@ func seedSearchSample(t *testing.T, pool *Pool) searchSampleSeed {
 }
 
 func TestKnowledgeCutover_SearchSampleFindsBeforeAndAfterTheMostFrequentQueries(t *testing.T) {
-	pool, _ := newMigratedScratchDatabase(t)
+	pool, _ := newPreArchiveScratchDatabase(t)
 	ctx := context.Background()
 	seedSearchSample(t, pool)
 
@@ -95,7 +95,7 @@ func TestKnowledgeCutover_SearchSampleFindsBeforeAndAfterTheMostFrequentQueries(
 }
 
 func TestKnowledgeCutover_WithoutASearchSampleNothingIsSampled(t *testing.T) {
-	pool, _ := newMigratedScratchDatabase(t)
+	pool, _ := newPreArchiveScratchDatabase(t)
 	ctx := context.Background()
 	seedSearchSample(t, pool)
 
@@ -108,7 +108,7 @@ func TestKnowledgeCutover_WithoutASearchSampleNothingIsSampled(t *testing.T) {
 }
 
 func TestKnowledgeCutover_ADryRunSamplesOnlyBefore(t *testing.T) {
-	pool, _ := newMigratedScratchDatabase(t)
+	pool, _ := newPreArchiveScratchDatabase(t)
 	ctx := context.Background()
 	seedSearchSample(t, pool)
 
@@ -129,7 +129,7 @@ func TestKnowledgeCutover_ADryRunSamplesOnlyBefore(t *testing.T) {
 // idempotent), so a reply that does not carry its contribution's text is a contribution the
 // search lost: the run fails and names it.
 func TestKnowledgeCutover_SearchSampleFailsWhenAMatchedContributionIsNotFoundAfter(t *testing.T) {
-	pool, _ := newMigratedScratchDatabase(t)
+	pool, _ := newPreArchiveScratchDatabase(t)
 	ctx := context.Background()
 	s := seedSearchSample(t, pool)
 	_, err := pool.Exec(ctx, `INSERT INTO replies (post_id, author_type, author_id, body, legacy_type, legacy_id)
@@ -168,7 +168,7 @@ func TestSearchSampleReport_FailureNamesEveryUnexplainedDifference(t *testing.T)
 // The comparison reads every page: compared by its first page, a query whose new reply
 // matches push old posts down would look like a loss (the rehearsal copy had 908 such).
 func TestKnowledgeCutover_SearchSampleReadsEveryPage(t *testing.T) {
-	pool, _ := newMigratedScratchDatabase(t)
+	pool, _ := newPreArchiveScratchDatabase(t)
 	ctx := context.Background()
 	authorAgent(ctx, t, pool, "ks-agent")
 	_, err := pool.Exec(ctx, `INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)

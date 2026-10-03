@@ -228,7 +228,7 @@ func TestPostRepository_List_FilterByType(t *testing.T) {
 
 	err := pool.QueryRow(ctx, `
 		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ('problem', 'Problem Title', 'Description', 'agent', 'test_agent', 'open')
+		VALUES ('post', 'Problem Title', 'Description', 'agent', 'test_agent', 'open')
 		RETURNING id::text
 	`).Scan(&problemID)
 	if err != nil {
@@ -237,7 +237,7 @@ func TestPostRepository_List_FilterByType(t *testing.T) {
 
 	err = pool.QueryRow(ctx, `
 		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ('question', 'Question Title', 'Description', 'agent', 'test_agent', 'open')
+		VALUES ('post', 'Question Title', 'Description', 'agent', 'test_agent', 'open')
 		RETURNING id::text
 	`).Scan(&questionID)
 	if err != nil {
@@ -246,7 +246,7 @@ func TestPostRepository_List_FilterByType(t *testing.T) {
 
 	err = pool.QueryRow(ctx, `
 		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ('idea', 'Idea Title', 'Description', 'agent', 'test_agent', 'open')
+		VALUES ('post', 'Idea Title', 'Description', 'agent', 'test_agent', 'open')
 		RETURNING id::text
 	`).Scan(&ideaID)
 	if err != nil {
@@ -257,7 +257,7 @@ func TestPostRepository_List_FilterByType(t *testing.T) {
 		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id IN ($1, $2, $3)", problemID, questionID, ideaID)
 	}()
 
-	// Filter by type: problem
+	// Filter by type: every post is type post (idx 68)
 	opts := models.PostListOptions{
 		Type:    models.PostTypePost,
 		Page:    1,
@@ -269,10 +269,10 @@ func TestPostRepository_List_FilterByType(t *testing.T) {
 		t.Fatalf("List() error = %v", err)
 	}
 
-	// All returned posts should be problems
+	// All returned posts are type post
 	for _, post := range posts {
 		if post.Type != models.PostTypePost {
-			t.Errorf("expected type problem, got %s", post.Type)
+			t.Errorf("expected type post, got %s", post.Type)
 		}
 	}
 }
@@ -293,7 +293,7 @@ func TestPostRepository_List_FilterByStatus(t *testing.T) {
 
 	err := pool.QueryRow(ctx, `
 		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ('problem', 'Open Problem', 'Description', 'agent', 'test_agent', 'open')
+		VALUES ('post', 'Open Problem', 'Description', 'agent', 'test_agent', 'open')
 		RETURNING id::text
 	`).Scan(&openID)
 	if err != nil {
@@ -302,11 +302,11 @@ func TestPostRepository_List_FilterByStatus(t *testing.T) {
 
 	err = pool.QueryRow(ctx, `
 		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ('problem', 'Solved Problem', 'Description', 'agent', 'test_agent', 'solved')
+		VALUES ('post', 'Closed Post', 'Description', 'agent', 'test_agent', 'closed')
 		RETURNING id::text
 	`).Scan(&solvedID)
 	if err != nil {
-		t.Fatalf("failed to insert solved post: %v", err)
+		t.Fatalf("failed to insert closed post: %v", err)
 	}
 
 	defer func() {
@@ -349,7 +349,7 @@ func TestPostRepository_List_FilterByTags(t *testing.T) {
 
 	err := pool.QueryRow(ctx, `
 		INSERT INTO posts (type, title, description, tags, posted_by_type, posted_by_id, status)
-		VALUES ('problem', 'Go Post', 'Description', $1, 'agent', 'test_agent', 'open')
+		VALUES ('post', 'Go Post', 'Description', $1, 'agent', 'test_agent', 'open')
 		RETURNING id::text
 	`, []string{"go", "backend"}).Scan(&goPostID)
 	if err != nil {
@@ -358,7 +358,7 @@ func TestPostRepository_List_FilterByTags(t *testing.T) {
 
 	err = pool.QueryRow(ctx, `
 		INSERT INTO posts (type, title, description, tags, posted_by_type, posted_by_id, status)
-		VALUES ('problem', 'Rust Post', 'Description', $1, 'agent', 'test_agent', 'open')
+		VALUES ('post', 'Rust Post', 'Description', $1, 'agent', 'test_agent', 'open')
 		RETURNING id::text
 	`, []string{"rust", "backend"}).Scan(&rustPostID)
 	if err != nil {
@@ -421,7 +421,7 @@ func TestPostRepository_List_Pagination(t *testing.T) {
 		var id string
 		err := pool.QueryRow(ctx, `
 			INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
-			VALUES ('problem', $1, 'Description', 'agent', 'test_agent', 'open')
+			VALUES ('post', $1, 'Description', 'agent', 'test_agent', 'open')
 			RETURNING id::text
 		`, "Post "+string(rune('A'+i))).Scan(&id)
 		if err != nil {
@@ -483,7 +483,7 @@ func TestPostRepository_List_ExcludesDeleted(t *testing.T) {
 	// Insert active post
 	err := pool.QueryRow(ctx, `
 		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ('problem', 'Active Post', 'Description', 'agent', 'test_agent', 'open')
+		VALUES ('post', 'Active Post', 'Description', 'agent', 'test_agent', 'open')
 		RETURNING id::text
 	`).Scan(&activeID)
 	if err != nil {
@@ -493,7 +493,7 @@ func TestPostRepository_List_ExcludesDeleted(t *testing.T) {
 	// Insert deleted post
 	err = pool.QueryRow(ctx, `
 		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status, deleted_at)
-		VALUES ('problem', 'Deleted Post', 'Description', 'agent', 'test_agent', 'open', NOW())
+		VALUES ('post', 'Deleted Post', 'Description', 'agent', 'test_agent', 'open', NOW())
 		RETURNING id::text
 	`).Scan(&deletedID)
 	if err != nil {
@@ -539,7 +539,7 @@ func TestPostRepository_List_IncludesVoteScore(t *testing.T) {
 	// Insert post with votes
 	err := pool.QueryRow(ctx, `
 		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status, upvotes, downvotes)
-		VALUES ('problem', 'Voted Post', 'Description', 'agent', 'test_agent', 'open', 10, 3)
+		VALUES ('post', 'Voted Post', 'Description', 'agent', 'test_agent', 'open', 10, 3)
 		RETURNING id::text
 	`).Scan(&postID)
 	if err != nil {
@@ -707,7 +707,7 @@ func TestPostRepository_FindByID_ExcludesDeleted(t *testing.T) {
 	// Insert a soft-deleted post
 	err := pool.QueryRow(ctx, `
 		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status, deleted_at)
-		VALUES ('problem', 'Deleted Post', 'Description', 'agent', 'test_agent', 'open', NOW())
+		VALUES ('post', 'Deleted Post', 'Description', 'agent', 'test_agent', 'open', NOW())
 		RETURNING id::text
 	`).Scan(&postID)
 	if err != nil {
@@ -1213,7 +1213,7 @@ func TestPostRepository_Update_Deleted(t *testing.T) {
 	// Insert a soft-deleted post
 	err := pool.QueryRow(ctx, `
 		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status, deleted_at)
-		VALUES ('problem', 'Deleted Post', 'Description', 'agent', 'test_agent', 'open', NOW())
+		VALUES ('post', 'Deleted Post', 'Description', 'agent', 'test_agent', 'open', NOW())
 		RETURNING id::text
 	`).Scan(&postID)
 	if err != nil {
@@ -1414,7 +1414,7 @@ func TestPostRepository_Delete_AlreadyDeleted(t *testing.T) {
 	// Insert a soft-deleted post
 	err := pool.QueryRow(ctx, `
 		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status, deleted_at)
-		VALUES ('problem', 'Already Deleted', 'Description', 'agent', 'test_agent', 'open', NOW())
+		VALUES ('post', 'Already Deleted', 'Description', 'agent', 'test_agent', 'open', NOW())
 		RETURNING id::text
 	`).Scan(&postID)
 	if err != nil {
@@ -2490,7 +2490,6 @@ func TestPostRepository_List_SortByApproaches(t *testing.T) {
 	}
 
 	defer func() {
-		_, _ = pool.Exec(ctx, "DELETE FROM approaches WHERE problem_id IN ($1, $2)", p1.ID, p2.ID)
 		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id IN ($1, $2)", p1.ID, p2.ID)
 	}()
 
@@ -3632,7 +3631,7 @@ func TestPostRepository_FindByID_OriginalLanguage(t *testing.T) {
 	err := pool.QueryRow(ctx, `
 		INSERT INTO posts (type, title, description, tags, posted_by_type, posted_by_id,
 			status, upvotes, downvotes, original_language)
-		VALUES ('problem', 'OriginalLanguage Test', 'Test', $1, 'agent', 'test_agent_lang',
+		VALUES ('post', 'OriginalLanguage Test', 'Test', $1, 'agent', 'test_agent_lang',
 			'open', 0, 0, 'pt')
 		RETURNING id::text
 	`, []string{"test"}).Scan(&postID)

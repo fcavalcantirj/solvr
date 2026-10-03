@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/fcavalcantirj/solvr/internal/auth"
@@ -17,10 +16,11 @@ import (
 // only mocked SDK responses. The client contract tests hold each client to recorded
 // examples served by a stub; here the consumer program (contract/consumer: its own module,
 // the Go SDK only, HTTP only) works against the real API on two real schemas:
-//   - clean: every migration applied to an empty database, and the same with the legacy
-//     contribution tables dropped the way schema cleanup will drop them;
+//   - clean: every migration applied to an empty database, the legacy contribution tables
+//     archived out of the public schema with the rest (000138);
 //   - upgraded: the production schema (productionSchemaVersion) holding rows the old
-//     release wrote, migrated to head and converted by the knowledge cutover.
+//     release wrote, migrated to the last schema below the legacy archive, converted by the
+//     knowledge cutover there, then migrated to head, as production upgrades.
 
 func consumerEnv(baseURL, run, plannerKey, executorKey string) map[string]string {
 	return map[string]string{
@@ -31,37 +31,31 @@ func consumerEnv(baseURL, run, plannerKey, executorKey string) map[string]string
 }
 
 func TestExternalConsumer_CleanSchema(t *testing.T) {
-	for _, tc := range []struct {
-		name, run  string
-		dropLegacy bool
-	}{
-		{"every migration", "consumerclean", false},
-		{"legacy tables dropped", "consumernolegacy", true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			dbURL := newConsumerScratchSchema(t, len(consumerSchemaFiles(t)), nil)
-			ts, pool := serveConsumerSchema(t, dbURL)
-			if tc.dropLegacy {
-				_, err := pool.Exec(context.Background(), "DROP TABLE "+strings.Join(db.LegacyTables, ", ")+" CASCADE")
-				require.NoError(t, err, "drop the legacy tables")
-			}
-			bin := buildExternalConsumer(t)
-			plannerID, plannerKey := registerConsumerAgent(t, ts.URL, "consumer_planner")
-			executorID, executorKey := registerConsumerAgent(t, ts.URL, "consumer_executor")
-			env := consumerEnv(ts.URL, tc.run, plannerKey, executorKey)
-
-			rep := runExternalConsumer(t, bin, "collaborate", env)
-			requireConsumerCollaborated(t, pool, rep, plannerID, executorID, tc.run)
-			require.Nil(t, rep.Existing, "no existing content was named")
-
-			// A new post waits for moderation; once approved, search finds it and its replies.
-			approveConsumerPost(t, pool, rep.Post.ID)
-			env["SOLVR_FIND"] = tc.run
-			found := runExternalConsumer(t, bin, "find", env)
-			require.Len(t, found.Searches, 1)
-			requireConsumerFound(t, found, 0, tc.run, rep.Post.ID, rep.Replies[0].ID, rep.Replies[1].ID)
-		})
+	const run = "consumerclean"
+	dbURL := newConsumerScratchSchema(t, len(consumerSchemaFiles(t)), nil)
+	ts, pool := serveConsumerSchema(t, dbURL)
+	// Every migration includes the legacy archive (000138): no legacy table is left in public,
+	// which the "legacy tables dropped" case used to arrange by hand.
+	for _, table := range db.LegacyTables {
+		var live bool
+		require.NoError(t, pool.QueryRow(context.Background(), `SELECT to_regclass('public.' || $1) IS NOT NULL`, table).Scan(&live))
+		require.False(t, live, "%s is archived out of the public schema", table)
 	}
+	bin := buildExternalConsumer(t)
+	plannerID, plannerKey := registerConsumerAgent(t, ts.URL, "consumer_planner")
+	executorID, executorKey := registerConsumerAgent(t, ts.URL, "consumer_executor")
+	env := consumerEnv(ts.URL, run, plannerKey, executorKey)
+
+	rep := runExternalConsumer(t, bin, "collaborate", env)
+	requireConsumerCollaborated(t, pool, rep, plannerID, executorID, run)
+	require.Nil(t, rep.Existing, "no existing content was named")
+
+	// A new post waits for moderation; once approved, search finds it and its replies.
+	approveConsumerPost(t, pool, rep.Post.ID)
+	env["SOLVR_FIND"] = run
+	found := runExternalConsumer(t, bin, "find", env)
+	require.Len(t, found.Searches, 1)
+	requireConsumerFound(t, found, 0, run, rep.Post.ID, rep.Replies[0].ID, rep.Replies[1].ID)
 }
 
 // productionSeed is what the old release wrote, in its own schema.
@@ -126,15 +120,21 @@ func TestExternalConsumer_UpgradedSchema(t *testing.T) {
 
 	legacyKey := auth.GenerateAPIKey()
 	var seed productionSeed
-	dbURL := newConsumerScratchSchema(t, productionSchemaVersion, func(ctx context.Context, conn *pgx.Conn) {
+	dbURL := newUpgradedConsumerSchema(t, func(ctx context.Context, conn *pgx.Conn) {
 		seed = seedProductionSchema(t, ctx, conn, legacyKey)
+	}, func(ctx context.Context, dbURL string) {
+		// The cutover runs below the legacy archive migration, which refuses to archive a
+		// legacy contribution that has no reply.
+		cutPool, err := db.NewPool(ctx, dbURL)
+		require.NoError(t, err)
+		defer cutPool.Close()
+		cut, err := db.RunKnowledgeCutover(ctx, cutPool, db.KnowledgeCutoverOptions{})
+		require.NoError(t, err, "the knowledge cutover")
+		require.Zero(t, cut.PostExceptions)
+		require.EqualValues(t, 2, cut.RepliesCreated, "the answer and the approach become replies")
+		require.EqualValues(t, 1, cut.ProgressNotes)
 	})
 	ts, pool := serveConsumerSchema(t, dbURL)
-	cut, err := db.RunKnowledgeCutover(ctx, pool, db.KnowledgeCutoverOptions{})
-	require.NoError(t, err, "the knowledge cutover")
-	require.Zero(t, cut.PostExceptions)
-	require.EqualValues(t, 2, cut.RepliesCreated, "the answer and the approach become replies")
-	require.EqualValues(t, 1, cut.ProgressNotes)
 	var approachReply string
 	require.NoError(t, pool.QueryRow(ctx, `SELECT id::text FROM replies WHERE legacy_type = 'approach' AND legacy_id = $1`,
 		seed.approach).Scan(&approachReply))
@@ -158,7 +158,7 @@ func TestExternalConsumer_UpgradedSchema(t *testing.T) {
 	require.NotNil(t, ex, "the consumer reports the existing post and room")
 	require.Equal(t, seed.question, ex.Post.ID)
 	require.Equal(t, seed.questionTitle, ex.Post.Title)
-	require.Equal(t, "question", ex.Post.Type, "a migrated post keeps its legacy label")
+	require.Equal(t, "post", ex.Post.Type, "the archive migration made every post type post (000138)")
 	require.Len(t, ex.Replies, 1, "the legacy answer is the question's one reply")
 	migrated := ex.Replies[0]
 	require.NotNil(t, migrated.LegacyType)
@@ -194,15 +194,12 @@ func TestExternalConsumer_UpgradedSchema(t *testing.T) {
 	requireConsumerFound(t, found, 1, "pgbouncer failover", seed.question)
 	requireConsumerFound(t, found, 2, "cooperative sticky assignor", seed.problem, approachReply)
 
-	// A cutover run after the consumer wrote finds nothing left to convert and duplicates nothing.
+	// A cutover run after the upgrade is refused (the legacy tables are archived) and
+	// duplicates nothing.
 	var repliesBefore int
 	require.NoError(t, pool.QueryRow(ctx, `SELECT count(*) FROM replies`).Scan(&repliesBefore))
-	again, err := db.RunKnowledgeCutover(ctx, pool, db.KnowledgeCutoverOptions{})
-	require.NoError(t, err)
-	require.Zero(t, again.PendingContributions)
-	require.Zero(t, again.RepliesCreated)
-	require.Zero(t, again.ProgressNotes)
-	require.Zero(t, again.PostStatesRemapped)
+	_, err := db.RunKnowledgeCutover(ctx, pool, db.KnowledgeCutoverOptions{})
+	require.ErrorIs(t, err, db.ErrLegacyTablesArchived)
 	var repliesAfter int
 	require.NoError(t, pool.QueryRow(ctx, `SELECT count(*) FROM replies`).Scan(&repliesAfter))
 	require.Equal(t, repliesBefore, repliesAfter)

@@ -38,7 +38,7 @@ type postCounts struct{ Answers, Approaches, Comments, Replies int }
 // the answers/approaches sorts follow the buckets, and all of it keeps working once the legacy
 // tables are gone.
 func TestCanonicalPostCounts_KeepTheLegacyCountsAcrossTheCutover(t *testing.T) {
-	pool, dropLegacy := newMigratedScratchDatabase(t)
+	pool, archiveLegacy := newPreArchiveScratchDatabase(t)
 	ctx := context.Background()
 	exec := func(sql string, args ...any) string {
 		t.Helper()
@@ -195,7 +195,7 @@ func TestCanonicalPostCounts_KeepTheLegacyCountsAcrossTheCutover(t *testing.T) {
 	check(migrated)
 	sorted()
 
-	dropLegacy()
+	archiveLegacy()
 	check(migrated)
 	sorted()
 

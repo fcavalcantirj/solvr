@@ -173,7 +173,7 @@ func TestHybridSearchReplies_FusesTextAndVectorOverEligibleReplies(t *testing.T)
 // without re-embedding; it never overwrites a reply's own embedding and a second run
 // changes nothing (task idx 76 step 5).
 func TestRemapLegacyRelations_CopiesLegacyEmbeddingsOntoReplies(t *testing.T) {
-	pool := setupTestDB(t)
+	pool, _ := newPreArchiveScratchDatabase(t) // the cutover tool runs below the legacy archive
 	defer pool.Close()
 	ctx := context.Background()
 
@@ -242,26 +242,31 @@ func TestRemapLegacyRelations_CopiesLegacyEmbeddingsOntoReplies(t *testing.T) {
 	assert.Zero(t, again.Embeddings, "second run copies nothing")
 }
 
-// The registry marks the legacy search functions and vector indexes done exactly when their
-// replacement (replies embedding, HNSW index, hybrid_search_replies) exists in the schema.
-func TestLegacyDependencyRegistry_SearchReplacementsDoneAreTheVerifiedOnes(t *testing.T) {
+// The legacy search functions and vector indexes left public with the legacy archive
+// migration only after their replacement (replies embedding, HNSW index,
+// hybrid_search_replies) exists in the schema, and the registry no longer lists them.
+func TestLegacySearchObjects_LeavePublicAfterTheirReplacement(t *testing.T) {
 	pool := setupTestDB(t)
 	defer pool.Close()
 	ctx := context.Background()
 
-	var fn, idx int
+	var fn, idx, legacy int
 	require.NoError(t, pool.QueryRow(ctx, `SELECT COUNT(*) FROM pg_proc WHERE proname='hybrid_search_replies'`).Scan(&fn))
 	require.NoError(t, pool.QueryRow(ctx, `SELECT COUNT(*) FROM pg_indexes
 		WHERE tablename='replies' AND indexname='idx_replies_embedding' AND indexdef LIKE '%hnsw%'`).Scan(&idx))
 	require.Equal(t, 1, fn, "hybrid_search_replies must exist")
 	require.Equal(t, 1, idx, "replies must have an HNSW embedding index")
+	require.NoError(t, pool.QueryRow(ctx, `SELECT
+		(SELECT COUNT(*) FROM pg_proc WHERE pronamespace = 'public'::regnamespace
+			AND proname IN ('hybrid_search_answers', 'hybrid_search_approaches')) +
+		(SELECT COUNT(*) FROM pg_indexes WHERE schemaname = 'public'
+			AND indexname IN ('idx_answers_embedding', 'idx_approaches_embedding'))`).Scan(&legacy))
+	assert.Zero(t, legacy, "the legacy search functions and indexes left public")
 
 	for _, key := range []string{
 		"function:hybrid_search_answers", "function:hybrid_search_approaches",
 		"index:answers.idx_answers_embedding", "index:approaches.idx_approaches_embedding",
 	} {
-		d, ok := LegacyDependencyDispositions[key]
-		require.True(t, ok, key)
-		assert.True(t, d.Done, "%s should be done", key)
+		assert.NotContains(t, LegacyDependencyDispositions, key)
 	}
 }

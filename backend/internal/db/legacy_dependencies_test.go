@@ -183,9 +183,9 @@ func TestLegacyDependencyRegistry_EveryEntryIsADecision(t *testing.T) {
 	}
 }
 
-// The live catalog of a fully migrated database: every foreign key, view, function,
-// trigger, index, check constraint and column tied to a legacy table or type is found and
-// has a disposition, and the registry names no catalog object that is gone.
+// The live catalog of a fully migrated database: the legacy tables and every object typed by
+// them left public with the legacy archive migration, what is still tied to a legacy type has
+// a disposition, and the registry names no catalog object that is gone.
 func TestDiscoverLegacySchemaDependencies_EveryCatalogObjectHasADisposition(t *testing.T) {
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
@@ -199,8 +199,32 @@ func TestDiscoverLegacySchemaDependencies_EveryCatalogObjectHasADisposition(t *t
 	deps, err := DiscoverLegacySchemaDependencies(ctx, pool)
 	require.NoError(t, err)
 	keys := depKeys(deps)
+	for _, table := range LegacyTables {
+		assert.NotContains(t, keys, "table:"+table, "the legacy archive migration moves it out of public")
+	}
+	for _, k := range []string{
+		"function:hybrid_search_approaches", "function:hybrid_search_answers",
+		"check:votes.votes_target_type_check", "check:flags.flags_target_type_check",
+		"check:reports.reports_target_type_check", "check:posts.posts_type_check",
+		"column:posts.accepted_answer_id",
+	} {
+		assert.NotContains(t, keys, k, "the legacy archive migration drops or narrows it")
+	}
+	assert.Contains(t, keys, "check:replies.replies_legacy_type_check", "replies keep their provenance")
+	assertRegistryCovers(t, deps, map[string]bool{
+		"table": true, "fk": true, "view": true, "function": true, "trigger": true,
+		"index": true, "check": true, "column": true,
+	})
+}
 
-	// Known objects from the migrated schema must be found (the discovery is not vacuous).
+// Below the legacy archive migration the same discovery finds every legacy object (it is not
+// vacuous at head): the tables, the functions typed by their rows, their indexes and foreign
+// keys, the legacy checks and posts.accepted_answer_id.
+func TestDiscoverLegacySchemaDependencies_FindsTheLegacyObjectsBeforeTheArchive(t *testing.T) {
+	pool, _ := newPreArchiveScratchDatabase(t)
+	deps, err := DiscoverLegacySchemaDependencies(context.Background(), pool)
+	require.NoError(t, err)
+	keys := depKeys(deps)
 	for _, k := range []string{
 		"table:approaches", "table:answers", "table:responses", "table:comments",
 		"table:approach_relationships", "table:progress_notes",
@@ -216,8 +240,4 @@ func TestDiscoverLegacySchemaDependencies_EveryCatalogObjectHasADisposition(t *t
 			assert.Equal(t, "table:answers", d.Owner)
 		}
 	}
-	assertRegistryCovers(t, deps, map[string]bool{
-		"table": true, "fk": true, "view": true, "function": true, "trigger": true,
-		"index": true, "check": true, "column": true,
-	})
 }

@@ -16,11 +16,11 @@ import (
 // rehearsal on the restored production dump showed the down path aborting on the first row
 // the new model can write and the old schema cannot hold: 000089.down re-adds the vote and
 // report target checks without 'reply', and 000088.down re-adds the typed-only posts check
-// although new posts default to the canonical type 'post'. Every down migration from 128 to
-// 85 must now run over such rows, and each row the old schema cannot hold must be archived
-// in rollback_archive rather than dropped silently.
+// although new posts default to the canonical type 'post'. Every down migration from the
+// legacy archive (000138) to 85 must now run over such rows, and each row the old schema cannot
+// hold must be archived in rollback_archive rather than dropped silently.
 func TestCutoverRollback_DownPathKeepsOrArchivesEveryPostCutoverWrite(t *testing.T) {
-	pool, _ := newMigratedScratchDatabase(t)
+	pool, archiveLegacy := newPreArchiveScratchDatabase(t)
 	ctx := context.Background()
 
 	exec := func(sql string, args ...any) {
@@ -94,8 +94,15 @@ func TestCutoverRollback_DownPathKeepsOrArchivesEveryPostCutoverWrite(t *testing
 	exec(`INSERT INTO flags (target_type, target_id, reporter_type, reporter_id, reason, status)
 		VALUES ('answer', $1, 'system', 'content-moderation', 'moderation_rejected', 'pending')`, answer)
 
+	// The legacy archive (idx 68) runs last, as on production; the rollback passes through its
+	// down migration, which restores the legacy tables, the posts' legacy fields and the
+	// legacy-target flag exactly, before the rest of the chain runs as it did without it.
+	archiveLegacy()
+	require.Equal(t, 0, countRows(t, pool, ctx, `SELECT count(*) FROM pg_class
+		WHERE relnamespace = 'public'::regnamespace AND relname = 'answers'`), "archived before the rollback")
+
 	applied := migrateDownTo84(ctx, t, pool)
-	require.Equal(t, 53, applied, "down migrations 000137..000085")
+	require.Equal(t, 54, applied, "down migrations 000138..000085")
 
 	var replies *string
 	require.NoError(t, pool.QueryRow(ctx, `SELECT to_regclass('replies')::text`).Scan(&replies))

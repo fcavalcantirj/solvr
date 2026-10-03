@@ -36,7 +36,7 @@ func TestLegacyAgentActivity_ServedCanonically(t *testing.T) {
 // family posts, which the feed never lists. The canonical activity survives dropping the legacy
 // tables unchanged; native replies move it, and a deleted reply or another agent's does not.
 func TestCanonicalAgentActivity_ListsPostsAndRepliesAcrossTheCutover(t *testing.T) {
-	pool, dropLegacy := newMigratedScratchDatabase(t)
+	pool, archiveLegacy := newPreArchiveScratchDatabase(t)
 	ctx := context.Background()
 	exec := func(sql string, args ...any) {
 		t.Helper()
@@ -165,10 +165,19 @@ func TestCanonicalAgentActivity_ListsPostsAndRepliesAcrossTheCutover(t *testing.
 	}
 	assert.Equal(t, 1, familyTitles)
 
-	dropLegacy()
+	archiveLegacy()
 	afterDrop, afterDropTotal := activity(agents, 1, 50)
-	assert.Equal(t, got, afterDrop, "the canonical activity needs no legacy table")
+	// The archive relabels every post's type to post and a retired status to open.
+	archived := make([]models.ActivityItem, len(got))
+	for i, it := range got {
+		if it.Type == "post" {
+			it.PostType, it.Status = "post", archivedPostStatus(it.Status)
+		}
+		archived[i] = it
+	}
+	assert.Equal(t, archived, afterDrop, "the canonical activity needs no legacy table")
 	assert.Equal(t, total, afterDropTotal)
+	got = archived
 
 	// Native replies after the cutover: a's reply on qA, its child reply and a reply on the family
 	// question are listed; a deleted reply and b's reply are not. A native reply is never

@@ -1575,9 +1575,10 @@ export interface APIRoomListResponse {
   data: APIRoomWithStats[];
 }
 
-/** Response from GET /v1/me/rooms — the rooms owned by the authenticated
- *  caller's account family (including private rooms). The API decides which
- *  rooms the caller is authorized to see; the client only renders them. */
+/** Response from GET /v1/me/rooms — the rooms the authenticated caller works in
+ *  (owned or joined; for an agent, also its human's owned rooms), most recently
+ *  active first, private rooms included. The API decides which rooms the caller
+ *  is authorized to see and their order; the client only renders them. */
 export interface APIMyRoomsResponse {
   data: APIRoom[];
 }

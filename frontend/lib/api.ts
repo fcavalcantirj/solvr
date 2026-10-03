@@ -423,9 +423,9 @@ class SolvrAPI extends SolvrAPIBase {
   }
 
   /**
-   * Fetch the rooms owned by the authenticated caller's account family
-   * (GET /v1/me/rooms), including private rooms. Requires authentication; the
-   * API enforces which rooms the caller may see and never returns tokens.
+   * Fetch the rooms the authenticated caller works in, most recently active
+   * first (GET /v1/me/rooms), including private rooms. Requires authentication;
+   * the API enforces which rooms the caller may see and never returns tokens.
    */
   async fetchMyRooms(): Promise<APIMyRoomsResponse> {
     return this.fetch<APIMyRoomsResponse>(`/v1/me/rooms`);

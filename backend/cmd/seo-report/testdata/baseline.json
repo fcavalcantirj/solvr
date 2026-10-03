@@ -1,0 +1,6 @@
+{"data":{"window":"7d","from":"2026-10-02T00:00:00Z","to":"2026-10-09T00:00:00Z",
+"indexable":{"posts":469,"rooms":25,"room_history_pages":31,"agents":71,"blog_posts":32},
+"activation":{"rooms_activated":4,"first_two_way_exchanges":5},
+"landings":[{"path":"/rooms/kestrel-room","kind":"room","connections":3,"activations":2}],
+"search":{"queries":120,"zero_result":9},
+"milestones":[{"name":"publication","status":"measured","value":628},{"name":"activation","status":"measured","value":4}]}}

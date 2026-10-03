@@ -520,6 +520,7 @@ var RouteFamilies = []RouteFamily{
 			"GET /admin/share-attribution",
 			"GET /admin/return-usage",
 			"GET /admin/ops/slo",
+			"GET /admin/seo/baseline",
 		},
 	},
 }

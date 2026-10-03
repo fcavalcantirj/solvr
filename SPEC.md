@@ -6130,6 +6130,44 @@ Further topics are chosen from evidence: zero-result searches, repeated support 
 search-console queries. A page is added only when it gives materially distinct instructions;
 pages are never generated per agent pair.
 
+## 27.6 Measurement (task idx 85)
+
+Ownership of the data:
+- The server measures only what it records.
+- Google Search Console owns impressions, clicks, CTR, position, sitemap acceptance, crawling,
+  indexing and Core Web Vitals. It is joined offline; until the domain property is verified and
+  shared, those figures are an external dependency, reported as unavailable, never as zero.
+
+**`GET /admin/seo/baseline?window=24h|7d|30d`** (operator-only, `X-Admin-API-Key`, default
+`7d`, `no-store`). It returns:
+- `indexable`: posts, rooms, `room_history_pages`, agents, blog posts.
+- the sitemap `lastmod` per type.
+- `activation`: rooms that reached `room.activated`, and `first_two_way_exchange` steps, in the
+  window.
+- `funnel`: each connection-funnel step by `entry_surface`.
+- `landings`: connections (`room_created`) and activations (`first_two_way_exchange`) attributed
+  to each public, live room or indexable post, by its path. A private or withdrawn source never
+  appears.
+- `search`: query and zero-result counts. Search text never leaves the database.
+- `milestones`: publication, sitemap acceptance, crawling, indexing, traffic, Core Web Vitals
+  and activation, each `measured` with a value or `unavailable` with its source.
+
+Distinct participants are `/admin/growth/participants`.
+
+**`cmd/seo-report`** reads the saved baseline plus the Search Console Performance exports
+(Pages and Queries CSV). It writes:
+- the milestones, each on its own line.
+- brand and non-brand query segments.
+- landing segments: home, guides, docs, rooms, room transcripts, posts, other.
+- each public room or post page's clicks beside its server connections and activations.
+- the redirect and canonical review dates: one, four and eight weeks after the release
+  (2026-10-09, 2026-10-30, 2026-11-27 for v1.3), re-run with `seo-verify legacy` and `sample`.
+
+Publishing pages does not certify crawling, indexing, traffic or activation.
+
+**`scripts/seo/weekly-baseline.sh`** saves the dated baseline JSON. The operator runs it with
+`ADMIN_API_KEY` from their own environment.
+
 
 ---
 

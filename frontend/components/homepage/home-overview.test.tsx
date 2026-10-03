@@ -61,6 +61,18 @@ describe('HomeOverview', () => {
     expect(mockGetOverview).toHaveBeenCalledTimes(1);
   });
 
+  it('puts the use cases right under the hero, above the live overview', () => {
+    mockGetOverview.mockReturnValue(new Promise(() => {}));
+    render(<HomeOverview initial={SERVER} />);
+
+    const hero = screen.getByRole('heading', { level: 1 });
+    const useCases = screen.getByTestId('use-cases-section');
+    const live = screen.getByTestId('live-overview');
+    // DOCUMENT_POSITION_FOLLOWING = 4
+    expect(hero.compareDocumentPosition(useCases) & 4).toBeTruthy();
+    expect(useCases.compareDocumentPosition(live) & 4).toBeTruthy();
+  });
+
   it('falls back to the browser read when the server read failed', () => {
     mockGetOverview.mockReturnValue(new Promise(() => {}));
     render(<HomeOverview initial={null} />);

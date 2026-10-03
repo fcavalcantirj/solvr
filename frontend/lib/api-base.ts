@@ -222,35 +222,6 @@ export class SolvrAPIBase {
     return this.fetch<{ data: APIRoom[] }>(`/v1/posts/${id}/rooms`);
   }
 
-  async getQuestionAnswers(questionId: string, params?: { page?: number; per_page?: number }): Promise<APIAnswersResponse> {
-    const searchParams = new URLSearchParams();
-    if (params?.page) searchParams.set('page', params.page.toString());
-    if (params?.per_page) searchParams.set('per_page', params.per_page.toString());
-
-    const query = searchParams.toString();
-    return this.fetch<APIAnswersResponse>(`/v1/questions/${questionId}/answers${query ? `?${query}` : ''}`);
-  }
-
-  async getProblemApproaches(problemId: string, params?: { page?: number; per_page?: number }): Promise<APIApproachesResponse> {
-    const searchParams = new URLSearchParams();
-    if (params?.page) searchParams.set('page', params.page.toString());
-    if (params?.per_page) searchParams.set('per_page', params.per_page.toString());
-
-    const query = searchParams.toString();
-    return this.fetch<APIApproachesResponse>(`/v1/problems/${problemId}/approaches${query ? `?${query}` : ''}`);
-  }
-
-  async getApproachHistory(problemId: string, approachId: string, depth?: number): Promise<{ data: APIApproachVersionHistory }> {
-    const searchParams = new URLSearchParams();
-    if (depth) searchParams.set('depth', depth.toString());
-    const query = searchParams.toString();
-    return this.fetch<{ data: APIApproachVersionHistory }>(`/v1/problems/${problemId}/approaches/${approachId}/history${query ? `?${query}` : ''}`);
-  }
-
-  async exportProblem(problemId: string): Promise<{ markdown: string; token_estimate: number }> {
-    return this.fetch<{ markdown: string; token_estimate: number }>(`/v1/problems/${problemId}/export`);
-  }
-
   async getFeed(params?: { sort?: string; limit?: number }): Promise<APIPostsResponse> {
     const searchParams = new URLSearchParams();
     if (params?.sort) searchParams.set('sort', params.sort);
@@ -370,29 +341,8 @@ export class SolvrAPIBase {
     });
   }
 
-  async createAnswer(questionId: string, content: string): Promise<APICreateAnswerResponse> {
-    return this.fetch<APICreateAnswerResponse>(`/v1/questions/${questionId}/answers`, {
-      method: 'POST',
-      body: JSON.stringify({ content }),
-    });
-  }
-
-  async createApproach(problemId: string, data: CreateApproachData): Promise<APICreateApproachResponse> {
-    return this.fetch<APICreateApproachResponse>(`/v1/problems/${problemId}/approaches`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
   async addProgressNote(approachId: string, content: string): Promise<APICreateProgressNoteResponse> {
     return this.fetch<APICreateProgressNoteResponse>(`/v1/approaches/${approachId}/progress`, {
-      method: 'POST',
-      body: JSON.stringify({ content }),
-    });
-  }
-
-  async createResponse(ideaId: string, content: string): Promise<APICreateResponseResponse> {
-    return this.fetch<APICreateResponseResponse>(`/v1/ideas/${ideaId}/responses`, {
       method: 'POST',
       body: JSON.stringify({ content }),
     });
@@ -431,12 +381,6 @@ export class SolvrAPIBase {
 
   async deleteComment(commentId: string): Promise<void> {
     await this.fetch<void>(`/v1/comments/${commentId}`, { method: 'DELETE' });
-  }
-
-  async acceptAnswer(questionId: string, answerId: string): Promise<APIAcceptAnswerResponse> {
-    return this.fetch<APIAcceptAnswerResponse>(`/v1/questions/${questionId}/accept/${answerId}`, {
-      method: 'POST',
-    });
   }
 
   async verifyApproach(approachId: string, verified: boolean = true): Promise<{ message: string; verified: boolean }> {
@@ -596,62 +540,6 @@ export class SolvrAPIBase {
     return this.fetch<APIPostsResponse>(`/v1/me/posts${query ? `?${query}` : ''}`);
   }
 
-  async getMyContributions(params?: { page?: number; per_page?: number }): Promise<APIPostsResponse> {
-    const searchParams = new URLSearchParams();
-    if (params?.page) searchParams.set('page', params.page.toString());
-    if (params?.per_page) searchParams.set('per_page', params.per_page.toString());
-
-    const query = searchParams.toString();
-    return this.fetch<APIPostsResponse>(`/v1/me/contributions${query ? `?${query}` : ''}`);
-  }
-
-  async getIdeas(params?: FetchIdeasParams): Promise<APIIdeasResponse> {
-    const searchParams = new URLSearchParams();
-    if (params?.status) searchParams.set('status', params.status);
-    if (params?.tags && params.tags.length > 0) searchParams.set('tags', params.tags.join(','));
-    if (params?.page) searchParams.set('page', params.page.toString());
-    if (params?.per_page) searchParams.set('per_page', params.per_page.toString());
-    if (params?.sort) searchParams.set('sort', params.sort);
-
-    const query = searchParams.toString();
-    const endpoint = `/v1/ideas${query ? `?${query}` : ''}`;
-
-    try {
-      const response = await this.fetch<APIIdeasResponse>(endpoint);
-
-      // Defensive: validate response structure
-      if (!response || typeof response !== 'object') {
-        console.error('[api.getIdeas] Invalid response format:', response);
-        throw new Error('Invalid API response format');
-      }
-
-      return response;
-    } catch (err) {
-      console.error('[api.getIdeas] Request failed:', endpoint, err);
-      throw err;
-    }
-  }
-
-  async getIdeasStats(): Promise<APIIdeasStatsResponse> {
-    return this.fetch<APIIdeasStatsResponse>('/v1/stats/ideas');
-  }
-
-  async getIdeaResponses(ideaId: string, params?: { page?: number; per_page?: number }): Promise<APIIdeaResponsesResponse> {
-    const searchParams = new URLSearchParams();
-    if (params?.page) searchParams.set('page', params.page.toString());
-    if (params?.per_page) searchParams.set('per_page', params.per_page.toString());
-
-    const query = searchParams.toString();
-    return this.fetch<APIIdeaResponsesResponse>(`/v1/ideas/${ideaId}/responses${query ? `?${query}` : ''}`);
-  }
-
-  async createIdeaResponse(ideaId: string, content: string, responseType: IdeaResponseType): Promise<APICreateResponseResponse> {
-    return this.fetch<APICreateResponseResponse>(`/v1/ideas/${ideaId}/responses`, {
-      method: 'POST',
-      body: JSON.stringify({ content, response_type: responseType }),
-    });
-  }
-
   async updateProfile(data: { display_name?: string; bio?: string }): Promise<APIMeResponse> {
     return this.fetch<APIMeResponse>('/v1/me', {
       method: 'PATCH',
@@ -764,33 +652,6 @@ export class SolvrAPIBase {
 
   async getSitemapCounts(): Promise<APISitemapCountsResponse> {
     return this.fetch<APISitemapCountsResponse>('/v1/sitemap/counts');
-  }
-
-  async getProblems(params?: FetchProblemsParams): Promise<APIPostsResponse> {
-    const searchParams = new URLSearchParams();
-    if (params?.status) searchParams.set('status', params.status);
-    if (params?.tags && params.tags.length > 0) searchParams.set('tags', params.tags.join(','));
-    if (params?.page) searchParams.set('page', params.page.toString());
-    if (params?.per_page) searchParams.set('per_page', params.per_page.toString());
-    if (params?.sort) searchParams.set('sort', params.sort);
-
-    const query = searchParams.toString();
-    const endpoint = `/v1/problems${query ? `?${query}` : ''}`;
-
-    try {
-      const response = await this.fetch<APIPostsResponse>(endpoint);
-
-      // Defensive: validate response structure
-      if (!response || typeof response !== 'object') {
-        console.error('[api.getProblems] Invalid response format:', response);
-        throw new Error('Invalid API response format');
-      }
-
-      return response;
-    } catch (err) {
-      console.error('[api.getProblems] Request failed:', endpoint, err);
-      throw err;
-    }
   }
 
 }

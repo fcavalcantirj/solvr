@@ -43,18 +43,22 @@ function matcherCovers(route: string): boolean {
 }
 
 describe('web post creation is canonical (idx 52)', () => {
-  const pages = sourceFiles(join(FRONTEND, 'app')).filter((f) => /page\.tsx$/.test(f));
-  const typedPages = pages.filter((f) => readFileSync(f, 'utf8').includes(TYPED_FORM));
-
-  it('finds the pages that still hold the typed form (the check below is not vacuous)', () => {
-    expect(typedPages.map(routeOf)).toContain('/new');
+  // The legacy code went all at once (lane C cleanup): the typed form and every page
+  // that rendered it are gone, and their old URLs still reach the canonical composer.
+  it('renders the typed form nowhere: no source file imports it any more', () => {
+    const holders = ['app', 'components', 'hooks', 'lib']
+      .flatMap((d) => sourceFiles(join(FRONTEND, d)))
+      .filter((f) => readFileSync(f, 'utf8').includes(TYPED_FORM))
+      .map((f) => relative(FRONTEND, f));
+    expect(holders).toEqual([]);
+    expect(sourceFiles(join(FRONTEND, 'app')).filter((f) => /page\.tsx$/.test(f)).map(routeOf)).not.toContain('/new');
   });
 
-  it('redirects every page that renders the typed form to the canonical composer before it renders', () => {
-    const reachable = typedPages
-      .map(routeOf)
-      .filter((route) => canonicalPath(route) !== '/posts/new' || !matcherCovers(route));
-    expect(reachable).toEqual([]);
+  it('still sends every old composer URL to the canonical composer through the middleware', () => {
+    for (const route of ['/new', '/problems/new', '/ideas/new', '/questions/new']) {
+      expect(canonicalPath(route), route).toBe('/posts/new');
+      expect(matcherCovers(route), route).toBe(true);
+    }
   });
 
   it('links nothing in the app to the old /new composer', () => {

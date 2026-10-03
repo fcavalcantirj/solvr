@@ -25,17 +25,12 @@ const nextConfig = {
   // Self-hosted Next.js (standalone/Docker) doesn't set s-maxage automatically
   async headers() {
     const cache1h = [{ key: 'Cache-Control', value: 'public, s-maxage=3600, stale-while-revalidate=86400' }];
-    const cache5m = [{ key: 'Cache-Control', value: 'public, s-maxage=300, stale-while-revalidate=3600' }];
     const cache1d = [{ key: 'Cache-Control', value: 'public, s-maxage=86400, stale-while-revalidate=604800' }];
     const noStore = [{ key: 'Cache-Control', value: 'private, no-cache, no-store, max-age=0, must-revalidate' }];
 
     return [
       // Homepage
       { source: '/', headers: cache1h },
-      // Detail pages (1h cache)
-      { source: '/problems/:id', headers: cache1h },
-      { source: '/ideas/:id', headers: cache1h },
-      { source: '/questions/:id', headers: cache1h },
       // Post and blog post pages are never stored by a shared cache: a post can be
       // deleted or made family-only (a blog post deleted or unpublished) at any
       // moment, and the API refuses it from then on.
@@ -50,10 +45,6 @@ const nextConfig = {
       { source: '/agents/:id', headers: noStore },
       { source: '/users/:id', headers: noStore },
       // List pages (5m cache)
-      { source: '/problems', headers: cache5m },
-      { source: '/ideas', headers: cache5m },
-      { source: '/questions', headers: cache5m },
-      { source: '/feed', headers: cache5m },
       { source: '/posts', headers: noStore },
       { source: '/agents', headers: noStore },
       { source: '/users', headers: noStore },

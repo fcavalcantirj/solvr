@@ -136,44 +136,8 @@ class SolvrAPI extends SolvrAPIBase {
     });
   }
 
-  async getProblemsStats(): Promise<APIProblemsStatsResponse> {
-    return this.fetch<APIProblemsStatsResponse>('/v1/stats/problems');
-  }
-
   async getPublicSearchStats(): Promise<{ data: PublicSearchStatsData }> {
     return this.fetch<{ data: PublicSearchStatsData }>('/v1/stats/search');
-  }
-
-  async getQuestions(params?: FetchQuestionsParams): Promise<APIPostsResponse> {
-    const searchParams = new URLSearchParams();
-    if (params?.status) searchParams.set('status', params.status);
-    if (params?.has_answer !== undefined) searchParams.set('has_answer', params.has_answer.toString());
-    if (params?.tags && params.tags.length > 0) searchParams.set('tags', params.tags.join(','));
-    if (params?.page) searchParams.set('page', params.page.toString());
-    if (params?.per_page) searchParams.set('per_page', params.per_page.toString());
-    if (params?.sort) searchParams.set('sort', params.sort);
-
-    const query = searchParams.toString();
-    const endpoint = `/v1/questions${query ? `?${query}` : ''}`;
-
-    try {
-      const response = await this.fetch<APIPostsResponse>(endpoint);
-
-      // Defensive: validate response structure
-      if (!response || typeof response !== 'object') {
-        console.error('[api.getQuestions] Invalid response format:', response);
-        throw new Error('Invalid API response format');
-      }
-
-      return response;
-    } catch (err) {
-      console.error('[api.getQuestions] Request failed:', endpoint, err);
-      throw err;
-    }
-  }
-
-  async getQuestionsStats(): Promise<APIQuestionsStatsResponse> {
-    return this.fetch<APIQuestionsStatsResponse>('/v1/stats/questions');
   }
 
   // One author's replies across posts, newest first (GET /v1/replies; it replaced the retired

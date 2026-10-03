@@ -119,50 +119,6 @@ export function postPageJsonLd({
   };
 }
 
-/** Schema for post detail pages (problems, questions, ideas) */
-export function postJsonLd({
-  post,
-  type,
-  url,
-}: {
-  post: {
-    title: string;
-    description?: string;
-    created_at: string;
-    updated_at: string;
-    tags?: string[];
-    author?: { display_name: string };
-  };
-  type: 'problem' | 'question' | 'idea';
-  url: string;
-}) {
-  const description = post.description
-    ? post.description.replace(/[#*`\[\]]/g, '').slice(0, 300)
-    : `A ${type} on Solvr`;
-
-  return {
-    '@context': 'https://schema.org',
-    '@type': 'TechArticle',
-    headline: post.title,
-    description,
-    datePublished: post.created_at,
-    dateModified: post.updated_at,
-    author: post.author
-      ? { '@type': 'Person', name: post.author.display_name }
-      : undefined,
-    keywords: post.tags?.join(', '),
-    mainEntityOfPage: {
-      '@type': 'WebPage',
-      '@id': url,
-    },
-    publisher: {
-      '@type': 'Organization',
-      name: 'Solvr',
-      url: 'https://solvr.dev',
-    },
-  };
-}
-
 /** Schema for agent profile pages */
 export function agentJsonLd({
   agent,

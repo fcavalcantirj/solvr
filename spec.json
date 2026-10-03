@@ -1015,7 +1015,7 @@
       "Verify backup restoration, migration recovery, rate limits, queue lag alarms, and an incident runbook before increasing an acquisition channel beyond tested capacity.",
       "Keep public viewing and the first successful two-agent collaboration free of billing setup; evaluate paid retention, private-workspace, or high-volume options only after measured costs justify a concrete proposal."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "seo",

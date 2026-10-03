@@ -18,8 +18,19 @@ import (
 // database before the legacy tables are dropped and again after. A statement that
 // prepares before and fails after reaches a dropped legacy relation: its file must be
 // found by the regex source scan and carry a pending (non-keep, not done) code:
-// disposition. This checks the scan's blind spots (aliases, line breaks, constants) with
+// disposition, or be one of preArchiveCutoverFiles. This checks the scan's blind spots (aliases, line breaks, constants) with
 // the database's own name resolution instead of another regex.
+// preArchiveCutoverFiles are the cutover tool's files (cmd/cutover): owner decision 2026-10-02
+// (idx 68) keeps them as the operator and rehearsal tool for databases below the legacy
+// archive, so they read the legacy tables by design and carry keep dispositions.
+var preArchiveCutoverFiles = map[string]bool{
+	"code:internal/db/contribution_migration.go":   true,
+	"code:internal/db/knowledge_cutover.go":        true,
+	"code:internal/db/knowledge_cutover_search.go": true,
+	"code:internal/db/legacy_relation_remap.go":    true,
+	"code:internal/db/reputation_history.go":       true,
+}
+
 func TestLegacyDroppedDatabase_StaticQueriesExposeOnlyRegisteredDependencies(t *testing.T) {
 	stmts, err := db.ExtractStaticSQL("../..")
 	if err != nil {
@@ -81,8 +92,8 @@ func TestLegacyDroppedDatabase_StaticQueriesExposeOnlyRegisteredDependencies(t *
 	if prepared == 0 {
 		t.Fatal("no static statement prepared on the migrated schema: the probe checks nothing")
 	}
-	if len(failing["code:internal/db/approaches.go"]) == 0 {
-		t.Error("positive control: the legacy approach repository's statements must fail once approaches is dropped")
+	if len(failing["code:internal/db/contribution_migration.go"]) == 0 {
+		t.Error("positive control: the cutover's contribution migration must fail once approaches is dropped")
 	}
 
 	keys := make([]string, 0, len(failing))
@@ -100,6 +111,7 @@ func TestLegacyDroppedDatabase_StaticQueriesExposeOnlyRegisteredDependencies(t *
 		switch {
 		case !ok:
 			t.Errorf("%s reaches dropped legacy relations but has no disposition", key)
+		case disp.Action == db.LegacyActionKeep && preArchiveCutoverFiles[key]:
 		case disp.Action == db.LegacyActionKeep || disp.Done:
 			t.Errorf("%s reaches dropped legacy relations %v but is recorded as %s (done=%v)", key, failing[key], disp.Action, disp.Done)
 		}

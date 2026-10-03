@@ -58,16 +58,25 @@ func contribAgent(t *testing.T, ts *httptest.Server, pool *db.Pool) (string, str
 	return id, key
 }
 
+// seedMigratedReply inserts a live reply by authorID on postID shaped like the ones the
+// contribution cutover wrote from a legacy row (legacyType and a legacy id of its own): since
+// the legacy duplicate branches went with the legacy tables (idx 68), the author's former
+// answers, approaches, responses and comments reach the gate only as these replies.
+func seedMigratedReply(t *testing.T, pool *db.Pool, postID, legacyType, authorID, body string) string {
+	t.Helper()
+	return seedLegacy(t, pool, `INSERT INTO replies (post_id, author_type, author_id, body, legacy_type, legacy_id)
+		VALUES ($1, 'agent', $2, $3, $4, gen_random_uuid()) RETURNING id::text`, postID, authorID, body, legacyType)
+}
+
 // The NaoParis case: an author's answer body repeated as a reply on a different post. The
-// legacy answer route is retired (task idx 52), so the author's live answer is seeded; the
-// canonical reply route must still find it (the legacy tables are kept until the all-at-once drop).
+// legacy answer route is retired (task idx 52) and the answer is a migrated reply now; the
+// canonical reply route must still find it.
 func TestContentGate_SameAuthorBodyOnADifferentPost(t *testing.T) {
 	ts, _, pool := newStatusContractServer(t)
 	agentID, key := contribAgent(t, ts, pool)
 	qa, post := seedOpenPost(t, pool, "question"), seedOpenPost(t, pool, "post")
 	text := "Great question! Check out my service at example.dev for the full fix " + uuid.NewString()[:8]
-	answer := seedLegacy(t, pool, `INSERT INTO answers (question_id, author_type, author_id, content)
-		VALUES ($1, 'agent', $2, $3) RETURNING id::text`, qa, agentID, text)
+	answer := seedMigratedReply(t, pool, qa, "answer", agentID, text)
 
 	// Cross-kind: the same text as a canonical reply on another post.
 	requireRefused(t, gateCall(t, ts, key, "/v1/posts/"+post+"/replies", fmt.Sprintf(`{"body":%q}`, text)),
@@ -77,9 +86,8 @@ func TestContentGate_SameAuthorBodyOnADifferentPost(t *testing.T) {
 	require.Equal(t, http.StatusCreated, unique.status, "a unique reply passes: %s", unique.body)
 }
 
-// POST /v1/posts/{id}/replies runs the gate against the author's replies and against the
-// author's live legacy approaches and responses (seeded: their create routes are retired, and
-// so is the progress-note route whose own duplicate check had no other caller).
+// POST /v1/posts/{id}/replies runs the gate against the author's replies, native and migrated
+// from legacy approaches and responses alike.
 func TestContentGate_ReplyApproachResponseProgressRoutes(t *testing.T) {
 	ts, _, pool := newStatusContractServer(t)
 	agentID, key := contribAgent(t, ts, pool)
@@ -92,32 +100,29 @@ func TestContentGate_ReplyApproachResponseProgressRoutes(t *testing.T) {
 	require.Equal(t, http.StatusCreated, first.status, first.body)
 	requireRefused(t, gateCall(t, ts, key, "/v1/posts/"+p2+"/replies", reply), http.StatusConflict, "DUPLICATE_CONTENT", "", first.id)
 
-	// An approach's method, repeated as a reply.
+	// A reply migrated from an approach, repeated as a reply.
 	method := "Wrap the client in a retry budget " + marker + "."
-	approach := seedLegacy(t, pool, `INSERT INTO approaches (problem_id, author_type, author_id, angle, method)
-		VALUES ($1, 'agent', $2, 'Bound the retries', $3) RETURNING id::text`, seedOpenPost(t, pool, "problem"), agentID, method)
+	approach := seedMigratedReply(t, pool, seedOpenPost(t, pool, "problem"), "approach", agentID, method)
 	requireRefused(t, gateCall(t, ts, key, "/v1/posts/"+p2+"/replies", fmt.Sprintf(`{"body":%q}`, method)),
 		http.StatusConflict, "DUPLICATE_CONTENT", "", approach)
 
-	// A response's content, repeated as a reply.
+	// A reply migrated from a response, repeated as a reply.
 	content := "This would pair well with a shared retry budget " + marker + "."
-	response := seedLegacy(t, pool, `INSERT INTO responses (idea_id, author_type, author_id, content, response_type)
-		VALUES ($1, 'agent', $2, $3, 'build') RETURNING id::text`, seedOpenPost(t, pool, "idea"), agentID, content)
+	response := seedMigratedReply(t, pool, seedOpenPost(t, pool, "idea"), "response", agentID, content)
 	requireRefused(t, gateCall(t, ts, key, "/v1/posts/"+p2+"/replies", fmt.Sprintf(`{"body":%q}`, content)),
 		http.StatusConflict, "DUPLICATE_CONTENT", "", response)
 }
 
-// A legacy comment's content, repeated as a reply, is refused wherever the comment was: the
-// four comment create routes are retired (task idx 52), so the author's comments are seeded.
+// A comment's content, repeated as a reply, is refused wherever the comment was: the four
+// comment create routes are retired (task idx 52) and the author's comments are migrated
+// replies now.
 func TestContentGate_CommentRoutes(t *testing.T) {
 	ts, _, pool := newStatusContractServer(t)
 	agentID, key := contribAgent(t, ts, pool)
 	q, post := seedOpenPost(t, pool, "question"), seedOpenPost(t, pool, "post")
-	answer := seedLegacy(t, pool, `INSERT INTO answers (question_id, author_type, author_id, content) VALUES ($1, 'agent', 'agent_gate_seed', 'seed answer') RETURNING id::text`, q)
-	for _, target := range []struct{ kind, id string }{{"answer", answer}, {"post", post}} {
-		content := fmt.Sprintf("+1, same issue here since the upgrade (%s) %s", target.kind, uuid.NewString()[:8])
-		comment := seedLegacy(t, pool, `INSERT INTO comments (target_type, target_id, author_type, author_id, content)
-			VALUES ($1, $2, 'agent', $3, $4) RETURNING id::text`, target.kind, target.id, agentID, content)
+	for _, target := range []string{q, post} {
+		content := fmt.Sprintf("+1, same issue here since the upgrade (%s) %s", target, uuid.NewString()[:8])
+		comment := seedMigratedReply(t, pool, target, "comment", agentID, content)
 		requireRefused(t, gateCall(t, ts, key, "/v1/posts/"+post+"/replies", fmt.Sprintf(`{"body":%q}`, content)),
 			http.StatusConflict, "DUPLICATE_CONTENT", "", comment)
 	}

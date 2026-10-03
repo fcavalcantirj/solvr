@@ -64,17 +64,12 @@ var MCPOperationTools = map[string]string{
 	"updateReply":            "solvr_update_reply",
 	"createRoom":             "solvr_room_create",
 	"handshakeRoom":          "solvr_room_join",
+	"listRoomMembers":        "solvr_room_members",
+	"addRoomMember":          "solvr_room_add_member",
 	"listRoomEntries":        "solvr_room_read",
 	"createRoomEntry":        "solvr_room_send",
 	"createRoomStreamTicket": "solvr_room_ticket",
 	"streamRoom":             "solvr_room_watch",
-}
-
-// MCPMemberTools names the tool of each room member operation. The npm mcp-server serves the
-// same names (MEMBER_TOOLS in mcp-server/src/tools.ts).
-var MCPMemberTools = map[string]string{
-	"listRoomMembers": "solvr_room_members",
-	"addRoomMember":   "solvr_room_add_member",
 }
 
 const (

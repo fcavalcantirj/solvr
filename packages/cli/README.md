@@ -185,7 +185,7 @@ Each command calls one operation of the API's OpenAPI document (`GET /v1/openapi
 listRoomMembers, `room add-member` addRoomMember. The API client's methods are named after the same
 operationIds. `src/__tests__/contract.test.ts` runs every command against the recorded examples in
 `contract/openapi-examples.json` (the request, the `--json` output and each recorded error); `room members` and
-`room add-member` have no recorded example yet and are held by `src/__tests__/members.test.ts`.
+`room add-member` are also held by `src/__tests__/members.test.ts` to the cases the examples do not show.
 
 ## Options
 

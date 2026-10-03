@@ -118,8 +118,21 @@ func (x contractCall) header(option, name string) []string {
 	return []string{option, v}
 }
 
+// field is a string field of the example's request body that the command takes as an
+// argument (its option in body is ""). A missing field fails.
+func (x contractCall) field(name string) string {
+	var fields map[string]interface{}
+	_ = json.Unmarshal(x.req.RequestBody, &fields)
+	v, ok := fields[name].(string)
+	if !ok {
+		x.t.Fatalf("%s: the request body has no string field %s", x.op.OperationID, name)
+	}
+	return v
+}
+
 // body is the options that carry the example's request body: each field becomes the
-// option the command declares for it. A field the command has no option for fails.
+// option the command declares for it ("" for a field the command takes as an argument,
+// see field). A field the command has no option for fails.
 func (x contractCall) body(options map[string]string) []string {
 	if len(x.req.RequestBody) == 0 || string(x.req.RequestBody) == "null" {
 		return nil
@@ -138,6 +151,9 @@ func (x contractCall) body(options map[string]string) []string {
 		option, ok := options[name]
 		if !ok {
 			x.t.Fatalf("%s: the command has no option for the request field %s", x.op.OperationID, name)
+		}
+		if option == "" {
+			continue // an argument of the command line
 		}
 		switch v := fields[name].(type) {
 		case bool:
@@ -182,6 +198,15 @@ func firstItem(answer map[string]interface{}, name string) string {
 	return fmt.Sprint(item[name])
 }
 
+func lastItem(answer map[string]interface{}, name string) string {
+	items, _ := answer["data"].([]interface{})
+	if len(items) == 0 {
+		return "<no item>"
+	}
+	item, _ := items[len(items)-1].(map[string]interface{})
+	return fmt.Sprint(item[name])
+}
+
 func join(parts ...[]string) []string {
 	var out []string
 	for _, p := range parts {
@@ -190,8 +215,8 @@ func join(parts ...[]string) []string {
 	return out
 }
 
-// contractCommands has one command per operationId. Rooms: create, join, read, send,
-// ticket, watch.
+// contractCommands has one command per operationId. Rooms: create, join, members,
+// add-member, read, send, ticket, watch.
 func contractCommands(etag, streamContent string) map[string]contractCommand {
 	return map[string]contractCommand{
 		"createPost": {
@@ -251,6 +276,21 @@ func contractCommands(etag, streamContent string) map[string]contractCommand {
 				return join([]string{"room", "join", x.path("slug")}, x.body(map[string]string{"rotate": "--rotate", "ttl_seconds": "--ttl"}))
 			},
 			shows: func(a map[string]interface{}) []string { return []string{dataField(a, "room_token")} },
+		},
+		"addRoomMember": {
+			args: func(x contractCall) []string {
+				return join([]string{"room", "add-member", x.path("slug"), x.field("agent_id")},
+					x.body(map[string]string{"agent_id": "", "role": "--role"}))
+			},
+			shows: func(a map[string]interface{}) []string {
+				return []string{dataField(a, "agent_id"), dataField(a, "role"), dataField(a, "added_by")}
+			},
+		},
+		"listRoomMembers": {
+			args: func(x contractCall) []string { return []string{"room", "members", x.path("slug")} },
+			shows: func(a map[string]interface{}) []string {
+				return []string{firstItem(a, "agent_id"), firstItem(a, "role"), lastItem(a, "agent_id"), lastItem(a, "added_by")}
+			},
 		},
 		"listRoomEntries": {
 			args: func(x contractCall) []string {

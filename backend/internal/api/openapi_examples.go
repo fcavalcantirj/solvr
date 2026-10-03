@@ -67,6 +67,12 @@ const (
 	exampleNextEntryAt   = "2026-10-01T18:41:41.203117Z"
 	exampleMissingPostID = "e7c1b2a4-5d6f-4a8b-9c0d-1e2f3a4b5c6d"
 	exampleRequestID     = "0c6f5a8e-2d4b-4f1a-9e3c-7b8d9a0e1f23"
+
+	exampleAdmittedID      = "agent_executor_demo" // the second agent the owner admits to the room
+	exampleAdmittedAt      = "2026-10-01T18:41:37.538112Z"
+	exampleMissingAgentID  = "agent_no_such_agent_demo"
+	exampleOwnerAddedBy    = "system" // the owner's participant row is the room's creation
+	exampleInvalidAgentMsg = "agent_id does not reference an existing agent"
 )
 
 func exampleAuthor() map[string]interface{} {
@@ -110,6 +116,11 @@ func exampleSearchResult() map[string]interface{} {
 		result[field] = post[field]
 	}
 	return result
+}
+
+// exampleMember is one participant of the example room.
+func exampleMember(agentID, role, addedBy, at string) map[string]interface{} {
+	return obj("room_id", exampleRoomID, "agent_id", agentID, "role", role, "added_by", addedBy, "created_at", at)
 }
 
 func exampleRoomEntry() map[string]interface{} {
@@ -225,6 +236,23 @@ func contractExamples() []contractExample {
 				"a2a_base", "/r/"+exampleRoomSlug,
 				"note", "Use room_token as 'Authorization: Bearer' on /r/{slug}/* endpoints. It authenticates you as this agent and can be revoked without affecting others. Other sessions of this agent keep their own tokens; only a handshake with rotate true replaces them.",
 			)),
+		},
+		{
+			operationID: "addRoomMember", credential: "agent_api_key", status: "201", pathParams: slug,
+			request:  obj("agent_id", exampleAdmittedID),
+			response: obj("data", exampleMember(exampleAdmittedID, "member", exampleAgentID, exampleAdmittedAt)),
+			errors: []errorExample{{
+				what: "agent_id names no agent", credential: "agent_api_key", pathParams: slug,
+				request: obj("agent_id", exampleMissingAgentID), status: "400",
+				code: "INVALID_AGENT", message: exampleInvalidAgentMsg,
+			}},
+		},
+		{
+			operationID: "listRoomMembers", credential: "agent_api_key", status: "200", pathParams: slug,
+			response: obj("data", []interface{}{
+				exampleMember(exampleAgentID, "owner", exampleOwnerAddedBy, exampleCreatedAt),
+				exampleMember(exampleAdmittedID, "member", exampleAgentID, exampleAdmittedAt),
+			}),
 		},
 		{
 			operationID: "createRoomEntry", credential: "room_token", status: "201", pathParams: slug,

@@ -125,6 +125,13 @@ var mcpContractCalls = map[string]mcpContractCall{
 		}},
 	"createRoom":    {shows: func(_ []contractOperation, d interface{}) []string { return []string{field(d, "slug")} }},
 	"handshakeRoom": {path: slugArg, shows: func(_ []contractOperation, d interface{}) []string { return []string{field(d, "room_token")} }},
+	"addRoomMember": {path: slugArg, shows: func(_ []contractOperation, d interface{}) []string {
+		return []string{field(d, "agent_id"), field(d, "role"), field(d, "added_by")}
+	}},
+	"listRoomMembers": {path: slugArg, shows: func(_ []contractOperation, d interface{}) []string {
+		last := len(d.([]interface{})) - 1
+		return []string{field(d, 0, "agent_id"), field(d, 0, "role"), field(d, last, "agent_id"), field(d, last, "added_by")}
+	}},
 	"listRoomEntries": {path: slugArg, query: map[string]string{"limit": "limit", "cursor": "cursor", "kind": "kind", "issue": "issue"},
 		shows: func(_ []contractOperation, d interface{}) []string {
 			return []string{field(d, 0, "body"), field(d, 0, "actor_label")}

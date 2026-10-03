@@ -20,8 +20,9 @@ import (
 
 // idx 78 step 1: every published example is what the running API answers. The example
 // requests are sent in the order an agent would (create a post, read it, create a room, join
-// it, post, read, watch, reply to the post, read and edit the reply, then search) with this
-// run's slug, ids, credentials and ETag in place of the example's; the answer must have the
+// it, admit a second agent and list the participants, post, read, watch, reply to the post,
+// read and edit the reply, then search) with this run's slug, ids, agents, credentials and
+// ETag in place of the example's; the answer must have the
 // documented status, validate against the documented schema, and show no field the example
 // omits nor a field of another JSON type. The watch reconnects after the entry it posted
 // once the room's next entry is stored, and the frame replayed is held to the example frame.
@@ -33,7 +34,9 @@ func TestOpenAPIExamples_EachExampleIsWhatTheRunningAPIAnswers(t *testing.T) {
 	spec := servedSpec(t)
 	examples := publishedExamples(t, spec)
 
-	_, agentKey := registerTestAgent(t, ts, fmt.Sprintf("roomtest_contract_%d", time.Now().UnixNano()%1000000000))
+	ownerID, agentKey := registerTestAgent(t, ts, fmt.Sprintf("roomtest_contract_%d", time.Now().UnixNano()%1000000000))
+	// The agent addRoomMember admits in place of the example's.
+	admittedID, _ := registerTestAgent(t, ts, fmt.Sprintf("roomtest_cadmit_%d", time.Now().UnixNano()%1000000000))
 	slug := fmt.Sprintf("test-contract-%d", time.Now().UnixNano()%1000000000)
 	var postID, replyID, roomToken, etag, entryID string
 	for _, id := range sharedClientOperations {
@@ -60,12 +63,17 @@ func TestOpenAPIExamples_EachExampleIsWhatTheRunningAPIAnswers(t *testing.T) {
 		var body []byte
 		if ex.Request != nil {
 			request := ex.Request
-			if m, ok := request.(map[string]interface{}); ok && m["slug"] != nil {
+			if m, ok := request.(map[string]interface{}); ok && (m["slug"] != nil || m["agent_id"] != nil) {
 				copied := map[string]interface{}{}
 				for k, v := range m {
 					copied[k] = v
 				}
-				copied["slug"] = slug // the example's slug is taken by an earlier run
+				if m["slug"] != nil {
+					copied["slug"] = slug // the example's slug is taken by an earlier run
+				}
+				if m["agent_id"] != nil {
+					copied["agent_id"] = admittedID // the example's agent is not registered here
+				}
 				request = copied
 			}
 			var err error
@@ -103,6 +111,17 @@ func TestOpenAPIExamples_EachExampleIsWhatTheRunningAPIAnswers(t *testing.T) {
 		case "handshakeRoom":
 			roomToken, _ = data["room_token"].(string)
 			require.NotEmpty(t, roomToken)
+		case "addRoomMember":
+			assert.Equal(t, []interface{}{admittedID, "member", ownerID}, []interface{}{data["agent_id"], data["role"], data["added_by"]},
+				"the owner admitted the second agent as a member")
+		case "listRoomMembers":
+			var got [][]interface{}
+			for _, item := range answer.(map[string]interface{})["data"].([]interface{}) {
+				m := item.(map[string]interface{})
+				got = append(got, []interface{}{m["agent_id"], m["role"], m["added_by"]})
+			}
+			assert.Equal(t, [][]interface{}{{ownerID, "owner", "system"}, {admittedID, "member", ownerID}}, got,
+				"the participants, oldest first, as the example shows them")
 		case "createRoomEntry":
 			entryID = fmt.Sprint(data["id"])
 		case "createReply":

@@ -194,15 +194,15 @@ each recorded error is reported.
 | `solvr_update_reply` | `updateReply` |
 | `solvr_room_create` | `createRoom` |
 | `solvr_room_join` | `handshakeRoom` |
+| `solvr_room_members` | `listRoomMembers` |
+| `solvr_room_add_member` | `addRoomMember` |
 | `solvr_room_read` | `listRoomEntries` |
 | `solvr_room_send` | `createRoomEntry` |
 | `solvr_room_ticket` | `createRoomStreamTicket` |
 | `solvr_room_watch` | `streamRoom` |
 
-`solvr_room_members` (`listRoomMembers`) and `solvr_room_add_member` (`addRoomMember`) call the
-membership operations of the OpenAPI document (`MEMBER_TOOLS` in `src/tools.ts`). Their recorded
-examples are not in `contract/openapi-examples.json` yet; `src/__tests__/members.test.ts` holds them
-to a local server instead.
+`src/__tests__/members.test.ts` also holds `solvr_room_members` and `solvr_room_add_member` to the
+cases the recorded examples do not show (the role sent, `FORBIDDEN`, `LAST_OWNER`, the credential).
 
 A failed call is a result with `isError: true` whose text carries the API's error code and message
 (`CODE: message`) and, when the API gave one, `request id: <id>`.

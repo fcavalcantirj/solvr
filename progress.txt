@@ -12651,3 +12651,181 @@ UAT: step 6 (remove legacy runtime tables after verified reconciliation, keep co
 2026-10-02 22:34 — PRODUCTION DATA FIX (owner: "relink github"; verified by the owner: GitHub login works)
 GitHub login failed because the GitHub identity belonged to felipe_cavalcanti_1, soft-deleted 2026-03-19, and the v1.3 identity gate (db/banned_identities.go IsRefused) refuses any OAuth login whose identity or email belongs to a soft-deleted user (via auth_methods OR the legacy users.auth_provider columns). One atomic DO block, each step required to touch exactly 1 row: the github auth_methods row moved to felipe_cavalcanti; felipe_cavalcanti_1's legacy auth_provider/auth_provider_id cleared; its email given a +deleted-20260319 alias. felipe_cavalcanti_1 stays soft-deleted. felipe_cavalcanti now has github + google.
 Finding (not fixed): the gate cannot tell an owner's own deleted test account from a banned spammer; any future "account suspended" report for a real person needs the same check.
+
+2026-10-02 23:20 — Task idx 78 (spec.json, category functional) — IN PROGRESS, passes STAYS false
+"Keep SDKs, CLI, MCP, skills, and webhooks consistent with the redesigned product"
+SLICE 32 (the fixture slice of REMAINING item "32.."): listRoomMembers and addRoomMember are CONTRACT OPERATIONS.
+The served OpenAPI document records an example of each (addRoomMember also records its INVALID_AGENT error),
+contract/openapi-examples.json is regenerated (13 -> 15 operations), and all 8 first-party consumers hold their
+member method/command/tool to those examples: Go SDK, TS SDK, Python SDK, packages/cli, cli/, mcp-server, backend
+/v1/mcp, skill. MEMBER_TOOLS / MCPMemberTools are folded into OPERATION_TOOLS / MCPOperationTools.
+================================================================================
+
+TASK SELECTION [REAL, spec.json + progress.txt read this session]: false tasks 24, 67, 68, 78-95. OWNER NOTE
+  2026-10-02 22:00: the loop works ONLY idx 78 (slice 32, then its open findings), then idx 79; skip 68, 80-92
+  (lanes) and 24, 67, 93, 94, 95. Continued from slice 31 (HEAD 22208d59). Tree clean at start. The OWNER NOTE
+  token items (a)/(b) were already done by lane T (dc6a7fa1); this slice touches no credential example.
+
+DESIGN (code read this session: openapi_examples*.go, openapi_member_paths.go, the 8 contract tests, handlers
+  rooms_members.go error texts, solvr-rooms.sh member output):
+  - Examples (openapi_examples.go): addRoomMember — agent_api_key, 201, slug planner-executor-demo, request
+    {"agent_id":"agent_executor_demo"}, answer RoomMember {room_id, agent_id, role member, added_by
+    agent_planner_demo, created_at}; error "agent_id names no agent": {"agent_id":"agent_no_such_agent_demo"} ->
+    400 INVALID_AGENT "agent_id does not reference an existing agent" (the handler's text). listRoomMembers —
+    agent_api_key, 200, answer {data: [planner owner added_by "system" (the owner row the API writes), executor
+    member added_by planner]}. Helper exampleMember().
+  - The INVALID_AGENT example must be a code its declared 400 row names (TestOpenAPIExamples_ErrorExamples
+    AreDeclaredAndValid) and that row must stay the shared BadRequest response (TestOpenAPIMembers_Membership
+    OperationsArePublished), so the shared BadRequest text (openapi_conventions.go) now lists "INVALID_AGENT (an
+    agent_id that names no agent)" beside INVALID_ID/INVALID_PARAM. The only test on that text is a Contains of
+    "malformed JSON is always VALIDATION_ERROR" (grep). Why INVALID_AGENT and not another: a role-admin
+    VALIDATION_ERROR or empty-body example fails the request-schema check (role enum, agent_id required);
+    FORBIDDEN needs a second key the live check does not hold; LAST_OWNER would need the same shared-text change
+    on Conflict (open finding, left for the findings slice).
+  - Clients: callers/commands/tools added beside handshakeRoom. Both CLIs take agent_id as an ARGUMENT, so their
+    contract harnesses gained Call.field(name) / contractCall.field(name), and body() skips a field mapped to
+    "" (an argument of the command line); "shows" holds the human output to agent_id/role/added_by (add) and the
+    first and last participant (members). Python surfaced() passes a data-only wrapper (RoomMemberList) as is,
+    per the slice 26 NOTE. Skill: contract() calls for `room add-member`, `room members` and the INVALID_AGENT
+    error, covered list += 2, header comment 13 -> 15 operations.
+
+WHAT CHANGED [REAL, git status --porcelain: 25 files M, none new; git diff --stat: 285+/74-]:
+  PRODUCTION:
+  M backend/internal/api/openapi_examples.go (+28): the two examples, 5 constants, exampleMember().
+  M backend/internal/api/openapi_conventions.go (+1/-1): shared BadRequest text names INVALID_AGENT.
+  M backend/internal/api/handlers/mcp.go (+2/-7): MCPOperationTools gains listRoomMembers/addRoomMember;
+    MCPMemberTools removed (grep: no production use of either map outside mcp.go; /v1/mcp serves the same 15 tools).
+  M mcp-server/src/tools.ts (+3/-10): OPERATION_TOOLS gains the two; MEMBER_TOOLS export removed.
+  M contract/openapi-examples.json (+80/-0): regenerated with SOLVR_WRITE_CLIENT_CONTRACT=1; pure insertion of the
+    two operations (15 operations, sorted by operation_id).
+  DOCS: M SPEC.md 18.2 (the "not contract operations until ..." sentences removed; "one tool per client-contract
+    operation" is true again: 15 tools, 15 operations; TestSpecMCPSections_DocumentTheServedTools PASS);
+    M mcp-server/README.md (contract table +2 rows, the MEMBER_TOOLS paragraph replaced), M packages/cli/README.md,
+    M packages/sdk-python/README.md, M packages/sdk-ts/README.md ("no recorded example yet" sentences replaced).
+  TESTS:
+  M backend/internal/api/openapi_examples_test.go: sharedClientOperations += addRoomMember, listRoomMembers (after
+    handshakeRoom).
+  M backend/internal/api/openapi_examples_errors_test.go: errorExampleFamilies += "addRoomMember": "INVALID_AGENT".
+  M backend/internal/api/openapi_examples_live_test.go: registers a second agent (roomtest_cadmit_*) that stands in
+    for the example's admitted agent (request agent_id substituted like slug); asserts the add answer is
+    {admitted, member, added_by owner} and the list is exactly [{owner, owner, system}, {admitted, member, owner}].
+  M backend/internal/api/handlers/mcp_contract_test.go: mcpContractCalls += the two.
+  M packages/sdk-go/contract_test.go, packages/sdk-ts/src/contract.test.ts, packages/sdk-python/tests/
+    test_contract.py, packages/cli/src/__tests__/contract.test.ts, cli/contract_test.go, mcp-server/src/__tests__/
+    contract.test.ts, skill/scripts/test_contract.sh: the entries above.
+  M backend/internal/api/router_test.go: comment only ("15 tools: one per contract operation").
+
+EXISTING TESTS CHANGED (behavior this slice replaces: the member tools were NOT contract operations; none deleted,
+  skipped or loosened):
+  (1) backend handlers/mcp_members_test.go TestMCPMemberTools_MatchTheNpmServer asserted
+      `reflect.DeepEqual(want, MCPMemberTools)`, `reflect.DeepEqual(npm, MCPMemberTools)` (npm = regex-read
+      MEMBER_TOOLS block) and, per member operation, `assert.False(t, isOperationTool, "%s is not a contract
+      operation yet")`. Same name, now: regex-reads npm OPERATION_TOOLS and asserts, for listRoomMembers ->
+      solvr_room_members and addRoomMember -> solvr_room_add_member, MCPOperationTools[op] == tool, npm[op] ==
+      tool, and the tool is served. The full map equality stays held by TestMCPContract_ToolNamesMatchTheNpmServer
+      and the fixture by TestMCPContract_HasAToolForEveryOperation (both PASS, tdd/green_bemcp.log).
+  (2) mcp-server members.test.ts "MEMBER_TOOLS names the tool of each membership operation, apart from the contract
+      operations" asserted `expect(MEMBER_TOOLS).toEqual({listRoomMembers: 'solvr_room_members', addRoomMember:
+      'solvr_room_add_member'})` and `expect(OPERATION_TOOLS[operation]).toBeUndefined()`. Now "OPERATION_TOOLS
+      names the tool of each membership operation, a contract operation like the others": the same two names read
+      from OPERATION_TOOLS, both served. PASSES (green_mcp.log); contract.test.ts "has a tool for every operation
+      of the contract" also holds them to the fixture.
+  (3) mcp-server replies.test.ts "tools/list serves the tool of every contract operation, of every membership
+      operation and solvr_claim" asserted names == [...OPERATION_TOOLS, ...MEMBER_TOOLS, 'solvr_claim']. Back to
+      its pre-slice-29 form: "tools/list serves the tool of every contract operation and solvr_claim", names ==
+      [...OPERATION_TOOLS, 'solvr_claim'] (still the exact served set of 16). PASSES.
+  (4) Python test_contract.py surfaced() (a helper, not a test) also passes a data-only wrapper; m1 below shows
+      listRoomMembers needs it. No other operation's result is data-only (all 13 passed under the old rule).
+
+TESTS FIRST [logs /tmp/solvr_idx78_s32/; DB: fresh local database solvr_loop_s32 created and migrated to 135 this
+  session on the docker solvr-postgres (5435), dropped at the end]:
+  [TEST] BASELINE (before any change): backend TestOpenAPIExamples|TestOpenAPIMembers 11 PASS, MCP handlers ok;
+    sdk-go ok, cli ok, sdk-ts 83, packages/cli 138, mcp-server 156, python 90, skill test_contract 45/0.
+  [TEST] RED backend (tdd/red_api.log): 4 FAIL — TheSharedOperationsCarryAnExample ("addRoomMember/listRoomMembers
+    publishes no x-solvr-example"), EachFamilyPublishesAnErrorExample, ErrorExamplesAreDeclaredAndValid ("5" not
+    >= "6"), EachExampleIsWhatTheRunningAPIAnswers.
+  [TEST] GREEN backend before regeneration (tdd/green_api_prefixture.log, -run 'TestOpenAPI|TestPublished|TestSpec'):
+    only TheClientFixtureIsThePublishedExamples FAIL ("differs ... rerun with SOLVR_WRITE_CLIENT_CONTRACT=1"); the
+    live test PASSES with both examples and the INVALID_AGENT error sent to the real router. Fixture written
+    (tdd/write_fixture.log ok).
+  [TEST] RED clients against the new fixture, no client change (tdd/red_*.log): sdk-go "addRoomMember: the contract
+    publishes it and no SDK caller exercises it" (+ list); cli/ TestContract_EveryOperationHasACommand + nil-caller
+    panic; sdk-ts 5 failed/21; packages/cli 6 failed/32; mcp-server 4 failed/19; python 4 failed/21; skill "no
+    command for: addRoomMember listRoomMembers" (44/1); backend /v1/mcp TestMCPContract_HasAToolForEveryOperation +
+    the two operations + the INVALID_AGENT error.
+  [TEST] GREEN (tdd/green_*.log): sdk-go contract ok (3 member subtests PASS), cli/ ok (5 member subtests PASS),
+    sdk-ts contract 26/26 (incl. the type check of the new examples against Input<'addRoomMember',1> /
+    Answer<'listRoomMembers'>), python contract 25/25, packages/cli contract 38/38, mcp-server 159/159 (all files)
+    + tsc exit 0, backend `go test -v -run MCP ./internal/api/handlers/` ok with 0 FAIL/SKIP, skill 51/0.
+  MUTATIONS [TEST] (mut/, each alone, restored, `shasum -c mut/orig.sha` 4/4 OK): m1 python surfaced() without the
+    data-only rule -> listRoomMembers FAIL; m2 npm OPERATION_TOOLS loses listRoomMembers -> mcp-server 3 FAIL and
+    backend 2 FAIL (ToolNamesMatchTheNpmServer, MemberTools_MatchTheNpmServer); m3 @solvr/cli api.ts sends a default
+    role -> first attempt `{ role: "member", ...input }` was a NO-OP (room-commands passes role: undefined, which the
+    spread keeps) and 38 passed; re-done as `{ ...input, role: input.role ?? "member" }` -> 3 FAIL (both add runs and
+    the error run); m4 Go SDK ListRoomMembers reads /participants -> FAIL "path .../participants, want .../members".
+
+OTHER CHECKS [this session]:
+  [TEST] FULL CLIENT SUITES after the change: sdk-go ok + go vet; cli/ ok + go vet; sdk-ts 86 (5 files) + tsc 0;
+    packages/cli 143 (8 files) + tsc 0; python 93 passed; mcp-server 159; skill test.sh all passed, test_members 22/0,
+    test_room_credentials 13/0, test_canonical_posts 55/0, test_migration 108/0, test_contract 51/0;
+    shellcheck -S warning test_contract.sh clean.
+  [REAL] `mypy solvr` in packages/sdk-python/.venv exits 1: "Library stubs not installed for requests" — the venv has
+    no types-requests (pip list); solvr/ is byte-identical to HEAD (git diff --quiet). With `--python-version 3.10
+    --disable-error-code import-untyped solvr tests/test_contract.py`: Success, 7 files. Environment, not this change.
+  [TEST] FULL BACKEND once (be_full.log, `go test -count=1 -p 1 ./...`, solvr_loop_s32) -> exit 1, FAIL in
+    internal/api, api/handlers, db. 59 failing names (all_fail.names): the 44 referral_code baseline names exactly
+    (TestBriefing 13, TestCrystallization 4, GetHardcoreUnsolved 5, GetPlatformPulse 1, GetRecentVictories 5,
+    GetRisingIdeas 5, GetTrendingNow 5, GetYouMightLike 5, UserRepository 1), TestIPFSHealthEndpoint (baseline), and
+    14 more whose every failure line is "FATAL: sorry, too many clients already (SQLSTATE 53300)" at connect (28 such
+    lines): TestRoomExpiry_ExpiredRoomIsGoneOnEverySurfaceBeforeTheReaper, TestPinMessageHandler_PinListUnpin,
+    TestPostMessageHandler_{RejectsForeignReferences,StaleSupersedeIsConflict,Supersede},
+    TestSearchIntegration_{ExactTitleMatch,MultiWordQuery,PartialWordMatch}, TestReplyRepository_* (5),
+    TestReplyThreads_AParentBelongsToTheSamePost. pg_stat_activity during the run showed the lane DBs on the same
+    server (solvr_c_verify, solvr_legacy_dropped_*, solvr_g2_*; max_connections 100). Run alone (alone_*.log, -v):
+    all 14 PASS, 0 FAIL/SKIP; with them TestMCPToolsListEndpoint, TestSpecMCPSections_DocumentTheServedTools, the 9
+    TestOpenAPIExamples_* and 10 TestPublished* PASS (22 PASS in internal/api).
+  [TEST] FRONTEND `npm test` once (fe_full.log): 1 failed | 1761 passed (202 files): components/api/
+    api-endpoints.test.tsx "labels a retired write and shows its replacement and migration instead of Try it" —
+    "Test timed out in 5000ms" while the backend suite ran beside it (no file it renders changed). Alone with the
+    three tests that read mcp-server/src/tools.ts and handlers/mcp.go (fe_alone.log: api-endpoints, mcp-tools,
+    api-mcp, api-endpoint-data): 4 files, 67 passed.
+  [REAL] gofmt -l clean on every touched Go file; go vet ./internal/api/ ./internal/api/handlers/ exit 0.
+    ./scripts/check-file-size.sh: "Found 32 file(s) exceeding 800 lines" (same as slices 17-31), none of this
+    slice's (largest cli/contract_test.go 787, not CI-scanned; openapi_examples.go 370).
+
+REAL-API SMOKE [REAL, smoke/]: `go build ./cmd/api`, run under env -i (DATABASE_URL = solvr_loop_s32, throwaway
+  JWT_SECRET, PORT 18100 checked free; no env file read). GET /v1/openapi.json: /rooms/{slug}/members get and post
+  carry x-solvr-example (agent_api_key, slug planner-executor-demo, 200 / 201), post's request example
+  {"agent_id":"agent_executor_demo"}, post's error examples [INVALID_AGENT], the get example lists 2 participants;
+  BadRequest names "INVALID_AGENT (an agent_id that names no agent)". POST /v1/mcp tools/list: 15 tools incl.
+  solvr_room_members and solvr_room_add_member. A registered agent created a room and sent the fixture's recorded
+  error request body to POST /v1/rooms/<slug>/members: {"code":"INVALID_AGENT","message":"agent_id does not
+  reference an existing agent"} with a request_id — the recorded example's code and message. API stopped (port
+  18100: 0 listeners); solvr_loop_s32 (0 connections) dropped; the built binary removed.
+
+VERIFICATION [this session]: [TEST] and [REAL] above. Not run: golangci-lint; frontend lint (lane N recorded 30
+  pre-existing errors; no frontend file changed).
+
+FINDINGS, NOT FIXED:
+  - Slices 6-31 findings stand: members list owner-only (owner call); LAST_OWNER absent from the shared Conflict text;
+    host backstop commit message; the owner's participant row answers added_by "system" (now also shown in the
+    recorded listRoomMembers example, because that is what the API answers); cli/config_test.go not gofmt-clean;
+    MCP versions not bumped (owner call); the skill's dashed adapter commands `room-members`/`room-add-member` beside
+    the canonical ones (owner call); solvr.sh over 800 lines (not CI-scanned).
+  - [REAL] packages/sdk-python/.venv lacks types-requests, so `mypy solvr` fails there (see OTHER CHECKS).
+  - [REAL] The shared Postgres (max_connections 100) is exhausted when the loop's full backend run overlaps the lanes'
+    suites: full runs during parallel lanes report SQLSTATE 53300 failures that pass alone.
+
+REMAINING FOR idx 78 (next slices, in order):
+  33.. the fixable findings: LAST_OWNER in the shared Conflict text (test-first, as INVALID_AGENT here);
+    cli/config_test.go gofmt. Then re-check every step of idx 78 against what slices 1-33 verified and list what is
+    the owner's (version numbers, adapter-command retirement, members list visibility) before deciding whether idx 78
+    can close with UAT lines.
+
+UAT (for when idx 78 closes, not now): as slice 21 (push + deploy so the served skill/installer are 4.0.0, decide
+  the version numbers, regenerate solvr-skill.zip); deploying the API so production /v1/openapi.json and /v1/mcp
+  serve the member examples and tools; publishing @solvr/cli and @solvr/mcp-server and releasing the Go CLI are the
+  owner's.
+
+git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged (idx 78
+  passes stays false).

@@ -75,9 +75,19 @@ class Call {
     return value === undefined ? [] : [option, value];
   }
 
+  /** A string field of the example's request body that the command takes as an argument (its option in body is ""). */
+  field(name: string): string {
+    const value = (this.req.request_body as Record<string, unknown> | null)?.[name];
+    if (typeof value !== "string") {
+      throw new Error(`${this.op.operation_id}: the request body has no string field ${name}`);
+    }
+    return value;
+  }
+
   /**
    * The options that carry the example's request body: each field becomes the option the
-   * command declares for it. A field the command has no option for fails the test.
+   * command declares for it ("" for a field the command takes as an argument, see field).
+   * A field the command has no option for fails the test.
    */
   body(options: Record<string, string>): string[] {
     const body = this.req.request_body;
@@ -85,9 +95,10 @@ class Call {
     const args: string[] = [];
     for (const [field, value] of Object.entries(body as Record<string, unknown>)) {
       const option = options[field];
-      if (!option) {
+      if (option === undefined) {
         throw new Error(`${this.op.operation_id}: the command has no option for the request field ${field}`);
       }
+      if (option === "") continue; // an argument of the command line
       if (value === true) args.push(option);
       else if (Array.isArray(value)) args.push(option, value.join(","));
       else if (typeof value === "string" || typeof value === "number") args.push(option, String(value));
@@ -108,7 +119,9 @@ type Answer = { data: Record<string, unknown> & Array<Record<string, unknown>> }
 
 const slug = (x: Call) => x.path("slug");
 
-// One command per operationId. Rooms: create, join, read, send, ticket, watch.
+const last = (a: Answer) => a.data[a.data.length - 1];
+
+// One command per operationId. Rooms: create, join, members, add-member, read, send, ticket, watch.
 const commands: Record<string, Command> = {
   createPost: {
     args: (x) => ["post", ...x.body({ title: "--title", description: "--description", tags: "--tags", visibility: "--visibility" })],
@@ -145,6 +158,14 @@ const commands: Record<string, Command> = {
   handshakeRoom: {
     args: (x) => ["room", "join", slug(x), ...x.body({ rotate: "--rotate", ttl_seconds: "--ttl" })],
     shows: (a) => [String(a.data.room_token)],
+  },
+  addRoomMember: {
+    args: (x) => ["room", "add-member", slug(x), x.field("agent_id"), ...x.body({ agent_id: "", role: "--role" })],
+    shows: (a) => [String(a.data.agent_id), String(a.data.role), String(a.data.added_by)],
+  },
+  listRoomMembers: {
+    args: (x) => ["room", "members", slug(x)],
+    shows: (a) => [String(a.data[0].agent_id), String(a.data[0].role), String(last(a).agent_id), String(last(a).added_by)],
   },
   listRoomEntries: {
     args: (x) => [

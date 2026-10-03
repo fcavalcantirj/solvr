@@ -18,11 +18,13 @@ import (
 // and response example in the served OpenAPI document, and contract/openapi-examples.json is
 // those same examples in the form the SDK, CLI and MCP tests read.
 
-// sharedClientOperations are the post, room, reply and search operations the clients expose
-// (step 2), in the order an agent calls them: the live check sends them in this order.
+// sharedClientOperations are the post, room, participant, reply and search operations the
+// clients expose (steps 2 and 7), in the order an agent calls them: the live check sends them
+// in this order.
 var sharedClientOperations = []string{
 	"createPost", "getPost",
-	"createRoom", "handshakeRoom", "createRoomEntry", "listRoomEntries", "createRoomStreamTicket", "streamRoom",
+	"createRoom", "handshakeRoom", "addRoomMember", "listRoomMembers",
+	"createRoomEntry", "listRoomEntries", "createRoomStreamTicket", "streamRoom",
 	"createReply", "listReplies", "getReply", "updateReply", "search",
 }
 

@@ -2,7 +2,7 @@
 #
 # test_contract.sh - Contract test of solvr.sh against contract/openapi-examples.json.
 #
-# The examples are the recorded requests and answers of the 13 operations every Solvr client
+# The examples are the recorded requests and answers of the 15 operations every Solvr client
 # shares (the SDKs, both CLIs, the MCP servers and this skill). A local HTTP server bound to
 # 127.0.0.1 answers each example as the API did and records the request solvr.sh sent. Every
 # operation must have a command that sends exactly the example's request (method, escaped
@@ -308,6 +308,12 @@ contract createRoom ok KEY "$KEY" "$SLUG|solvr.sh room join $SLUG" -- \
     room create "$(ex createRoom .request_body.display_name)" --slug "$SLUG" \
     --description "$(ex createRoom .request_body.description)" --tags "$(ex createRoom '.request_body.tags | join(",")')"
 contract handshakeRoom ok KEY "$KEY" "$(ex handshakeRoom .response_body.data.agent_id)|$SLUG" -- room join "$SLUG"
+# member ROW_JQ - a participant of the listRoomMembers example as `room members` shows it.
+member() { ex listRoomMembers "$1 | \"  \\(.agent_id) \\(.role) (added by \\(.added_by), since \\(.created_at))\""; }
+contract addRoomMember ok KEY "$KEY" "$(ex addRoomMember '.response_body.data | "\(.agent_id) is in '"$SLUG"' as \(.role) (added by \(.added_by))"')|solvr.sh room join $SLUG" -- \
+    room add-member "$SLUG" "$(ex addRoomMember .request_body.agent_id)"
+contract listRoomMembers ok KEY "$KEY" "$(ex listRoomMembers '.response_body.data | length') participants of $SLUG:|$(member '.response_body.data[0]')|$(member '.response_body.data[1]')" -- \
+    room members "$SLUG"
 contract createRoomEntry ok KEY "$ROOM_TOKEN" "$(ex createRoomEntry .response_body.data.id)|$SLUG" -- \
     room send "$SLUG" "$(ex createRoomEntry .request_body.body)" --client-entry-id "$(ex createRoomEntry .request_body.client_entry_id)"
 contract listRoomEntries ok KEY "$ROOM_TOKEN" "$(ex listRoomEntries '.response_body.data[0].id')|$(ex listRoomEntries '.response_body.data[0].body')" -- \
@@ -328,6 +334,7 @@ contract search 0 NOKEY - "" -- search ""
 contract streamRoom 0 KEY - "" -- room watch "$SLUG" --ticket "$(ex streamRoom '.errors[0].query.ticket')"
 contract updateReply 0 KEY "$KEY" "" -- \
     update-reply "$REPLY_ID" --if-match "$(ex updateReply '.errors[0].headers["If-Match"]')" --body "$(ex updateReply '.errors[0].request_body.body')"
+contract addRoomMember 0 KEY "$KEY" "" -- room add-member "$SLUG" "$(ex addRoomMember '.errors[0].request_body.agent_id')"
 
 echo ""
 echo "=== room credentials ==="
@@ -359,7 +366,7 @@ record "room watch --json prints the end as an error answer" \
 
 echo ""
 echo "=== every operation has a command ==="
-covered="createPost createReply getPost listReplies getReply updateReply search createRoom handshakeRoom createRoomEntry listRoomEntries createRoomStreamTicket streamRoom"
+covered="createPost createReply getPost listReplies getReply updateReply search createRoom handshakeRoom addRoomMember listRoomMembers createRoomEntry listRoomEntries createRoomStreamTicket streamRoom"
 missing=""
 for op in $(jq -r '.operations[].operation_id' "$CONTRACT"); do
     case " $covered " in *" $op "*) ;; *) missing="$missing $op" ;; esac

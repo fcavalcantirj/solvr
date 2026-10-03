@@ -107,6 +107,8 @@ CALLERS: Dict[str, Callable[[Solvr, Call], Any]] = {
     "updateReply": lambda c, x: c.update_reply(x.path("id"), x.header("If-Match") or "", **x.body()),
     "createRoom": lambda c, x: c.create_room(**x.body()),
     "handshakeRoom": lambda c, x: c.handshake_room(x.path("slug"), **x.body()),
+    "addRoomMember": lambda c, x: c.add_room_member(x.path("slug"), **x.body()),
+    "listRoomMembers": lambda c, x: c.list_room_members(x.path("slug")),
     "listRoomEntries": lambda c, x: c.list_room_entries(
         x.path("slug"),
         cursor=x.query("cursor"),
@@ -263,10 +265,11 @@ def type_error(hint: Any, value: Any, at: str = "$") -> str:
 
 
 def surfaced(result: Any) -> Dict[str, Any]:
-    """What the SDK surfaced, in the answer's shape: a method answers the answer's data, and a page or
-    a write the API answers with meta answers both."""
+    """What the SDK surfaced, in the answer's shape: a method answers the answer's data, a page or
+    a write the API answers with meta answers both, and a list answered as data alone (RoomMemberList)
+    answers that wrapper."""
     value = asdict(result)
-    if "data" in value and "meta" in value:
+    if "data" in value and ("meta" in value or set(value) == {"data"}):
         return value
     return {"data": value}
 

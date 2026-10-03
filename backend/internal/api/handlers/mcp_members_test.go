@@ -3,7 +3,6 @@ package handlers
 import (
 	"net/http"
 	"os"
-	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -194,26 +193,23 @@ func TestMCPRoomMemberTools_DeclareTheirArguments(t *testing.T) {
 	assert.Equal(t, []interface{}{"owner", "member"}, role["enum"])
 }
 
-// Both first-party MCP servers name the member operations' tools alike. They are not contract
-// operations yet (contract/openapi-examples.json has no listRoomMembers or addRoomMember
-// example), so neither server lists them among its operation tools.
+// Both first-party MCP servers name the member operations' tools alike, as contract operations
+// (contract/openapi-examples.json records listRoomMembers and addRoomMember): each server lists
+// them among its operation tools.
 func TestMCPMemberTools_MatchTheNpmServer(t *testing.T) {
 	src, err := os.ReadFile("../../../../mcp-server/src/tools.ts")
 	require.NoError(t, err)
-	block := regexp.MustCompile(`(?s)export const MEMBER_TOOLS[^{]*\{(.*?)\n\};`).FindSubmatch(src)
-	require.NotNil(t, block, "mcp-server/src/tools.ts has no MEMBER_TOOLS")
+	block := regexp.MustCompile(`(?s)export const OPERATION_TOOLS[^{]*\{(.*?)\n\};`).FindSubmatch(src)
+	require.NotNil(t, block, "mcp-server/src/tools.ts has no OPERATION_TOOLS")
 	npm := map[string]string{}
 	for _, m := range regexp.MustCompile(`(\w+): '(solvr_\w+)'`).FindAllStringSubmatch(string(block[1]), -1) {
 		npm[m[1]] = m[2]
 	}
 	want := map[string]string{"listRoomMembers": "solvr_room_members", "addRoomMember": "solvr_room_add_member"}
-	assert.True(t, reflect.DeepEqual(want, MCPMemberTools), "/v1/mcp %v", MCPMemberTools)
-	assert.True(t, reflect.DeepEqual(npm, MCPMemberTools), "npm %v, /v1/mcp %v", npm, MCPMemberTools)
-
 	served := MCPToolNames()
-	for operation, tool := range MCPMemberTools {
+	for operation, tool := range want {
+		assert.Equal(t, tool, MCPOperationTools[operation], "/v1/mcp's tool of %s", operation)
+		assert.Equal(t, tool, npm[operation], "npm's tool of %s", operation)
 		assert.Contains(t, served, tool)
-		_, isOperationTool := MCPOperationTools[operation]
-		assert.False(t, isOperationTool, "%s is not a contract operation yet", operation)
 	}
 }

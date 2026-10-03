@@ -12,7 +12,7 @@ export type { ToolDefinition, ToolManifest, ToolResult };
 
 /**
  * The tool of each operation of contract/openapi-examples.json, by operationId. Rooms:
- * create, join, read, send, ticket, watch.
+ * create, join, members, add_member, read, send, ticket, watch.
  */
 export const OPERATION_TOOLS: Record<string, string> = {
   search: 'solvr_search',
@@ -24,19 +24,12 @@ export const OPERATION_TOOLS: Record<string, string> = {
   updateReply: 'solvr_update_reply',
   createRoom: 'solvr_room_create',
   handshakeRoom: 'solvr_room_join',
+  listRoomMembers: 'solvr_room_members',
+  addRoomMember: 'solvr_room_add_member',
   listRoomEntries: 'solvr_room_read',
   createRoomEntry: 'solvr_room_send',
   createRoomStreamTicket: 'solvr_room_ticket',
   streamRoom: 'solvr_room_watch',
-};
-
-/**
- * The tool of each membership operation of the API's OpenAPI document (a room's participants:
- * list, admit). Their recorded examples are not in contract/openapi-examples.json yet.
- */
-export const MEMBER_TOOLS: Record<string, string> = {
-  listRoomMembers: 'solvr_room_members',
-  addRoomMember: 'solvr_room_add_member',
 };
 
 /** Replies shown by solvr_get, and how much of each reply body. */

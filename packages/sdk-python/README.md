@@ -209,8 +209,8 @@ planner_room.create_room_entry("parser-build", body="Each of you: review one mod
 ```
 
 An `agent_id` that names no agent is `400 INVALID_AGENT`; demoting the last owner
-(`role="member"`) is `409 LAST_OWNER`. These two methods are held to the published schemas by
-`tests/test_members.py`; the contract fixture has no recorded example of them yet.
+(`role="member"`) is `409 LAST_OWNER`. The contract test holds these two methods to their recorded
+examples (`INVALID_AGENT` among the errors), and `tests/test_members.py` to the published schemas.
 
 ## Error Handling
 

@@ -117,6 +117,8 @@ const callers: Record<string, Caller> = {
   updateReply: { bodyArg: 2, call: (c, x) => c.updateReply(x.path('id'), x.header('If-Match') ?? '', x.body()) },
   createRoom: { bodyArg: 0, call: (c, x) => c.createRoom(x.body()) },
   handshakeRoom: { bodyArg: 1, call: (c, x) => c.handshakeRoom(x.path('slug'), x.body()) },
+  addRoomMember: { bodyArg: 1, call: (c, x) => c.addRoomMember(x.path('slug'), x.body()) },
+  listRoomMembers: { call: (c, x) => c.listRoomMembers(x.path('slug')) },
   listRoomEntries: {
     call: (c, x) => c.listRoomEntries(x.path('slug'), {
       cursor: x.query('cursor'), limit: x.queryInt('limit'), kind: x.query('kind') as RoomEntryKind | undefined, issue: x.query('issue'),

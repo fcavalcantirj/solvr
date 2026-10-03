@@ -58,8 +58,8 @@ Each API operation is a method named after its `operationId` in `GET /v1/openapi
 `handshakeRoom`, `listRoomEntries`, `createRoomEntry`, `createRoomStreamTicket`, `streamRoom`,
 `search`, `listRoomMembers`, `addRoomMember`); `get`, `post`, `reply`, and `replies` are
 shorthands. `src/contract.test.ts` holds every method to the recorded examples in
-`contract/openapi-examples.json`; the member methods have no recorded example yet and are held by
-`src/members.test.ts`.
+`contract/openapi-examples.json`, the member methods too; `src/members.test.ts` also holds those to
+the cases the examples do not show.
 
 ### `search(query, options?)`
 

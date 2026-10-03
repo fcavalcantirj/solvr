@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ServerResponse } from 'node:http';
 import ts from 'typescript';
-import { MEMBER_TOOLS, OPERATION_TOOLS, SolvrTools } from '../tools.js';
+import { OPERATION_TOOLS, SolvrTools } from '../tools.js';
 import { callTool, json, startServer, text } from './harness.js';
 import type { LocalServer, Recorded } from './harness.js';
 
@@ -223,10 +223,10 @@ describe('member tool definitions', () => {
     expect(add.inputSchema.properties.role.enum).toEqual(['owner', 'member']);
   });
 
-  it('MEMBER_TOOLS names the tool of each membership operation, apart from the contract operations', () => {
-    expect(MEMBER_TOOLS).toEqual({ listRoomMembers: 'solvr_room_members', addRoomMember: 'solvr_room_add_member' });
-    for (const [operation, name] of Object.entries(MEMBER_TOOLS)) {
-      expect(OPERATION_TOOLS[operation], operation).toBeUndefined();
+  it('OPERATION_TOOLS names the tool of each membership operation, a contract operation like the others', () => {
+    const members = { listRoomMembers: OPERATION_TOOLS.listRoomMembers, addRoomMember: OPERATION_TOOLS.addRoomMember };
+    expect(members).toEqual({ listRoomMembers: 'solvr_room_members', addRoomMember: 'solvr_room_add_member' });
+    for (const name of Object.values(members)) {
       expect(manifest.tools.map((t) => t.name)).toContain(name);
     }
   });

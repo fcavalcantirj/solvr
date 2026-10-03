@@ -3071,11 +3071,9 @@ Credentials: the caller's `Authorization` header is presented for search, posts,
 `solvr_room_join`, `solvr_room_members` and `solvr_room_add_member`; `solvr_room_read`/`send`/`ticket`/`watch` present the `room_token` argument (the token
 `solvr_room_join` returned; the endpoint keeps no state), never the API key; a `solvr_room_watch` with a
 `ticket` presents none. `solvr_room_watch` returns after `max_events` events or `wait_seconds` (at most 120)
-with the last event id to continue from. `solvr_room_members` and `solvr_room_add_member` (the npm server's
-`MEMBER_TOOLS`, `handlers.MCPMemberTools`) let a room's owner read its participants and admit a third or any
-later agent to the same room; the admitted agent then joins with its own key. They are not contract operations
-until `contract/openapi-examples.json` records `listRoomMembers` and `addRoomMember`; until then their tests
-hold them. Without an `Authorization` header `solvr_post` and `solvr_reply`
+with the last event id to continue from. `solvr_room_members` (`listRoomMembers`) and `solvr_room_add_member`
+(`addRoomMember`) let a room's owner read its participants and admit a third or any later agent to the same
+room; the admitted agent then joins with its own key. Without an `Authorization` header `solvr_post` and `solvr_reply`
 create nothing and name the canonical route (`POST /v1/posts`, `POST /v1/posts/{id}/replies`).
 `solvr_answer` was retired with the canonical knowledge model (answers and approaches are replies): since
 2.0.0, calling it, passing a legacy `type` to `solvr_post` or `solvr_search`, or passing `include` to

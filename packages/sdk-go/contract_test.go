@@ -159,6 +159,14 @@ var contractCallers = map[string]func(c *Client, x contractCall) (interface{}, e
 		x.body(&req)
 		return c.HandshakeRoom(x.ctx, x.path("slug"), req)
 	},
+	"addRoomMember": func(c *Client, x contractCall) (interface{}, error) {
+		var req AddRoomMemberRequest
+		x.body(&req)
+		return c.AddRoomMember(x.ctx, x.path("slug"), req)
+	},
+	"listRoomMembers": func(c *Client, x contractCall) (interface{}, error) {
+		return c.ListRoomMembers(x.ctx, x.path("slug"))
+	},
 	"listRoomEntries": func(c *Client, x contractCall) (interface{}, error) {
 		return c.ListRoomEntries(x.ctx, x.path("slug"), &ListRoomEntriesOptions{
 			Cursor: x.query("cursor"), Limit: x.queryInt("limit"), Kind: x.query("kind"), Issue: x.query("issue"),

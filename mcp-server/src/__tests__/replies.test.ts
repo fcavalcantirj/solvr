@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import type { ServerResponse } from 'node:http';
 import { handleRequest } from '../server.js';
-import { MEMBER_TOOLS, OPERATION_TOOLS, SolvrTools } from '../tools.js';
+import { OPERATION_TOOLS, SolvrTools } from '../tools.js';
 import { callTool, json, startServer, text } from './harness.js';
 import type { LocalServer, Recorded } from './harness.js';
 
@@ -94,10 +94,10 @@ describe('solvr_search', () => {
 });
 
 describe('JSON-RPC handler', () => {
-  it('tools/list serves the tool of every contract operation, of every membership operation and solvr_claim', async () => {
+  it('tools/list serves the tool of every contract operation and solvr_claim', async () => {
     const response = await handleRequest({ jsonrpc: '2.0', id: 1, method: 'tools/list' }, new SolvrTools(API_KEY, 'http://127.0.0.1:1'));
     const names = (response.result as { tools: Array<{ name: string }> }).tools.map((t) => t.name);
-    expect(names.sort()).toEqual([...Object.values(OPERATION_TOOLS), ...Object.values(MEMBER_TOOLS), 'solvr_claim'].sort());
+    expect(names.sort()).toEqual([...Object.values(OPERATION_TOOLS), 'solvr_claim'].sort());
   });
 
   it('answers initialize, rejects a call without a tool name and an unknown method', async () => {

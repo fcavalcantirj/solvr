@@ -19,6 +19,7 @@ var errorExampleFamilies = map[string]string{
 	"createRoomEntry": "UNAUTHORIZED",          // rooms: a room token that is not live
 	"streamRoom":      "STREAM_TICKET_INVALID", // watch
 	"search":          "VALIDATION_ERROR",      // search
+	"addRoomMember":   "INVALID_AGENT",         // participants: an agent_id that names no agent
 }
 
 // errorCredentials adds "invalid" to the success credentials: a bearer that is not a live

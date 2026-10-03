@@ -1112,8 +1112,7 @@ func TestMCPToolsListEndpoint(t *testing.T) {
 		t.Fatalf("expected tools to be array, got %T", result["tools"])
 	}
 
-	// Should have 15 tools: one per contract operation (handlers.MCPOperationTools) and the two
-	// room member tools (handlers.MCPMemberTools)
+	// Should have 15 tools: one per contract operation (handlers.MCPOperationTools)
 	if len(tools) != 15 {
 		t.Errorf("expected 15 tools, got %d", len(tools))
 	}

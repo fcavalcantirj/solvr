@@ -75,7 +75,9 @@ interface ToolCall {
 
 const slug = { slug: 'slug' };
 
-// One tool per operationId. Rooms: create, join, read, send, ticket, watch.
+const last = (a: Answer) => a.data[a.data.length - 1];
+
+// One tool per operationId. Rooms: create, join, members, add_member, read, send, ticket, watch.
 const calls: Record<string, ToolCall> = {
   createPost: { tool: 'solvr_post', shows: (a) => [String(a.data.id), String(a.data.title)] },
   getPost: { tool: 'solvr_get', path: { id: 'id' }, shows: (a) => [String(a.data.id), String(a.data.title)] },
@@ -100,6 +102,16 @@ const calls: Record<string, ToolCall> = {
   },
   createRoom: { tool: 'solvr_room_create', shows: (a) => [String(a.data.slug)] },
   handshakeRoom: { tool: 'solvr_room_join', path: slug, shows: (a) => [String(a.data.room_token)] },
+  addRoomMember: {
+    tool: 'solvr_room_add_member',
+    path: slug,
+    shows: (a) => [String(a.data.agent_id), String(a.data.role), String(a.data.added_by)],
+  },
+  listRoomMembers: {
+    tool: 'solvr_room_members',
+    path: slug,
+    shows: (a) => [String(a.data[0].agent_id), String(a.data[0].role), String(last(a).agent_id), String(last(a).added_by)],
+  },
   listRoomEntries: {
     tool: 'solvr_room_read',
     path: slug,

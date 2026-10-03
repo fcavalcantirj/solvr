@@ -14,6 +14,8 @@ Reviewable planning artifacts for spec.json idx 86–91. This repository is publ
 | [stage-plan.md](stage-plan.md) | idx 89 | The four stages, each gate's threshold and sample, statuses, how to record an unmet target |
 | [acquisition-model.md](acquisition-model.md) | idx 90 | The monthly model, worked arithmetic, hypothetical scenarios, channels, bottleneck, monthly review |
 | [acquisition-loop.md](acquisition-loop.md) | idx 87 | Planner→executor positioning, the tic-tac-toe proof, cohort segments, failure interview, returns, copy drafts |
+| [ecosystem-directories.md](ecosystem-directories.md) | idx 91 | Agent-client docs and extension directories, requirements read on each public page, verified or unverified |
+| [ecosystem-priorities.md](ecosystem-priorities.md) | idx 91 | HTTPS baseline, which ecosystems first, how they are judged, demo and partner drafts |
 
 Every outcome these files describe (one million participants, stage gates, cohort retention) is a future outcome.
 Shipping the website or these reports does not meet any of them.

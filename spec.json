@@ -1067,7 +1067,7 @@
       "Verify status codes, redirects, canonical tags, robots directives, internal links, and sitemap entries agree for a representative sample before public cutover.",
       "Use https://developers.google.com/search/docs/crawling-indexing/site-move-with-url-changes as the migration reference; monitor indexing and search traffic after release without guaranteeing that rankings remain unchanged."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "seo",
@@ -1080,7 +1080,7 @@
       "Avoid generating every possible agent-pair landing page; add a dedicated page only when it provides materially distinct instructions and demand is evidenced.",
       "Measure organic landing-to-connection and landing-to-activation conversion, not just impressions or indexed-page count."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "seo",
@@ -1092,7 +1092,7 @@
       "Review migration redirects and selected canonical URLs at one week, four weeks, and eight weeks; investigate dropped useful pages and fix evidence-backed issues.",
       "Treat new page publication, sitemap acceptance, crawling, indexing, traffic, and activated participants as distinct milestones; implementation completion does not certify future ranking or traffic outcomes."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "growth",

@@ -13265,3 +13265,10 @@ Sweep [REAL]: home server HTML carries the hero numbers ("204 agents connected (
 FINDING (not fixed): the web container logs "Failed to update prerender cache for /index [EACCES ... /app/.next/server/app/index.html]" — frontend/Dockerfile copies .next/standalone without --chown while running as nextjs (only .next/cache is chowned), so ISR cannot persist regenerated pages; the client refresh still shows current numbers. Fix: COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./ (owner decision pending).
 Ops note: `docker service logs` hung on the origin during the sweep (killed); read logs with `docker logs <task container>` instead.
 UAT: owner visual review of /, /data, /docs/guides.
+
+2026-10-03 20:23 — v1.3.5 DEPLOYED TO PRODUCTION, web only (owner: "ok to include… deploy now") — orchestrator
+FROZEN c2b318d0 (frontend 0.4.5): e0b8cd61 fix(web) — frontend/Dockerfile copies .next/standalone and .next/static with --chown=nextjs:nodejs (and creates .next owned by nextjs), so ISR can rewrite regenerated pages. API not redeployed (unchanged since v1.3.4).
+Proof before deploy [REAL local, /tmp/solvr-orch/rel135/isr-proof.log]: old v1.3.4 image — index.html owned by root, not rewritten after the 60s window, 4 EACCES; fixed image — owned by nextjs, rewritten (mtime advanced), 0 EACCES.
+Production [REAL]: push 4582a3e4..c2b318d0; web webhook 200; live 20:21:56 (index.html owner root -> nextjs); /, /data, /docs/guides, /connect, /rooms 200; after 65s: STALE then HIT, index.html rewritten (mtime 1791069703 -> 1791069786), 0 EACCES; hero numbers served (api: 204 / 2.5k / 4 / 92).
+Cleanup: lane E and lane H worktrees + branches removed (both merged), solvr_lane_e/h and the v1.3-era rehearsal DBs dropped; window worktrees kept for v1.3.3 (92cb7b26), v1.3.4 (4582a3e4), v1.3.5 (c2b318d0).
+Next: lane S (one slim, beautiful prompt; Impeccable design pass) -> v1.3.6.

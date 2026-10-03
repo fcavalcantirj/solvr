@@ -390,6 +390,11 @@ func scheduledWorkers(pool *db.Pool, tracer *dbErrorTracer) []probeWorker {
 			svc := services.NewHealthCheckerService(pool, probeIPFS{})
 			jobs.NewHealthCheckJob(svc, db.NewServiceCheckRepository(pool)).RunOnce(ctx)
 		}},
+		{"job:OpsAlarmJob", func(ctx context.Context, t *testing.T) {
+			if _, err := jobs.NewOpsAlarmJob(db.NewOpsSLORepository(pool), logger).RunOnce(ctx); err != nil {
+				t.Errorf("ops alarm job: %v", err)
+			}
+		}},
 		{"job:PresenceReaperJob", func(ctx context.Context, _ *testing.T) {
 			registry := hub.NewPresenceRegistry()
 			mgr := hub.NewHubManager(ctx, registry, logger, 0)

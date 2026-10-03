@@ -53,6 +53,7 @@ var LegacyDependencyDispositions = map[string]LegacyDependencyDisposition{
 	// Scheduled jobs (cmd/api/main.go) and LISTEN consumers.
 	"job:CleanupJob":               keep("prunes claim tokens and idempotency keys; touches no legacy table"),
 	"job:HealthCheckJob":           keep("checks API, database and IPFS health; touches no legacy table"),
+	"job:OpsAlarmJob":              keep("judges the webhook_deliveries backlog (OpsSLORepository.WebhookQueue) every 5 minutes and logs WARN on alarm; touches no legacy table"),
 	"job:PresenceReaperJob":        keep("reaps room presence; the room model is not the knowledge model"),
 	"job:SearchDocumentJob":        keep("embeds the posts and replies search_document_drift() lists; touches no legacy table"),
 	"job:WebhookDeliveryJob":       keep("sends the webhook deliveries queued with notification events (webhooks, webhook_deliveries, notifications); touches no legacy table"),

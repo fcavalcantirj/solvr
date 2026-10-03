@@ -94,7 +94,7 @@ describe('useIdeas - evolved_into and field resolution', () => {
     vi.restoreAllMocks();
   });
 
-  it('maps evolved_into array length to branches count', async () => {
+  it('reads no branches from evolved_into, retired with idea evolution (idx 68)', async () => {
     (api.getIdeas as ReturnType<typeof vi.fn>).mockResolvedValue(mockResponse);
 
     const { result } = renderHook(() => useIdeas());
@@ -103,8 +103,8 @@ describe('useIdeas - evolved_into and field resolution', () => {
       expect(result.current.loading).toBe(false);
     });
 
-    // Idea with 3 evolved_into entries should have branches = 3
-    expect(result.current.ideas[0].branches).toBe(3);
+    // Even a payload that still carries 3 evolved_into entries yields no branches.
+    expect(result.current.ideas[0].branches).toBe(0);
   });
 
   it('sets branches to 0 when evolved_into is not present', async () => {
@@ -171,7 +171,7 @@ describe('useIdeas - evolved_into and field resolution', () => {
     // All fields should be properly resolved, not left as TODO placeholders
     const idea = result.current.ideas[0];
     expect(typeof idea.branches).toBe('number');
-    expect(idea.branches).toBeGreaterThan(0); // evolved_into has 3 entries
+    expect(idea.branches).toBe(0); // idea evolution is retired: 0 by design, not a TODO
     expect(idea.supporters).toEqual([]); // Empty but intentional, not a TODO
     expect(idea.recentComment).toBeNull(); // Null but intentional, not a TODO
   });

@@ -137,8 +137,8 @@ describe('useCreatePost', () => {
       createdPost = await result.current.submit();
     });
 
+    // The form's type is not sent: every post is type post and the API refuses a legacy type (idx 68).
     expect(api.createPost).toHaveBeenCalledWith({
-      type: 'problem',
       title: 'A valid problem title here',
       description: 'A description that is long enough to meet the minimum requirement of 50 characters.',
       tags: ['go', 'testing'],

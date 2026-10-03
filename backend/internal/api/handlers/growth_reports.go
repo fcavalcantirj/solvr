@@ -15,6 +15,7 @@ import (
 //	GET /admin/growth/participants?end=<RFC3339>  monthly active participants (spec.json idx 86)
 //	GET /admin/growth/stages?end=<RFC3339>        staged growth gates (spec.json idx 89)
 //	GET /admin/growth/model?month=YYYY-MM         the monthly acquisition model (spec.json idx 90)
+//	GET /admin/growth/acquisition-loop?end=...    the planner-to-executor acquisition loop (spec.json idx 87)
 //
 // Each report is Solvr reporting about ITSELF — participant counts, traffic, the one-million
 // target — so it is operator analytics: the router gates it with RequireOperatorAccess, this
@@ -37,11 +38,17 @@ type ModelReader interface {
 	MonthlyFlows(ctx context.Context, monthStart time.Time) (growth.MonthlyFlows, error)
 }
 
+// LoopReader measures the acquisition loop for the window ending at end.
+type LoopReader interface {
+	Measure(ctx context.Context, end time.Time, exampleSlugs []string) (growth.LoopMeasures, error)
+}
+
 // GrowthReaders are the measurements the growth reports read.
 type GrowthReaders struct {
 	Participants ParticipantReader
 	Stages       StageReader
 	Model        ModelReader
+	Loop         LoopReader
 }
 
 // GrowthReportsHandler serves the operator growth reports.
@@ -142,6 +149,36 @@ func readReportMonth(w http.ResponseWriter, r *http.Request) (time.Time, bool) {
 		return time.Time{}, false
 	}
 	return month.UTC(), true
+}
+
+// GetAcquisitionLoop handles GET /admin/growth/acquisition-loop?end=<RFC3339>: the planner-to-
+// executor loop — example-room evidence (the public demo first, then the editorial preview rooms),
+// first-connection failure points, 7- and 28-day returns and same-owner agent depth.
+func (h *GrowthReportsHandler) GetAcquisitionLoop(w http.ResponseWriter, r *http.Request) {
+	end, ok := h.authorizeAndReadEnd(w, r)
+	if !ok {
+		return
+	}
+	m, err := h.readers.Loop.Measure(r.Context(), end, exampleRoomSlugs())
+	if err != nil {
+		slog.Error("growth acquisition loop report failed", "error", err)
+		writeOperatorError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to compute the acquisition loop")
+		return
+	}
+	writeActivationJSON(w, http.StatusOK, map[string]any{"data": growth.BuildLoopReport(m)})
+}
+
+// exampleRoomSlugs is the public demo room followed by the editorial preview rooms, each once.
+func exampleRoomSlugs() []string {
+	slugs := []string{growth.PublicDemoRoomSlug}
+	seen := map[string]bool{growth.PublicDemoRoomSlug: true}
+	for _, s := range PreviewSlugsFromEnv() {
+		if !seen[s] {
+			seen[s] = true
+			slugs = append(slugs, s)
+		}
+	}
+	return slugs
 }
 
 // participantTargetInputs reduces participant measures to the identity sums a target reads.

@@ -95,6 +95,11 @@ var OperatorReports = []OperatorReport{
 	},
 	{
 		Method:  http.MethodGet,
+		Path:    "/admin/growth/acquisition-loop",
+		Reports: "the planner-to-executor loop: example connection evidence, first-connection failure points, returns and agent depth",
+	},
+	{
+		Method:  http.MethodGet,
 		Path:    "/admin/email/history",
 		Reports: "what was sent to the mailing list, when, and how much of it landed",
 	},

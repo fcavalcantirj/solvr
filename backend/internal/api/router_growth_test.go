@@ -22,6 +22,7 @@ var growthReportPaths = []string{
 	"/admin/growth/participants",
 	"/admin/growth/stages",
 	"/admin/growth/model",
+	"/admin/growth/acquisition-loop",
 }
 
 func TestGrowthReports_AreRegisteredOperatorReports(t *testing.T) {

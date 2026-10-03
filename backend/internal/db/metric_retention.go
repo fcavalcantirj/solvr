@@ -118,6 +118,8 @@ var RawEventSources = []RawEventSource{
 				"operator stage gates: weekly activated rooms, owners, workflows, 24h conversion, creator returns (an owner's first room ever)", AllHistory},
 			{"AcquisitionModelRepository.MonthlyFlows",
 				"operator acquisition model: monthly room creators and cohorts over all history", AllHistory},
+			{"AcquisitionLoopRepository.Measure",
+				"operator acquisition loop: example-room evidence, owners' first rooms ever, participants per owner", AllHistory},
 		},
 	},
 	{

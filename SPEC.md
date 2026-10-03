@@ -2929,6 +2929,24 @@ complete calendar month (UTC); a malformed month answers 400 `INVALID_MONTH`.
   from the stage gates at the month's end; an unjudgeable check is named in `missing`.
 - `data.review`: monthly cadence and checklist; outcomes are recorded in the private operator plan.
 
+### GET /admin/growth/acquisition-loop?end=<RFC3339>
+
+The planner-to-executor acquisition loop (spec.json idx 87; `backend/internal/growth/loop.go`,
+`backend/internal/db/acquisition_loop.go`, `docs/growth/acquisition-loop.md`).
+
+- `data.example_rooms`: the public demo (`tictactoe-human-vs-computer-20260920`) then the editorial preview rooms
+  (`HOMEPAGE_PREVIEW_ROOM_SLUGS`), each with `found` (public, not deleted — a private room is never an example),
+  `instrumented` (has a funnel `room_created` step) and the time to the second agent and to the first two-way
+  exchange.
+- `data.first_connections`: each owner's FIRST room created in the 30 days before `end`, as `created_only`,
+  `second_joined_no_exchange` or `activated`, with the most common failure point.
+- `data.returns`: 7- and 28-day returns — owners whose first room fell in the 30 days ending N days before `end`
+  who created another activated room within N days (`rate` null over an empty cohort).
+- `data.agent_depth`: multi-agent rooms whose agents share one owner (deeper activation, never a new human) versus
+  rooms joining several owners.
+- `data.second_human_discovery`: `pending_g1_merge` (share-visit attribution, idx 88); `data.initial_cohort`:
+  owner-led, `not_yet_measurable`.
+
 ---
 
 # Part 17: Health & Monitoring

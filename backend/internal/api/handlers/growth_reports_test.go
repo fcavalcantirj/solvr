@@ -208,3 +208,38 @@ func TestGrowthModel_DefaultsToTheLastCompleteMonthAndRejectsABadMonth(t *testin
 	}
 	assert.Equal(t, http.StatusUnauthorized, growthRequest(t, h.GetModel, "/admin/growth/model", nil).Code)
 }
+
+// fakeLoopReader records the window end and example slugs it was asked for.
+type fakeLoopReader struct {
+	gotEnd   time.Time
+	gotSlugs []string
+	measures growth.LoopMeasures
+	err      error
+}
+
+func (f *fakeLoopReader) Measure(_ context.Context, end time.Time, slugs []string) (growth.LoopMeasures, error) {
+	f.gotEnd, f.gotSlugs = end, slugs
+	return f.measures, f.err
+}
+
+func TestGrowthLoop_ReadsTheDemoAndEditorialExamples(t *testing.T) {
+	t.Setenv("ADMIN_API_KEY", "op-key")
+	t.Setenv(previewSlugsEnv, "editorial-one, "+growth.PublicDemoRoomSlug)
+	loop := &fakeLoopReader{measures: growth.LoopMeasures{FirstConnections: growth.FirstConnectionPoints{CreatedOnly: 2, Activated: 1}}}
+	h := NewGrowthReportsHandler(GrowthReaders{Loop: loop})
+
+	rec := growthRequest(t, h.GetAcquisitionLoop, "/admin/growth/acquisition-loop?end=2026-10-01T00:00:00Z",
+		map[string]string{OperatorAccessHeader: "op-key"})
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC), loop.gotEnd)
+	assert.Equal(t, []string{growth.PublicDemoRoomSlug, "editorial-one"}, loop.gotSlugs, "the demo first, each slug once")
+
+	var body struct {
+		Data growth.LoopReport `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Equal(t, 3, body.Data.FirstConnections.Total)
+	assert.Equal(t, growth.StatusPendingG1Merge, body.Data.SecondHumanDiscovery.Status)
+
+	assert.Equal(t, http.StatusUnauthorized, growthRequest(t, h.GetAcquisitionLoop, "/admin/growth/acquisition-loop", nil).Code)
+}

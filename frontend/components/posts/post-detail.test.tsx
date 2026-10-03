@@ -167,4 +167,12 @@ describe('PostDetail', () => {
       expect(screen.getByRole('link', { name: /edit/i })).toHaveAttribute('href', '/posts/p1/edit');
     });
   });
+
+  // idx 88: a post can seed a fresh room ("Try this workflow"). The API decides whether
+  // the post is public enough to seed one; the link only names the post.
+  it('offers Try this workflow, opening the start flow seeded from this post', async () => {
+    render(<PostDetail postId="p1" />);
+    const link = await screen.findByRole('link', { name: /try this workflow/i });
+    expect(link).toHaveAttribute('href', '/connect?post=p1');
+  });
 });

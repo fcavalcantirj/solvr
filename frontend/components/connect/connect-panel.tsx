@@ -6,7 +6,16 @@ import { ArrowRight, Check, Copy } from 'lucide-react';
 
 import { useConnectStart } from '@/hooks/use-connect-start';
 import { api } from '@/lib/api';
-import type { APIConnectOption, APIConnectStart } from '@/lib/api-types';
+import type { APIConnectOption, APIConnectStart, APIFunnelSourceRef } from '@/lib/api-types';
+
+// funnelSourceOf names the public source a seeded flow's funnel steps are attributed
+// to, from the source the API already resolved (idx 88). None for an ordinary start.
+function funnelSourceOf(start: APIConnectStart): APIFunnelSourceRef | undefined {
+  const src = start.source;
+  if (src?.kind === 'room' && src.room_slug) return { kind: 'room', ref: src.room_slug };
+  if (src?.kind === 'post' && src.post_id) return { kind: 'post', ref: src.post_id };
+  return undefined;
+}
 
 // entrySurfaceFor names where a connection-funnel browser step was reported from,
 // so the funnel can tell an index-panel open apart from the full /connect page.
@@ -25,7 +34,10 @@ function entrySurfaceFor(variant: ConnectPanelVariant): string {
 type ConnectPanelVariant = 'panel' | 'page';
 
 export function ConnectPanel({ variant = 'panel' }: { variant?: ConnectPanelVariant }) {
-  const { start, loading, error, task, setTask, setPreset, setVisibility } = useConnectStart();
+  // Only the full page forwards the source it was linked with ("Try this workflow").
+  const { start, loading, error, task, setTask, setPreset, setVisibility } = useConnectStart({
+    readLocation: variant === 'page',
+  });
 
   if (!start) {
     if (loading) {
@@ -92,12 +104,14 @@ function ConnectPanelContent({
   // Fired once per open — this component only mounts once the contract exists and
   // stays mounted across task/preset re-fetches — not on every keystroke.
   useEffect(() => {
+    const source = funnelSourceOf(start);
     void api.postFunnelEvent?.({
       event: 'connection_started',
       flow_id: start.selected.flow_id,
       entry_surface: entrySurface,
       preset: start.selected.preset,
       instruction_version: start.instruction_version,
+      ...(source ? { source } : {}),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -145,6 +159,18 @@ function ConnectPanelContent({
         {start.heading}
       </Heading>
       <p className="mt-3 text-sm sm:text-base text-muted-foreground leading-relaxed">{start.intro}</p>
+
+      {start.source && (
+        <div data-testid="connect-source" className="mt-4 border border-border p-3">
+          <p className="font-mono text-xs tracking-wider">
+            STARTING FROM{' '}
+            <Link href={start.source.url} className="underline underline-offset-4">
+              {start.source.title}
+            </Link>
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{start.source.detail}</p>
+        </div>
+      )}
 
       {/* The two copy/paste actions, before any statistic has to be read */}
       <ol data-testid="connect-steps" className="mt-6 border-y border-border divide-y divide-border">

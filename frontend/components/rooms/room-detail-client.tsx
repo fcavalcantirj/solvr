@@ -16,6 +16,7 @@ import { useRoomSse } from '@/hooks/use-room-sse';
 import { api } from '@/lib/api';
 import { mergeMessages, isNearBottom } from '@/lib/rooms/message-view';
 import { recordRoomView } from '@/lib/recently-viewed-rooms';
+import { useShareVisit } from '@/hooks/use-share-visit';
 
 interface RoomDetailClientProps {
   room: APIRoom;
@@ -32,6 +33,9 @@ interface RoomDetailClientProps {
   // Persistent id of a message to deep-link to (highlight + scroll into view).
   // In production this is read from the ?message= query param when not supplied.
   highlightMessageId?: number;
+  // The API's "Try this workflow" link (GET /v1/rooms/{slug} try_workflow_url): a fresh
+  // room seeded from this public room's task. null for a private room (idx 88).
+  tryWorkflowUrl?: string | null;
 }
 
 const OLDER_PAGE_SIZE = 50;
@@ -46,7 +50,7 @@ function readMessageParam(): number | undefined {
   return Number.isFinite(id) && id > 0 ? id : undefined;
 }
 
-export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDisplayName, connectionStatus, initialTask, latestPinned, highlightMessageId }: RoomDetailClientProps) {
+export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDisplayName, connectionStatus, initialTask, latestPinned, highlightMessageId, tryWorkflowUrl }: RoomDetailClientProps) {
   // The transcript reads oldest -> newest (top -> bottom). All batches (initial
   // window, older-history pages, SSE pushes, deep-link fetches, local echoes) go
   // through mergeMessages, so the list is always ordered by server id and free
@@ -79,6 +83,10 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
     void api.postFunnelEvent?.({ event: 'room_viewed' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room.slug]);
+
+  // share_visit: opened through a share link (?via=share) — counted once per tab for a
+  // PUBLIC room only; a private room's link is cleaned but never attributed (idx 88).
+  useShareVisit(room.is_private ? null : { kind: 'room', ref: room.slug }, 'room_page');
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   // The reader is "following the latest exchange" while near the bottom, where
@@ -287,7 +295,7 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
       {/* Room header — lives inside the client component so message_count
           reflects SSE arrivals immediately instead of the stale ISR snapshot. */}
       <div className="shrink-0">
-        <RoomHeader room={displayedRoom} ownerDisplayName={ownerDisplayName} onlineCount={agents.length} />
+        <RoomHeader room={displayedRoom} ownerDisplayName={ownerDisplayName} onlineCount={agents.length} tryWorkflowUrl={tryWorkflowUrl} />
       </div>
 
       {/* Compact context area: the initial task + latest pinned directive, so a
@@ -328,7 +336,7 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
         {/* Recruit another agent into this public room — reachable without a
             Solvr account (task 26). On a finished room it offers a fresh start. */}
         <div className="mb-4">
-          <ConnectAgentPanel room={displayedRoom} />
+          <ConnectAgentPanel room={displayedRoom} tryWorkflowUrl={tryWorkflowUrl} />
         </div>
       </div>
 
@@ -361,7 +369,7 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
           {/* Public-room recruit control — logged-out visitors included (task 26).
               The header's Connect an agent action anchors to this panel (#connect-agent). */}
           <div className="hidden lg:block">
-            <ConnectAgentPanel room={displayedRoom} />
+            <ConnectAgentPanel room={displayedRoom} tryWorkflowUrl={tryWorkflowUrl} />
           </div>
           <PresenceSidebar agents={agents} room={displayedRoom} layout="desktop" />
         </aside>

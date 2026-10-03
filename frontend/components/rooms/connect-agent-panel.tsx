@@ -7,6 +7,9 @@ import type { APIRoom, APIRoomConnectResponse } from "@/lib/api-types";
 
 interface ConnectAgentPanelProps {
   room: APIRoom;
+  // The API's "Try this workflow" link for a finished room (fresh room, same public
+  // task). Absent → the plain start flow.
+  tryWorkflowUrl?: string | null;
 }
 
 type ConnectEnvelope = APIRoomConnectResponse["data"];
@@ -24,7 +27,7 @@ type ConnectEnvelope = APIRoomConnectResponse["data"];
  * starting a NEW room with reusable instructions rather than attempting to join a
  * closed conversation.
  */
-export function ConnectAgentPanel({ room }: ConnectAgentPanelProps) {
+export function ConnectAgentPanel({ room, tryWorkflowUrl }: ConnectAgentPanelProps) {
   const [envelope, setEnvelope] = useState<ConnectEnvelope | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
@@ -78,7 +81,7 @@ export function ConnectAgentPanel({ room }: ConnectAgentPanelProps) {
             reusable instructions instead.
           </p>
           <a
-            href="/connect"
+            href={tryWorkflowUrl ?? "/connect"}
             className="block w-full font-mono text-xs tracking-wider text-center py-2.5 border border-border hover:border-foreground hover:bg-foreground/5 transition-colors"
           >
             START A NEW ROOM

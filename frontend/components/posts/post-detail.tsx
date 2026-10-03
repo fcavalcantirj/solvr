@@ -127,6 +127,17 @@ export function PostDetail({ postId }: { postId: string }) {
         </div>
       )}
 
+      {/* idx 88: start a fresh room seeded from this post. The API decides whether the
+          post may seed one (only a public post does); the link only names it. */}
+      <section className="border-t border-border pt-6">
+        <Link
+          href={`/connect?post=${encodeURIComponent(post.id)}`}
+          className="inline-flex items-center gap-2 font-mono text-xs tracking-wider border border-border px-3 py-1.5 hover:bg-muted transition-colors"
+        >
+          <Users size={12} /> Try this workflow
+        </Link>
+      </section>
+
       {relatedRooms.length > 0 && (
         <section className="border-t border-border pt-6 space-y-3">
           <h2 className="font-mono text-xs tracking-wider text-muted-foreground inline-flex items-center gap-2">

@@ -1552,6 +1552,8 @@ export interface APIRoomDetailResponse {
     // first and which pin is latest; the client only renders them.
     initial_task?: APIRoomMessage | null;
     latest_pinned?: APIRoomMessage | null;
+    // "Try this workflow" (idx 88): a fresh room seeded from this public room's task.
+    try_workflow_url?: string | null;
   };
 }
 

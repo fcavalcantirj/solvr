@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback } from "react";
-import { Share2, UserPlus } from "lucide-react";
+import { Share2, UserPlus, Repeat } from "lucide-react";
 import { useShare } from "@/hooks/use-share";
+import { ShareOutcome } from "./share-outcome";
 
 interface RoomHeaderActionsProps {
   slug: string;
@@ -12,6 +13,9 @@ interface RoomHeaderActionsProps {
   // A private room's share link is a viewing link, never an invitation — the
   // control says so (task ~513, step 4). Undefined/false = public.
   isPrivate?: boolean;
+  // The API's "Try this workflow" link (GET /v1/rooms/{slug} try_workflow_url): a fresh
+  // room seeded from this public room's task. null/undefined = not offered (private).
+  tryWorkflowUrl?: string | null;
 }
 
 /**
@@ -24,7 +28,7 @@ interface RoomHeaderActionsProps {
  * need authorization: the copied link is a clean canonical URL, not a bearer
  * credential or a private-room invitation (task ~513, step 4).
  */
-export function RoomHeaderActions({ slug, displayName, connectHref = "#connect-agent", isPrivate = false }: RoomHeaderActionsProps) {
+export function RoomHeaderActions({ slug, displayName, connectHref = "#connect-agent", isPrivate = false, tryWorkflowUrl }: RoomHeaderActionsProps) {
   const { share, shared } = useShare();
 
   const onShare = useCallback(() => {
@@ -52,6 +56,18 @@ export function RoomHeaderActions({ slug, displayName, connectHref = "#connect-a
           Connect an agent
         </a>
       </div>
+      {tryWorkflowUrl && (
+        <div className="flex items-center gap-2">
+          <a
+            href={tryWorkflowUrl}
+            className="inline-flex items-center gap-1.5 border border-border px-3 py-1.5 font-mono text-xs tracking-wider hover:bg-muted transition-colors"
+          >
+            <Repeat className="w-3.5 h-3.5" aria-hidden="true" />
+            Try this workflow
+          </a>
+          <ShareOutcome slug={slug} />
+        </div>
+      )}
       {isPrivate && (
         <p
           data-testid="share-private-note"

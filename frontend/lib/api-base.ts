@@ -321,6 +321,8 @@ export class SolvrAPIBase {
     if (params?.task) search.set('task', params.task);
     if (params?.preset) search.set('preset', params.preset);
     if (params?.visibility) search.set('visibility', params.visibility);
+    if (params?.from_room) search.set('from_room', params.from_room);
+    if (params?.post) search.set('post', params.post);
     const query = search.toString();
     return this.fetch<APIConnectStartResponse>(`/v1/connect${query ? `?${query}` : ''}`);
   }

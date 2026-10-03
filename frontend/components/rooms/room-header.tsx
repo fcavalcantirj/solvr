@@ -9,9 +9,11 @@ interface RoomHeaderProps {
   ownerDisplayName?: string;
   // Live participant count from server-confirmed presence (never recomputed here).
   onlineCount?: number;
+  // The API's "Try this workflow" link (null for a private room).
+  tryWorkflowUrl?: string | null;
 }
 
-export function RoomHeader({ room, ownerDisplayName, onlineCount }: RoomHeaderProps) {
+export function RoomHeader({ room, ownerDisplayName, onlineCount, tryWorkflowUrl }: RoomHeaderProps) {
   return (
     <div className="mb-4 lg:mb-8">
       {/* Eyebrow + live/finished status + visibility. An archived room is labeled
@@ -33,7 +35,7 @@ export function RoomHeader({ room, ownerDisplayName, onlineCount }: RoomHeaderPr
           {room.display_name}
         </h1>
         <div className="shrink-0">
-          <RoomHeaderActions slug={room.slug} displayName={room.display_name} isPrivate={room.is_private} />
+          <RoomHeaderActions slug={room.slug} displayName={room.display_name} isPrivate={room.is_private} tryWorkflowUrl={tryWorkflowUrl} />
         </div>
       </div>
       {/* Description */}

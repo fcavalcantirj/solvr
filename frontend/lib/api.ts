@@ -16,6 +16,7 @@ export * from './api-types';
 import type {
   APIPost,
   APIFunnelEventInput,
+  APIRoomShareResponse,
   APIPostsResponse,
   APISearchResponse,
   APIAnswersResponse,
@@ -513,6 +514,14 @@ class SolvrAPI extends SolvrAPIBase {
     return this.fetch<APIRoomMembersResponse>(
       `/v1/rooms/${encodeURIComponent(slug)}/members`,
     );
+  }
+
+  /**
+   * GET /v1/rooms/{slug}/share — the clean links and outcome excerpt a person may copy
+   * to share a public room (idx 88). Solvr never posts any of it anywhere.
+   */
+  async getRoomShare(slug: string): Promise<APIRoomShareResponse> {
+    return this.fetch<APIRoomShareResponse>(`/v1/rooms/${encodeURIComponent(slug)}/share`);
   }
 
   /**

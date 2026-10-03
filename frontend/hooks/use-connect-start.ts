@@ -11,9 +11,32 @@ import type { APIConnectStart } from '@/lib/api-types';
 // the labels, the explanations and which option is selected all come back from
 // GET /v1/connect. A choice not yet made is not sent at all, so the API's own
 // defaults are the only defaults anywhere.
+//
+// The full /connect page also forwards the SOURCE it was linked with — a public
+// room (?from_room=) or a post (?post=), "Try this workflow" — read once from its
+// own address. The API validates it; an unknown or private source simply gives the
+// ordinary contract. ?preset= is deliberately not forwarded: old links still carry
+// a value the API refuses.
 const TASK_DEBOUNCE_MS = 300;
 
-export function useConnectStart() {
+interface ConnectSourceParams {
+  from_room?: string;
+  post?: string;
+}
+
+function readSourceFromLocation(): ConnectSourceParams {
+  if (typeof window === 'undefined') return {};
+  const params = new URLSearchParams(window.location.search);
+  const fromRoom = params.get('from_room');
+  const post = params.get('post');
+  return {
+    ...(fromRoom ? { from_room: fromRoom } : {}),
+    ...(post ? { post } : {}),
+  };
+}
+
+export function useConnectStart({ readLocation = false }: { readLocation?: boolean } = {}) {
+  const [source] = useState<ConnectSourceParams>(() => (readLocation ? readSourceFromLocation() : {}));
   const [task, setTask] = useState('');
   const [preset, setPreset] = useState<string | undefined>(undefined);
   const [visibility, setVisibility] = useState<string | undefined>(undefined);
@@ -29,6 +52,7 @@ export function useConnectStart() {
     const fetchStart = async () => {
       try {
         const response = await api.getConnectStart({
+          ...source,
           ...(debouncedTask ? { task: debouncedTask } : {}),
           ...(preset ? { preset } : {}),
           ...(visibility ? { visibility } : {}),
@@ -50,7 +74,7 @@ export function useConnectStart() {
     return () => {
       cancelled = true;
     };
-  }, [debouncedTask, preset, visibility]);
+  }, [source, debouncedTask, preset, visibility]);
 
   return { start, loading, error, task, setTask, setPreset, setVisibility };
 }

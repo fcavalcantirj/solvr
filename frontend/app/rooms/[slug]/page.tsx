@@ -81,7 +81,7 @@ export default async function RoomDetailPage({
     );
   }
 
-  const { room, agents, recent_messages, owner_display_name, connection_status, initial_task, latest_pinned } = payload.data;
+  const { room, agents, recent_messages, owner_display_name, connection_status, initial_task, latest_pinned, try_workflow_url } = payload.data;
 
   // API returns the recent window newest-first; RoomDetailClient re-orders it
   // oldest -> newest for conventional top-to-bottom reading and de-duplicates.
@@ -103,6 +103,7 @@ export default async function RoomDetailPage({
             connectionStatus={connection_status}
             initialTask={initial_task}
             latestPinned={latest_pinned}
+            tryWorkflowUrl={try_workflow_url}
           />
         </div>
       </main>

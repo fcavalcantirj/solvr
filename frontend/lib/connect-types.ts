@@ -36,6 +36,28 @@ export interface APIConnectSelection {
   preset: string;
   visibility: string;
   flow_id?: string;
+  // The validated source this flow was seeded from (at most one), carried by the
+  // prompt into the create-room body (idx 88).
+  source_room?: string;
+  source_post_id?: string;
+}
+
+// Where a start flow was seeded from: a public room ("Try this workflow") or a
+// published post. Rendered as-is; the API decided it was public.
+export interface APIConnectSource {
+  kind: 'room' | 'post' | string;
+  room_slug?: string;
+  post_id?: string;
+  title: string;
+  url: string;
+  detail: string;
+}
+
+// The public room or post a browser funnel step is attributed to. The API resolves
+// it; an identifier that is not public is dropped there.
+export interface APIFunnelSourceRef {
+  kind: 'room' | 'post';
+  ref: string;
 }
 
 // One connection-funnel step the browser reports to POST /v1/analytics/funnel.
@@ -47,6 +69,7 @@ export interface APIFunnelEventInput {
   role?: string;
   entry_surface?: string;
   instruction_version?: string;
+  source?: APIFunnelSourceRef;
 }
 
 // The one thing the visitor copies. `instruction` names the agent that must
@@ -136,6 +159,7 @@ export interface APIConnectStart {
   requirements: APIConnectRequirements;
   add_agent: APIConnectAddAgentControl;
   customize: APIConnectCustomizeSection;
+  source?: APIConnectSource;
 }
 
 export interface APIConnectStartResponse {
@@ -148,4 +172,22 @@ export interface ConnectStartParams {
   task?: string;
   preset?: string;
   visibility?: string;
+  // The source the /connect page was linked with ("Try this workflow").
+  from_room?: string;
+  post?: string;
+}
+
+// GET /v1/rooms/{slug}/share — what a person may copy to share a public room. The API
+// composes every link and the excerpt; Solvr never posts any of it anywhere.
+export interface APIRoomShare {
+  room_url: string;
+  share_url: string;
+  try_url: string;
+  excerpt: { title: string; text: string; source: string };
+  copy_text: string;
+  note: string;
+}
+
+export interface APIRoomShareResponse {
+  data: APIRoomShare;
 }

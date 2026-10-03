@@ -131,6 +131,7 @@ var RouteFamilies = []RouteFamily{
 			"GET /v1/rooms/{slug}/posts",
 			"POST /v1/rooms/{slug}/save-as-post",
 			"POST /v1/rooms/{slug}/posts/{postID}/publish",
+			"GET /v1/rooms/{slug}/share",
 		},
 	},
 	{

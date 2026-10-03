@@ -34,6 +34,8 @@ type RoomHandler struct {
 	// memberNotify records the room membership events (SetMemberNotifier). Optional: nil
 	// records none.
 	memberNotify ContributionNotifier
+	// outcomePosts lets the share excerpt prefer a published outcome (SetOutcomePosts).
+	outcomePosts roomOutcomePosts
 }
 
 // SetOverviewChangeNotifier wires the announcement of public overview changes (see
@@ -319,6 +321,7 @@ func (h *RoomHandler) GetRoom(w http.ResponseWriter, r *http.Request) {
 			"recent_messages":   messages,
 			"initial_task":      initialTask,
 			"latest_pinned":     latestPinned,
+			"try_workflow_url":  roomTryWorkflowURL(room),
 			"connection_status": ComputeConnectionStatus(activated, onlineCount),
 			"online_count":      onlineCount,
 		},

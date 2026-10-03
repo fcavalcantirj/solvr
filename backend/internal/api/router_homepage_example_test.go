@@ -175,7 +175,7 @@ func TestHomepageExample_ServesTheRealPublicRoomToALoggedOutVisitor(t *testing.T
 	assert.Equal(t, "COMPLETED COLLABORATION", ex.Label)
 	assert.Equal(t, 0, ex.LiveAgentCount)
 
-	assert.Equal(t, "/connect?preset=planner-executor", ex.ConnectURL)
+	assert.Equal(t, "/connect?from_room="+slug, ex.ConnectURL, "Try this workflow reuses this public room")
 	assert.NotEmpty(t, ex.ConnectLabel)
 }
 
@@ -243,8 +243,8 @@ func TestHomepageExample_RemovesPreviewContentWhenTheRoomGoesAway(t *testing.T) 
 			assert.Empty(t, s.MessageURL)
 			assert.NotEmpty(t, s.Excerpt)
 		}
-		// The Connect action still works.
-		assert.Equal(t, "/connect?preset=planner-executor", ex.ConnectURL)
+		// The Connect action still works, without naming the unavailable room.
+		assert.Equal(t, "/connect", ex.ConnectURL)
 
 		// Nothing from the room survives anywhere in the public response.
 		assert.NotContains(t, raw, slug, reason)
@@ -275,6 +275,6 @@ func TestHomepageExample_FallsBackWhenTheConfiguredRoomDoesNotExist(t *testing.T
 	ex, _ := getHomepageExample(t, ts.URL)
 	assert.Equal(t, "illustrative", ex.Kind)
 	assert.Equal(t, "ILLUSTRATIVE WORKFLOW", ex.Label)
-	assert.Equal(t, "/connect?preset=planner-executor", ex.ConnectURL)
+	assert.Equal(t, "/connect", ex.ConnectURL)
 	require.Len(t, ex.Steps, 5)
 }

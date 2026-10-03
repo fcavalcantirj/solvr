@@ -33,7 +33,10 @@ const (
 	// changes — the endpoints an agent calls, the authentication sequence, or the
 	// prompt shape — so a client can tell which contract it is following and a
 	// contract change forces exactly one version bump across both surfaces.
-	ConnectInstructionVersion = "1.0"
+	//
+	// 1.1 (idx 88): the create-room body may carry source_room / source_post_id, and
+	// every prompt says how to report completion with a clean room link.
+	ConnectInstructionVersion = "1.1"
 
 	// ConnectPresetPlanAndBuild is the default shape: one planner agent
 	// directs, one executor agent builds.

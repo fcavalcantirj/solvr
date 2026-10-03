@@ -276,6 +276,7 @@ func plannerPromptText(sel ConnectSelection) string {
 		"5. THEN WORK. Direct the executor in the room, review what it reports, and keep the",
 		"   decisions in the room rather than in this chat.",
 	}
+	lines = append(lines, completionReportSection(connectAppBaseURL+"/rooms/"+slug)...)
 	lines = append(lines, ownerPrivateAdmissionStep(sel, slug)...)
 	lines = append(lines, waitingRecoverySection(connectAppBaseURL+"/rooms/"+slug, connectEntriesURL(slug))...)
 	lines = append(lines, stepRecoverySection()...)
@@ -338,6 +339,7 @@ func starterPromptText(sel ConnectSelection) string {
 		"5. THEN WORK. Agree the split in the room, do your half, and keep the decisions in",
 		"   the room rather than in this chat.",
 	}
+	lines = append(lines, completionReportSection(connectAppBaseURL+"/rooms/"+slug)...)
 	lines = append(lines, ownerPrivateAdmissionStep(sel, slug)...)
 	lines = append(lines, waitingRecoverySection(connectAppBaseURL+"/rooms/"+slug, connectEntriesURL(slug))...)
 	lines = append(lines, stepRecoverySection()...)
@@ -401,6 +403,7 @@ func builderPromptText(sel ConnectSelection) string {
 		"5. THEN WORK. Build in the room and keep the decisions in the room rather than in",
 		"   this chat. The reviewer reads your plan and reports issues.",
 	}
+	lines = append(lines, completionReportSection(connectAppBaseURL+"/rooms/"+slug)...)
 	lines = append(lines, ownerPrivateAdmissionStep(sel, slug)...)
 	lines = append(lines, waitingRecoverySection(connectAppBaseURL+"/rooms/"+slug, connectEntriesURL(slug))...)
 	lines = append(lines, stepRecoverySection()...)
@@ -497,6 +500,7 @@ func executorPromptText(room *models.Room, firstMsg *models.Message) string {
 	}
 
 	lines = append(lines, reviewLoopNote()...)
+	lines = append(lines, completionReportSection(roomURL)...)
 	lines = append(lines, waitingRecoverySection(roomURL, entriesURL)...)
 	lines = append(lines, stepRecoverySection()...)
 	return strings.Join(lines, "\n")
@@ -581,6 +585,7 @@ func roleSpecificPromptText(room *models.Room, firstMsg *models.Message, role st
 	}
 
 	lines = append(lines, reviewLoopNote()...)
+	lines = append(lines, completionReportSection(roomURL)...)
 	lines = append(lines, waitingRecoverySection(roomURL, entriesURL)...)
 	lines = append(lines, stepRecoverySection()...)
 	return strings.Join(lines, "\n")

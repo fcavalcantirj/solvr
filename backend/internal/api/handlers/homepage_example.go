@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -33,9 +34,10 @@ const (
 	// before it must say it is showing an excerpt.
 	collabExampleExcerptMaxChars = 240
 
-	// collabExampleConnectURL opens the connect flow preloaded with this exact
-	// two-agent shape.
-	collabExampleConnectURL   = "/connect?preset=planner-executor"
+	// collabExampleConnectURL opens the start flow. A real example adds
+	// ?from_room=<slug> so "Try this workflow" reuses that public room's task
+	// (idx 88); the illustrative fallback opens the plain flow.
+	collabExampleConnectURL   = "/connect"
 	collabExampleConnectLabel = "Try this workflow"
 
 	// collabExampleTranscriptLimit bounds how much of a room is read to find the
@@ -208,7 +210,7 @@ func buildCollaborationExample(room *models.Room, messages []models.Message, liv
 		RoomURL:      "/rooms/" + room.Slug,
 		Participants: participants,
 		Steps:        steps,
-		ConnectURL:   collabExampleConnectURL,
+		ConnectURL:   collabExampleConnectURL + "?from_room=" + url.QueryEscape(room.Slug),
 		ConnectLabel: collabExampleConnectLabel,
 		Headline:     room.DisplayName,
 	}

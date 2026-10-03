@@ -195,7 +195,7 @@ func TestRoomsConnect_HandlerServesRoomConnectEnvelope(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper), "body: %s", w.Body.String())
 	resp := wrapper.Data
 
-	require.Equal(t, "1.0", resp.InstructionVersion)
+	require.Equal(t, ConnectInstructionVersion, resp.InstructionVersion)
 	require.Equal(t, room.Slug, resp.RoomSlug)
 	require.Equal(t, connectAppBaseURL+"/rooms/"+room.Slug, resp.RoomURL)
 	require.False(t, resp.Private)

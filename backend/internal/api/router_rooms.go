@@ -51,6 +51,7 @@ func mountRoomRoutes(
 	roomHandler.SetFunnelRecorder(funnelRepo)
 	roomHandler.SetOverviewChangeNotifier(pool.OverviewChanged)
 	roomHandler.SetMemberNotifier(db.NewNotificationsRepository(pool).Create)
+	roomHandler.SetOutcomePosts(db.NewPostRepository(pool))
 	presenceHandler.SetFunnelRecorder(funnelRepo)
 	msgHandler.SetFunnelRecorder(funnelRepo)
 	entryRepo := db.NewRoomEntryRepository(pool)
@@ -106,6 +107,8 @@ func mountRoomRoutes(
 		r.With(entriesPolicy(apimiddleware.RoomRead)).Get("/{slug}", roomHandler.GetRoom)
 		r.With(entriesPolicy(apimiddleware.RoomRead)).Get("/{slug}/agents", presenceHandler.ListPresence)
 		r.With(entriesPolicy(apimiddleware.RoomRead)).Get("/{slug}/connect", roomConnectHandler.GetRoomConnect)
+		// Share a public room (idx 88): clean links + an optional excerpt; never posted anywhere.
+		r.With(entriesPolicy(apimiddleware.RoomRead)).Get("/{slug}/share", roomHandler.GetRoomShare)
 
 		// Message reads are adapters over the canonical timeline: the message entries of
 		// GET /{slug}/entries, decided by the same policy (a presented room token must be

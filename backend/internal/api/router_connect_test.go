@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
+	"github.com/fcavalcantirj/solvr/internal/api/handlers"
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/hub"
 	"github.com/fcavalcantirj/solvr/internal/models"
@@ -444,7 +445,7 @@ func TestConnectEndpoint_RoomInstructionsEndpoint(t *testing.T) {
 	// Now an anonymous visitor fetches the executor prompt.
 	contract, body := getRoomConnectContract(t, ts.URL, roomSlug)
 
-	require.Equal(t, "1.0", contract.InstructionVersion, "body: %s", body)
+	require.Equal(t, handlers.ConnectInstructionVersion, contract.InstructionVersion, "body: %s", body)
 	require.Equal(t, roomSlug, contract.RoomSlug)
 	require.Equal(t, "https://solvr.dev/rooms/"+roomSlug, contract.RoomURL)
 	require.False(t, contract.Private)

@@ -266,8 +266,9 @@ func TestCollaborationExample_FallsBackToIllustrativeWhenTheRoomIsGone(t *testin
 				"final_review",
 			}, beatsOf(ex))
 
-			// ...and the Connect action still works.
-			assert.Equal(t, collabExampleConnectURL, ex.ConnectURL)
+			// ...and the Connect action still works: the plain start flow, since there is
+			// no public room to reuse.
+			assert.Equal(t, "/connect", ex.ConnectURL)
 			assert.NotEmpty(t, ex.ConnectLabel)
 
 			// ...but NO preview content from the room survives in the response.
@@ -315,9 +316,12 @@ func TestCollaborationExample_AlwaysOffersAWorkingConnectAction(t *testing.T) {
 	real := buildCollaborationExample(exampleRoomFixture(), exampleTranscriptFixture(), 0, time.Now())
 	fallback := buildCollaborationExample(nil, nil, 0, time.Now())
 
+	// A real example reuses its public room's task ("Try this workflow", idx 88); the
+	// illustrative fallback opens the plain start flow. Both are valid /connect links
+	// (the old ?preset=planner-executor named a preset the API refuses).
+	assert.Equal(t, "/connect?from_room=tictactoe-human-vs-computer-20260920", real.ConnectURL)
+	assert.Equal(t, "/connect", fallback.ConnectURL)
 	for _, ex := range []collaborationExample{real, fallback} {
-		assert.Equal(t, "/connect?preset=planner-executor", ex.ConnectURL,
-			"Try this workflow must open /connect with the planner/executor preset")
 		assert.NotEmpty(t, ex.ConnectLabel)
 	}
 }

@@ -2,7 +2,6 @@ package db
 
 import (
 	"context"
-	"math"
 	"testing"
 	"time"
 
@@ -29,10 +28,7 @@ func TestLegacyStats_ServedByTheCanonicalRepository(t *testing.T) {
 		assert.NotEqual(t, "code:internal/db/stats_canonical.go", dep.Key, "the canonical statistics name no legacy table or type")
 	}
 	assertLegacyDependencyGone(t, "code:internal/db/stats_questions.go") // deleted with the legacy tables (idx 68)
-	s, ok := LegacyDependencyDispositions["code:internal/db/stats.go"]
-	require.True(t, ok)
-	assert.Equal(t, LegacyActionRefactor, s.Action)
-	assert.False(t, s.Done, "its solved and answered counters and the idea sidebar still name legacy types")
+	assertLegacyDependencyGone(t, "code:internal/db/stats.go")           // its solved/answered counters and the idea sidebar went with the legacy types (idx 68)
 }
 
 // statsReader is what the served stats routes read that the legacy tables fed.
@@ -40,12 +36,6 @@ type statsReader interface {
 	GetAllStats(ctx context.Context) (*AllStatsResult, error)
 	GetTotalContributionsCount(ctx context.Context) (int, error)
 	GetTrendingPosts(ctx context.Context, limit int) ([]any, error)
-	GetProblemsStats(ctx context.Context) (map[string]any, error)
-	GetRecentlySolvedProblems(ctx context.Context, limit int) ([]map[string]any, error)
-	GetTopProblemSolvers(ctx context.Context, limit int) ([]map[string]any, error)
-	GetQuestionsStats(ctx context.Context) (map[string]any, error)
-	GetRecentlyAnsweredQuestions(ctx context.Context, limit int) ([]map[string]any, error)
-	GetTopAnswerers(ctx context.Context, limit int) ([]map[string]any, error)
 }
 
 type trendingStat struct {
@@ -54,37 +44,10 @@ type trendingStat struct {
 	Responses int
 }
 
-type answererStat struct {
-	Name       string
-	Count      int
-	AcceptRate float64
-}
-
 type statsSnapshot struct {
-	All              AllStatsResult
-	Contributions    int
-	Trending         map[string]trendingStat // post id -> figures
-	Problems         map[string]any
-	RecentlySolved   []map[string]any
-	TopSolvers       map[string]int // author id -> solved problems
-	Questions        map[string]any
-	RecentlyAnswered []map[string]any
-	TopAnswerers     map[string]answererStat // author id -> figures
-}
-
-func roundStat(v any) any {
-	if f, ok := v.(float64); ok {
-		return math.Round(f*1000) / 1000
-	}
-	return v
-}
-
-func roundedStats(m map[string]any) map[string]any {
-	out := make(map[string]any, len(m))
-	for k, v := range m {
-		out[k] = roundStat(v)
-	}
-	return out
+	All           AllStatsResult
+	Contributions int
+	Trending      map[string]trendingStat // post id -> figures
 }
 
 func takeStatsSnapshot(t *testing.T, ctx context.Context, r statsReader) statsSnapshot {
@@ -104,37 +67,6 @@ func takeStatsSnapshot(t *testing.T, ctx context.Context, r statsReader) statsSn
 		s.Trending[m["id"].(string)] = trendingStat{Type: m["type"].(string), VoteScore: m["vote_score"].(int), Responses: m["response_count"].(int)}
 	}
 
-	s.Problems, err = r.GetProblemsStats(ctx)
-	require.NoError(t, err)
-	s.Problems = roundedStats(s.Problems)
-	solved, err := r.GetRecentlySolvedProblems(ctx, 100)
-	require.NoError(t, err)
-	for _, m := range solved {
-		s.RecentlySolved = append(s.RecentlySolved, roundedStats(m))
-	}
-	solvers, err := r.GetTopProblemSolvers(ctx, 100)
-	require.NoError(t, err)
-	s.TopSolvers = map[string]int{}
-	for _, m := range solvers {
-		s.TopSolvers[m["author_id"].(string)] = m["solved_count"].(int)
-	}
-
-	s.Questions, err = r.GetQuestionsStats(ctx)
-	require.NoError(t, err)
-	s.Questions = roundedStats(s.Questions)
-	answered, err := r.GetRecentlyAnsweredQuestions(ctx, 100)
-	require.NoError(t, err)
-	for _, m := range answered {
-		s.RecentlyAnswered = append(s.RecentlyAnswered, roundedStats(m))
-	}
-	answerers, err := r.GetTopAnswerers(ctx, 100)
-	require.NoError(t, err)
-	s.TopAnswerers = map[string]answererStat{}
-	for _, m := range answerers {
-		s.TopAnswerers[m["author_id"].(string)] = answererStat{
-			Name: m["display_name"].(string), Count: m["answer_count"].(int), AcceptRate: roundStat(m["accept_rate"]).(float64),
-		}
-	}
 	return s
 }
 
@@ -235,16 +167,6 @@ func TestCanonicalStats_KeepsLegacyFiguresAcrossTheCutover(t *testing.T) {
 	// comments and progress notes never counted. The other platform figures come from posts, which
 	// the canonical repository reads the same way before the cutover.
 	pre := takeStatsSnapshot(t, ctx, canonical)
-	require.Equal(t, 3, pre.All.ProblemsSolved)
-	require.Equal(t, 1, pre.All.QuestionsAnswered)
-	wantSolved := []map[string]any{
-		{"id": p1, "title": "stats problem solved", "solver_name": sc, "solver_type": "agent", "time_to_solve_days": 5},
-		{"id": p2, "title": "stats problem solved", "solver_name": sa, "solver_type": "agent", "time_to_solve_days": 2},
-		{"id": p3, "title": "stats problem solved", "solver_name": "unknown", "solver_type": "unknown", "time_to_solve_days": 0},
-	}
-	wantAnswered := []map[string]any{
-		{"id": q1, "title": "stats question open", "answerer_name": "Stats Human", "answerer_type": "human", "time_to_answer_hours": 4.0},
-	}
 
 	_, err = MigrateContributions(ctx, pool)
 	require.NoError(t, err)
@@ -264,17 +186,6 @@ func TestCanonicalStats_KeepsLegacyFiguresAcrossTheCutover(t *testing.T) {
 		q1: {"question", 0, 4}, q2: {"question", 0, 0}, i1: {"idea", 0, 1},
 	}
 	assert.Equal(t, wantTrending, after.Trending, "every live contributor reply is a response")
-	assert.Equal(t, map[string]any{
-		"total_problems": 4, "solved_count": 3, "active_approaches": 0, "avg_solve_time_days": 3,
-	}, after.Problems, "the approach status workflow is retired")
-	assert.Equal(t, wantSolved, after.RecentlySolved, "the solver is kept across the cutover")
-	assert.Equal(t, map[string]int{sa: 2, sc: 1}, after.TopSolvers, "solvers are kept across the cutover")
-	assert.Equal(t, map[string]any{
-		"total_questions": 2, "answered_count": 1, "response_rate": 50.0, "avg_response_time_hours": 1.0,
-	}, after.Questions, "the first reply to q1 is the comment, 1h after it")
-	assert.Equal(t, wantAnswered, after.RecentlyAnswered, "the accepted reply keeps its author and time")
-	wantAnswerers := map[string]answererStat{h: {"Stats Human", 1, 100}, sa: {sa, 1, 0}, sc: {sc, 1, 0}}
-	assert.Equal(t, wantAnswerers, after.TopAnswerers, "the comment on q1 is a top-level reply; the one on the answer is not")
 
 	dropLegacy()
 	assert.Equal(t, after, takeStatsSnapshot(t, ctx, canonical), "the canonical statistics need no legacy table")
@@ -292,7 +203,4 @@ func TestCanonicalStats_KeepsLegacyFiguresAcrossTheCutover(t *testing.T) {
 	assert.Equal(t, 14, live.Contributions)
 	wantTrending[q2] = trendingStat{"question", 0, 2}
 	assert.Equal(t, wantTrending, live.Trending)
-	assert.InDelta(t, 2.0, live.Questions["avg_response_time_hours"], 0.001, "q1 after 1h, q2 after 3h")
-	wantAnswerers[sb] = answererStat{sb, 1, 0}
-	assert.Equal(t, wantAnswerers, live.TopAnswerers, "the native top-level reply is an answer; its child is not")
 }

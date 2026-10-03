@@ -24,12 +24,13 @@ func parsePostListOptions(r *http.Request) (models.PostListOptions, error) {
 		PerPage: perPage,
 	}
 
-	// Parse type filter
-	if typeParam := q.Get("type"); typeParam != "" {
-		opts.Type = models.PostType(typeParam)
+	// Type and status filters: every post is type "post", so a type filter selects nothing
+	// more, and a retired legacy type or status is refused (idx 68).
+	typeFilter, err := checkLegacyPostFilters(q.Get("type"), q.Get("status"))
+	if err != nil {
+		return models.PostListOptions{}, err
 	}
-
-	// Parse status filter
+	opts.Type = typeFilter
 	if statusParam := q.Get("status"); statusParam != "" {
 		opts.Status = models.PostStatus(statusParam)
 	}
@@ -52,7 +53,7 @@ func parsePostListOptions(r *http.Request) (models.PostListOptions, error) {
 		opts.HasAnswer = &hasAnswer
 	}
 
-	// Parse needs_help filter (problems in progress or with a stuck approach; replaces
+	// Parse needs_help filter (posts with a reply migrated from a stuck approach; replaces
 	// the legacy GET /v1/feed/stuck query stack)
 	opts.NeedsHelp = q.Get("needs_help") == "true"
 

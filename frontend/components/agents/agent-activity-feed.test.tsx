@@ -16,7 +16,7 @@ describe('AgentActivityFeed', () => {
   });
 
   describe('getActivityLink - correct URL routing', () => {
-    it('links problems to /problems/{id}', () => {
+    it('links a post to /posts/{id}', () => {
       // Arrange
       vi.mocked(useAgentActivityModule.useAgentActivity).mockReturnValue({
         items: [{
@@ -42,10 +42,10 @@ describe('AgentActivityFeed', () => {
 
       // Assert - link should be /problems/problem-123, NOT /posts/problem-123
       const link = screen.getByRole('link');
-      expect(link).toHaveAttribute('href', '/problems/problem-123');
+      expect(link).toHaveAttribute('href', '/posts/problem-123');
     });
 
-    it('links questions to /questions/{id}', () => {
+    it('links a question-era post to /posts/{id}', () => {
       // Arrange
       vi.mocked(useAgentActivityModule.useAgentActivity).mockReturnValue({
         items: [{
@@ -71,10 +71,10 @@ describe('AgentActivityFeed', () => {
 
       // Assert
       const link = screen.getByRole('link');
-      expect(link).toHaveAttribute('href', '/questions/question-456');
+      expect(link).toHaveAttribute('href', '/posts/question-456');
     });
 
-    it('links ideas to /ideas/{id}', () => {
+    it('links an idea-era post to /posts/{id}', () => {
       // Arrange
       vi.mocked(useAgentActivityModule.useAgentActivity).mockReturnValue({
         items: [{
@@ -100,10 +100,10 @@ describe('AgentActivityFeed', () => {
 
       // Assert
       const link = screen.getByRole('link');
-      expect(link).toHaveAttribute('href', '/ideas/idea-789');
+      expect(link).toHaveAttribute('href', '/posts/idea-789');
     });
 
-    it('links approaches to /problems/{targetId}', () => {
+    it('links a reply migrated from an approach to /posts/{targetId}', () => {
       // Arrange - approaches are on problems
       vi.mocked(useAgentActivityModule.useAgentActivity).mockReturnValue({
         items: [{
@@ -130,10 +130,10 @@ describe('AgentActivityFeed', () => {
 
       // Assert - approaches link to their parent problem
       const link = screen.getByRole('link');
-      expect(link).toHaveAttribute('href', '/problems/problem-parent');
+      expect(link).toHaveAttribute('href', '/posts/problem-parent');
     });
 
-    it('links answers to /questions/{targetId}', () => {
+    it('links a reply migrated from an answer to /posts/{targetId}', () => {
       // Arrange - answers are on questions
       vi.mocked(useAgentActivityModule.useAgentActivity).mockReturnValue({
         items: [{
@@ -160,10 +160,10 @@ describe('AgentActivityFeed', () => {
 
       // Assert - answers link to their parent question
       const link = screen.getByRole('link');
-      expect(link).toHaveAttribute('href', '/questions/question-parent');
+      expect(link).toHaveAttribute('href', '/posts/question-parent');
     });
 
-    it('links responses to /ideas/{targetId}', () => {
+    it('links a reply migrated from a response to /posts/{targetId}', () => {
       // Arrange - responses are on ideas
       vi.mocked(useAgentActivityModule.useAgentActivity).mockReturnValue({
         items: [{
@@ -190,7 +190,7 @@ describe('AgentActivityFeed', () => {
 
       // Assert - responses link to their parent idea
       const link = screen.getByRole('link');
-      expect(link).toHaveAttribute('href', '/ideas/idea-parent');
+      expect(link).toHaveAttribute('href', '/posts/idea-parent');
     });
   });
 

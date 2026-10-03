@@ -121,25 +121,24 @@ func seedLegacyFeed(t *testing.T, pool *db.Pool, authorID string) legacyFeedSeed
 	repo := db.NewPostRepository(pool)
 	create := func(pt models.PostType, status models.PostStatus, title string) string {
 		p, err := repo.Create(ctx, &models.Post{
-			Type:            pt,
-			Title:           title,
-			Description:     "Legacy feed adapter body for " + title,
-			Tags:            []string{s.tag},
-			PostedByType:    models.AuthorTypeAgent,
-			PostedByID:      authorID,
-			Status:          status,
-			Visibility:      models.VisibilityPublic,
-			SuccessCriteria: []string{"it works"},
+			Type:         pt,
+			Title:        title,
+			Description:  "Legacy feed adapter body for " + title,
+			Tags:         []string{s.tag},
+			PostedByType: models.AuthorTypeAgent,
+			PostedByID:   authorID,
+			Status:       status,
+			Visibility:   models.VisibilityPublic,
 		})
 		require.NoError(t, err)
 		return p.ID
 	}
-	s.inProgress = create(models.PostTypeProblem, models.PostStatusInProgress, "Feed problem in progress")
-	s.stuckApproach = create(models.PostTypeProblem, models.PostStatusOpen, "Feed problem with a stuck approach")
-	s.openProblem = create(models.PostTypeProblem, models.PostStatusOpen, "Feed problem progressing fine")
-	s.unanswered = create(models.PostTypeQuestion, models.PostStatusOpen, "Feed unanswered question")
-	s.answered = create(models.PostTypeQuestion, models.PostStatusOpen, "Feed answered question")
-	s.idea = create(models.PostTypeIdea, models.PostStatusOpen, "Feed idea")
+	s.inProgress = create(models.PostTypePost, models.PostStatusOpen, "Feed problem in progress")
+	s.stuckApproach = create(models.PostTypePost, models.PostStatusOpen, "Feed problem with a stuck approach")
+	s.openProblem = create(models.PostTypePost, models.PostStatusOpen, "Feed problem progressing fine")
+	s.unanswered = create(models.PostTypePost, models.PostStatusOpen, "Feed unanswered question")
+	s.answered = create(models.PostTypePost, models.PostStatusOpen, "Feed answered question")
+	s.idea = create(models.PostTypePost, models.PostStatusOpen, "Feed idea")
 
 	for _, a := range []struct {
 		problem string
@@ -173,8 +172,8 @@ var legacyFeedRoutes = []struct {
 	canonical string
 }{
 	{"/v1/feed", "/v1/posts?sort=newest"},
-	{"/v1/feed/stuck", "/v1/posts?type=problem&needs_help=true&sort=newest"},
-	{"/v1/feed/unanswered", "/v1/posts?type=question&has_answer=false&sort=newest"},
+	{"/v1/feed/stuck", "/v1/posts?needs_help=true&sort=newest"},
+	{"/v1/feed/unanswered", "/v1/posts?has_answer=false&sort=newest"},
 }
 
 // legacyFeedFieldMoves maps each legacy feed item field the canonical row renames to that row's
@@ -244,7 +243,7 @@ func TestRetiredFeed_NamedQueryCarriesEveryFeedItemField(t *testing.T) {
 		}
 	}
 
-	stuck := getCanonicalFeed(t, ts.URL+"/v1/posts?type=problem&needs_help=true&sort=newest&tags="+s.tag)
+	stuck := getCanonicalFeed(t, ts.URL+"/v1/posts?needs_help=true&sort=newest&tags="+s.tag)
 	require.Len(t, stuck.Data, 2)
 	for _, d := range stuck.Data {
 		assert.Equal(t, "problem", d.Type)
@@ -279,7 +278,7 @@ func TestRetiredFeed_EveryLegacyQueryShapeGetsTheMigrationError(t *testing.T) {
 	for _, fr := range legacyFeedRoutes {
 		ret := readRetirement(t, fr.path)
 		message, _ := retirementAnswer(ret)
-		for _, query := range []string{"", "?per_page=200", "?page=abc&per_page=-1", "?type=problem&has_answer=true&tags=x"} {
+		for _, query := range []string{"", "?per_page=200", "?page=abc&per_page=-1", "?has_answer=true&tags=x"} {
 			got, err := callStatusContract(http.DefaultClient, http.MethodGet, ts.URL+fr.path+query, "", "")
 			require.NoError(t, err)
 			require.Equal(t, http.StatusGone, got.status, "%s%s: %s", fr.path, query, got.body)

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowUp, FileText, HelpCircle, Lightbulb, Loader2 } from "lucide-react";
+import { ArrowUp, FileText, Loader2 } from "lucide-react";
 import type { UserPostData } from "@/hooks/use-user";
 
 export interface UserPostsListProps {
@@ -9,32 +9,14 @@ export interface UserPostsListProps {
   loading?: boolean;
 }
 
-// Get the correct route prefix for each post type
+// Every post has one page, /posts/{id} (idx 68).
 function getPostPath(post: UserPostData): string {
-  switch (post.type) {
-    case 'question':
-      return `/questions/${post.id}`;
-    case 'problem':
-      return `/problems/${post.id}`;
-    case 'idea':
-      return `/ideas/${post.id}`;
-    default:
-      return `/posts/${post.id}`;
-  }
+  return `/posts/${post.id}`;
 }
 
-// Get icon for post type
-function PostTypeIcon({ type }: { type: UserPostData['type'] }) {
-  switch (type) {
-    case 'question':
-      return <HelpCircle size={14} />;
-    case 'problem':
-      return <FileText size={14} />;
-    case 'idea':
-      return <Lightbulb size={14} />;
-    default:
-      return <FileText size={14} />;
-  }
+// Icon for a post
+function PostTypeIcon(_: { type: UserPostData['type'] }) {
+  return <FileText size={14} />;
 }
 
 export function UserPostsList({ posts, loading = false }: UserPostsListProps) {

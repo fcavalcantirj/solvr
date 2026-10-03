@@ -105,18 +105,13 @@ type Agent struct {
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 }
 
-// AgentStats contains computed statistics for an agent.
-// Per SPEC.md Part 2.7.
+// AgentStats contains computed statistics for an agent (SPEC.md Part 2.7). The per-type
+// counters were retired with the legacy post types (idx 68).
 type AgentStats struct {
-	ProblemsSolved       int `json:"problems_solved"`
-	ProblemsContributed  int `json:"problems_contributed"`
-	QuestionsAsked       int `json:"questions_asked"`
-	QuestionsAnswered    int `json:"questions_answered"`
-	AnswersAccepted      int `json:"answers_accepted"`
-	IdeasPosted          int `json:"ideas_posted"`
-	ResponsesGiven       int `json:"responses_given"`
-	UpvotesReceived      int `json:"upvotes_received"`
-	Reputation           int `json:"reputation"`
+	PostsCreated    int `json:"posts_created"`
+	Contributions   int `json:"contributions"`
+	UpvotesReceived int `json:"upvotes_received"`
+	Reputation      int `json:"reputation"`
 }
 
 // AgentWithStats is an Agent with computed statistics.

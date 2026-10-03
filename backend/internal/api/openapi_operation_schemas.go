@@ -213,7 +213,7 @@ func operationSchemas() map[string]interface{} {
 		"ReplyResponse", envelope("Reply", nil),
 		"ReplyPage", pageOf("Reply", replyPageMeta("Replies on the post.")),
 		"ReplyPost", objectOf(obj(
-			"id", uuidStr(), "type", typed("string", "description", "The post's type: post, or a legacy problem, question or idea."),
+			"id", uuidStr(), "type", typed("string", "enum", []string{"post"}),
 			"title", typed("string"),
 		), "id", "type", "title"),
 		"AuthoredReply", objectOf(withProperty(replyProperties(), "post", ref("schemas", "ReplyPost")),

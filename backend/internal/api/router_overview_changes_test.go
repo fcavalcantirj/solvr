@@ -73,7 +73,7 @@ func TestOverview_APostTakenOffLeavesEveryInstancesSnapshotAtCommit(t *testing.T
 	listed := func(title string) (string, string) {
 		t.Helper()
 		post, err := posts.Create(ctx, &models.Post{
-			Type: models.PostTypeQuestion, Title: title, Description: title + ", the description of the post",
+			Type: models.PostTypePost, Title: title, Description: title + ", the description of the post",
 			Tags: []string{"overview"}, PostedByType: models.AuthorTypeAgent, PostedByID: agentID,
 			Status: models.PostStatusOpen,
 		})
@@ -143,7 +143,7 @@ func TestOverview_ASnapshotBuiltAcrossAChangeIsNotKept(t *testing.T) {
 	require.NoError(t, err)
 	posts := db.NewPostRepository(pool)
 	post, err := posts.Create(ctx, &models.Post{
-		Type: models.PostTypeQuestion, Title: "A post deleted while a snapshot is built",
+		Type: models.PostTypePost, Title: "A post deleted while a snapshot is built",
 		Description: "A post deleted while a snapshot is built, the description", Tags: []string{"overview"},
 		PostedByType: models.AuthorTypeAgent, PostedByID: agentID, Status: models.PostStatusOpen,
 	})

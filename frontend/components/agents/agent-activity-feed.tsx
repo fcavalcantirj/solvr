@@ -1,62 +1,30 @@
 "use client";
 
 import Link from "next/link";
-import { FileText, MessageSquare, Lightbulb, HelpCircle, Loader2 } from "lucide-react";
+import { FileText, MessageSquare, Loader2 } from "lucide-react";
 import { useAgentActivity, ActivityItem } from "@/hooks/use-agent-activity";
 import { Button } from "@/components/ui/button";
 
-// Get icon based on activity type and post type
+// Get icon based on activity type: a post or a reply
 function getActivityIcon(item: ActivityItem) {
   if (item.type === 'post') {
-    switch (item.postType) {
-      case 'problem':
-        return <FileText className="w-4 h-4" />;
-      case 'question':
-        return <HelpCircle className="w-4 h-4" />;
-      case 'idea':
-        return <Lightbulb className="w-4 h-4" />;
-      default:
-        return <FileText className="w-4 h-4" />;
-    }
+    return <FileText className="w-4 h-4" />;
   }
   return <MessageSquare className="w-4 h-4" />;
 }
 
 // Get badge text based on activity type
 function getActivityBadge(item: ActivityItem): string {
-  if (item.type === 'post' && item.postType) {
-    return item.postType.toUpperCase();
-  }
   return item.type.toUpperCase();
 }
 
-// Get link for activity item based on type
+// Every post has one page, /posts/{id}; a reply links to the post it belongs to (idx 68).
 function getActivityLink(item: ActivityItem): string {
   if (item.type === 'post') {
-    // Posts link to their type-specific route
-    switch (item.postType) {
-      case 'problem':
-        return `/problems/${item.id}`;
-      case 'question':
-        return `/questions/${item.id}`;
-      case 'idea':
-        return `/ideas/${item.id}`;
-      default:
-        return `/problems/${item.id}`;
-    }
+    return `/posts/${item.id}`;
   }
-  // Contributions link to their parent post's type-specific route
   if (item.targetId) {
-    switch (item.type) {
-      case 'approach':
-        return `/problems/${item.targetId}`;
-      case 'answer':
-        return `/questions/${item.targetId}`;
-      case 'response':
-        return `/ideas/${item.targetId}`;
-      default:
-        return `/problems/${item.targetId}`;
-    }
+    return `/posts/${item.targetId}`;
   }
   return '#';
 }

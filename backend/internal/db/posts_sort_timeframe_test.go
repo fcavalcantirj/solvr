@@ -23,7 +23,7 @@ func TestPostRepository_List_SortByHot(t *testing.T) {
 
 	// Create a recent post with high votes
 	postRecent, err := repo.Create(ctx, &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Recent Hot Post",
 		Description:  "Recent post with many votes",
 		PostedByType: models.AuthorTypeAgent,
@@ -37,7 +37,7 @@ func TestPostRepository_List_SortByHot(t *testing.T) {
 
 	// Create an old post with high votes
 	postOld, err := repo.Create(ctx, &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Old High Votes Post",
 		Description:  "Old post with many votes",
 		PostedByType: models.AuthorTypeAgent,
@@ -116,7 +116,7 @@ func TestPostRepository_List_SortByHot_EngagementMatters(t *testing.T) {
 
 	// Create two posts at the same time with 0 votes
 	postEngaged, err := repo.Create(ctx, &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Engaged Post Zero Votes",
 		Description:  "Post with comments and views but no votes",
 		PostedByType: models.AuthorTypeAgent,
@@ -129,7 +129,7 @@ func TestPostRepository_List_SortByHot_EngagementMatters(t *testing.T) {
 	}
 
 	postDead, err := repo.Create(ctx, &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Dead Post Zero Everything",
 		Description:  "Post with zero engagement",
 		PostedByType: models.AuthorTypeAgent,
@@ -243,7 +243,7 @@ func TestPostRepository_List_TimeframeToday(t *testing.T) {
 
 	// Create a post now (should be included)
 	postToday, err := repo.Create(ctx, &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Today Post",
 		Description:  "Created today",
 		PostedByType: models.AuthorTypeAgent,
@@ -257,7 +257,7 @@ func TestPostRepository_List_TimeframeToday(t *testing.T) {
 
 	// Create a post 3 days ago (should be excluded)
 	postOld, err := repo.Create(ctx, &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Old Post",
 		Description:  "Created 3 days ago",
 		PostedByType: models.AuthorTypeAgent,
@@ -323,7 +323,7 @@ func TestPostRepository_List_TimeframeWeek(t *testing.T) {
 
 	// Create a recent post (3 days ago — included)
 	postRecent, err := repo.Create(ctx, &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Recent Week Post",
 		Description:  "Created 3 days ago",
 		PostedByType: models.AuthorTypeAgent,
@@ -337,7 +337,7 @@ func TestPostRepository_List_TimeframeWeek(t *testing.T) {
 
 	// Create an old post (14 days ago — excluded)
 	postOld, err := repo.Create(ctx, &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Old Week Post",
 		Description:  "Created 14 days ago",
 		PostedByType: models.AuthorTypeAgent,
@@ -407,7 +407,7 @@ func TestPostRepository_List_TimeframeMonth(t *testing.T) {
 
 	// Create a recent post (15 days ago — included)
 	postRecent, err := repo.Create(ctx, &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Recent Month Post",
 		Description:  "Created 15 days ago",
 		PostedByType: models.AuthorTypeAgent,
@@ -421,7 +421,7 @@ func TestPostRepository_List_TimeframeMonth(t *testing.T) {
 
 	// Create an old post (45 days ago — excluded)
 	postOld, err := repo.Create(ctx, &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Old Month Post",
 		Description:  "Created 45 days ago",
 		PostedByType: models.AuthorTypeAgent,

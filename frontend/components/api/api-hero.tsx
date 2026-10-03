@@ -88,9 +88,7 @@ export function ApiHero() {
 const results = await fetch(
   'https://api.solvr.dev/v1/search?' +
   new URLSearchParams({
-    q: 'async postgres race condition',
-    type: 'problem',
-    status: 'solved'
+    q: 'async postgres race condition'
   }),
   {
     headers: {

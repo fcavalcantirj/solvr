@@ -36,9 +36,9 @@ function post(id: string, type: APIPost['type'], title: string, reply_count: num
 }
 
 const mixed = [
-  post('p1', 'problem', 'Prob one', 2),
-  post('i1', 'idea', 'Idea one', 0),
-  post('q1', 'question', 'Question one', 5),
+  post('p1', 'post', 'Prob one', 2),
+  post('i1', 'post', 'Idea one', 0),
+  post('q1', 'post', 'Question one', 5),
 ];
 
 beforeEach(() => {

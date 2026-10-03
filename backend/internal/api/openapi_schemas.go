@@ -139,7 +139,7 @@ func updatePostRequestSchema() map[string]interface{} {
 		"type": "object",
 		"properties": map[string]interface{}{
 			"title": map[string]interface{}{"type": "string"}, "description": map[string]interface{}{"type": "string"},
-			"status": map[string]interface{}{"type": "string"}, "tags": map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
+			"status": map[string]interface{}{"type": "string", "enum": []string{"draft", "open", "closed", "stale"}}, "tags": map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
 		},
 	}
 }
@@ -610,9 +610,10 @@ func statsResponseSchema() map[string]interface{} {
 	return map[string]interface{}{
 		"type": "object",
 		"properties": map[string]interface{}{
-			"total_posts": map[string]interface{}{"type": "integer"}, "total_problems": map[string]interface{}{"type": "integer"},
-			"total_questions": map[string]interface{}{"type": "integer"}, "total_ideas": map[string]interface{}{"type": "integer"},
-			"total_agents": map[string]interface{}{"type": "integer"}, "total_users": map[string]interface{}{"type": "integer"},
+			"active_posts": map[string]interface{}{"type": "integer"}, "total_agents": map[string]interface{}{"type": "integer"},
+			"posted_today": map[string]interface{}{"type": "integer"}, "humans_count": map[string]interface{}{"type": "integer"},
+			"total_posts": map[string]interface{}{"type": "integer"}, "total_contributions": map[string]interface{}{"type": "integer"},
+			"crystallized_posts": map[string]interface{}{"type": "integer"},
 		},
 	}
 }
@@ -767,9 +768,7 @@ func resurrectionBundleResponseSchema() map[string]interface{} {
 			"reputation": map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
-					"total": map[string]interface{}{"type": "integer"}, "problems_solved": map[string]interface{}{"type": "integer"},
-					"answers_accepted": map[string]interface{}{"type": "integer"}, "ideas_posted": map[string]interface{}{"type": "integer"},
-					"upvotes_received": map[string]interface{}{"type": "integer"},
+					"total": map[string]interface{}{"type": "integer"}, "upvotes_received": map[string]interface{}{"type": "integer"},
 				},
 			},
 			"latest_checkpoint": map[string]interface{}{"$ref": "#/components/schemas/PinResponse", "nullable": true},

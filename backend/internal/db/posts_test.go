@@ -161,7 +161,7 @@ func TestPostRepository_List_WithPosts(t *testing.T) {
 			VALUES ($1, $2, $3, $4, $5, $6, $7)
 			RETURNING id::text
 		`,
-			models.PostTypeProblem,
+			models.PostTypePost,
 			"Test Post "+string(rune('A'+i)),
 			"Description "+string(rune('A'+i)),
 			[]string{"go", "testing"},
@@ -259,7 +259,7 @@ func TestPostRepository_List_FilterByType(t *testing.T) {
 
 	// Filter by type: problem
 	opts := models.PostListOptions{
-		Type:    models.PostTypeProblem,
+		Type:    models.PostTypePost,
 		Page:    1,
 		PerPage: 100,
 	}
@@ -271,7 +271,7 @@ func TestPostRepository_List_FilterByType(t *testing.T) {
 
 	// All returned posts should be problems
 	for _, post := range posts {
-		if post.Type != models.PostTypeProblem {
+		if post.Type != models.PostTypePost {
 			t.Errorf("expected type problem, got %s", post.Type)
 		}
 	}
@@ -618,7 +618,7 @@ func TestPostRepository_FindByID_Success(t *testing.T) {
 		t.Errorf("expected ID %s, got %s", postID, post.ID)
 	}
 
-	if post.Type != models.PostTypeProblem {
+	if post.Type != models.PostTypePost {
 		t.Errorf("expected type problem, got %s", post.Type)
 	}
 
@@ -816,7 +816,7 @@ func TestPostRepository_FindByID_IncludesCommentCount(t *testing.T) {
 
 	// Create a test post
 	post, err := repo.Create(ctx, &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Test Problem for Comments in FindByID",
 		Description:  "Testing comment count in FindByID",
 		PostedByType: models.AuthorTypeAgent,
@@ -862,17 +862,14 @@ func TestPostRepository_Create_Problem(t *testing.T) {
 	ctx := context.Background()
 	authorAgent(ctx, t, pool, "test_agent_create")
 
-	weight := 3
 	post := &models.Post{
-		Type:            models.PostTypeProblem,
-		Title:           "Test Problem Creation",
-		Description:     "This is a test problem for Create method",
-		Tags:            []string{"go", "testing"},
-		PostedByType:    models.AuthorTypeAgent,
-		PostedByID:      "test_agent_create",
-		Status:          models.PostStatusOpen,
-		SuccessCriteria: []string{"Criterion 1", "Criterion 2"},
-		Weight:          &weight,
+		Type:         models.PostTypePost,
+		Title:        "Test Problem Creation",
+		Description:  "This is a test problem for Create method",
+		Tags:         []string{"go", "testing"},
+		PostedByType: models.AuthorTypeAgent,
+		PostedByID:   "test_agent_create",
+		Status:       models.PostStatusOpen,
 	}
 
 	createdPost, err := repo.Create(ctx, post)
@@ -890,7 +887,7 @@ func TestPostRepository_Create_Problem(t *testing.T) {
 	}
 
 	// Verify fields are set correctly
-	if createdPost.Type != models.PostTypeProblem {
+	if createdPost.Type != models.PostTypePost {
 		t.Errorf("expected type problem, got %s", createdPost.Type)
 	}
 
@@ -916,14 +913,6 @@ func TestPostRepository_Create_Problem(t *testing.T) {
 
 	if createdPost.Status != models.PostStatusOpen {
 		t.Errorf("expected status open, got %s", createdPost.Status)
-	}
-
-	if len(createdPost.SuccessCriteria) != 2 {
-		t.Errorf("expected 2 success criteria, got %d", len(createdPost.SuccessCriteria))
-	}
-
-	if createdPost.Weight == nil || *createdPost.Weight != 3 {
-		t.Error("expected weight 3")
 	}
 
 	// Verify timestamps are set
@@ -966,7 +955,7 @@ func TestPostRepository_Create_Question(t *testing.T) {
 	ctx := context.Background()
 
 	post := &models.Post{
-		Type:         models.PostTypeQuestion,
+		Type:         models.PostTypePost,
 		Title:        "Test Question Creation",
 		Description:  "This is a test question for Create method",
 		Tags:         []string{"go"},
@@ -984,18 +973,10 @@ func TestPostRepository_Create_Question(t *testing.T) {
 		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id = $1", createdPost.ID)
 	}()
 
-	if createdPost.Type != models.PostTypeQuestion {
+	if createdPost.Type != models.PostTypePost {
 		t.Errorf("expected type question, got %s", createdPost.Type)
 	}
 
-	// Questions should not have success_criteria or weight
-	if len(createdPost.SuccessCriteria) > 0 {
-		t.Error("question should not have success_criteria")
-	}
-
-	if createdPost.Weight != nil {
-		t.Error("question should not have weight")
-	}
 }
 
 func TestPostRepository_Create_Idea(t *testing.T) {
@@ -1010,7 +991,7 @@ func TestPostRepository_Create_Idea(t *testing.T) {
 	authorAgent(ctx, t, pool, "test_agent_idea")
 
 	post := &models.Post{
-		Type:         models.PostTypeIdea,
+		Type:         models.PostTypePost,
 		Title:        "Test Idea Creation",
 		Description:  "This is a test idea for Create method",
 		Tags:         []string{"brainstorm"},
@@ -1028,7 +1009,7 @@ func TestPostRepository_Create_Idea(t *testing.T) {
 		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id = $1", createdPost.ID)
 	}()
 
-	if createdPost.Type != models.PostTypeIdea {
+	if createdPost.Type != models.PostTypePost {
 		t.Errorf("expected type idea, got %s", createdPost.Type)
 	}
 }
@@ -1045,7 +1026,7 @@ func TestPostRepository_Create_WithNilTags(t *testing.T) {
 	authorAgent(ctx, t, pool, "test_agent_notags")
 
 	post := &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Test No Tags",
 		Description:  "Post without tags",
 		Tags:         nil, // nil tags
@@ -1081,7 +1062,7 @@ func TestPostRepository_Create_DefaultStatus(t *testing.T) {
 	authorAgent(ctx, t, pool, "test_agent_defaultstatus")
 
 	post := &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Test Default Status",
 		Description:  "Post with default status",
 		PostedByType: models.AuthorTypeAgent,
@@ -1118,17 +1099,14 @@ func TestPostRepository_Update_Success(t *testing.T) {
 	authorAgent(ctx, t, pool, "test_agent_update")
 
 	// First create a post
-	weight := 2
 	post := &models.Post{
-		Type:            models.PostTypeProblem,
-		Title:           "Original Title",
-		Description:     "Original description",
-		Tags:            []string{"go"},
-		PostedByType:    models.AuthorTypeAgent,
-		PostedByID:      "test_agent_update",
-		Status:          models.PostStatusOpen,
-		SuccessCriteria: []string{"Original criteria"},
-		Weight:          &weight,
+		Type:         models.PostTypePost,
+		Title:        "Original Title",
+		Description:  "Original description",
+		Tags:         []string{"go"},
+		PostedByType: models.AuthorTypeAgent,
+		PostedByID:   "test_agent_update",
+		Status:       models.PostStatusOpen,
 	}
 
 	createdPost, err := repo.Create(ctx, post)
@@ -1141,13 +1119,10 @@ func TestPostRepository_Update_Success(t *testing.T) {
 	}()
 
 	// Update the post
-	newWeight := 4
 	createdPost.Title = "Updated Title"
 	createdPost.Description = "Updated description"
 	createdPost.Tags = []string{"go", "updated"}
-	createdPost.Status = models.PostStatusInProgress
-	createdPost.SuccessCriteria = []string{"Updated criteria 1", "Updated criteria 2"}
-	createdPost.Weight = &newWeight
+	createdPost.Status = models.PostStatusOpen
 
 	updatedPost, err := repo.Update(ctx, createdPost)
 	if err != nil {
@@ -1167,16 +1142,8 @@ func TestPostRepository_Update_Success(t *testing.T) {
 		t.Errorf("expected 2 tags, got %d", len(updatedPost.Tags))
 	}
 
-	if updatedPost.Status != models.PostStatusInProgress {
+	if updatedPost.Status != models.PostStatusOpen {
 		t.Errorf("expected status in_progress, got %s", updatedPost.Status)
-	}
-
-	if len(updatedPost.SuccessCriteria) != 2 {
-		t.Errorf("expected 2 success criteria, got %d", len(updatedPost.SuccessCriteria))
-	}
-
-	if updatedPost.Weight == nil || *updatedPost.Weight != 4 {
-		t.Error("expected weight 4")
 	}
 
 	// Verify updated_at changed
@@ -1208,7 +1175,7 @@ func TestPostRepository_Update_NotFound(t *testing.T) {
 	// Try to update a non-existent post
 	post := &models.Post{
 		ID:           "non_existent_post_id_update_test",
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Non-existent",
 		Description:  "This post does not exist",
 		PostedByType: models.AuthorTypeAgent,
@@ -1260,7 +1227,7 @@ func TestPostRepository_Update_Deleted(t *testing.T) {
 	// Try to update the deleted post
 	post := &models.Post{
 		ID:           postID,
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Updated Title",
 		Description:  "Updated description",
 		PostedByType: models.AuthorTypeAgent,
@@ -1295,7 +1262,7 @@ func TestPostRepository_Update_PreservesImmutableFields(t *testing.T) {
 
 	// Create a post
 	post := &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Original Title",
 		Description:  "Original description",
 		PostedByType: models.AuthorTypeAgent,
@@ -1329,7 +1296,7 @@ func TestPostRepository_Update_PreservesImmutableFields(t *testing.T) {
 	}
 
 	// Verify type was preserved
-	if updatedPost.Type != models.PostTypeProblem {
+	if updatedPost.Type != models.PostTypePost {
 		t.Errorf("type should be preserved, got %s", updatedPost.Type)
 	}
 
@@ -1358,7 +1325,7 @@ func TestPostRepository_Delete_Success(t *testing.T) {
 
 	// Create a post
 	post := &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Post to Delete",
 		Description:  "This post will be soft deleted",
 		PostedByType: models.AuthorTypeAgent,
@@ -1482,7 +1449,7 @@ func TestPostRepository_Delete_ExcludedFromList(t *testing.T) {
 
 	// Create a post
 	post := &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Post to Delete for List Test",
 		Description:  "This post will be deleted and should not appear in list",
 		Tags:         []string{"delete_test_unique_tag"},
@@ -1558,7 +1525,7 @@ func TestPostRepository_Vote_Upvote(t *testing.T) {
 
 	// Create a post to vote on
 	post := &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Post for Upvote Test",
 		Description:  "Testing upvote functionality",
 		PostedByType: models.AuthorTypeAgent,
@@ -1614,7 +1581,7 @@ func TestPostRepository_Vote_Downvote(t *testing.T) {
 
 	// Create a post to vote on
 	post := &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Post for Downvote Test",
 		Description:  "Testing downvote functionality",
 		PostedByType: models.AuthorTypeAgent,
@@ -1670,7 +1637,7 @@ func TestPostRepository_Vote_ChangeVote(t *testing.T) {
 
 	// Create a post to vote on
 	post := &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Post for Change Vote Test",
 		Description:  "Testing vote change functionality",
 		PostedByType: models.AuthorTypeAgent,
@@ -1738,7 +1705,7 @@ func TestPostRepository_Vote_MultipleVoters(t *testing.T) {
 
 	// Create a post to vote on
 	post := &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Post for Multiple Voters Test",
 		Description:  "Testing multiple voters",
 		PostedByType: models.AuthorTypeAgent,
@@ -1804,7 +1771,7 @@ func TestPostRepository_Vote_SameVoteTwice(t *testing.T) {
 
 	// Create a post to vote on
 	post := &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Post for Same Vote Test",
 		Description:  "Testing same vote twice",
 		PostedByType: models.AuthorTypeAgent,
@@ -1879,7 +1846,7 @@ func TestPostRepository_Vote_InvalidDirection(t *testing.T) {
 
 	// Create a post
 	post := &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Post for Invalid Direction Test",
 		Description:  "Testing invalid vote direction",
 		PostedByType: models.AuthorTypeAgent,
@@ -1921,7 +1888,7 @@ func TestPostRepository_Vote_InvalidVoterType(t *testing.T) {
 
 	// Create a post
 	post := &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Post for Invalid Voter Type Test",
 		Description:  "Testing invalid voter type",
 		PostedByType: models.AuthorTypeAgent,
@@ -1965,7 +1932,7 @@ func TestPostRepository_Vote_SetsConfirmedTrue(t *testing.T) {
 
 	// Create a post to vote on
 	post := &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Post for Confirmed Vote Test",
 		Description:  "Testing that votes are auto-confirmed",
 		PostedByType: models.AuthorTypeAgent,
@@ -2019,7 +1986,7 @@ func TestPostRepository_Create_ReturnsViewCount(t *testing.T) {
 	authorAgent(ctx, t, pool, "test_agent_viewcount")
 
 	post := &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Test ViewCount in Create Response",
 		Description:  "FIX-030: Create must return view_count to avoid scan error",
 		Tags:         []string{"fix-030"},
@@ -2049,7 +2016,7 @@ func TestPostRepository_Create_ReturnsViewCount(t *testing.T) {
 	}
 
 	// Verify all other essential fields are populated
-	if createdPost.Type != models.PostTypeProblem {
+	if createdPost.Type != models.PostTypePost {
 		t.Errorf("expected type problem, got %s", createdPost.Type)
 	}
 
@@ -2087,7 +2054,7 @@ func TestPostRepository_GetUserVote_NoVote(t *testing.T) {
 
 	// Create a post
 	post := &models.Post{
-		Type:         models.PostTypeQuestion,
+		Type:         models.PostTypePost,
 		Title:        "Post for GetUserVote Test - No Vote",
 		Description:  "Testing GetUserVote when user hasn't voted",
 		PostedByType: models.AuthorTypeAgent,
@@ -2128,7 +2095,7 @@ func TestPostRepository_GetUserVote_Upvote(t *testing.T) {
 
 	// Create a post
 	post := &models.Post{
-		Type:         models.PostTypeQuestion,
+		Type:         models.PostTypePost,
 		Title:        "Post for GetUserVote Test - Upvote",
 		Description:  "Testing GetUserVote after upvoting",
 		PostedByType: models.AuthorTypeAgent,
@@ -2180,7 +2147,7 @@ func TestPostRepository_GetUserVote_Downvote(t *testing.T) {
 
 	// Create a post
 	post := &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Post for GetUserVote Test - Downvote",
 		Description:  "Testing GetUserVote after downvoting",
 		PostedByType: models.AuthorTypeAgent,
@@ -2231,7 +2198,7 @@ func TestPostRepository_GetUserVote_ChangeVote(t *testing.T) {
 
 	// Create a post
 	post := &models.Post{
-		Type:         models.PostTypeIdea,
+		Type:         models.PostTypePost,
 		Title:        "Post for GetUserVote Test - Change Vote",
 		Description:  "Testing GetUserVote after changing vote",
 		PostedByType: models.AuthorTypeHuman,
@@ -2287,7 +2254,7 @@ func TestPostRepository_GetUserVote_DifferentUsers(t *testing.T) {
 
 	// Create a post
 	post := &models.Post{
-		Type:         models.PostTypeQuestion,
+		Type:         models.PostTypePost,
 		Title:        "Post for GetUserVote Test - Different Users",
 		Description:  "Testing GetUserVote with multiple users",
 		PostedByType: models.AuthorTypeAgent,
@@ -2413,7 +2380,7 @@ func TestPostRepository_List_SortByAnswers(t *testing.T) {
 
 	// Create two questions via repo.Create (generates valid UUIDs)
 	q1, err := repo.Create(ctx, &models.Post{
-		Type: models.PostTypeQuestion, Title: "Q1 Many Answers",
+		Type: models.PostTypePost, Title: "Q1 Many Answers",
 		Description: "Sort test q1", PostedByType: models.AuthorTypeAgent,
 		PostedByID: "sort_test_agent", Status: models.PostStatusOpen,
 		Tags: []string{"sort_answers_test"},
@@ -2423,7 +2390,7 @@ func TestPostRepository_List_SortByAnswers(t *testing.T) {
 	}
 
 	q2, err := repo.Create(ctx, &models.Post{
-		Type: models.PostTypeQuestion, Title: "Q2 Few Answers",
+		Type: models.PostTypePost, Title: "Q2 Few Answers",
 		Description: "Sort test q2", PostedByType: models.AuthorTypeAgent,
 		PostedByID: "sort_test_agent", Status: models.PostStatusOpen,
 		Tags: []string{"sort_answers_test"},
@@ -2445,7 +2412,7 @@ func TestPostRepository_List_SortByAnswers(t *testing.T) {
 
 	// List with sort=answers, filtered by tag to isolate our test data
 	posts, _, err := repo.List(ctx, models.PostListOptions{
-		Type: models.PostTypeQuestion, Sort: "answers",
+		Type: models.PostTypePost, Sort: "answers",
 		Tags: []string{"sort_answers_test"}, Page: 1, PerPage: 10,
 	})
 	if err != nil {
@@ -2503,7 +2470,7 @@ func TestPostRepository_List_SortByApproaches(t *testing.T) {
 	repo := NewPostRepository(pool)
 
 	p1, err := repo.Create(ctx, &models.Post{
-		Type: models.PostTypeProblem, Title: "P1 Many Approaches",
+		Type: models.PostTypePost, Title: "P1 Many Approaches",
 		Description: "Sort test p1", PostedByType: models.AuthorTypeAgent,
 		PostedByID: "sort_test_agent", Status: models.PostStatusOpen,
 		Tags: []string{"sort_approaches_test"},
@@ -2513,7 +2480,7 @@ func TestPostRepository_List_SortByApproaches(t *testing.T) {
 	}
 
 	p2, err := repo.Create(ctx, &models.Post{
-		Type: models.PostTypeProblem, Title: "P2 Few Approaches",
+		Type: models.PostTypePost, Title: "P2 Few Approaches",
 		Description: "Sort test p2", PostedByType: models.AuthorTypeAgent,
 		PostedByID: "sort_test_agent", Status: models.PostStatusOpen,
 		Tags: []string{"sort_approaches_test"},
@@ -2534,7 +2501,7 @@ func TestPostRepository_List_SortByApproaches(t *testing.T) {
 	seedMigratedReply(t, pool, ctx, p2.ID, "approach", "agent", "sort_test_agent", "Approach for p2")
 
 	posts, _, err := repo.List(ctx, models.PostListOptions{
-		Type: models.PostTypeProblem, Sort: "approaches",
+		Type: models.PostTypePost, Sort: "approaches",
 		Tags: []string{"sort_approaches_test"}, Page: 1, PerPage: 10,
 	})
 	if err != nil {
@@ -2590,7 +2557,7 @@ func TestPostRepository_List_CountsExcludeSoftDeleted(t *testing.T) {
 	repo := NewPostRepository(pool)
 
 	q, err := repo.Create(ctx, &models.Post{
-		Type: models.PostTypeQuestion, Title: "Q Soft Delete Count",
+		Type: models.PostTypePost, Title: "Q Soft Delete Count",
 		Description: "Count test", PostedByType: models.AuthorTypeAgent,
 		PostedByID: "count_test_agent", Status: models.PostStatusOpen,
 		Tags: []string{"count_softdelete_test"},
@@ -2652,7 +2619,7 @@ func TestPostRepository_List_SortByTop(t *testing.T) {
 
 	// Create 3 posts via repo.Create (generates valid UUIDs)
 	postHigh, err := repo.Create(ctx, &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "High Votes Post",
 		Description:  "This post has 5 upvotes",
 		PostedByType: models.AuthorTypeAgent,
@@ -2665,7 +2632,7 @@ func TestPostRepository_List_SortByTop(t *testing.T) {
 	}
 
 	postMed, err := repo.Create(ctx, &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Med Votes Post",
 		Description:  "This post has 2 net votes (3 up, 1 down)",
 		PostedByType: models.AuthorTypeAgent,
@@ -2678,7 +2645,7 @@ func TestPostRepository_List_SortByTop(t *testing.T) {
 	}
 
 	postLow, err := repo.Create(ctx, &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Low Votes Post",
 		Description:  "This post has 1 upvote",
 		PostedByType: models.AuthorTypeAgent,
@@ -2779,7 +2746,7 @@ func TestPostRepository_List_SortByVotes(t *testing.T) {
 
 	// Create 3 posts
 	postHigh, err := repo.Create(ctx, &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "High Votes Post (votes param)",
 		Description:  "Testing sort=votes",
 		PostedByType: models.AuthorTypeAgent,
@@ -2792,7 +2759,7 @@ func TestPostRepository_List_SortByVotes(t *testing.T) {
 	}
 
 	postLow, err := repo.Create(ctx, &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Low Votes Post (votes param)",
 		Description:  "Testing sort=votes",
 		PostedByType: models.AuthorTypeAgent,
@@ -2867,7 +2834,7 @@ func TestPostRepository_List_SortByTop_WithNegativeScores(t *testing.T) {
 
 	// Create 3 posts with positive, zero, and negative scores
 	postPositive, err := repo.Create(ctx, &models.Post{
-		Type:         models.PostTypeQuestion,
+		Type:         models.PostTypePost,
 		Title:        "Positive Score Post",
 		Description:  "10 up, 2 down = score 8",
 		PostedByType: models.AuthorTypeAgent,
@@ -2880,7 +2847,7 @@ func TestPostRepository_List_SortByTop_WithNegativeScores(t *testing.T) {
 	}
 
 	postZero, err := repo.Create(ctx, &models.Post{
-		Type:         models.PostTypeQuestion,
+		Type:         models.PostTypePost,
 		Title:        "Zero Score Post",
 		Description:  "5 up, 5 down = score 0",
 		PostedByType: models.AuthorTypeAgent,
@@ -2893,7 +2860,7 @@ func TestPostRepository_List_SortByTop_WithNegativeScores(t *testing.T) {
 	}
 
 	postNegative, err := repo.Create(ctx, &models.Post{
-		Type:         models.PostTypeQuestion,
+		Type:         models.PostTypePost,
 		Title:        "Negative Score Post",
 		Description:  "2 up, 5 down = score -3",
 		PostedByType: models.AuthorTypeAgent,
@@ -2987,7 +2954,7 @@ func TestPostRepository_List_HasAnswerFalse(t *testing.T) {
 	// Create 3 questions with different answer counts
 	// q1: 0 answers
 	q1, err := repo.Create(ctx, &models.Post{
-		Type:         models.PostTypeQuestion,
+		Type:         models.PostTypePost,
 		Title:        "Question with 0 answers",
 		Description:  "Test question with no answers",
 		PostedByType: models.AuthorTypeAgent,
@@ -3000,7 +2967,7 @@ func TestPostRepository_List_HasAnswerFalse(t *testing.T) {
 
 	// q2: 1 answer
 	q2, err := repo.Create(ctx, &models.Post{
-		Type:         models.PostTypeQuestion,
+		Type:         models.PostTypePost,
 		Title:        "Question with 1 answer",
 		Description:  "Test question with one answer",
 		PostedByType: models.AuthorTypeAgent,
@@ -3015,7 +2982,7 @@ func TestPostRepository_List_HasAnswerFalse(t *testing.T) {
 
 	// q3: 3 answers
 	q3, err := repo.Create(ctx, &models.Post{
-		Type:         models.PostTypeQuestion,
+		Type:         models.PostTypePost,
 		Title:        "Question with 3 answers",
 		Description:  "Test question with three answers",
 		PostedByType: models.AuthorTypeAgent,
@@ -3038,7 +3005,7 @@ func TestPostRepository_List_HasAnswerFalse(t *testing.T) {
 	// Act: List with HasAnswer = false
 	falseVal := false
 	opts := models.PostListOptions{
-		Type:      models.PostTypeQuestion,
+		Type:      models.PostTypePost,
 		HasAnswer: &falseVal,
 		Page:      1,
 		PerPage:   100,
@@ -3088,7 +3055,7 @@ func TestPostRepository_List_HasAnswerTrue(t *testing.T) {
 	// Create 3 questions with different answer counts
 	// q1: 0 answers
 	q1, err := repo.Create(ctx, &models.Post{
-		Type:         models.PostTypeQuestion,
+		Type:         models.PostTypePost,
 		Title:        "Question with 0 answers",
 		Description:  "Test question with no answers",
 		PostedByType: models.AuthorTypeAgent,
@@ -3101,7 +3068,7 @@ func TestPostRepository_List_HasAnswerTrue(t *testing.T) {
 
 	// q2: 1 answer
 	q2, err := repo.Create(ctx, &models.Post{
-		Type:         models.PostTypeQuestion,
+		Type:         models.PostTypePost,
 		Title:        "Question with 1 answer",
 		Description:  "Test question with one answer",
 		PostedByType: models.AuthorTypeAgent,
@@ -3116,7 +3083,7 @@ func TestPostRepository_List_HasAnswerTrue(t *testing.T) {
 
 	// q3: 3 answers
 	q3, err := repo.Create(ctx, &models.Post{
-		Type:         models.PostTypeQuestion,
+		Type:         models.PostTypePost,
 		Title:        "Question with 3 answers",
 		Description:  "Test question with three answers",
 		PostedByType: models.AuthorTypeAgent,
@@ -3139,7 +3106,7 @@ func TestPostRepository_List_HasAnswerTrue(t *testing.T) {
 	// Act: List with HasAnswer = true
 	trueVal := true
 	opts := models.PostListOptions{
-		Type:      models.PostTypeQuestion,
+		Type:      models.PostTypePost,
 		HasAnswer: &trueVal,
 		Page:      1,
 		PerPage:   100,
@@ -3184,7 +3151,7 @@ func TestPostRepository_List_NoHasAnswerFilter(t *testing.T) {
 	// Create 3 questions with different answer counts
 	// q1: 0 answers
 	q1, err := repo.Create(ctx, &models.Post{
-		Type:         models.PostTypeQuestion,
+		Type:         models.PostTypePost,
 		Title:        "Question with 0 answers",
 		Description:  "Test question with no answers",
 		PostedByType: models.AuthorTypeAgent,
@@ -3197,7 +3164,7 @@ func TestPostRepository_List_NoHasAnswerFilter(t *testing.T) {
 
 	// q2: 1 answer
 	q2, err := repo.Create(ctx, &models.Post{
-		Type:         models.PostTypeQuestion,
+		Type:         models.PostTypePost,
 		Title:        "Question with 1 answer",
 		Description:  "Test question with one answer",
 		PostedByType: models.AuthorTypeAgent,
@@ -3212,7 +3179,7 @@ func TestPostRepository_List_NoHasAnswerFilter(t *testing.T) {
 
 	// q3: 3 answers
 	q3, err := repo.Create(ctx, &models.Post{
-		Type:         models.PostTypeQuestion,
+		Type:         models.PostTypePost,
 		Title:        "Question with 3 answers",
 		Description:  "Test question with three answers",
 		PostedByType: models.AuthorTypeAgent,
@@ -3234,7 +3201,7 @@ func TestPostRepository_List_NoHasAnswerFilter(t *testing.T) {
 
 	// Act: List without HasAnswer parameter (nil)
 	opts := models.PostListOptions{
-		Type:    models.PostTypeQuestion,
+		Type:    models.PostTypePost,
 		Page:    1,
 		PerPage: 100,
 	}
@@ -3279,7 +3246,7 @@ func TestPostRepository_List_IncludesCommentCount(t *testing.T) {
 
 	// Create a test post
 	post, err := repo.Create(ctx, &models.Post{
-		Type:         models.PostTypeQuestion,
+		Type:         models.PostTypePost,
 		Title:        "Test Question for Comments",
 		Description:  "Test",
 		PostedByType: models.AuthorTypeAgent,
@@ -3302,7 +3269,7 @@ func TestPostRepository_List_IncludesCommentCount(t *testing.T) {
 
 	// Act: List posts
 	posts, _, err := repo.List(ctx, models.PostListOptions{
-		Type:    models.PostTypeQuestion,
+		Type:    models.PostTypePost,
 		Page:    1,
 		PerPage: 10,
 	})
@@ -3344,7 +3311,7 @@ func TestPostRepository_List_CommentsCountAllTypes(t *testing.T) {
 
 	// Create one post of each type
 	question, err := repo.Create(ctx, &models.Post{
-		Type:         models.PostTypeQuestion,
+		Type:         models.PostTypePost,
 		Title:        "Question with comments",
 		Description:  "Test question",
 		PostedByType: models.AuthorTypeAgent,
@@ -3356,7 +3323,7 @@ func TestPostRepository_List_CommentsCountAllTypes(t *testing.T) {
 	}
 
 	problem, err := repo.Create(ctx, &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Problem with comments",
 		Description:  "Test problem",
 		PostedByType: models.AuthorTypeAgent,
@@ -3368,7 +3335,7 @@ func TestPostRepository_List_CommentsCountAllTypes(t *testing.T) {
 	}
 
 	idea, err := repo.Create(ctx, &models.Post{
-		Type:         models.PostTypeIdea,
+		Type:         models.PostTypePost,
 		Title:        "Idea with comments",
 		Description:  "Test idea",
 		PostedByType: models.AuthorTypeAgent,
@@ -3394,7 +3361,7 @@ func TestPostRepository_List_CommentsCountAllTypes(t *testing.T) {
 
 	// Test Questions - Should return comments_count = 1
 	questions, _, err := repo.List(ctx, models.PostListOptions{
-		Type:    models.PostTypeQuestion,
+		Type:    models.PostTypePost,
 		Page:    1,
 		PerPage: 10,
 	})
@@ -3418,7 +3385,7 @@ func TestPostRepository_List_CommentsCountAllTypes(t *testing.T) {
 
 	// Test Problems - Should return comments_count = 1
 	problems, _, err := repo.List(ctx, models.PostListOptions{
-		Type:    models.PostTypeProblem,
+		Type:    models.PostTypePost,
 		Page:    1,
 		PerPage: 10,
 	})
@@ -3442,7 +3409,7 @@ func TestPostRepository_List_CommentsCountAllTypes(t *testing.T) {
 
 	// Test Ideas - Should return comments_count = 1
 	ideas, _, err := repo.List(ctx, models.PostListOptions{
-		Type:    models.PostTypeIdea,
+		Type:    models.PostTypePost,
 		Page:    1,
 		PerPage: 10,
 	})
@@ -3478,7 +3445,7 @@ func TestPostRepository_List_WithViewerVote(t *testing.T) {
 
 	// Create a post
 	post := &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "List ViewerVote Test",
 		Description:  "Testing user_vote in List results",
 		PostedByType: models.AuthorTypeAgent,
@@ -3592,7 +3559,7 @@ func TestPostRepository_FindByID_WithViewerVote(t *testing.T) {
 
 	// Create a post
 	post := &models.Post{
-		Type:         models.PostTypeQuestion,
+		Type:         models.PostTypePost,
 		Title:        "FindByID ViewerVote Test",
 		Description:  "Testing user_vote in FindByID result",
 		PostedByType: models.AuthorTypeAgent,

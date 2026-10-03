@@ -185,9 +185,9 @@ func TestCanonicalPostCounts_KeepTheLegacyCountsAcrossTheCutover(t *testing.T) {
 	}
 	sorted := func() {
 		t.Helper()
-		assert.Equal(t, []string{q1}, ids(models.PostListOptions{Type: models.PostTypeQuestion, HasAnswer: &yes}))
-		assert.ElementsMatch(t, []string{q2, q3}, ids(models.PostListOptions{Type: models.PostTypeQuestion, HasAnswer: &no}))
-		assert.Equal(t, []string{p2, p1}, ids(models.PostListOptions{Type: models.PostTypeProblem, Sort: "approaches"}))
+		assert.Equal(t, []string{q1}, ids(models.PostListOptions{Type: models.PostTypePost, HasAnswer: &yes}))
+		assert.ElementsMatch(t, []string{q2, q3}, ids(models.PostListOptions{Type: models.PostTypePost, HasAnswer: &no}))
+		assert.Equal(t, []string{p2, p1}, ids(models.PostListOptions{Type: models.PostTypePost, Sort: "approaches"}))
 		assert.Equal(t, i1, ids(models.PostListOptions{Sort: "answers"})[0], "two answers lead the answers sort")
 		assert.Len(t, ids(models.PostListOptions{Sort: "hot"}), 6, "the hot sort reads the same counts")
 	}
@@ -206,6 +206,6 @@ func TestCanonicalPostCounts_KeepTheLegacyCountsAcrossTheCutover(t *testing.T) {
 	exec(`INSERT INTO replies (post_id, author_type, author_id, body, deleted_at) VALUES ($1, 'agent', $2, 'deleted', NOW()) RETURNING id::text`, q3, a)
 	migrated[q3] = postCounts{Answers: 1, Comments: 2, Replies: 3}
 	check(migrated)
-	assert.ElementsMatch(t, []string{q1, q3}, ids(models.PostListOptions{Type: models.PostTypeQuestion, HasAnswer: &yes}))
-	assert.Equal(t, []string{q2}, ids(models.PostListOptions{Type: models.PostTypeQuestion, HasAnswer: &no}))
+	assert.ElementsMatch(t, []string{q1, q3}, ids(models.PostListOptions{Type: models.PostTypePost, HasAnswer: &yes}))
+	assert.Equal(t, []string{q2}, ids(models.PostListOptions{Type: models.PostTypePost, HasAnswer: &no}))
 }

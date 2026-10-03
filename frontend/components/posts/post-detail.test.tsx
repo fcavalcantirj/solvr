@@ -20,7 +20,7 @@ import { PostDetail } from './post-detail';
 function makePost(over: Partial<APIPost> = {}): APIPost {
   return {
     id: 'p1',
-    type: 'problem',
+    type: 'post',
     title: 'How to fix the deadlock',
     description: 'This is the body of the post.',
     status: 'open',
@@ -142,7 +142,7 @@ describe('PostDetail', () => {
     });
 
     it('shows the snapshot for any canonical post carrying a CID, not only a problem type (step 3)', async () => {
-      getPost.mockResolvedValue({ data: makePost({ type: 'idea', crystallization_cid: 'bafyIdea' }) });
+      getPost.mockResolvedValue({ data: makePost({ type: 'post', crystallization_cid: 'bafyIdea' }) });
       render(<PostDetail postId="p1" />);
       expect(await screen.findByRole('link', { name: /bafyIdea/i })).toBeInTheDocument();
     });

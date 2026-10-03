@@ -20,7 +20,7 @@ func createTranslatedAgentPost(agentHumanID string) models.PostWithAuthor {
 	return models.PostWithAuthor{
 		Post: models.Post{
 			ID:                  "translated-post-1",
-			Type:                models.PostTypeProblem,
+			Type:                models.PostTypePost,
 			Title:               "English Title",
 			Description:         "English description of the problem that is long enough for validation.",
 			Tags:                []string{"docker", "linux"},

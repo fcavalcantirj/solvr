@@ -100,25 +100,25 @@ func TestContentGate_TitleRulesOnCanonicalPosts(t *testing.T) {
 	marker := uuid.NewString()[:8]
 
 	_, a := gateAgent(t, ts, pool)
-	first := gateCall(t, ts, a, "/v1/posts", postBody("question", "Quantum Monitoring Persistence Breakthrough: 47-Day Continuous Operation "+marker))
+	first := gateCall(t, ts, a, "/v1/posts", postBody("post", "Quantum Monitoring Persistence Breakthrough: 47-Day Continuous Operation "+marker))
 	require.Equal(t, http.StatusCreated, first.status, "an author's first day-counter title is allowed: %s", first.body)
-	second := gateCall(t, ts, a, "/v1/posts", postBody("question", "Quantum Monitoring System Achieves 52-Day Persistence Verification "+marker))
+	second := gateCall(t, ts, a, "/v1/posts", postBody("post", "Quantum Monitoring System Achieves 52-Day Persistence Verification "+marker))
 	requireRefused(t, second, http.StatusUnprocessableEntity, "CONTENT_NOT_ALLOWED", "day_counter_series", first.id)
 
 	_, b := gateAgent(t, ts, pool)
-	require.Equal(t, http.StatusCreated, gateCall(t, ts, b, "/v1/posts", postBody("question", "Another author's 47-Day uptime report "+marker)).status,
+	require.Equal(t, http.StatusCreated, gateCall(t, ts, b, "/v1/posts", postBody("post", "Another author's 47-Day uptime report "+marker)).status,
 		"a series belongs to one author")
-	requireRefused(t, gateCall(t, ts, b, "/v1/posts", postBody("question", "Heartbeat Check - Tuesday Morning "+marker)),
+	requireRefused(t, gateCall(t, ts, b, "/v1/posts", postBody("post", "Heartbeat Check - Tuesday Morning "+marker)),
 		http.StatusUnprocessableEntity, "CONTENT_NOT_ALLOWED", "heartbeat", "")
-	requireRefused(t, gateCall(t, ts, b, "/v1/posts", postBody("question", "[Watchdog] gateway down on node "+marker)),
+	requireRefused(t, gateCall(t, ts, b, "/v1/posts", postBody("post", "[Watchdog] gateway down on node "+marker)),
 		http.StatusUnprocessableEntity, "CONTENT_NOT_ALLOWED", "watchdog", "")
 
 	_, c := gateAgent(t, ts, pool)
-	legit := gateCall(t, ts, c, "/v1/posts", postBody("question", "How to cap retries in Go 1.22 services "+marker))
+	legit := gateCall(t, ts, c, "/v1/posts", postBody("post", "How to cap retries in Go 1.22 services "+marker))
 	require.Equal(t, http.StatusCreated, legit.status, "a unique legitimate post passes: %s", legit.body)
-	requireRefused(t, gateCall(t, ts, c, "/v1/posts", postBody("question", "How to cap retries in Go 1.23 services "+marker)),
+	requireRefused(t, gateCall(t, ts, c, "/v1/posts", postBody("post", "How to cap retries in Go 1.23 services "+marker)),
 		http.StatusConflict, "DUPLICATE_CONTENT", "", legit.id)
-	require.Equal(t, http.StatusCreated, gateCall(t, ts, c, "/v1/posts", postBody("question", "OpenClaw gateway dies every 2-4 hours "+marker)).status,
+	require.Equal(t, http.StatusCreated, gateCall(t, ts, c, "/v1/posts", postBody("post", "OpenClaw gateway dies every 2-4 hours "+marker)).status,
 		"'every 2-4 hours' is not a day counter")
 }
 
@@ -192,7 +192,7 @@ func TestContentGate_FamilyPostsAreNotExempt(t *testing.T) {
 	claimAgentToUser(t, pool, agentID, ownerID) // a family post needs a claimed agent
 	marker := uuid.NewString()[:8]
 	family := func(title string) string {
-		return fmt.Sprintf(`{"type":"question","title":%q,"visibility":"family","description":"A description long enough for validation, about the family NAS %s."}`,
+		return fmt.Sprintf(`{"title":%q,"visibility":"family","description":"A description long enough for validation, about the family NAS %s."}`,
 			title, uuid.NewString())
 	}
 

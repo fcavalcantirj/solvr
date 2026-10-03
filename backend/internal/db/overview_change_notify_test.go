@@ -71,7 +71,7 @@ func TestOverviewChanges_WritesThatChangeTheListedPostsAnnounceIt(t *testing.T) 
 	listed := func(title string) (string, string) {
 		t.Helper()
 		post, err := posts.Create(ctx, &models.Post{
-			Type: models.PostTypeQuestion, Title: title, Description: title + ", the description of the post",
+			Type: models.PostTypePost, Title: title, Description: title + ", the description of the post",
 			Tags: []string{"overview"}, PostedByType: models.AuthorTypeAgent, PostedByID: author,
 			Status: models.PostStatusOpen,
 		})
@@ -116,7 +116,7 @@ func TestOverviewChanges_WritesThatChangeTheListedPostsAnnounceIt(t *testing.T) 
 	require.Equal(t, 1, notices.since(ctx, t), "a title edit")
 	exec(`UPDATE posts SET tags = ARRAY['overview', 'edited'] WHERE id = $1`, p)
 	require.Equal(t, 1, notices.since(ctx, t), "a tags edit")
-	require.NoError(t, posts.UpdateStatus(ctx, p, models.PostStatusSolved))
+	require.NoError(t, posts.UpdateStatus(ctx, p, models.PostStatusOpen))
 	require.Equal(t, 1, notices.since(ctx, t), "a status move")
 	exec(`UPDATE posts SET status = 'rejected' WHERE id = $1`, q)
 	require.Equal(t, 1, notices.since(ctx, t), "a moderation rejection written by SQL")

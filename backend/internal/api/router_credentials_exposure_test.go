@@ -85,7 +85,7 @@ func TestCredentials_AreNeverEchoedInResponsesOrLogs(t *testing.T) {
 		{"POST", "/v1/rooms/" + room.slug + "/stream-ticket", ""},
 		{"POST", "/v1/rooms/" + room.slug + "/handshake", `{}`},
 		{"POST", "/v1/rooms/" + room.slug + "/entries", `{"kind":"message","content":"hi"}`},
-		{"POST", "/v1/posts", `{"type":"question","title":"a title long enough","description":"a description that is long enough to pass"}`},
+		{"POST", "/v1/posts", `{"title":"a title long enough","description":"a description that is long enough to pass"}`},
 		{"GET", "/v1/me", ""},
 	}
 	for _, secret := range bogus {

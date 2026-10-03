@@ -78,15 +78,10 @@ func (m *MockAgentRepository) Update(ctx context.Context, agent *models.Agent) e
 
 func (m *MockAgentRepository) GetAgentStats(ctx context.Context, agentID string) (*models.AgentStats, error) {
 	return &models.AgentStats{
-		ProblemsSolved:      5,
-		ProblemsContributed: 10,
-		QuestionsAsked:      3,
-		QuestionsAnswered:   15,
-		AnswersAccepted:     8,
-		IdeasPosted:         2,
-		ResponsesGiven:      20,
-		UpvotesReceived:     100,
-		Reputation:          1250,
+		PostsCreated:    12,
+		Contributions:   45,
+		UpvotesReceived: 100,
+		Reputation:      1250,
 	}, nil
 }
 
@@ -192,7 +187,7 @@ func (m *MockAgentRepository) List(ctx context.Context, opts models.AgentListOpt
 			DisplayName:         agent.DisplayName,
 			Bio:                 agent.Bio,
 			Status:              agent.Status,
-			Reputation:               agent.Reputation,
+			Reputation:          agent.Reputation,
 			PostCount:           0,
 			CreatedAt:           agent.CreatedAt,
 			HasHumanBackedBadge: agent.HasHumanBackedBadge,
@@ -939,7 +934,7 @@ func TestUpdateAgent_ModelReputationBonus_FirstTime(t *testing.T) {
 		ID:          "my_agent",
 		DisplayName: "Test Agent",
 		HumanID:     &humanID,
-		Reputation:       0, // Start with 0 reputation
+		Reputation:  0,  // Start with 0 reputation
 		Model:       "", // No model initially
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
@@ -986,7 +981,7 @@ func TestUpdateAgent_ModelReputationBonus_NoBonus(t *testing.T) {
 		ID:          "my_agent",
 		DisplayName: "Test Agent",
 		HumanID:     &humanID,
-		Reputation:       50, // Already has reputation
+		Reputation:  50,      // Already has reputation
 		Model:       "gpt-4", // Already has model
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),

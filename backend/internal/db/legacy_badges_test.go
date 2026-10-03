@@ -13,8 +13,9 @@ import (
 
 // Task idx 76 steps 3-4 (feature:badges): milestone awarding is retired, not moved to the
 // canonical model. services.BadgeService (first_solve, ten_solves, hundred_upvotes,
-// first_answer_accepted) has had no production caller since it was written, and its rules
-// count solved problems and accepted answers the canonical model does not have. What stays
+// first_answer_accepted) never had a production caller, and its rules counted solved problems
+// and accepted answers the canonical model does not have; it was deleted with the legacy post
+// types (idx 68). What stays
 // is the history: earned badge rows, served unchanged (TestBadgeRoutes_ServeEarnedBadges
 // AsHistoryAcrossTheCutover). This pins the retirement: no production Go file constructs the
 // service or runs its milestone check, and the registry records exactly that decision.

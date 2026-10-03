@@ -8,14 +8,24 @@ import (
 // PostType represents the type of post.
 type PostType string
 
-const (
-	PostTypeProblem  PostType = "problem"
-	PostTypeQuestion PostType = "question"
-	PostTypeIdea     PostType = "idea"
-	// PostTypePost is the canonical untyped post (BART-583). New posts created
-	// without a type use it; the API no longer requires a problem/question/idea choice.
-	PostTypePost PostType = "post"
-)
+// PostTypePost is the type of every post (BART-583, idx 68): the legacy problem, question and
+// idea types were retired, and each post's original type is kept only in the recovery archive
+// (legacy_archive.post_fields).
+const PostTypePost PostType = "post"
+
+// RetiredPostTypes are the legacy post types retired in idx 68. They are named only so a request
+// sending one is refused with LEGACY_FIELD_RETIRED instead of being treated as an unknown type.
+var RetiredPostTypes = []PostType{"problem", "question", "idea"}
+
+// IsRetiredPostType reports whether t is one of RetiredPostTypes.
+func IsRetiredPostType(t PostType) bool {
+	for _, r := range RetiredPostTypes {
+		if r == t {
+			return true
+		}
+	}
+	return false
+}
 
 // PublicationState is the canonical publication lifecycle of a post, independent
 // of the moderation decision (BART-583).
@@ -50,7 +60,7 @@ func DeriveStates(status PostStatus) (PublicationState, ModerationState) {
 	case PostStatusClosed:
 		return PublicationArchived, ModerationApproved
 	default:
-		// open, in_progress, solved, answered, active, dormant, evolved, stale
+		// open, stale
 		return PublicationPublished, ModerationApproved
 	}
 }
@@ -68,30 +78,31 @@ const MaxPostDescriptionLength = 50000
 // PostStatus represents the status of a post.
 type PostStatus string
 
-// Post status constants per SPEC.md Part 2.2.
+// Post status constants per SPEC.md Part 2.2. The status mirrors the canonical states
+// (DeriveStates); the legacy per-type statuses were retired (idx 68, RetiredPostStatuses).
 const (
-	// Common statuses
-	PostStatusDraft PostStatus = "draft"
-	PostStatusOpen  PostStatus = "open"
-
-	// Problem statuses
-	PostStatusInProgress PostStatus = "in_progress"
-	PostStatusSolved     PostStatus = "solved"
-	PostStatusClosed     PostStatus = "closed"
-	PostStatusStale      PostStatus = "stale"
-
-	// Question statuses
-	PostStatusAnswered PostStatus = "answered"
-
-	// Idea statuses
-	PostStatusActive  PostStatus = "active"
-	PostStatusDormant PostStatus = "dormant"
-	PostStatusEvolved PostStatus = "evolved"
-
-	// Content moderation statuses (valid for all post types)
+	PostStatusDraft         PostStatus = "draft"
+	PostStatusOpen          PostStatus = "open"
+	PostStatusClosed        PostStatus = "closed"
+	PostStatusStale         PostStatus = "stale"
 	PostStatusPendingReview PostStatus = "pending_review"
-	PostStatusRejected     PostStatus = "rejected"
+	PostStatusRejected      PostStatus = "rejected"
 )
+
+// RetiredPostStatuses are the legacy per-type statuses retired with the legacy post types (idx
+// 68): live posts holding one became open, and a request naming one is refused with
+// LEGACY_FIELD_RETIRED rather than treated as an unknown value.
+var RetiredPostStatuses = []PostStatus{"in_progress", "solved", "answered", "active", "dormant", "evolved"}
+
+// IsRetiredPostStatus reports whether status is one of RetiredPostStatuses.
+func IsRetiredPostStatus(status PostStatus) bool {
+	for _, s := range RetiredPostStatuses {
+		if s == status {
+			return true
+		}
+	}
+	return false
+}
 
 // AuthorType represents whether the author is a human or AI agent.
 type AuthorType string
@@ -109,21 +120,20 @@ const (
 	VisibilityFamily = "family"
 )
 
-// Post represents a problem, question, or idea on Solvr.
+// Post represents a post on Solvr.
 // Per SPEC.md Part 2.2 and Part 6 (posts table).
 type Post struct {
 	// ID is the unique identifier for the post.
 	ID string `json:"id"`
 
-	// Type is the post type: problem, question, or idea.
+	// Type is always "post" (PostTypePost).
 	Type PostType `json:"type"`
 
 	// Title is the post title.
 	// Max 200 chars.
 	Title string `json:"title"`
 
-	// Description is the post content in markdown.
-	// Max varies by type: 50,000 for problems/ideas, 20,000 for questions.
+	// Description is the post content in markdown (MaxPostDescriptionLength).
 	Description string `json:"description"`
 
 	// Tags is a list of tags for the post.
@@ -163,19 +173,6 @@ type Post struct {
 	// ViewCount is the number of unique views.
 	ViewCount int `json:"view_count"`
 
-	// SuccessCriteria is for problems only - list of success criteria.
-	// Max 10 items per SPEC.md Part 2.2.
-	SuccessCriteria []string `json:"success_criteria,omitempty"`
-
-	// Weight is for problems only - difficulty rating (1-5).
-	Weight *int `json:"weight,omitempty"`
-
-	// AcceptedAnswerID is for questions only - the accepted answer ID.
-	AcceptedAnswerID *string `json:"accepted_answer_id,omitempty"`
-
-	// EvolvedInto is for ideas only - IDs of posts this idea evolved into.
-	EvolvedInto []string `json:"evolved_into,omitempty"`
-
 	// CreatedAt is when the post was created.
 	CreatedAt time.Time `json:"created_at"`
 
@@ -185,11 +182,10 @@ type Post struct {
 	// DeletedAt is when the post was soft deleted (null if not deleted).
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 
-	// CrystallizationCID is the IPFS CID of the immutable snapshot (problems only).
-	// Set when a solved problem is crystallized to IPFS for permanent archival.
+	// CrystallizationCID is the IPFS CID of the post's immutable snapshot (feature:crystallization).
 	CrystallizationCID *string `json:"crystallization_cid,omitempty"`
 
-	// CrystallizedAt is when the problem was crystallized to IPFS.
+	// CrystallizedAt is when the post was crystallized to IPFS.
 	CrystallizedAt *time.Time `json:"crystallized_at,omitempty"`
 
 	// OriginalLanguage is set when a post was saved as draft due to a language-only
@@ -271,9 +267,9 @@ type PostWithAuthor struct {
 	// (answers + approaches + comments), computed server-side (BART-583). The three
 	// counts partition the post's live replies (db.postReplyCountsJoin), so ReplyCount
 	// equals the total of GET /v1/posts/{id}/replies.
-	ReplyCount int `json:"reply_count"`
-	UserVote        *string    `json:"user_vote"`
-	AgentHumanID    string     `json:"-"` // agent's owning human UUID, never in JSON
+	ReplyCount   int     `json:"reply_count"`
+	UserVote     *string `json:"user_vote"`
+	AgentHumanID string  `json:"-"` // agent's owning human UUID, never in JSON
 }
 
 // PostListOptions contains options for listing posts.
@@ -284,7 +280,7 @@ type PostListOptions struct {
 	AuthorType    AuthorType // Filter by author type (BE-003)
 	AuthorID      string     // Filter by author ID (BE-003)
 	HasAnswer     *bool      // Filter by answer count: nil=no filter, false=0 answers, true=1+ answers
-	NeedsHelp     bool       // Filter to posts needing help: status in_progress or a stuck approach
+	NeedsHelp     bool       // Filter to posts needing help: a live reply migrated from a stuck approach
 	IncludeHidden bool       // When true, include pending_review/rejected/draft posts (author self-view)
 	Sort          string     // Sort order: "newest" (default), "votes", "top", "hot", "approaches", "answers"
 	Timeframe     string     // Timeframe filter: "today", "week", "month"
@@ -295,51 +291,22 @@ type PostListOptions struct {
 	ViewerHuman   string     // Optional: caller's family human UUID for visibility scoping ("" = public-only)
 }
 
-// ValidPostTypes returns all valid post types.
+// ValidPostTypes returns the valid post types: only "post" since idx 68.
 func ValidPostTypes() []PostType {
-	return []PostType{PostTypeProblem, PostTypeQuestion, PostTypeIdea}
+	return []PostType{PostTypePost}
 }
 
-// IsValidPostType checks if a post type is valid.
+// IsValidPostType reports whether t is a valid post type ("post").
 func IsValidPostType(t PostType) bool {
-	switch t {
-	case PostTypeProblem, PostTypeQuestion, PostTypeIdea, PostTypePost:
-		return true
-	default:
-		return false
-	}
+	return t == PostTypePost
 }
 
-// IsValidPostStatus checks if a post status is valid for the given type.
-func IsValidPostStatus(status PostStatus, postType PostType) bool {
-	// Content moderation statuses are valid for all post types.
-	if status == PostStatusPendingReview || status == PostStatusRejected {
-		return IsValidPostType(postType)
-	}
-
-	switch postType {
-	case PostTypeProblem:
-		switch status {
-		case PostStatusDraft, PostStatusOpen, PostStatusInProgress, PostStatusSolved, PostStatusClosed, PostStatusStale:
-			return true
-		}
-	case PostTypeQuestion:
-		switch status {
-		case PostStatusDraft, PostStatusOpen, PostStatusAnswered, PostStatusClosed, PostStatusStale:
-			return true
-		}
-	case PostTypeIdea:
-		switch status {
-		case PostStatusDraft, PostStatusOpen, PostStatusActive, PostStatusDormant, PostStatusEvolved:
-			return true
-		}
-	case PostTypePost:
-		// Canonical untyped posts use the generic lifecycle statuses; publication
-		// and moderation are tracked separately by publication_state/moderation_state.
-		switch status {
-		case PostStatusDraft, PostStatusOpen, PostStatusClosed, PostStatusStale:
-			return true
-		}
+// IsValidPostStatus reports whether status is a live post status: draft, open, closed, stale,
+// pending_review or rejected.
+func IsValidPostStatus(status PostStatus) bool {
+	switch status {
+	case PostStatusDraft, PostStatusOpen, PostStatusClosed, PostStatusStale, PostStatusPendingReview, PostStatusRejected:
+		return true
 	}
 	return false
 }
@@ -347,12 +314,12 @@ func IsValidPostStatus(status PostStatus, postType PostType) bool {
 // Vote represents a vote on content (post, answer, response).
 // Per SPEC.md Part 2.9 and Part 6 (votes table).
 type Vote struct {
-	ID         string     `json:"id"`
-	TargetType string     `json:"target_type"` // "post", "answer", "response"
-	TargetID   string     `json:"target_id"`
-	VoterType  string     `json:"voter_type"` // "human" or "agent"
-	VoterID    string     `json:"voter_id"`
-	Direction  string     `json:"direction"` // "up" or "down"
-	Confirmed  bool       `json:"confirmed"`
-	CreatedAt  time.Time  `json:"created_at"`
+	ID         string    `json:"id"`
+	TargetType string    `json:"target_type"` // "post", "answer", "response"
+	TargetID   string    `json:"target_id"`
+	VoterType  string    `json:"voter_type"` // "human" or "agent"
+	VoterID    string    `json:"voter_id"`
+	Direction  string    `json:"direction"` // "up" or "down"
+	Confirmed  bool      `json:"confirmed"`
+	CreatedAt  time.Time `json:"created_at"`
 }

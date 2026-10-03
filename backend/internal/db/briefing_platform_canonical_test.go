@@ -72,17 +72,15 @@ func TestCanonicalPlatformBriefing_Pulse(t *testing.T) {
 		return cbInsertPost(t, pool, ctx, title, s)
 	}
 	openPost := byA("pulse open post", cbPostSeed{})
-	openProblem := byA("pulse open problem", cbPostSeed{postType: "problem", status: "in_progress", age: 2 * time.Hour})
-	openQuestion := byA("pulse open question", cbPostSeed{postType: "question", age: 30 * time.Hour})
-	byA("pulse active idea", cbPostSeed{postType: "idea", status: "active", age: 30 * time.Hour})
+	openProblem := byA("pulse second open post", cbPostSeed{age: 2 * time.Hour})
+	openQuestion := byA("pulse third open post", cbPostSeed{age: 30 * time.Hour})
+	byA("pulse fourth open post", cbPostSeed{age: 30 * time.Hour})
 	family := byA("pulse family post", cbPostSeed{visibility: "family"})
 	byA("pulse draft post", cbPostSeed{publication: "draft"})
 	byA("pulse pending post", cbPostSeed{moderation: "pending"})
 	byA("pulse deleted post", cbPostSeed{deleted: true})
 	byA("pulse closed post", cbPostSeed{status: "closed", age: time.Minute})
-	byA("pulse solved problem", cbPostSeed{postType: "problem", status: "solved", age: time.Hour})
-	byA("pulse solved long ago", cbPostSeed{postType: "problem", status: "solved", age: 8 * 24 * time.Hour})
-	byA("pulse solved family", cbPostSeed{postType: "problem", status: "solved", visibility: "family", age: time.Hour})
+	byA("pulse stale post", cbPostSeed{status: "stale", age: time.Hour})
 
 	cbInsertReply(t, pool, ctx, openPost, "agent", b, 0, false)
 	cbInsertReply(t, pool, ctx, openProblem, "agent", b, 0, false)
@@ -94,12 +92,8 @@ func TestCanonicalPlatformBriefing_Pulse(t *testing.T) {
 	after, err := repo.GetPlatformPulse(ctx)
 	require.NoError(t, err)
 
-	require.Equal(t, 4, after.OpenPosts-before.OpenPosts, "open public published approved posts of every type")
-	require.Equal(t, 1, after.OpenProblems-before.OpenProblems, "problem-typed subset of the open posts")
-	require.Equal(t, 1, after.OpenQuestions-before.OpenQuestions, "question-typed subset of the open posts")
-	require.Equal(t, 1, after.ActiveIdeas-before.ActiveIdeas, "idea-typed subset of the open posts")
+	require.Equal(t, 4, after.OpenPosts-before.OpenPosts, "open public published approved posts")
 	require.Equal(t, 4, after.NewPostsLast24h-before.NewPostsLast24h, "public published approved posts created in 24h")
-	require.Equal(t, 1, after.SolvedLast7d-before.SolvedLast7d, "public posts marked solved in the last 7 days")
 	require.Equal(t, 2, after.ContributorsThisWeek-before.ContributorsThisWeek,
 		"distinct authors of this week's public posts and live human/agent replies on them")
 }
@@ -187,9 +181,8 @@ func TestCanonicalPlatformBriefing_RisingPosts(t *testing.T) {
 	replies(busy, 3)
 	cbInsertReply(t, pool, ctx, busy, "system", "moderation", time.Hour, false)
 	cbInsertReply(t, pool, ctx, busy, "human", authorHuman(ctx, t, pool, "cbpl-gone"), time.Hour, true)
-	idea := byOther("rising idea", cbPostSeed{postType: "idea", age: 4 * time.Hour})
+	idea := byOther("rising post with one reply", cbPostSeed{age: 4 * time.Hour})
 	replies(idea, 1)
-	cpSetPost(t, pool, ctx, idea, `evolved_into = ARRAY[$2::uuid]`, busy)
 	upvoted := byOther("rising upvoted only", cbPostSeed{})
 	cpSetPost(t, pool, ctx, upvoted, `upvotes = 5`)
 
@@ -198,7 +191,7 @@ func TestCanonicalPlatformBriefing_RisingPosts(t *testing.T) {
 	cbInsertReply(t, pool, ctx, systemOnly, "system", "moderation", time.Hour, false)
 	excluded := map[string]string{"no engagement": quiet, "system verdict only": systemOnly}
 	for name, s := range map[string]cbPostSeed{
-		"closed": {status: "closed"}, "dormant": {postType: "idea", status: "dormant"},
+		"closed": {status: "closed"},
 		"family": {visibility: "family"}, "draft": {publication: "draft"}, "pending": {moderation: "pending"},
 	} {
 		id := byOther("rising "+name, s)
@@ -218,7 +211,6 @@ func TestCanonicalPlatformBriefing_RisingPosts(t *testing.T) {
 	require.Equal(t, 3, got[iBusy].ResponseCount, "live human/agent replies only")
 	require.Equal(t, 5, got[iBusy].AgeHours)
 	require.Equal(t, 1, got[iIdea].ResponseCount)
-	require.Equal(t, 0, got[iIdea].EvolvedCount, "idea evolution is retired")
 	require.Equal(t, 0, got[iUp].ResponseCount)
 	require.Equal(t, 5, got[iUp].Upvotes)
 
@@ -260,13 +252,9 @@ func TestCanonicalPlatformBriefing_HardcoreUnsolved(t *testing.T) {
 	replies(twoReplies, "agent", 2)
 	replies(twoReplies, "system", 3)
 	oldUnliked := byOther("hardcore old unliked", cbPostSeed{age: 40 * 24 * time.Hour})
-	heavy := byOther("hardcore heavy problem", cbPostSeed{postType: "problem"})
-	cpSetPost(t, pool, ctx, heavy, `weight = 5`)
-	excluded := map[string]string{"two contributor replies": twoReplies, "old without score": oldUnliked,
-		"weight is retired": heavy}
+	excluded := map[string]string{"two contributor replies": twoReplies, "old without score": oldUnliked}
 	for name, s := range map[string]cbPostSeed{
-		"solved": {postType: "problem", status: "solved"}, "answered": {postType: "question", status: "answered"},
-		"closed": {status: "closed"}, "evolved": {postType: "idea", status: "evolved"},
+		"closed": {status: "closed"},
 		"family": {visibility: "family"}, "draft": {publication: "draft"}, "pending": {moderation: "pending"},
 	} {
 		id := byOther("hardcore "+name, s)
@@ -285,7 +273,6 @@ func TestCanonicalPlatformBriefing_HardcoreUnsolved(t *testing.T) {
 	c := got[iContested]
 	require.Equal(t, 3, c.TotalApproaches, "live human/agent replies")
 	require.Equal(t, 0, c.FailedCount, "the approach failure workflow is retired")
-	require.Equal(t, 1, c.Weight, "the problem-only weight is retired")
 	require.Equal(t, 0, c.AgeDays)
 	require.InDelta(t, 4*math.Log(2+2.0/24), c.DifficultyScore, 0.01)
 	o := got[iOld]
@@ -331,8 +318,8 @@ func TestCanonicalPlatformBriefing_RecentVictoriesAreRoomOutcomes(t *testing.T) 
 		"pending":     outcome("victory pending", room, cbPostSeed{moderation: "pending"}),
 		"deleted":     outcome("victory deleted", room, cbPostSeed{deleted: true}),
 		"15 days old": outcome("victory too old", room, cbPostSeed{age: 15 * 24 * time.Hour}),
-		"not a room outcome": cbInsertPost(t, pool, ctx, "solved problem without a room",
-			cbPostSeed{postType: "problem", status: "solved", byID: solver}),
+		"not a room outcome": cbInsertPost(t, pool, ctx, "open post without a room",
+			cbPostSeed{byID: solver}),
 	}
 
 	got, err := repo.GetRecentVictories(ctx, cpBigLimit)

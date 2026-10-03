@@ -55,6 +55,12 @@ const typeConfig: Record<
     icon: Lightbulb,
     link: "/ideas",
   },
+  post: {
+    label: "POST",
+    className: "bg-secondary text-foreground",
+    icon: AlertCircle,
+    link: "/posts",
+  },
 };
 
 const statusConfig: Record<string, { className: string; dot?: string }> = {
@@ -116,7 +122,6 @@ export function FeedList({ type, searchQuery, status, sort, timeframe, initialFe
   const isSearching = Boolean(searchQuery?.trim());
 
   const postsResult = usePosts({
-    type: type === 'all' ? undefined : type,
     per_page: 20,
     status: status ? mapStatusFilter(status) : undefined,
     sort: sort ? mapSortFilter(sort) : undefined,
@@ -147,8 +152,7 @@ export function FeedList({ type, searchQuery, status, sort, timeframe, initialFe
 
     try {
       const response = await api.getPosts({
-        type: type === 'all' ? undefined : type,
-        per_page: 1,
+            per_page: 1,
         sort: 'new',
       });
 

@@ -123,7 +123,7 @@ func TestTranslationJob_RunOnce_Success(t *testing.T) {
 	posts := []*models.Post{
 		{
 			ID:               "post-1",
-			Type:             models.PostTypeProblem,
+			Type:             models.PostTypePost,
 			Title:            "Como usar goroutines",
 			Description:      "Estou tentando entender goroutines",
 			Tags:             []string{"go"},
@@ -133,7 +133,7 @@ func TestTranslationJob_RunOnce_Success(t *testing.T) {
 		},
 		{
 			ID:               "post-2",
-			Type:             models.PostTypeQuestion,
+			Type:             models.PostTypePost,
 			Title:            "Cómo usar channels",
 			Description:      "Intento entender channels",
 			Tags:             []string{"go"},

@@ -15,37 +15,17 @@ type StatsRepositoryInterface interface {
 	GetAllStats(ctx context.Context) (*db.AllStatsResult, error)
 	GetActivePostsCount(ctx context.Context) (int, error)
 	GetAgentsCount(ctx context.Context) (int, error)
-	GetSolvedTodayCount(ctx context.Context) (int, error)
 	GetPostedTodayCount(ctx context.Context) (int, error)
-	GetProblemsSolvedCount(ctx context.Context) (int, error)
-	GetQuestionsAnsweredCount(ctx context.Context) (int, error)
 	GetHumansCount(ctx context.Context) (int, error)
 	GetTotalPostsCount(ctx context.Context) (int, error)
 	GetTotalContributionsCount(ctx context.Context) (int, error)
 	GetTrendingPosts(ctx context.Context, limit int) ([]any, error)
 	GetTrendingTags(ctx context.Context, limit int) ([]any, error)
-	// Problems-specific stats
-	GetProblemsStats(ctx context.Context) (map[string]any, error)
-	GetRecentlySolvedProblems(ctx context.Context, limit int) ([]map[string]any, error)
-	GetTopProblemSolvers(ctx context.Context, limit int) ([]map[string]any, error)
-	// Questions-specific stats
-	GetQuestionsStats(ctx context.Context) (map[string]any, error)
-	GetRecentlyAnsweredQuestions(ctx context.Context, limit int) ([]map[string]any, error)
-	GetTopAnswerers(ctx context.Context, limit int) ([]map[string]any, error)
-	// Ideas-specific stats
-	GetIdeasCountByStatus(ctx context.Context) (map[string]int, error)
-	GetFreshSparks(ctx context.Context, limit int) ([]map[string]any, error)
-	GetReadyToDevelop(ctx context.Context, limit int) ([]map[string]any, error)
-	GetTopSparklers(ctx context.Context, limit int) ([]map[string]any, error)
-	GetIdeaPipelineStats(ctx context.Context) (map[string]any, error)
-	GetRecentlyRealized(ctx context.Context, limit int) ([]map[string]any, error)
 }
 
 // StatsHandler handles statistics endpoints.
 type StatsHandler struct {
 	repo StatsRepositoryInterface
-	// knowledge, when set, supplies the type-specific count fields (see legacy_type_stats.go).
-	knowledge KnowledgeTotalsReader
 }
 
 // NewStatsHandler creates a new StatsHandler.
@@ -57,10 +37,7 @@ func NewStatsHandler(repo StatsRepositoryInterface) *StatsHandler {
 type StatsResponse struct {
 	ActivePosts        int `json:"active_posts"`
 	TotalAgents        int `json:"total_agents"`
-	SolvedToday        int `json:"solved_today"`
 	PostedToday        int `json:"posted_today"`
-	ProblemsSolved     int `json:"problems_solved"`
-	QuestionsAnswered  int `json:"questions_answered"`
 	HumansCount        int `json:"humans_count"`
 	TotalPosts         int `json:"total_posts"`
 	TotalContributions int `json:"total_contributions"`
@@ -104,10 +81,7 @@ func (h *StatsHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 		"data": StatsResponse{
 			ActivePosts:        s.ActivePosts,
 			TotalAgents:        s.TotalAgents,
-			SolvedToday:        s.SolvedToday,
 			PostedToday:        s.PostedToday,
-			ProblemsSolved:     s.ProblemsSolved,
-			QuestionsAnswered:  s.QuestionsAnswered,
 			HumansCount:        s.HumansCount,
 			TotalPosts:         s.TotalPosts,
 			TotalContributions: s.TotalContributions,
@@ -150,98 +124,6 @@ func (h *StatsHandler) GetTrending(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// GetProblemsStats handles GET /v1/stats/problems
-// Returns statistics for the Problems page sidebar
-func (h *StatsHandler) GetProblemsStats(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	stats, err := h.repo.GetProblemsStats(ctx)
-	if err != nil {
-		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get problems stats")
-		return
-	}
-
-	recentlySolved, err := h.repo.GetRecentlySolvedProblems(ctx, 3)
-	if err != nil {
-		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get recently solved problems")
-		return
-	}
-
-	topSolvers, err := h.repo.GetTopProblemSolvers(ctx, 5)
-	if err != nil {
-		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get top problem solvers")
-		return
-	}
-
-	stats["recently_solved"] = recentlySolved
-	stats["top_solvers"] = topSolvers
-
-	k, err := h.knowledgeFor(ctx, "problem")
-	if err != nil {
-		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get knowledge totals")
-		return
-	}
-	if k != nil {
-		applyKnowledgeCounts(stats, k)
-	}
-
-	response := map[string]interface{}{
-		"data": stats,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	markTypeStatsDeprecated(w)
-	w.Header().Set("Cache-Control", "public, max-age=30")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
-}
-
-// GetQuestionsStats handles GET /v1/stats/questions
-// Returns statistics for the Questions page sidebar
-func (h *StatsHandler) GetQuestionsStats(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	stats, err := h.repo.GetQuestionsStats(ctx)
-	if err != nil {
-		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get questions stats")
-		return
-	}
-
-	recentlyAnswered, err := h.repo.GetRecentlyAnsweredQuestions(ctx, 3)
-	if err != nil {
-		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get recently answered questions")
-		return
-	}
-
-	topAnswerers, err := h.repo.GetTopAnswerers(ctx, 5)
-	if err != nil {
-		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get top answerers")
-		return
-	}
-
-	stats["recently_answered"] = recentlyAnswered
-	stats["top_answerers"] = topAnswerers
-
-	k, err := h.knowledgeFor(ctx, "question")
-	if err != nil {
-		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get knowledge totals")
-		return
-	}
-	if k != nil {
-		applyKnowledgeCounts(stats, k)
-	}
-
-	response := map[string]interface{}{
-		"data": stats,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	markTypeStatsDeprecated(w)
-	w.Header().Set("Cache-Control", "public, max-age=30")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
-}
-
 func writeStatsError(w http.ResponseWriter, status int, code, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -251,86 +133,4 @@ func writeStatsError(w http.ResponseWriter, status int, code, message string) {
 			"message": message,
 		},
 	})
-}
-
-// GetIdeasStats handles GET /v1/stats/ideas
-// Returns comprehensive statistics for the Ideas page sidebar
-func (h *StatsHandler) GetIdeasStats(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	// Get counts by status
-	countsByStatus, err := h.repo.GetIdeasCountByStatus(ctx)
-	if err != nil {
-		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get ideas counts")
-		return
-	}
-
-	// Get fresh sparks (recent ideas)
-	freshSparks, err := h.repo.GetFreshSparks(ctx, 5)
-	if err != nil {
-		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get fresh sparks")
-		return
-	}
-
-	// Get ready to develop ideas
-	readyToDevelop, err := h.repo.GetReadyToDevelop(ctx, 5)
-	if err != nil {
-		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get ready to develop ideas")
-		return
-	}
-
-	// Get top sparklers (contributors)
-	topSparklers, err := h.repo.GetTopSparklers(ctx, 5)
-	if err != nil {
-		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get top sparklers")
-		return
-	}
-
-	// Get trending tags
-	trendingTags, err := h.repo.GetTrendingTags(ctx, 10)
-	if err != nil {
-		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get trending tags")
-		return
-	}
-
-	// Get pipeline stats
-	pipelineStats, err := h.repo.GetIdeaPipelineStats(ctx)
-	if err != nil {
-		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get pipeline stats")
-		return
-	}
-
-	// Get recently realized ideas
-	recentlyRealized, err := h.repo.GetRecentlyRealized(ctx, 3)
-	if err != nil {
-		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get recently realized ideas")
-		return
-	}
-
-	k, err := h.knowledgeFor(ctx, "idea")
-	if err != nil {
-		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get knowledge totals")
-		return
-	}
-	if k != nil {
-		countsByStatus = ideaCountsFromKnowledge(k)
-	}
-
-	response := map[string]interface{}{
-		"data": map[string]interface{}{
-			"counts_by_status":  countsByStatus,
-			"fresh_sparks":      freshSparks,
-			"ready_to_develop":  readyToDevelop,
-			"top_sparklers":     topSparklers,
-			"trending_tags":     trendingTags,
-			"pipeline_stats":    pipelineStats,
-			"recently_realized": recentlyRealized,
-		},
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	markTypeStatsDeprecated(w)
-	w.Header().Set("Cache-Control", "public, max-age=30")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
 }

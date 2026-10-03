@@ -196,7 +196,6 @@ func TestCreatePost_SetsPendingReview(t *testing.T) {
 	handler := NewPostsHandler(repo)
 
 	body := `{
-		"type": "question",
 		"title": "How do I handle async operations in Go?",
 		"description": "I need help understanding how to properly handle async operations in Go with goroutines and channels for concurrent processing."
 	}`
@@ -239,7 +238,6 @@ func TestCreatePost_NoModerationService(t *testing.T) {
 	// Deliberately NOT setting a content moderation service
 
 	body := `{
-		"type": "idea",
 		"title": "Exploring new testing approaches",
 		"description": "What if we used property-based testing more broadly? Let's discuss the trade-offs and practical applications of this approach."
 	}`
@@ -620,7 +618,6 @@ func TestModeratePostAsync_SpawnsGoroutine(t *testing.T) {
 	handler.SetPostStatusUpdater(statusUpdater)
 
 	body := `{
-		"type": "question",
 		"title": "How do I handle async operations in Go?",
 		"description": "I need help understanding how to properly handle async operations in Go with goroutines and channels for concurrent processing."
 	}`

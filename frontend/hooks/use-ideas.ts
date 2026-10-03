@@ -60,7 +60,7 @@ export function transformIdea(post: APIPost): IdeaListItem {
     },
     support: post.upvotes,
     comments: post.comments_count || 0,
-    branches: post.evolved_into?.length ?? 0,
+    branches: 0, // idea evolution was retired (idx 68)
     viewCount: post.view_count || 0,
     tags: post.tags || [],
     timestamp: formatRelativeTime(post.created_at),

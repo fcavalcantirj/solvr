@@ -351,7 +351,6 @@ func searchPostSelect(tsArg, score, similarity, from, counts string) string {
 			` + postReplyCountColumns + `,
 			COALESCE(p.view_count, 0) as view_count,
 			p.created_at,
-			CASE WHEN p.status = 'solved' THEN p.updated_at ELSE NULL END as solved_at,
 			` + similarity + ` as similarity
 		FROM ` + from + `
 		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
@@ -489,7 +488,6 @@ func scanSearchResults(rows pgx.Rows) ([]models.SearchResult, error) {
 			&r.CommentsCount,
 			&r.ViewCount,
 			&r.CreatedAt,
-			&r.SolvedAt,
 			&r.Similarity,
 		)
 		if err != nil {

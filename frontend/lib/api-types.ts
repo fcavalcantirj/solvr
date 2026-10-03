@@ -16,7 +16,7 @@ export interface APIAuthor {
 
 export interface APIPost {
   id: string;
-  type: 'problem' | 'question' | 'idea';
+  type: 'post';  // every post is type post (idx 68)
   title: string;
   description: string;
   status: string;
@@ -32,7 +32,6 @@ export interface APIPost {
   approaches_count?: number;
   comments_count?: number | null;  // Production may return null when comments table doesn't exist
   reply_count?: number;  // Canonical unified count of all contributions (server-computed)
-  evolved_into?: string[];
   crystallization_cid?: string;
   crystallized_at?: string;
   user_vote?: 'up' | 'down' | null;
@@ -191,7 +190,7 @@ export interface APIApproachVersionHistory {
 }
 
 export interface FetchPostsParams {
-  type?: 'problem' | 'question' | 'idea' | 'all';
+  type?: 'post' | 'all';
   status?: string;
   page?: number;
   per_page?: number;
@@ -201,7 +200,7 @@ export interface FetchPostsParams {
 
 export interface SearchParams {
   q: string;
-  type?: 'problem' | 'question' | 'idea' | 'all';
+  type?: 'post' | 'all';
   status?: string;
   tags?: string;
   page?: number;
@@ -281,15 +280,12 @@ export interface APICheckReportedResponse {
 }
 
 export interface CreatePostData {
-  // type is optional and omitted by the canonical composer: POST /v1/posts
-  // defaults to a plain canonical post. Legacy callers may still send it.
-  type?: 'problem' | 'idea';
+  // No type: every post is type post, and the API refuses the retired legacy types and
+  // problem-only fields with 400 LEGACY_FIELD_RETIRED (idx 68).
   title: string;
   description: string;
   tags?: string[];
   visibility?: 'public' | 'family';
-  success_criteria?: string[];
-  weight?: number;
 }
 
 export interface UpdatePostData {
@@ -301,7 +297,7 @@ export interface UpdatePostData {
 export interface APICreatePostResponse {
   data: {
     id: string;
-    type: 'problem' | 'question' | 'idea';
+    type: 'post';
     title: string;
     description: string;
     tags: string[];
@@ -444,10 +440,7 @@ export interface APIVoteResponse {
 export interface StatsData {
   active_posts: number;
   total_agents: number;
-  solved_today: number;
   posted_today: number;
-  problems_solved: number;
-  questions_answered: number;
   humans_count: number;
   total_posts: number;
   total_contributions: number;
@@ -661,13 +654,8 @@ export interface FetchAgentsParams {
 }
 
 export interface APIAgentStats {
-  problems_solved: number;
-  problems_contributed: number;
-  questions_asked: number;
-  questions_answered: number;
-  answers_accepted: number;
-  ideas_posted: number;
-  responses_given: number;
+  posts_created: number;
+  contributions: number;
   upvotes_received: number;
   reputation: number;
 }
@@ -685,7 +673,7 @@ export interface APIActivityItem {
   type: string;  // 'post' | 'answer' | 'approach' | 'response'
   action: string;  // 'created' | 'answered' | 'started_approach' | 'responded'
   title: string;
-  post_type?: string;  // 'problem' | 'question' | 'idea'
+  post_type?: string;  // 'post'
   status?: string;
   created_at: string;
   target_id?: string;
@@ -1063,9 +1051,6 @@ export interface APIResurrectionBundle {
   };
   reputation: {
     total: number;
-    problems_solved: number;
-    answers_accepted: number;
-    ideas_posted: number;
     upvotes_received: number;
   };
   latest_checkpoint: APIPinResponse | null;
@@ -1132,9 +1117,7 @@ export interface BriefingOpenItem {
 }
 
 export interface BriefingOpenItems {
-  problems_no_approaches: number;
-  questions_no_answers: number;
-  approaches_stale: number;
+  posts_no_replies: number;
   items: BriefingOpenItem[];
 }
 
@@ -1173,11 +1156,8 @@ export interface BriefingReputationChanges {
 
 // Platform briefing types (enriched /me response — new sections)
 export interface BriefingPlatformPulse {
-  open_problems: number;
-  open_questions: number;
-  active_ideas: number;
+  open_posts: number;
   new_posts_last_24h: number;
-  solved_last_7d: number;
   active_agents_last_24h: number;
   contributors_this_week: number;
   blog_posts_published?: number;
@@ -1198,7 +1178,6 @@ export interface BriefingTrendingPost {
 export interface BriefingHardcoreUnsolved {
   id: string;
   title: string;
-  weight: number;
   total_approaches: number;
   failed_count: number;
   age_days: number;
@@ -1211,7 +1190,6 @@ export interface BriefingRisingIdea {
   title: string;
   responses_count: number;
   upvotes: number;
-  evolved_count: number;
   age_hours: number;
   tags: string[];
 }

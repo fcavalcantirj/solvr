@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api, APIPost, FetchPostsParams, formatRelativeTime, truncateText, mapStatus } from '@/lib/api';
 
-export type PostType = 'problem' | 'question' | 'idea';
+export type PostType = 'problem' | 'question' | 'idea' | 'post';
 export type AuthorType = 'human' | 'ai';
 
 export interface FeedPost {
@@ -30,13 +30,8 @@ export interface FeedPost {
 
 // Transform API post to FeedPost format
 export function transformPost(post: APIPost): FeedPost {
-  // Map comment counts based on post type:
-  // - Problems: use approaches_count
-  // - Questions: use answers_count
-  // - Ideas: use answers_count (backend maps responses to this field)
-  const responses = post.type === 'problem'
-    ? (post.approaches_count || 0)
-    : (post.answers_count || 0);
+  // Every post is type post (idx 68): its responses are all its replies.
+  const responses = post.reply_count ?? ((post.answers_count || 0) + (post.approaches_count || 0));
 
   return {
     id: post.id,
@@ -200,7 +195,6 @@ export function useSearch(query: string, type?: PostType | 'all', options?: UseS
       const stableOptions: UseSearchOptions = JSON.parse(optionsKey);
       const response = await api.search({
         q: query,
-        type,
         status: stableOptions.status,
         tags: stableOptions.tags ? stableOptions.tags.join(',') : undefined,
         page: pageNum,

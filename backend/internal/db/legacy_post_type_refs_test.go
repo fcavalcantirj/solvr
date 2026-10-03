@@ -63,13 +63,13 @@ func TestLegacyDependencyRegistry_CoversThePostTypeReferences(t *testing.T) {
 	deps, err := ScanLegacyPostTypeReferences(backendRoot(t))
 	require.NoError(t, err)
 	keys := depKeys(deps)
-	// Known references (the scan is not vacuous): a canonical counter passing the type as a
-	// parameter, a canonical route branching on it, and an unmounted per-type statistics handler.
+	// Known references (the scan is not vacuous): the retired reads' migration text, a room
+	// message label and the scanner's own table. Since idx 68 no counter, route or model
+	// branches on a legacy post type.
 	for _, k := range []string{
-		"typeref:internal/db/profile_stats_canonical.go",
-		"typeref:internal/api/handlers/posts.go",
-		"typeref:internal/api/handlers/stats.go",
-		"typeref:internal/models/post.go",
+		"typeref:internal/api/legacy_read_retirement.go",
+		"typeref:internal/api/handlers/homepage_activity.go",
+		"typeref:internal/db/legacy_post_type_refs.go",
 	} {
 		assert.Contains(t, keys, k)
 	}

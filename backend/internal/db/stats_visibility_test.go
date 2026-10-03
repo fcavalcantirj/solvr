@@ -148,13 +148,8 @@ func TestPublicPostCounters_ExcludeFamilyPrivatePosts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetPostedTodayCount() error = %v", err)
 	}
-	solvedBefore, err := repo.GetProblemsSolvedCount(ctx)
-	if err != nil {
-		t.Fatalf("GetProblemsSolvedCount() error = %v", err)
-	}
-
-	insertVisibilityTestPost(t, pool, ctx, "problem", "Family open problem stays private", "open", "family", 0)
-	insertVisibilityTestPost(t, pool, ctx, "problem", "Family solved problem stays private", "solved", "family", 0)
+	insertVisibilityTestPost(t, pool, ctx, "post", "Family open post stays private", "open", "family", 0)
+	insertVisibilityTestPost(t, pool, ctx, "post", "Family closed post stays private", "closed", "family", 0)
 
 	totalAfter, err := repo.GetTotalPostsCount(ctx)
 	if err != nil {
@@ -178,129 +173,5 @@ func TestPublicPostCounters_ExcludeFamilyPrivatePosts(t *testing.T) {
 	}
 	if postedAfter != postedBefore {
 		t.Errorf("GetPostedTodayCount counted family-private posts: got %d, want %d", postedAfter, postedBefore)
-	}
-
-	solvedAfter, err := repo.GetProblemsSolvedCount(ctx)
-	if err != nil {
-		t.Fatalf("GetProblemsSolvedCount() error = %v", err)
-	}
-	if solvedAfter != solvedBefore {
-		t.Errorf("GetProblemsSolvedCount counted family-private posts: got %d, want %d", solvedAfter, solvedBefore)
-	}
-}
-
-// TestSectionStats_ExcludeFamilyPrivatePosts covers the per-section public stats:
-// /v1/stats/problems, /v1/stats/questions and /v1/stats/ideas.
-func TestSectionStats_ExcludeFamilyPrivatePosts(t *testing.T) {
-	pool := setupTestDB(t)
-	// Registered first so it runs LAST (t.Cleanup is LIFO): the per-post
-	// deletes below must run against an open pool.
-	t.Cleanup(pool.Close)
-
-	repo := NewCanonicalStatsRepository(pool)
-	ctx := context.Background()
-
-	problemsBefore, err := repo.GetProblemsStats(ctx)
-	if err != nil {
-		t.Fatalf("GetProblemsStats() error = %v", err)
-	}
-	questionsBefore, err := repo.GetQuestionsStats(ctx)
-	if err != nil {
-		t.Fatalf("GetQuestionsStats() error = %v", err)
-	}
-	ideasBefore, err := repo.GetIdeasCountByStatus(ctx)
-	if err != nil {
-		t.Fatalf("GetIdeasCountByStatus() error = %v", err)
-	}
-
-	insertVisibilityTestPost(t, pool, ctx, "problem", "Family problem hidden from problems stats", "open", "family", 0)
-	insertVisibilityTestPost(t, pool, ctx, "question", "Family question hidden from questions stats", "open", "family", 0)
-	insertVisibilityTestPost(t, pool, ctx, "idea", "Family idea hidden from ideas stats", "open", "family", 0)
-
-	problemsAfter, err := repo.GetProblemsStats(ctx)
-	if err != nil {
-		t.Fatalf("GetProblemsStats() error = %v", err)
-	}
-	if got, want := problemsAfter["total_problems"], problemsBefore["total_problems"]; got != want {
-		t.Errorf("total_problems counted a family-private problem: got %v, want %v", got, want)
-	}
-
-	questionsAfter, err := repo.GetQuestionsStats(ctx)
-	if err != nil {
-		t.Fatalf("GetQuestionsStats() error = %v", err)
-	}
-	if got, want := questionsAfter["total_questions"], questionsBefore["total_questions"]; got != want {
-		t.Errorf("total_questions counted a family-private question: got %v, want %v", got, want)
-	}
-
-	ideasAfter, err := repo.GetIdeasCountByStatus(ctx)
-	if err != nil {
-		t.Fatalf("GetIdeasCountByStatus() error = %v", err)
-	}
-	if got, want := ideasAfter["total"], ideasBefore["total"]; got != want {
-		t.Errorf("ideas total counted a family-private idea: got %d, want %d", got, want)
-	}
-	if got, want := ideasAfter["open"], ideasBefore["open"]; got != want {
-		t.Errorf("ideas open count included a family-private idea: got %d, want %d", got, want)
-	}
-}
-
-// TestPublicStatsLists_ExcludeFamilyPrivatePosts verifies the list-shaped public stats
-// never expose a family-private post's id or title, while the equivalent public post
-// still shows up.
-func TestPublicStatsLists_ExcludeFamilyPrivatePosts(t *testing.T) {
-	pool := setupTestDB(t)
-	// Registered first so it runs LAST (t.Cleanup is LIFO): the per-post
-	// deletes below must run against an open pool.
-	t.Cleanup(pool.Close)
-
-	repo := NewCanonicalStatsRepository(pool)
-	ctx := context.Background()
-
-	// Fresh sparks / ready-to-develop: high upvotes so a leak would sort to the top.
-	familyIdea := insertVisibilityTestPost(t, pool, ctx, "idea", "Family spark must not surface", "open", "family", 9999)
-	publicIdea := insertVisibilityTestPost(t, pool, ctx, "idea", "Public spark surfaces", "open", "public", 9998)
-	familySolved := insertVisibilityTestPost(t, pool, ctx, "problem", "Family solved problem must not surface", "solved", "family", 0)
-	publicSolved := insertVisibilityTestPost(t, pool, ctx, "problem", "Public solved problem surfaces", "solved", "public", 0)
-
-	sparks, err := repo.GetFreshSparks(ctx, 5)
-	if err != nil {
-		t.Fatalf("GetFreshSparks() error = %v", err)
-	}
-	assertListHasNot(t, "GetFreshSparks", sparks, familyIdea)
-	assertListHas(t, "GetFreshSparks", sparks, publicIdea)
-
-	ready, err := repo.GetReadyToDevelop(ctx, 5)
-	if err != nil {
-		t.Fatalf("GetReadyToDevelop() error = %v", err)
-	}
-	assertListHasNot(t, "GetReadyToDevelop", ready, familyIdea)
-	assertListHas(t, "GetReadyToDevelop", ready, publicIdea)
-
-	solved, err := repo.GetRecentlySolvedProblems(ctx, 5)
-	if err != nil {
-		t.Fatalf("GetRecentlySolvedProblems() error = %v", err)
-	}
-	assertListHasNot(t, "GetRecentlySolvedProblems", solved, familySolved)
-	assertListHas(t, "GetRecentlySolvedProblems", solved, publicSolved)
-}
-
-func assertListHas(t *testing.T, name string, items []map[string]any, id string) {
-	t.Helper()
-	for _, item := range items {
-		if got, _ := item["id"].(string); got == id {
-			return
-		}
-	}
-	t.Errorf("%s omitted public post %s", name, id)
-}
-
-func assertListHasNot(t *testing.T, name string, items []map[string]any, id string) {
-	t.Helper()
-	for _, item := range items {
-		if got, _ := item["id"].(string); got == id {
-			t.Errorf("%s exposed family-private post %s", name, id)
-			return
-		}
 	}
 }

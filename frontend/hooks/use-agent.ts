@@ -3,13 +3,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api, formatRelativeTime } from '@/lib/api';
 
-// Agent stats from API
+// Agent stats from API (the per-type counters were retired, idx 68)
 export interface AgentStats {
   reputation: number;
-  problemsSolved: number;
-  problemsContributed: number;
-  ideasPosted: number;
-  responsesGiven: number;
+  postsCreated: number;
+  contributions: number;
+  upvotesReceived: number;
 }
 
 // Agent data for frontend use
@@ -53,13 +52,8 @@ function transformAgent(
     model?: string | null;
   },
   stats?: {
-    problems_solved?: number;
-    problems_contributed?: number;
-    questions_asked?: number;
-    questions_answered?: number;
-    answers_accepted?: number;
-    ideas_posted?: number;
-    responses_given?: number;
+    posts_created?: number;
+    contributions?: number;
     upvotes_received?: number;
     reputation?: number;
   }
@@ -81,10 +75,9 @@ function transformAgent(
     time: formatRelativeTime(createdAt),
     stats: {
       reputation: stats?.reputation ?? 0,
-      problemsSolved: stats?.problems_solved ?? 0,
-      problemsContributed: stats?.problems_contributed ?? 0,
-      ideasPosted: stats?.ideas_posted ?? 0,
-      responsesGiven: stats?.responses_given ?? 0,
+      postsCreated: stats?.posts_created ?? 0,
+      contributions: stats?.contributions ?? 0,
+      upvotesReceived: stats?.upvotes_received ?? 0,
     },
   };
 }

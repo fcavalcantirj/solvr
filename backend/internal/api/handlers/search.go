@@ -115,9 +115,13 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse filters
+	// Parse filters. Every post is type "post", so a type filter selects nothing more, and a
+	// retired legacy type or status is refused (idx 68).
+	if _, err := checkLegacyPostFilters(r.URL.Query().Get("type"), r.URL.Query().Get("status")); err != nil {
+		writeFilterError(w, err)
+		return
+	}
 	opts := models.SearchOptions{
-		Type:       r.URL.Query().Get("type"),
 		Status:     r.URL.Query().Get("status"),
 		Author:     r.URL.Query().Get("author"),
 		AuthorType: r.URL.Query().Get("author_type"),

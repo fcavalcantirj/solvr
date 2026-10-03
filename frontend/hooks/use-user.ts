@@ -23,7 +23,7 @@ export interface UserData {
 // Post data for frontend use in user profile
 export interface UserPostData {
   id: string;
-  type: 'problem' | 'question' | 'idea';
+  type: 'post';
   title: string;
   description: string;
   status: string;

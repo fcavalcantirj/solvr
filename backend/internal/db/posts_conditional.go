@@ -10,8 +10,7 @@ import (
 )
 
 // UpdateIfUnmodified writes a post's mutable fields (title, description, tags,
-// status, success_criteria, weight, accepted_answer_id, evolved_into, the
-// embedding when one is given, and the canonical states derived from status)
+// status, the embedding when one is given, and the canonical states derived from status)
 // only while the row is still at the expected version (its updated_at), in the
 // same statement, so two edits that read the same version cannot both land
 // (spec.json idx 74 step 5). A nil expected writes unconditionally.
@@ -25,20 +24,15 @@ func (r *PostRepository) UpdateIfUnmodified(ctx context.Context, post *models.Po
 			description = $3,
 			tags = $4,
 			status = $5,
-			success_criteria = $6,
-			weight = $7,
-			accepted_answer_id = $8,
-			evolved_into = $9,
-			embedding = COALESCE($10::vector, embedding),
-			publication_state = $11,
-			moderation_state = $12,
+			embedding = COALESCE($6::vector, embedding),
+			publication_state = $7,
+			moderation_state = $8,
 			updated_at = NOW()
 		WHERE id = $1 AND deleted_at IS NULL
-		  AND ($13::timestamptz IS NULL OR updated_at = $13::timestamptz)
+		  AND ($9::timestamptz IS NULL OR updated_at = $9::timestamptz)
 		RETURNING id, type, title, description, tags,
 			posted_by_type, posted_by_id, status,
-			upvotes, downvotes, view_count, success_criteria, weight,
-			accepted_answer_id, evolved_into,
+			upvotes, downvotes, view_count,
 			created_at, updated_at, deleted_at,
 			crystallization_cid, crystallized_at, visibility,
 			publication_state, moderation_state, source_room_id
@@ -54,10 +48,6 @@ func (r *PostRepository) UpdateIfUnmodified(ctx context.Context, post *models.Po
 		post.Description,
 		post.Tags,
 		post.Status,
-		post.SuccessCriteria,
-		post.Weight,
-		post.AcceptedAnswerID,
-		post.EvolvedInto,
 		post.EmbeddingStr,
 		pub,
 		mod,

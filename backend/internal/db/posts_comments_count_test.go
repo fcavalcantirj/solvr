@@ -25,7 +25,7 @@ func TestPostList_CountsSystemComments(t *testing.T) {
 
 	// List() should count the system comment
 	posts, _, err := postRepo.List(ctx, models.PostListOptions{
-		Type:    models.PostTypeQuestion,
+		Type:    models.PostTypePost,
 		Page:    1,
 		PerPage: 50,
 	})
@@ -93,7 +93,7 @@ func TestPostList_CountMatchesFeedCount(t *testing.T) {
 
 	// List() should return 2 (matches what feed counts)
 	posts, _, err := postRepo.List(ctx, models.PostListOptions{
-		Type:    models.PostTypeQuestion,
+		Type:    models.PostTypePost,
 		Page:    1,
 		PerPage: 50,
 	})

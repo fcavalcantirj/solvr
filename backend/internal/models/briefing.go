@@ -9,9 +9,9 @@ type BriefingResult struct {
 	// Agent-centric sections (original 5)
 	Inbox             *BriefingInbox           `json:"inbox"`
 	MyOpenItems       *OpenItemsResult         `json:"my_open_items"`
-	SuggestedActions  []SuggestedAction         `json:"suggested_actions"`
-	Opportunities     *OpportunitiesSection     `json:"opportunities"`
-	ReputationChanges *ReputationChangesResult  `json:"reputation_changes"`
+	SuggestedActions  []SuggestedAction        `json:"suggested_actions"`
+	Opportunities     *OpportunitiesSection    `json:"opportunities"`
+	ReputationChanges *ReputationChangesResult `json:"reputation_changes"`
 	// Platform-wide sections (6 new)
 	PlatformPulse    *PlatformPulse     `json:"platform_pulse"`
 	TrendingNow      []TrendingPost     `json:"trending_now"`
@@ -27,7 +27,7 @@ type BriefingResult struct {
 
 // BriefingInbox represents the inbox portion of a briefing.
 type BriefingInbox struct {
-	UnreadCount int                `json:"unread_count"`
+	UnreadCount int                 `json:"unread_count"`
 	Items       []BriefingInboxItem `json:"items"`
 }
 
@@ -43,17 +43,13 @@ type BriefingInboxItem struct {
 }
 
 // OpenItemsResult holds the aggregated open items data for an agent briefing.
-// PostsNoReplies counts every open post of the agent that has no contributor reply;
-// the problem/question counters are its legacy-typed subsets.
+// PostsNoReplies counts every open post of the agent that has no contributor reply.
 type OpenItemsResult struct {
-	PostsNoReplies       int        `json:"posts_no_replies"`
-	ProblemsNoApproaches int        `json:"problems_no_approaches"`
-	QuestionsNoAnswers   int        `json:"questions_no_answers"`
-	ApproachesStale      int        `json:"approaches_stale"`
-	Items                []OpenItem `json:"items"`
+	PostsNoReplies int        `json:"posts_no_replies"`
+	Items          []OpenItem `json:"items"`
 }
 
-// OpenItem represents a single open item (problem, question, or approach) needing attention.
+// OpenItem represents a single open post needing attention.
 type OpenItem struct {
 	Type     string `json:"type"`
 	ID       string `json:"id"`
@@ -103,15 +99,10 @@ type ReputationEvent struct {
 }
 
 // PlatformPulse holds global Solvr activity statistics for the platform pulse briefing section.
-// OpenPosts counts open public posts of every type; OpenProblems, OpenQuestions and
-// ActiveIdeas are its subsets of the legacy post types.
+// OpenPosts counts open public posts; the per-type and solved counters were retired (idx 68).
 type PlatformPulse struct {
 	OpenPosts            int `json:"open_posts"`
-	OpenProblems         int `json:"open_problems"`
-	OpenQuestions        int `json:"open_questions"`
-	ActiveIdeas          int `json:"active_ideas"`
 	NewPostsLast24h      int `json:"new_posts_last_24h"`
-	SolvedLast7d         int `json:"solved_last_7d"`
 	ActiveAgentsLast24h  int `json:"active_agents_last_24h"`
 	ContributorsThisWeek int `json:"contributors_this_week"`
 	BlogPostsPublished   int `json:"blog_posts_published"`
@@ -134,7 +125,6 @@ type TrendingPost struct {
 type HardcoreUnsolved struct {
 	ID              string   `json:"id"`
 	Title           string   `json:"title"`
-	Weight          int      `json:"weight"`
 	TotalApproaches int      `json:"total_approaches"`
 	FailedCount     int      `json:"failed_count"`
 	AgeDays         int      `json:"age_days"`
@@ -148,22 +138,21 @@ type RisingIdea struct {
 	Title         string   `json:"title"`
 	Tags          []string `json:"tags"`
 	ResponseCount int      `json:"response_count"`
-	EvolvedCount  int      `json:"evolved_count"`
 	Upvotes       int      `json:"upvotes"`
 	AgeHours      int      `json:"age_hours"`
 }
 
 // RecentVictory represents a recently solved problem with solver info.
 type RecentVictory struct {
-	ID              string    `json:"id"`
-	Title           string    `json:"title"`
-	SolverName      string    `json:"solver_name"`
-	SolverType      string    `json:"solver_type"`
-	SolverID        string    `json:"solver_id"`
-	TotalApproaches int       `json:"total_approaches"`
-	DaysToSolve     int       `json:"days_to_solve"`
-	SolvedAt        string    `json:"solved_at"`
-	Tags            []string  `json:"tags"`
+	ID              string   `json:"id"`
+	Title           string   `json:"title"`
+	SolverName      string   `json:"solver_name"`
+	SolverType      string   `json:"solver_type"`
+	SolverID        string   `json:"solver_id"`
+	TotalApproaches int      `json:"total_approaches"`
+	DaysToSolve     int      `json:"days_to_solve"`
+	SolvedAt        string   `json:"solved_at"`
+	Tags            []string `json:"tags"`
 }
 
 // RecommendedPost represents a post recommended for the agent based on their activity and specialties.
@@ -180,8 +169,8 @@ type RecommendedPost struct {
 // CrystallizationEvent represents a post that was pinned to IPFS (crystallized).
 // Appears in the agent briefing when the agent's content or succeeded approach is crystallized.
 type CrystallizationEvent struct {
-	PostID          string `json:"post_id"`
-	PostTitle       string `json:"post_title"`
-	CID             string `json:"cid"`
-	CrystallizedAt  string `json:"crystallized_at"`
+	PostID         string `json:"post_id"`
+	PostTitle      string `json:"post_title"`
+	CID            string `json:"cid"`
+	CrystallizedAt string `json:"crystallized_at"`
 }

@@ -54,13 +54,13 @@ func TestReputation_CrossEndpointConsistency(t *testing.T) {
 
 	// Create some activity: 1 solved problem (100 + 25 = 125 points)
 	_, err = postRepo.Create(ctx, &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Test Solved Problem",
 		Description:  "Test",
 		Tags:         []string{"test"},
 		PostedByType: models.AuthorTypeHuman,
 		PostedByID:   created.ID,
-		Status:       models.PostStatusSolved,
+		Status:       models.PostStatusOpen,
 	})
 	if err != nil {
 		t.Fatalf("failed to create problem: %v", err)

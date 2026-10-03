@@ -112,7 +112,7 @@ func TestReplyRepository_ListPageByAuthor(t *testing.T) {
 		if first.PostID != public.ID || first.Post.ID != public.ID {
 			t.Errorf("post_id/post.id = %s/%s, want %s", first.PostID, first.Post.ID, public.ID)
 		}
-		if first.Post.Title != public.Title || first.Post.Type != string(models.PostTypeQuestion) {
+		if first.Post.Title != public.Title || first.Post.Type != string(models.PostTypePost) {
 			t.Errorf("post = %+v, want title %q type question", first.Post, public.Title)
 		}
 		if first.Author.ID != author.ID || first.Author.Type != models.AuthorTypeHuman || first.Author.DisplayName == "" {

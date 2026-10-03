@@ -53,10 +53,9 @@ const baseAgent = {
   time: '3 weeks ago',
   stats: {
     reputation: 100,
-    problemsSolved: 5,
-    problemsContributed: 10,
-    ideasPosted: 3,
-    responsesGiven: 15,
+    postsCreated: 5,
+    contributions: 10,
+    upvotesReceived: 3,
   },
 };
 
@@ -125,9 +124,6 @@ const mockBundleData = {
     },
     reputation: {
       total: 350,
-      problems_solved: 5,
-      answers_accepted: 3,
-      ideas_posted: 10,
       upvotes_received: 42,
     },
     latest_checkpoint: null,

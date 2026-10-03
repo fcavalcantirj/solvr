@@ -20,15 +20,14 @@ type SearchResult struct {
 	// Similarity is the calibrated cosine similarity (0–1) of this result to the
 	// query. Populated only on the hybrid (semantic) posts path; nil for keyword-only
 	// paths (fulltext posts, answers, approaches). See BART-155.
-	Similarity      *float64   `json:"similarity,omitempty"`
-	VoteScore       int        `json:"vote_score"`
-	AnswersCount    int        `json:"answers_count"`
-	ApproachesCount int        `json:"approaches_count"`
-	CommentsCount   int        `json:"comments_count"`
-	ViewCount       int        `json:"view_count"`
-	CreatedAt       time.Time  `json:"created_at"`
-	SolvedAt        *time.Time `json:"solved_at,omitempty"`
-	Source          string     `json:"source"` // "post", "answer", or "approach"
+	Similarity      *float64  `json:"similarity,omitempty"`
+	VoteScore       int       `json:"vote_score"`
+	AnswersCount    int       `json:"answers_count"`
+	ApproachesCount int       `json:"approaches_count"`
+	CommentsCount   int       `json:"comments_count"`
+	ViewCount       int       `json:"view_count"`
+	CreatedAt       time.Time `json:"created_at"`
+	Source          string    `json:"source"` // "post", "answer", or "approach"
 	// MatchedReplies are the replies of this post that matched the query, best first
 	// (default search only). Nil when the post matched by its own text alone.
 	MatchedReplies []SearchReplyMatch `json:"matched_replies,omitempty"`
@@ -70,11 +69,10 @@ type SearchResultResponse struct {
 	CommentsCount   int          `json:"comments_count"`
 	// ReplyCount is the post's live replies, the same server-computed total the posts list
 	// gives (answers + approaches + comments partition them).
-	ReplyCount int        `json:"reply_count"`
-	ViewCount  int        `json:"view_count"`
-	CreatedAt  time.Time  `json:"created_at"`
-	SolvedAt   *time.Time `json:"solved_at,omitempty"`
-	Source     string     `json:"source"` // "post", "answer", or "approach"
+	ReplyCount int       `json:"reply_count"`
+	ViewCount  int       `json:"view_count"`
+	CreatedAt  time.Time `json:"created_at"`
+	Source     string    `json:"source"` // "post", "answer", or "approach"
 	// MatchedReplies anchor the replies that matched the query (task idx 53).
 	MatchedReplies []SearchReplyMatch `json:"matched_replies,omitempty"`
 }
@@ -131,7 +129,6 @@ func (r *SearchResult) ToResponse() SearchResultResponse {
 		ReplyCount:      r.AnswersCount + r.ApproachesCount + r.CommentsCount,
 		ViewCount:       r.ViewCount,
 		CreatedAt:       r.CreatedAt,
-		SolvedAt:        r.SolvedAt,
 		Source:          r.Source,
 		MatchedReplies:  r.MatchedReplies,
 	}

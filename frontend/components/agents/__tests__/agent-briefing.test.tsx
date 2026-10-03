@@ -37,9 +37,7 @@ function makeInbox(overrides?: Partial<BriefingInbox>): BriefingInbox {
 
 function makeOpenItems(overrides?: Partial<BriefingOpenItems>): BriefingOpenItems {
   return {
-    problems_no_approaches: 1,
-    questions_no_answers: 2,
-    approaches_stale: 0,
+    posts_no_replies: 3,
     items: [
       {
         type: 'question',

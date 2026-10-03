@@ -31,15 +31,14 @@ func TestOpenAPIPosts_SchemasDescribeTheJSONTheHandlersReturn(t *testing.T) {
 	}
 }
 
-// A post is created without a type: the canonical post is untyped, and the legacy types are
-// still accepted. Create answers the stored post; the reads add its author and counts, so those
+// A post is created without a type (or with type post): the legacy problem, question and idea
+// types were retired (idx 68). Create answers the stored post; the reads add its author and counts, so those
 // are documented but not required.
 func TestOpenAPIPosts_CreateTakesNoTypeAndThePostShowsTheCanonicalStates(t *testing.T) {
 	spec := servedSpec(t)
 	create := at(t, spec, "components", "schemas", "CreatePostRequest").(map[string]interface{})
 	assert.ElementsMatch(t, []interface{}{"title", "description"}, create["required"])
-	assert.ElementsMatch(t, []interface{}{"post", "problem", "question", "idea"},
-		at(t, create, "properties", "type", "enum"))
+	assert.ElementsMatch(t, []interface{}{"post"}, at(t, create, "properties", "type", "enum"))
 
 	post := at(t, spec, "components", "schemas", "Post").(map[string]interface{})
 	for _, field := range []string{"id", "type", "title", "description", "status", "publication_state",

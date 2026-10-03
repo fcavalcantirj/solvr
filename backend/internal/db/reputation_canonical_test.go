@@ -129,12 +129,6 @@ func TestCanonicalReputation_ProfilesAndListsAgreeWithTheServedLeaderboard(t *te
 	// -1) = 217; the user = 125 + 10 (answer) + 2 (comment) + 2 (vote) = 139; the newcomer's
 	// approach and the vote on it score nothing. The surfaces below must show exactly that.
 
-	// What the legacy AgentRepository.GetAgentStats (deleted, idx 68) returned for holder before
-	// the cutover, measured on e726cb7f by running this test against it (the legacy agent
-	// formula scored no comment, hence 215).
-	legacyStats := &models.AgentStats{ProblemsSolved: 1, ProblemsContributed: 1, QuestionsAsked: 0, QuestionsAnswered: 1,
-		AnswersAccepted: 1, IdeasPosted: 1, ResponsesGiven: 1, UpvotesReceived: 2, Reputation: 215}
-
 	_, err = MigrateContributions(ctx, pool)
 	require.NoError(t, err)
 	_, err = RemapLegacyRelations(ctx, pool)
@@ -195,11 +189,6 @@ func TestCanonicalReputation_ProfilesAndListsAgreeWithTheServedLeaderboard(t *te
 	assert.Equal(t, []string{rich, holder, newcomer}, []string{listed[0].ID, listed[1].ID, listed[2].ID},
 		"the agents list sorts by canonical reputation")
 
-	canonicalStats, err := agents.GetAgentStats(ctx, holder)
-	require.NoError(t, err)
-	legacyBefore := *legacyStats
-	canonicalStats.Reputation, legacyBefore.Reputation = 0, 0
-	assert.Equal(t, &legacyBefore, canonicalStats, "only Reputation differs from the legacy stats before the cutover")
 	missing, err := agents.GetAgentStats(ctx, "agent_rp_missing_"+sfx)
 	require.NoError(t, err)
 	assert.Equal(t, &models.AgentStats{}, missing, "an unknown agent has zero stats, as before")

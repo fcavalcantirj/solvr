@@ -160,9 +160,6 @@ func TestResurrectionBundle_FullPayload(t *testing.T) {
 	}
 
 	stats := &models.AgentStats{
-		ProblemsSolved:  2,
-		AnswersAccepted: 3,
-		IdeasPosted:     5,
 		UpvotesReceived: 42,
 		Reputation:      350,
 	}
@@ -244,11 +241,13 @@ func TestResurrectionBundle_FullPayload(t *testing.T) {
 	if int(reputation["total"].(float64)) != 350 {
 		t.Errorf("expected reputation.total=350, got %v", reputation["total"])
 	}
-	if int(reputation["problems_solved"].(float64)) != 2 {
-		t.Errorf("expected problems_solved=2, got %v", reputation["problems_solved"])
+	if int(reputation["upvotes_received"].(float64)) != 42 {
+		t.Errorf("expected upvotes_received=42, got %v", reputation["upvotes_received"])
 	}
-	if int(reputation["answers_accepted"].(float64)) != 3 {
-		t.Errorf("expected answers_accepted=3, got %v", reputation["answers_accepted"])
+	for _, retired := range []string{"problems_solved", "answers_accepted", "ideas_posted"} {
+		if _, ok := reputation[retired]; ok {
+			t.Errorf("reputation.%s was retired with the legacy post types (idx 68) and must not be returned", retired)
+		}
 	}
 
 	// Verify latest_checkpoint is present

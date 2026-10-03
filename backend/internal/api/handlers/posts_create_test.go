@@ -20,7 +20,6 @@ func TestCreatePost_Success(t *testing.T) {
 	handler := NewPostsHandler(repo)
 
 	body := map[string]interface{}{
-		"type":        "problem",
 		"title":       "Test Problem Title That Is Long Enough",
 		"description": "This is a test description that needs to be at least fifty characters long to pass validation.",
 		"tags":        []string{"go", "testing"},
@@ -63,7 +62,6 @@ func TestCreatePost_NoAuth(t *testing.T) {
 	handler := NewPostsHandler(repo)
 
 	body := map[string]interface{}{
-		"type":        "problem",
 		"title":       "Test Problem Title",
 		"description": "Test description",
 	}
@@ -121,7 +119,6 @@ func TestCreatePost_TitleTooShort(t *testing.T) {
 	handler := NewPostsHandler(repo)
 
 	body := map[string]interface{}{
-		"type":        "problem",
 		"title":       "Short", // Less than 10 chars
 		"description": "This is a test description that needs to be at least fifty characters long.",
 	}
@@ -160,7 +157,6 @@ func TestCreatePost_TitleTooLong(t *testing.T) {
 	}
 
 	body := map[string]interface{}{
-		"type":        "problem",
 		"title":       string(longTitle),
 		"description": "This is a test description that needs to be at least fifty characters long.",
 	}
@@ -184,7 +180,6 @@ func TestCreatePost_DescriptionTooShort(t *testing.T) {
 	handler := NewPostsHandler(repo)
 
 	body := map[string]interface{}{
-		"type":        "problem",
 		"title":       "Valid Title That Is Long Enough",
 		"description": "Too short", // Less than 50 chars
 	}
@@ -208,7 +203,6 @@ func TestCreatePost_MissingTitle(t *testing.T) {
 	handler := NewPostsHandler(repo)
 
 	body := map[string]interface{}{
-		"type":        "problem",
 		"description": "This is a test description that needs to be at least fifty characters long.",
 	}
 	jsonBody, _ := json.Marshal(body)
@@ -238,7 +232,6 @@ func TestCreatePost_DescriptionTooLong(t *testing.T) {
 	}
 
 	body := map[string]interface{}{
-		"type":        "problem",
 		"title":       "Test Problem Title That Is Long Enough",
 		"description": string(longDesc),
 	}
@@ -280,7 +273,6 @@ func TestCreatePost_DescriptionMaxAllowed(t *testing.T) {
 	}
 
 	body := map[string]interface{}{
-		"type":        "problem",
 		"title":       "Test Problem Title That Is Long Enough",
 		"description": string(maxDesc),
 	}
@@ -309,7 +301,6 @@ func TestCreatePost_TooManyTags(t *testing.T) {
 	}
 
 	body := map[string]interface{}{
-		"type":        "problem",
 		"title":       "Test Problem Title That Is Long Enough",
 		"description": "This is a test description that needs to be at least fifty characters long to pass validation.",
 		"tags":        tags,
@@ -352,7 +343,6 @@ func TestCreatePost_MaxTagsAllowed(t *testing.T) {
 	}
 
 	body := map[string]interface{}{
-		"type":        "problem",
 		"title":       "Test Problem Title That Is Long Enough",
 		"description": "This is a test description that needs to be at least fifty characters long to pass validation.",
 		"tags":        tags,
@@ -394,7 +384,6 @@ func TestCreatePost_ContentFallbackToDescription(t *testing.T) {
 	handler := NewPostsHandler(repo)
 
 	body := map[string]interface{}{
-		"type":    "problem",
 		"title":   "Test Problem Title That Is Long Enough",
 		"content": "This is content sent instead of description, needs to be at least fifty characters long to pass.",
 		"tags":    []string{"go", "testing"},
@@ -419,7 +408,6 @@ func TestCreatePost_DescriptionTakesPrecedenceOverContent(t *testing.T) {
 	handler := NewPostsHandler(repo)
 
 	body := map[string]interface{}{
-		"type":        "idea",
 		"title":       "Test Idea Title That Is Long Enough",
 		"description": "This is the real description field and it should be used over content field value.",
 		"content":     "This content field should be ignored because description is already provided here.",

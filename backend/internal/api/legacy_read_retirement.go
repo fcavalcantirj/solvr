@@ -14,6 +14,14 @@ const legacyFeedItemsAsPosts = " Each item of data is a post: snippet is descrip
 	"author, vote_score and created_at are unchanged. A page or per_page that is not a positive integer, or " +
 	"per_page above 50 answers 400 VALIDATION_ERROR instead of falling back to the default or being clamped to 50."
 
+// legacyTypesRetired tells a legacy typed list caller why the type filter is gone.
+const legacyTypesRetired = " Every post is type post since the legacy types were retired, so the list " +
+	"holds every post; a type other than post answers 400 LEGACY_FIELD_RETIRED."
+
+// perTypeStatsRetired tells a legacy type-specific statistics caller where the counts went.
+const perTypeStatsRetired = "Per-type counts were retired with the legacy post types: every post is type post, " +
+	"and data.knowledge.types of GET /v1/overview counts the posts by status with their replies. "
+
 // legacyTypedListAsPosts tells a legacy typed list caller that the canonical rows are the ones it
 // got, and the one query-shape difference.
 const legacyTypedListAsPosts = " The data rows and meta are unchanged: the route was served by this list. " +
@@ -39,10 +47,10 @@ func commentsOnContribution(legacyType string) string {
 // legacyPostAsCanonical tells a legacy single-post caller how GET /v1/posts/{id} differs from the
 // route, which read the same post.
 func legacyPostAsCanonical(legacyType string) string {
-	return " data is the same post with the same fields: the route read it from the posts table GET /v1/posts/{id} " +
-		"reads, but answered 404 for a post whose type is not " + legacyType + " (check data.type); its user_vote " +
-		"was always null where GET /v1/posts/{id} gives the caller's vote, and the author of a translated post (or " +
-		"the human who owns that agent author) reads its original title and description."
+	return " data is the same post: the route read it from the posts table GET /v1/posts/{id} reads, but answered " +
+		"404 for a post whose type was not " + legacyType + "; every post is type post since the legacy types were " +
+		"retired. Its user_vote was always null where GET /v1/posts/{id} gives the caller's vote, and the author of a " +
+		"translated post (or the human who owns that agent author) reads its original title and description."
 }
 
 // legacyApproachAsReply tells a caller how a legacy approach and its progress notes read as replies.
@@ -102,37 +110,33 @@ const legacyContributionListingAsReplies = " Each item of data is a reply with i
 // sunset period. TestLegacyReadRetirements_CoverEveryRetiredReadFamilyAndNameAServedReplacement
 // pins it to the GET routes of the retired read families.
 var LegacyReadRetirements = []LegacyRouteRetirement{
-	{"GET /v1/stats/problems", "GET /v1/overview",
-		"Per-type counts are in data.knowledge.types of GET /v1/overview. In the entry whose type is \"problem\", " +
-			"total was total_problems and by_status.solved was solved_count. active_approaches, " +
-			"avg_solve_time_days, recently_solved and top_solvers have no canonical equivalent."},
-	{"GET /v1/stats/questions", "GET /v1/overview",
-		"Per-type counts are in data.knowledge.types of GET /v1/overview. In the entry whose type is \"question\", " +
-			"total was total_questions and with_accepted_reply was answered_count; response_rate was " +
-			"with_accepted_reply * 100 / total. avg_response_time_hours, recently_answered and top_answerers " +
-			"have no canonical equivalent."},
-	{"GET /v1/stats/ideas", "GET /v1/overview",
-		"Per-type counts are in data.knowledge.types of GET /v1/overview. In the entry whose type is \"idea\", " +
-			"by_status and total were counts_by_status. fresh_sparks, ready_to_develop, top_sparklers, " +
-			"trending_tags, pipeline_stats and recently_realized have no canonical equivalent."},
+	{"GET /v1/stats/problems", "GET /v1/overview", perTypeStatsRetired +
+		"total_problems, solved_count, active_approaches, avg_solve_time_days, recently_solved and top_solvers " +
+		"have no canonical equivalent."},
+	{"GET /v1/stats/questions", "GET /v1/overview", perTypeStatsRetired +
+		"total_questions, answered_count, response_rate, avg_response_time_hours, recently_answered and " +
+		"top_answerers have no canonical equivalent."},
+	{"GET /v1/stats/ideas", "GET /v1/overview", perTypeStatsRetired +
+		"counts_by_status, fresh_sparks, ready_to_develop, top_sparklers, trending_tags, pipeline_stats and " +
+		"recently_realized have no canonical equivalent."},
 	{"GET /v1/feed", "GET /v1/posts",
 		"Call GET /v1/posts?sort=newest with the same query parameters." + legacyFeedItemsAsPosts},
 	{"GET /v1/feed/stuck", "GET /v1/posts",
-		"Call GET /v1/posts?type=problem&needs_help=true&sort=newest with the same query parameters: " +
-			"needs_help lists problems in status in_progress or with a stuck approach." + legacyFeedItemsAsPosts},
+		"Call GET /v1/posts?needs_help=true&sort=newest with the same query parameters: needs_help lists the " +
+			"posts with a reply migrated from a stuck approach." + legacyFeedItemsAsPosts},
 	{"GET /v1/feed/unanswered", "GET /v1/posts",
-		"Call GET /v1/posts?type=question&has_answer=false&sort=newest with the same query parameters: " +
-			"has_answer=false lists questions without an answer." + legacyFeedItemsAsPosts},
+		"Call GET /v1/posts?has_answer=false&sort=newest with the same query parameters: has_answer=false " +
+			"lists the posts without an answer reply." + legacyFeedItemsAsPosts},
 	{"GET /v1/problems", "GET /v1/posts",
-		"Call GET /v1/posts?type=problem with the same query parameters other than type (the route replaced " +
-			"a caller's type with problem)." + legacyTypedListAsPosts},
+		"Call GET /v1/posts with the same query parameters other than type (the route replaced a caller's " +
+			"type with problem)." + legacyTypesRetired + legacyTypedListAsPosts},
 	{"GET /v1/questions", "GET /v1/posts",
-		"Call GET /v1/posts?type=question with the same query parameters other than type (the route replaced " +
-			"a caller's type with question): has_answer=true or has_answer=false still lists questions with or " +
-			"without an answer." + legacyTypedListAsPosts},
+		"Call GET /v1/posts with the same query parameters other than type (the route replaced a caller's " +
+			"type with question): has_answer=true or has_answer=false lists the posts with or without an answer " +
+			"reply." + legacyTypesRetired + legacyTypedListAsPosts},
 	{"GET /v1/ideas", "GET /v1/posts",
-		"Call GET /v1/posts?type=idea with the same query parameters other than type (the route replaced " +
-			"a caller's type with idea)." + legacyTypedListAsPosts},
+		"Call GET /v1/posts with the same query parameters other than type (the route replaced a caller's " +
+			"type with idea)." + legacyTypesRetired + legacyTypedListAsPosts},
 	{"GET /v1/posts/{id}/comments", "GET /v1/posts/{id}/replies",
 		"Call GET /v1/posts/{id}/replies; the post id is unchanged. A comment on the post is a top-level reply " +
 			"(no parent_reply_id) whose legacy_type is \"comment\"; replies written since the cutover carry no " +
@@ -144,8 +148,8 @@ var LegacyReadRetirements = []LegacyRouteRetirement{
 		"Call GET /v1/posts/{id}; the post id is unchanged." + legacyPostAsCanonical("problem")},
 	{"GET /v1/questions/{id}", "GET /v1/posts/{id}",
 		"Call GET /v1/posts/{id} for the question and GET /v1/posts/{id}/replies for its answers; the post id is " +
-			"unchanged." + legacyPostAsCanonical("question") + " accepted_answer_id names the reply migrated from " +
-			"the accepted answer. data.answers, the question's first 100 answers, are replies of the post." +
+			"unchanged." + legacyPostAsCanonical("question") + " accepted_answer_id was retired: the accepted " +
+			"answer is the reply whose provenance.is_accepted is true. data.answers, the question's first 100 answers, are replies of the post." +
 			legacyAnswerAsReply + legacyContributionListAsReplies},
 	{"GET /v1/ideas/{id}", "GET /v1/posts/{id}",
 		"Call GET /v1/posts/{id} for the idea and GET /v1/posts/{id}/replies for its responses; the post id is " +

@@ -240,7 +240,7 @@ func TestXSSPrevention(t *testing.T) {
 				handler := NewPostsHandler(mockRepo)
 
 				// Create a post with XSS in the title
-				body := `{"type":"question","title":"` + escapeJSON(payload) + ` test title padding","description":"This is a test description that must be at least 50 characters long to pass validation requirements."}`
+				body := `{"title":"` + escapeJSON(payload) + ` test title padding","description":"This is a test description that must be at least 50 characters long to pass validation requirements."}`
 				req := httptest.NewRequest("POST", "/v1/posts", strings.NewReader(body))
 				req.Header.Set("Content-Type", "application/json")
 

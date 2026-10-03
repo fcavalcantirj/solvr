@@ -6,7 +6,7 @@ import type { APIPost, APISearchReplyMatch } from '@/lib/api-types';
 function makePost(overrides: Partial<APIPost> = {}): APIPost {
   return {
     id: 'post-123',
-    type: 'problem',
+    type: 'post',
     title: 'How to debug a deadlock',
     description: 'A long description about a deadlock in the scheduler.',
     status: 'open',
@@ -31,7 +31,7 @@ describe('PostCard', () => {
   });
 
   it('never links to a legacy /problems, /ideas, or /questions detail route', () => {
-    const { container } = render(<PostCard post={makePost({ type: 'idea' })} />);
+    const { container } = render(<PostCard post={makePost({ type: 'post' })} />);
     const hrefs = Array.from(container.querySelectorAll('a')).map((a) => a.getAttribute('href'));
     expect(
       hrefs.some(

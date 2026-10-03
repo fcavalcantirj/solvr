@@ -123,15 +123,13 @@ func TestCrystallization_PostModelFields(t *testing.T) {
 
 	// Test 1: Create a problem post — crystallization fields should be nil
 	post := &models.Post{
-		Type:            models.PostTypeProblem,
-		Title:           "Test Crystallization Problem",
-		Description:     "A problem to test crystallization fields.",
-		Tags:            []string{"test", "crystallization"},
-		PostedByType:    models.AuthorTypeHuman,
-		PostedByID:      userID,
-		Status:          models.PostStatusOpen,
-		SuccessCriteria: []string{"CID is set after crystallization"},
-		Weight:          intPtr(3),
+		Type:         models.PostTypePost,
+		Title:        "Test Crystallization Problem",
+		Description:  "A problem to test crystallization fields.",
+		Tags:         []string{"test", "crystallization"},
+		PostedByType: models.AuthorTypeHuman,
+		PostedByID:   userID,
+		Status:       models.PostStatusOpen,
 	}
 
 	created, err := postRepo.Create(ctx, post)
@@ -212,7 +210,7 @@ func TestCrystallization_PostModelFields(t *testing.T) {
 	}
 
 	// Test 6: Update should preserve crystallization fields (they're not in the UPDATE SET clause)
-	created.Status = models.PostStatusSolved
+	created.Status = models.PostStatusOpen
 	updated, err := postRepo.Update(ctx, created)
 	if err != nil {
 		t.Fatalf("Update() error = %v", err)
@@ -253,13 +251,13 @@ func TestCrystallization_SetCrystallizationCID(t *testing.T) {
 
 	// Create a problem post
 	post := &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Problem for CID Setting",
 		Description:  "Testing the SetCrystallizationCID method.",
 		Tags:         []string{"test"},
 		PostedByType: models.AuthorTypeHuman,
 		PostedByID:   userID,
-		Status:       models.PostStatusSolved,
+		Status:       models.PostStatusOpen,
 	}
 
 	created, err := postRepo.Create(ctx, post)

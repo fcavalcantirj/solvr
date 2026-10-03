@@ -23,7 +23,7 @@ describe('useSearch searchMethod', () => {
     vi.mocked(api.search).mockResolvedValue({
       data: [{
         id: 'post-1',
-        type: 'problem',
+        type: 'post',
         title: 'Test',
         description: 'Test desc',
         tags: [],

@@ -55,7 +55,7 @@ func buildPublicOverviewFixture() HomepageOverview {
 		Search: buildOverviewSearch(searchPulse),
 		Community: buildOverviewCommunity(
 			&db.AllTimeTotals{AllRooms: 219, PublicRooms: 214, PublishedPosts: 2098, RegisteredAgents: 64, RegisteredHumans: 1003},
-			&db.AllStatsResult{TotalContributions: 3327, ProblemsSolved: 41, CrystallizedPosts: 12},
+			&db.AllStatsResult{TotalContributions: 3327, CrystallizedPosts: 12},
 		),
 		Posts:       buildOverviewPosts(nil),
 		Closing:     buildOverviewClosing(),

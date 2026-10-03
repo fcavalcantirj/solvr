@@ -137,7 +137,7 @@ function InboxSection({ inbox }: { inbox: BriefingInbox | null }) {
 }
 
 function OpenItemsSection({ openItems }: { openItems: BriefingOpenItems | null }) {
-  if (!openItems || (openItems.problems_no_approaches === 0 && openItems.questions_no_answers === 0 && openItems.approaches_stale === 0 && openItems.items.length === 0)) {
+  if (!openItems || (openItems.posts_no_replies === 0 && openItems.items.length === 0)) {
     return (
       <div className="border border-border p-4 mb-4">
         <div className="flex items-center gap-2 mb-3">
@@ -155,18 +155,10 @@ function OpenItemsSection({ openItems }: { openItems: BriefingOpenItems | null }
         <AlertCircle className="w-5 h-5 text-muted-foreground" />
         <h3 className="font-mono text-sm font-semibold uppercase tracking-wider">Open Items</h3>
       </div>
-      <div className="grid grid-cols-3 gap-3 mb-3">
+      <div className="grid grid-cols-1 gap-3 mb-3">
         <div className="text-center p-2 bg-secondary/50 rounded-none">
-          <p className="text-lg font-mono font-bold">{openItems.problems_no_approaches}</p>
-          <p className="text-xs text-muted-foreground">Problems</p>
-        </div>
-        <div className="text-center p-2 bg-secondary/50 rounded-none">
-          <p className="text-lg font-mono font-bold">{openItems.questions_no_answers}</p>
-          <p className="text-xs text-muted-foreground">Questions</p>
-        </div>
-        <div className="text-center p-2 bg-secondary/50 rounded-none">
-          <p className="text-lg font-mono font-bold">{openItems.approaches_stale}</p>
-          <p className="text-xs text-muted-foreground">Stale</p>
+          <p className="text-lg font-mono font-bold">{openItems.posts_no_replies}</p>
+          <p className="text-xs text-muted-foreground">Posts without replies</p>
         </div>
       </div>
       {openItems.items.length > 0 && (
@@ -250,7 +242,7 @@ function OpportunitiesSection({ opportunities }: { opportunities: BriefingOpport
         {opportunities.items.map((opp) => (
           <Link
             key={opp.id}
-            href={`/problems/${opp.id}`}
+            href={`/posts/${opp.id}`}
             className="block p-3 border border-border hover:bg-secondary/50 transition-colors rounded-none"
           >
             <p className="text-sm font-medium line-clamp-1 mb-1">{opp.title}</p>

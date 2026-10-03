@@ -27,7 +27,6 @@ func TestPostsCRUD_Integration(t *testing.T) {
 	// Step 1: Create a post
 	t.Run("Step1_CreatePost", func(t *testing.T) {
 		body := map[string]interface{}{
-			"type":        "problem",
 			"title":       "Integration Test Problem Title",
 			"description": "This is a test description for the integration test. It needs to be at least fifty characters long to pass validation requirements.",
 			"tags":        []string{"integration", "testing"},
@@ -57,8 +56,8 @@ func TestPostsCRUD_Integration(t *testing.T) {
 		if data["title"] != "Integration Test Problem Title" {
 			t.Errorf("Step 1: expected title 'Integration Test Problem Title', got '%v'", data["title"])
 		}
-		if data["type"] != "problem" {
-			t.Errorf("Step 1: expected type 'problem', got '%v'", data["type"])
+		if data["type"] != "post" {
+			t.Errorf("Step 1: expected type 'post', got '%v'", data["type"])
 		}
 		if data["status"] != "open" {
 			t.Errorf("Step 1: expected status 'open', got '%v'", data["status"])
@@ -99,8 +98,8 @@ func TestPostsCRUD_Integration(t *testing.T) {
 		if data["title"] != "Integration Test Problem Title" {
 			t.Errorf("Step 2: expected title 'Integration Test Problem Title', got '%v'", data["title"])
 		}
-		if data["type"] != "problem" {
-			t.Errorf("Step 2: expected type 'problem', got '%v'", data["type"])
+		if data["type"] != "post" {
+			t.Errorf("Step 2: expected type 'post', got '%v'", data["type"])
 		}
 
 		// Verify author info is included
@@ -248,7 +247,6 @@ func TestPostsCRUD_OwnershipEnforcement(t *testing.T) {
 	// Create a post as owner
 	t.Run("CreateAsOwner", func(t *testing.T) {
 		body := map[string]interface{}{
-			"type":        "question",
 			"title":       "Ownership Test Question Title",
 			"description": "This is a test question to verify ownership enforcement works correctly with at least fifty characters.",
 			"tags":        []string{"ownership", "test"},
@@ -380,7 +378,6 @@ func TestPostsCRUD_VotingFlow(t *testing.T) {
 	// Create a post first
 	t.Run("CreatePost", func(t *testing.T) {
 		body := map[string]interface{}{
-			"type":        "idea",
 			"title":       "Voting Flow Test Idea Title",
 			"description": "This is a test idea to verify the voting flow works correctly in integration tests.",
 			"tags":        []string{"voting", "test"},
@@ -510,19 +507,16 @@ func TestPostsCRUD_ListAndPagination(t *testing.T) {
 	t.Run("CreateMultiplePosts", func(t *testing.T) {
 		posts := []map[string]interface{}{
 			{
-				"type":        "problem",
 				"title":       "First Problem for List Test",
 				"description": "Description for the first problem that is at least fifty characters long for validation.",
 				"tags":        []string{"problem", "test"},
 			},
 			{
-				"type":        "question",
 				"title":       "Second Question for List Test",
 				"description": "Description for the second question that is at least fifty characters long for validation.",
 				"tags":        []string{"question", "test"},
 			},
 			{
-				"type":        "idea",
 				"title":       "Third Idea for List Test",
 				"description": "Description for the third idea that is at least fifty characters long for validation purposes.",
 				"tags":        []string{"idea", "test"},
@@ -567,9 +561,9 @@ func TestPostsCRUD_ListAndPagination(t *testing.T) {
 		}
 	})
 
-	// Filter by type
+	// Filter by type: every post is type post, so type=post applies no filter (idx 68)
 	t.Run("FilterByType", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/v1/posts?type=problem", nil)
+		req := httptest.NewRequest(http.MethodGet, "/v1/posts?type=post", nil)
 		w := httptest.NewRecorder()
 
 		handler.List(w, req)
@@ -578,9 +572,8 @@ func TestPostsCRUD_ListAndPagination(t *testing.T) {
 			t.Fatalf("expected status 200, got %d", w.Code)
 		}
 
-		// Verify type filter was applied
-		if repo.listOpts.Type != models.PostTypeProblem {
-			t.Errorf("expected type filter 'problem', got '%s'", repo.listOpts.Type)
+		if repo.listOpts.Type != "" {
+			t.Errorf("expected no type filter, got '%s'", repo.listOpts.Type)
 		}
 	})
 

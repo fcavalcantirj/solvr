@@ -30,14 +30,11 @@ func TestLegacyProfileStats_ServedCanonically(t *testing.T) {
 	}
 }
 
-// Task idx 76 steps 3 and 5: in a database holding only this fixture, the legacy profile stats
-// before the contribution cutover and the canonical ones after it agree wherever the canonical
-// model keeps the concept, and differ exactly where it deliberately does not: a question's
-// answers are its top-level replies (a comment on a question counts) and an idea's responses
-// its top-level replies; an upvote on any of the owner's replies counts (approach upvotes
-// included); a user's contributions are all their live replies (approaches and comments
-// included). The canonical stats then survive dropping the legacy tables unchanged, and native
-// replies, accepted replies and votes move them.
+// Task idx 76 steps 3 and 5, idx 68: in a database holding only this fixture, the canonical
+// profile stats after the contribution cutover count the owner's live posts, every live reply
+// (migrated answers, responses, approaches and comments alike) and confirmed upvotes on their
+// posts and replies (approach upvotes included). They survive dropping the legacy tables
+// unchanged, and native replies and votes move them. The per-type counters were retired.
 func TestCanonicalProfileStats_KeepsLegacyCountsAcrossTheCutover(t *testing.T) {
 	pool, dropLegacy := newMigratedScratchDatabase(t)
 	ctx := context.Background()
@@ -135,18 +132,6 @@ func TestCanonicalProfileStats_KeepsLegacyCountsAcrossTheCutover(t *testing.T) {
 		return *s
 	}
 
-	// What the legacy GetAgentStats/GetUserStats (deleted, idx 68) returned for this fixture,
-	// reputation aside: the deleted post, the deleted answer, the comment and the approach upvote
-	// did not count, and contributions were answers plus responses.
-	legacyA := models.AgentStats{
-		ProblemsSolved: 1, ProblemsContributed: 2, QuestionsAsked: 1, QuestionsAnswered: 2,
-		AnswersAccepted: 1, IdeasPosted: 1, ResponsesGiven: 1, UpvotesReceived: 3,
-	}
-	legacyB := models.AgentStats{QuestionsAnswered: 1}
-	legacyH := models.UserStats{
-		PostsCreated: 3, AnswersGiven: 1, AnswersAccepted: 1, UpvotesReceived: 2, Contributions: 2,
-	}
-
 	_, err = MigrateContributions(ctx, pool)
 	require.NoError(t, err)
 	_, err = RemapLegacyRelations(ctx, pool)
@@ -155,17 +140,18 @@ func TestCanonicalProfileStats_KeepsLegacyCountsAcrossTheCutover(t *testing.T) {
 	agents, users := NewCanonicalReputationAgentRepository(pool), NewCanonicalReputationUserRepository(pool)
 	withoutReputation := func(s models.AgentStats) models.AgentStats { s.Reputation = 0; return s }
 	canonicalA, canonicalB, canonicalH := agentStats(agents, a), agentStats(agents, b), userStats(users)
-	wantA := legacyA
-	wantA.QuestionsAnswered = 3 // + the comment on qH, a top-level reply on a question
-	wantA.UpvotesReceived = 4   // + the upvote on the approach, now a reply
+	// a: four live posts (not the deleted one); five live replies (two answers, the response, the
+	// approach, the comment; not the deleted answer); four confirmed upvotes (a post, an answer,
+	// the response and the approach, now replies; not the unconfirmed vote).
+	wantA := models.AgentStats{PostsCreated: 4, Contributions: 5, UpvotesReceived: 4}
 	assert.Equal(t, wantA, withoutReputation(canonicalA))
-	assert.Equal(t, legacyB, withoutReputation(canonicalB), "an answer stays an answer")
-	wantH := legacyH
-	wantH.UpvotesReceived = 3 // + the upvote on the approach
-	wantH.Contributions = 5   // the answer, the response, the approach and both comments
+	assert.Equal(t, models.AgentStats{Contributions: 1}, withoutReputation(canonicalB), "b's one answer is a reply")
+	// h: three posts; five replies (the answer, the response, the approach and both comments, the
+	// one on the answer as a child reply); three upvotes (the answer, the question, the approach).
+	wantH := models.UserStats{PostsCreated: 3, Contributions: 5, UpvotesReceived: 3}
 	gotH := canonicalH
 	gotH.Reputation = 0
-	assert.Equal(t, wantH, gotH, "the comment on the answer is a child reply, not an answer")
+	assert.Equal(t, wantH, gotH, "every live reply of h is a contribution")
 	missing, err := agents.GetAgentStats(ctx, "agent_pstats_missing")
 	require.NoError(t, err)
 	assert.Equal(t, &models.AgentStats{}, missing, "an unknown agent has zero stats, as before")
@@ -175,22 +161,21 @@ func TestCanonicalProfileStats_KeepsLegacyCountsAcrossTheCutover(t *testing.T) {
 	assert.Equal(t, canonicalB, agentStats(agents, b))
 	assert.Equal(t, canonicalH, userStats(users), "the canonical user stats need no legacy table")
 
-	// Native replies after the cutover: a's top-level reply on qA becomes its accepted reply
-	// (taking the acceptance from h's answer) and is upvoted; a child reply is not an answer, a
-	// deleted reply and a downvote count for nothing; h's reply on an idea is a contribution.
+	// Native replies after the cutover: a's reply and its child reply are contributions, its upvote
+	// counts and the downvote does not; a deleted reply counts for nothing; h's reply on an idea
+	// is a contribution.
 	nA := id(`INSERT INTO replies (post_id, author_type, author_id, body) VALUES ($1, 'agent', $2, 'native answer')`, qA, a)
 	exec(`INSERT INTO replies (post_id, parent_reply_id, author_type, author_id, body) VALUES ($1, $2, 'agent', $3, 'native child')`, qA, nA, a)
 	exec(`INSERT INTO replies (post_id, author_type, author_id, body, deleted_at) VALUES ($1, 'agent', $2, 'gone', NOW())`, qH, a)
 	exec(`INSERT INTO replies (post_id, author_type, author_id, body) VALUES ($1, 'human', $2, 'native idea reply')`, iA, h)
-	exec(`UPDATE posts SET accepted_answer_id = $2 WHERE id = $1`, qA, nA)
 	vote("reply", nA, "up", true)
 	vote("reply", nA, "down", true)
 
 	liveA := withoutReputation(agentStats(agents, a))
-	wantA.QuestionsAnswered, wantA.AnswersAccepted, wantA.UpvotesReceived = 4, 2, 5
+	wantA.Contributions, wantA.UpvotesReceived = 7, 5
 	assert.Equal(t, wantA, liveA)
 	liveH := userStats(users)
 	liveH.Reputation = 0
-	wantH.Contributions, wantH.AnswersAccepted = 6, 0
-	assert.Equal(t, wantH, liveH, "qA's accepted reply is a's now")
+	wantH.Contributions = 6
+	assert.Equal(t, wantH, liveH, "h's native reply on an idea is a contribution")
 }

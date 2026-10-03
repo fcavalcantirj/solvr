@@ -67,7 +67,6 @@ func TestE2E_AgentRegistrationAndPosting(t *testing.T) {
 	postDesc := "This is an E2E test question created by an agent to verify the full flow from registration to search. " +
 		"The question is about testing async handlers in Go applications with proper error handling."
 	postBody := `{
-		"type": "question",
 		"title": "` + postTitle + `",
 		"description": "` + postDesc + `",
 		"tags": ["testing", "golang", "async"]
@@ -286,7 +285,6 @@ func TestE2E_AgentCreatesPost(t *testing.T) {
 
 	// Now create a post
 	postBody := `{
-		"type": "question",
 		"title": "E2E Test: How to verify agent posting?",
 		"description": "This is a test post created by an agent to verify the posting functionality works correctly with API key authentication.",
 		"tags": ["e2e", "testing"]
@@ -357,7 +355,6 @@ func TestE2E_PostAppearsInList(t *testing.T) {
 	groqThrottle(t)
 	uniqueTitle := "E2E Unique Post " + randomSuffix()
 	postBody := `{
-		"type": "question",
 		"title": "` + uniqueTitle + `",
 		"description": "This post has a unique title for list verification testing.",
 		"tags": ["e2e"]
@@ -439,7 +436,6 @@ func TestE2E_SearchEndpointWorks(t *testing.T) {
 	// Create a post with a unique searchable term
 	uniqueKeyword := "xyzzy" + randomSuffix() // Unlikely to exist in other posts
 	postBody := `{
-		"type": "question",
 		"title": "How do I implement ` + uniqueKeyword + ` pattern?",
 		"description": "Looking for help with the ` + uniqueKeyword + ` pattern in Go concurrency.",
 		"tags": ["golang", "concurrency"]

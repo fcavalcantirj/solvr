@@ -32,7 +32,7 @@ func TestReportsRepository_Create(t *testing.T) {
 
 	// Create test post
 	post := &models.Post{
-		Type:         models.PostTypeQuestion,
+		Type:         models.PostTypePost,
 		Title:        "Test question for reports",
 		Description:  "This is a test question",
 		Tags:         []string{"test"},
@@ -96,7 +96,7 @@ func TestReportsRepository_Create_Duplicate(t *testing.T) {
 
 	// Create test post
 	post := &models.Post{
-		Type:         models.PostTypeQuestion,
+		Type:         models.PostTypePost,
 		Title:        "Test question for duplicate reports",
 		Description:  "This is a test question",
 		Tags:         []string{"test"},
@@ -163,7 +163,7 @@ func TestReportsRepository_HasReported(t *testing.T) {
 
 	// Create test post
 	post := &models.Post{
-		Type:         models.PostTypeQuestion,
+		Type:         models.PostTypePost,
 		Title:        "Test question for has reported",
 		Description:  "This is a test question",
 		Tags:         []string{"test"},

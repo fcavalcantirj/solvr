@@ -145,8 +145,7 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 		SELECT
 			p.id, p.type, p.title, p.description, p.tags,
 			p.posted_by_type, p.posted_by_id, p.status,
-			p.upvotes, p.downvotes, p.view_count, p.success_criteria, p.weight,
-			p.accepted_answer_id, p.evolved_into,
+			p.upvotes, p.downvotes, p.view_count,
 			p.created_at, p.updated_at, p.deleted_at,
 			p.crystallization_cid, p.crystallized_at,
 			COALESCE(p.original_language, '') as original_language,

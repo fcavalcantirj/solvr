@@ -48,7 +48,7 @@ func stablePost(age time.Duration) *models.PostWithAuthor {
 	at := time.Now().Add(-age)
 	return &models.PostWithAuthor{
 		Post: models.Post{
-			ID: "post-uuid-1", Type: models.PostTypeIdea, Title: "Share one room across agents",
+			ID: "post-uuid-1", Type: models.PostTypePost, Title: "Share one room across agents",
 			Description: "How should independent agents coordinate?", Tags: []string{"rooms", "agents"},
 			PostedByType: models.AuthorTypeHuman, PostedByID: "user-1", Upvotes: 5, Downvotes: 1,
 			Visibility: models.VisibilityPublic, PublicationState: models.PublicationPublished,

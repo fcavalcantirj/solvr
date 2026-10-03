@@ -8,41 +8,27 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Canonical profile stats (task idx 76 step 3): the counts on an agent's or a user's profile
-// (GET /v1/agents/{id}, /v1/users/{id}, /v1/me and the resurrection bundle) read posts, replies
-// and votes, never the legacy contribution tables. An owner's reply is a live reply they wrote,
-// on any post, as the legacy counts took any live answer and any response:
-//   - answers (questions_answered, answers_given): their top-level replies on questions, so a
-//     comment written on a question before the move to replies counts;
-//   - accepted answers: their replies that the reply's post names as its accepted reply;
-//   - responses: their top-level replies on ideas;
-//   - contributions (users): every reply, approaches, comments and progress notes included;
+// Canonical profile stats (task idx 76 step 3, idx 68): the counts on an agent's or a user's
+// profile (GET /v1/agents/{id}, /v1/users/{id}, /v1/me and the resurrection bundle) read posts,
+// replies and votes, never the legacy contribution tables:
+//   - posts created: their live posts;
+//   - contributions: their live replies on any post, approaches, comments and progress notes
+//     migrated from the legacy tables included;
 //   - upvotes received: confirmed upvotes on their posts and replies, a vote on a former
 //     approach included.
 //
-// The problem, question and idea figures are subsets of the posts.type column, passed as
-// parameters like the public statistics: they read 0 once check:posts.posts_type_check narrows
-// the column to 'post'. Reputation is the served leaderboard's (reputation_canonical.go).
+// The per-type counters (problems, questions, ideas, answers, accepted answers, responses)
+// were retired with the legacy post types (idx 68). Reputation is the served leaderboard's
+// (reputation_canonical.go).
 
 // canonicalProfileCounts computes the counts of the owner row o (owner_type, owner_id,
-// reputation). $2, $3 and $4 are the problem, question and idea post types.
+// reputation).
 const canonicalProfileCounts = `
-	SELECT ps.created::int, ps.solved::int, ps.problems::int, ps.questions::int, ps.ideas::int,
-		rs.answers::int, rs.accepted::int, rs.responses::int, rs.replies::int, vs.upvotes::int,
-		o.reputation::int
+	SELECT ps.created::int, rs.replies::int, vs.upvotes::int, o.reputation::int
 	FROM o,
-	LATERAL (SELECT COUNT(*) AS created,
-			COUNT(*) FILTER (WHERE p.type = $2 AND p.status = 'solved') AS solved,
-			COUNT(*) FILTER (WHERE p.type = $2) AS problems,
-			COUNT(*) FILTER (WHERE p.type = $3) AS questions,
-			COUNT(*) FILTER (WHERE p.type = $4) AS ideas
-		FROM posts p
+	LATERAL (SELECT COUNT(*) AS created FROM posts p
 		WHERE p.posted_by_type = o.owner_type AND p.posted_by_id = o.owner_id AND p.deleted_at IS NULL) ps,
-	LATERAL (SELECT COUNT(*) AS replies,
-			COUNT(*) FILTER (WHERE r.parent_reply_id IS NULL AND p.type = $3) AS answers,
-			COUNT(*) FILTER (WHERE p.accepted_answer_id = r.id) AS accepted,
-			COUNT(*) FILTER (WHERE r.parent_reply_id IS NULL AND p.type = $4) AS responses
-		FROM replies r JOIN posts p ON p.id = r.post_id
+	LATERAL (SELECT COUNT(*) AS replies FROM replies r
 		WHERE r.author_type = o.owner_type AND r.author_id = o.owner_id AND r.deleted_at IS NULL) rs,
 	LATERAL (SELECT COUNT(*) AS upvotes FROM votes v
 		WHERE v.confirmed = true AND v.direction = 'up' AND (
@@ -62,17 +48,13 @@ const canonicalUserStatsQuery = `
 	WITH o AS (SELECT 'human'::text AS owner_type, u.id AS owner_id, ` + canonicalUserReputation + ` AS reputation
 		FROM (SELECT $1::text AS id) u)` + canonicalProfileCounts
 
-var statsIdeaType = string(models.PostTypeIdea)
-
 type profileCounts struct {
-	created, solved, problems, questions, ideas, answers, accepted, responses, replies, upvotes, reputation int
+	created, replies, upvotes, reputation int
 }
 
 // queryProfileCounts runs a one-owner profile query; ok is false when it returns no row.
 func queryProfileCounts(ctx context.Context, pool *Pool, op, sql, id string) (c profileCounts, ok bool, err error) {
-	err = pool.QueryRow(ctx, sql, id, statsProblemType, statsQuestionType, statsIdeaType).Scan(
-		&c.created, &c.solved, &c.problems, &c.questions, &c.ideas,
-		&c.answers, &c.accepted, &c.responses, &c.replies, &c.upvotes, &c.reputation)
+	err = pool.QueryRow(ctx, sql, id).Scan(&c.created, &c.replies, &c.upvotes, &c.reputation)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return c, false, nil
 	}
@@ -94,15 +76,10 @@ func (r *CanonicalReputationAgentRepository) GetAgentStats(ctx context.Context, 
 		return &models.AgentStats{}, nil
 	}
 	return &models.AgentStats{
-		ProblemsSolved:      c.solved,
-		ProblemsContributed: c.problems,
-		QuestionsAsked:      c.questions,
-		QuestionsAnswered:   c.answers,
-		AnswersAccepted:     c.accepted,
-		IdeasPosted:         c.ideas,
-		ResponsesGiven:      c.responses,
-		UpvotesReceived:     c.upvotes,
-		Reputation:          c.reputation,
+		PostsCreated:    c.created,
+		Contributions:   c.replies,
+		UpvotesReceived: c.upvotes,
+		Reputation:      c.reputation,
 	}, nil
 }
 
@@ -114,10 +91,8 @@ func (r *CanonicalReputationUserRepository) GetUserStats(ctx context.Context, us
 	}
 	return &models.UserStats{
 		PostsCreated:    c.created,
-		AnswersGiven:    c.answers,
-		AnswersAccepted: c.accepted,
-		UpvotesReceived: c.upvotes,
 		Contributions:   c.replies,
+		UpvotesReceived: c.upvotes,
 		Reputation:      c.reputation,
 	}, nil
 }

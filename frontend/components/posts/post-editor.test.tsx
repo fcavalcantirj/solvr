@@ -19,7 +19,7 @@ import { PostEditor } from './post-editor';
 function makePost(over: Partial<APIPost> = {}): APIPost {
   return {
     id: 'p1',
-    type: 'idea',
+    type: 'post',
     title: 'Original title here',
     description: 'Original body content.',
     status: 'open',

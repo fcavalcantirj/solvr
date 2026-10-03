@@ -133,11 +133,11 @@ func TestModeration_ModeratorSeesTheAuthorsRecentTitles(t *testing.T) {
 	ts, _, pool := newStatusContractServer(t)
 	_, key := gateAgent(t, ts, pool)
 	firstTitle := "Worker pool drains slowly under load " + uuid.NewString()[:8]
-	require.Equal(t, http.StatusCreated, gateCall(t, ts, key, "/v1/posts", postBody("question", firstTitle)).status)
+	require.Equal(t, http.StatusCreated, gateCall(t, ts, key, "/v1/posts", postBody("post", firstTitle)).status)
 	require.Eventually(t, func() bool { return mod.GetCalls() == 1 }, waitTimeout, waitTick)
 
 	secondTitle := "Connection pool exhausted after deploys " + uuid.NewString()[:8]
-	require.Equal(t, http.StatusCreated, gateCall(t, ts, key, "/v1/posts", postBody("question", secondTitle)).status)
+	require.Equal(t, http.StatusCreated, gateCall(t, ts, key, "/v1/posts", postBody("post", secondTitle)).status)
 	require.Eventually(t, func() bool { return mod.GetCalls() == 2 }, waitTimeout, waitTick)
 	in := mod.LastInput()
 	require.Equal(t, secondTitle, in.Title)

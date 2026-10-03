@@ -1161,7 +1161,7 @@ func TestUserRepository_List_ReputationCalculation(t *testing.T) {
 
 	post := func(title string) string {
 		p, err := postRepo.Create(ctx, &models.Post{
-			Type: models.PostTypeProblem, Title: title, Description: "Test", Tags: []string{"test"},
+			Type: models.PostTypePost, Title: title, Description: "Test", Tags: []string{"test"},
 			PostedByType: models.AuthorTypeHuman, PostedByID: created.ID, Status: models.PostStatusOpen,
 		})
 		if err != nil {

@@ -179,8 +179,8 @@ func addAuthContext(r *http.Request, userID, role string) *http.Request {
 func TestListPosts_Success(t *testing.T) {
 	repo := NewMockPostsRepository()
 	repo.SetPosts([]models.PostWithAuthor{
-		createTestPost("post-1", "First Post", models.PostTypeProblem),
-		createTestPost("post-2", "Second Post", models.PostTypeQuestion),
+		createTestPost("post-1", "First Post", models.PostTypePost),
+		createTestPost("post-2", "Second Post", models.PostTypePost),
 	}, 2)
 
 	handler := NewPostsHandler(repo)
@@ -209,14 +209,14 @@ func TestListPosts_Success(t *testing.T) {
 	}
 }
 
-// TestListPosts_FilterByType tests filtering by type.
+// TestListPosts_FilterByType: type=post selects every post, so no filter reaches the repository.
 func TestListPosts_FilterByType(t *testing.T) {
 	repo := NewMockPostsRepository()
 	repo.SetPosts([]models.PostWithAuthor{}, 0)
 
 	handler := NewPostsHandler(repo)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/posts?type=problem", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/posts?type=post", nil)
 	w := httptest.NewRecorder()
 
 	handler.List(w, req)
@@ -225,8 +225,8 @@ func TestListPosts_FilterByType(t *testing.T) {
 		t.Errorf("expected status 200, got %d", w.Code)
 	}
 
-	if repo.listOpts.Type != models.PostTypeProblem {
-		t.Errorf("expected type filter 'problem', got '%s'", repo.listOpts.Type)
+	if repo.listOpts.Type != "" {
+		t.Errorf("expected no type filter, got '%s'", repo.listOpts.Type)
 	}
 }
 
@@ -334,7 +334,7 @@ func TestListPosts_PerPageMax(t *testing.T) {
 // TestListPosts_IncludesResponseCounts verifies answers_count and approaches_count in List response.
 func TestListPosts_IncludesResponseCounts(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPost("post-1", "Test Post", models.PostTypeProblem)
+	post := createTestPost("post-1", "Test Post", models.PostTypePost)
 	post.AnswersCount = 5
 	post.ApproachesCount = 3
 	repo.SetPosts([]models.PostWithAuthor{post}, 1)
@@ -386,7 +386,7 @@ func TestListPosts_IncludesResponseCounts(t *testing.T) {
 // TestGetPost_Success tests successful retrieval of a post.
 func TestGetPost_Success(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPost("post-123", "Test Post", models.PostTypeProblem)
+	post := createTestPost("post-123", "Test Post", models.PostTypePost)
 	repo.SetPost(&post)
 
 	handler := NewPostsHandler(repo)
@@ -452,7 +452,7 @@ func TestGetPost_NotFound(t *testing.T) {
 func TestGetPost_Deleted(t *testing.T) {
 	repo := NewMockPostsRepository()
 	now := time.Now()
-	post := createTestPost("post-123", "Deleted Post", models.PostTypeProblem)
+	post := createTestPost("post-123", "Deleted Post", models.PostTypePost)
 	post.DeletedAt = &now
 	repo.SetPost(&post)
 
@@ -474,7 +474,7 @@ func TestGetPost_Deleted(t *testing.T) {
 // TestGetPost_IncludesAuthorInfo tests that author info is included.
 func TestGetPost_IncludesAuthorInfo(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPost("post-123", "Test Post", models.PostTypeProblem)
+	post := createTestPost("post-123", "Test Post", models.PostTypePost)
 	repo.SetPost(&post)
 
 	handler := NewPostsHandler(repo)
@@ -515,7 +515,7 @@ func TestGetPost_IncludesAuthorInfo(t *testing.T) {
 // TestDeletePost_OwnerCanDelete tests owner can delete their post.
 func TestDeletePost_OwnerCanDelete(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPost("post-123", "Test Post", models.PostTypeProblem)
+	post := createTestPost("post-123", "Test Post", models.PostTypePost)
 	repo.SetPost(&post)
 
 	handler := NewPostsHandler(repo)
@@ -541,7 +541,7 @@ func TestDeletePost_OwnerCanDelete(t *testing.T) {
 // TestDeletePost_AdminCanDelete tests admin can delete any post.
 func TestDeletePost_AdminCanDelete(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPost("post-123", "Test Post", models.PostTypeProblem)
+	post := createTestPost("post-123", "Test Post", models.PostTypePost)
 	repo.SetPost(&post)
 
 	handler := NewPostsHandler(repo)
@@ -563,7 +563,7 @@ func TestDeletePost_AdminCanDelete(t *testing.T) {
 // TestDeletePost_OthersForbidden tests non-owner non-admin gets 403.
 func TestDeletePost_OthersForbidden(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPost("post-123", "Test Post", models.PostTypeProblem)
+	post := createTestPost("post-123", "Test Post", models.PostTypePost)
 	repo.SetPost(&post)
 
 	handler := NewPostsHandler(repo)
@@ -701,7 +701,7 @@ func TestListPosts_PerPageTooLarge(t *testing.T) {
 func TestListPosts_IncludesUserVote_Authenticated(t *testing.T) {
 	repo := NewMockPostsRepository()
 	upVote := "up"
-	post := createTestPost("post-1", "Test Post", models.PostTypeProblem)
+	post := createTestPost("post-1", "Test Post", models.PostTypePost)
 	post.UserVote = &upVote
 	repo.SetPosts([]models.PostWithAuthor{post}, 1)
 
@@ -745,7 +745,7 @@ func TestListPosts_IncludesUserVote_Authenticated(t *testing.T) {
 // do NOT pass viewer info and user_vote is omitted from response.
 func TestListPosts_NoUserVote_Anonymous(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPost("post-1", "Test Post", models.PostTypeProblem)
+	post := createTestPost("post-1", "Test Post", models.PostTypePost)
 	// UserVote is nil (anonymous)
 	repo.SetPosts([]models.PostWithAuthor{post}, 1)
 
@@ -789,7 +789,7 @@ func TestListPosts_NoUserVote_Anonymous(t *testing.T) {
 func TestGetPost_IncludesUserVote_Authenticated(t *testing.T) {
 	repo := &MockPostsRepoWithViewerTracking{}
 	downVote := "down"
-	post := createTestPost("post-123", "Test Post", models.PostTypeProblem)
+	post := createTestPost("post-123", "Test Post", models.PostTypePost)
 	post.UserVote = &downVote
 	repo.post = &post
 
@@ -838,7 +838,7 @@ func TestGetPost_IncludesUserVote_Authenticated(t *testing.T) {
 // uses FindByID (not FindByIDForViewer) and omits user_vote.
 func TestGetPost_Anonymous_UsesFindByID(t *testing.T) {
 	repo := &MockPostsRepoWithViewerTracking{}
-	post := createTestPost("post-123", "Test Post", models.PostTypeProblem)
+	post := createTestPost("post-123", "Test Post", models.PostTypePost)
 	repo.post = &post
 
 	handler := NewPostsHandler(repo)

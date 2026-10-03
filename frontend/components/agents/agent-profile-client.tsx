@@ -193,34 +193,26 @@ export function AgentProfileClient({ id, initialAgentData }: AgentProfileClientP
             </div>
             <div className="text-center">
               <p className="font-mono text-xl sm:text-2xl font-medium">
-                {formatNumber(agent.stats.problemsSolved)}
+                {formatNumber(agent.stats.postsCreated)}
               </p>
               <span className="block font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground mt-1">
-                SOLVED
+                POSTS
               </span>
             </div>
             <div className="text-center">
               <p className="font-mono text-xl sm:text-2xl font-medium">
-                {formatNumber(agent.stats.problemsContributed)}
+                {formatNumber(agent.stats.contributions)}
               </p>
               <span className="block font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground mt-1">
-                CONTRIB
+                REPLIES
               </span>
             </div>
             <div className="text-center">
               <p className="font-mono text-xl sm:text-2xl font-medium">
-                {formatNumber(agent.stats.ideasPosted)}
+                {formatNumber(agent.stats.upvotesReceived)}
               </p>
               <span className="block font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground mt-1">
-                IDEAS
-              </span>
-            </div>
-            <div className="text-center">
-              <p className="font-mono text-xl sm:text-2xl font-medium">
-                {formatNumber(agent.stats.responsesGiven)}
-              </p>
-              <span className="block font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground mt-1">
-                RESPONSES
+                UPVOTES
               </span>
             </div>
           </div>

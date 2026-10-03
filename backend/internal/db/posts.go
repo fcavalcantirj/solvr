@@ -56,8 +56,8 @@ type PostRepository struct {
 // postColumns defines the standard columns returned when querying posts.
 // Used to keep queries consistent and DRY.
 const postColumns = `id, type, title, description, tags, posted_by_type, posted_by_id,
-	status, upvotes, downvotes, view_count, success_criteria, weight, accepted_answer_id,
-	evolved_into, created_at, updated_at, deleted_at, crystallization_cid, crystallized_at`
+	status, upvotes, downvotes, view_count, created_at, updated_at, deleted_at,
+	crystallization_cid, crystallized_at`
 
 // NewPostRepository creates a new PostRepository.
 func NewPostRepository(pool *Pool) *PostRepository {
@@ -66,7 +66,7 @@ func NewPostRepository(pool *Pool) *PostRepository {
 
 // scanPostWithAuthorRows scans a row into a PostWithAuthor struct.
 // Used for queries that include LEFT JOINs for author information.
-// Expects 29 columns: 20 post fields + 3 translation fields + 2 author fields + 3 counts + 1 user_vote_direction.
+// Expects 25 columns: 16 post fields + 3 translation fields + 2 author fields + 3 counts + 1 user_vote_direction.
 func (r *PostRepository) scanPostWithAuthorRows(rows pgx.Rows) (*models.PostWithAuthor, error) {
 	var post models.PostWithAuthor
 	var authorDisplayName, authorAvatarURL string
@@ -83,10 +83,6 @@ func (r *PostRepository) scanPostWithAuthorRows(rows pgx.Rows) (*models.PostWith
 		&post.Upvotes,
 		&post.Downvotes,
 		&post.ViewCount,
-		&post.SuccessCriteria,
-		&post.Weight,
-		&post.AcceptedAnswerID,
-		&post.EvolvedInto,
 		&post.CreatedAt,
 		&post.UpdatedAt,
 		&post.DeletedAt,
@@ -144,10 +140,6 @@ func (r *PostRepository) scanPost(row pgx.Row) (*models.Post, error) {
 		&post.Upvotes,
 		&post.Downvotes,
 		&post.ViewCount,
-		&post.SuccessCriteria,
-		&post.Weight,
-		&post.AcceptedAnswerID,
-		&post.EvolvedInto,
 		&post.CreatedAt,
 		&post.UpdatedAt,
 		&post.DeletedAt,
@@ -189,10 +181,6 @@ func (r *PostRepository) scanPostRows(rows pgx.Rows) (*models.Post, error) {
 		&post.Upvotes,
 		&post.Downvotes,
 		&post.ViewCount,
-		&post.SuccessCriteria,
-		&post.Weight,
-		&post.AcceptedAnswerID,
-		&post.EvolvedInto,
 		&post.CreatedAt,
 		&post.UpdatedAt,
 		&post.DeletedAt,
@@ -215,18 +203,15 @@ func (r *PostRepository) Create(ctx context.Context, post *models.Post) (*models
 			type, title, description, tags,
 			posted_by_type, posted_by_id, status,
 			upvotes, downvotes,
-			success_criteria, weight,
-			accepted_answer_id, evolved_into,
 			embedding,
 			visibility, owner_human_id,
 			publication_state, moderation_state, source_room_id, idempotency_key,
 			created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::vector, $15, $16, $17, $18, $19, $20, NOW(), NOW())
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::vector, $11, $12, $13, $14, $15, $16, NOW(), NOW())
 		RETURNING id, type, title, description, tags,
 			posted_by_type, posted_by_id, status,
-			upvotes, downvotes, view_count, success_criteria, weight,
-			accepted_answer_id, evolved_into,
+			upvotes, downvotes, view_count,
 			created_at, updated_at, deleted_at,
 			crystallization_cid, crystallized_at, visibility,
 			publication_state, moderation_state, source_room_id
@@ -261,10 +246,6 @@ func (r *PostRepository) Create(ctx context.Context, post *models.Post) (*models
 		status,
 		0, // upvotes
 		0, // downvotes
-		post.SuccessCriteria,
-		post.Weight,
-		post.AcceptedAnswerID,
-		post.EvolvedInto,
 		post.EmbeddingStr,
 		visibilityOrDefault(post.Visibility),
 		post.OwnerHumanID,
@@ -325,8 +306,7 @@ func (r *PostRepository) findByIDInternal(ctx context.Context, id string, viewer
 		SELECT
 			p.id, p.type, p.title, p.description, p.tags,
 			p.posted_by_type, p.posted_by_id, p.status,
-			p.upvotes, p.downvotes, p.view_count, p.success_criteria, p.weight,
-			p.accepted_answer_id, p.evolved_into,
+			p.upvotes, p.downvotes, p.view_count,
 			p.created_at, p.updated_at, p.deleted_at,
 			p.crystallization_cid, p.crystallized_at,
 			COALESCE(p.original_language, '') as original_language,
@@ -366,10 +346,6 @@ func (r *PostRepository) findByIDInternal(ctx context.Context, id string, viewer
 		&post.Upvotes,
 		&post.Downvotes,
 		&post.ViewCount,
-		&post.SuccessCriteria,
-		&post.Weight,
-		&post.AcceptedAnswerID,
-		&post.EvolvedInto,
 		&post.CreatedAt,
 		&post.UpdatedAt,
 		&post.DeletedAt,
@@ -422,8 +398,7 @@ func (r *PostRepository) findByIDInternal(ctx context.Context, id string, viewer
 }
 
 // Update updates an existing post in the database unconditionally.
-// Only mutable fields are updated: title, description, tags, status,
-// success_criteria, weight, accepted_answer_id, evolved_into.
+// Only mutable fields are updated: title, description, tags, status.
 // Returns ErrPostNotFound if the post doesn't exist or is soft-deleted.
 // The write itself lives in posts_conditional.go (UpdateIfUnmodified).
 func (r *PostRepository) Update(ctx context.Context, post *models.Post) (*models.Post, error) {

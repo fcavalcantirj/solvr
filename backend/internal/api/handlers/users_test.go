@@ -99,7 +99,7 @@ func TestGetUserAgents_Success(t *testing.T) {
 			HumanID:             &humanID,
 			Bio:                 "First agent",
 			Model:               "claude-opus-4",
-			Reputation:               100,
+			Reputation:          100,
 			HasHumanBackedBadge: true,
 			CreatedAt:           time.Now(),
 			UpdatedAt:           time.Now(),
@@ -110,7 +110,7 @@ func TestGetUserAgents_Success(t *testing.T) {
 			HumanID:             &humanID,
 			Bio:                 "Second agent",
 			Model:               "gpt-4",
-			Reputation:               50,
+			Reputation:          50,
 			HasHumanBackedBadge: true,
 			CreatedAt:           time.Now(),
 			UpdatedAt:           time.Now(),
@@ -287,7 +287,7 @@ func TestListUsers_Success(t *testing.T) {
 			Username:    "alice",
 			DisplayName: "Alice Smith",
 			AvatarURL:   "https://example.com/alice.jpg",
-			Reputation:       150,
+			Reputation:  150,
 			AgentsCount: 3,
 			CreatedAt:   now,
 		},
@@ -296,7 +296,7 @@ func TestListUsers_Success(t *testing.T) {
 			Username:    "bob",
 			DisplayName: "Bob Jones",
 			AvatarURL:   "https://example.com/bob.jpg",
-			Reputation:       75,
+			Reputation:  75,
 			AgentsCount: 1,
 			CreatedAt:   now.Add(-time.Hour),
 		},
@@ -366,7 +366,7 @@ func TestListUsers_WithPagination(t *testing.T) {
 			ID:          "user-" + string(rune('0'+i)),
 			Username:    "user" + string(rune('0'+i)),
 			DisplayName: "User " + string(rune('0'+i)),
-			Reputation:       i * 10,
+			Reputation:  i * 10,
 			AgentsCount: i,
 			CreatedAt:   now,
 		})
@@ -754,10 +754,10 @@ func TestGetUserAgents_ReturnsComputedReputation(t *testing.T) {
 	}
 	// Mock computed stats: real reputation is 520 (includes activity)
 	agentRepo.stats["agent_computed"] = &models.AgentStats{
-		Reputation:          520,
-		ProblemsContributed: 18,
-		IdeasPosted:         30,
-		UpvotesReceived:     6,
+		Reputation:      520,
+		PostsCreated:    18,
+		Contributions:   30,
+		UpvotesReceived: 6,
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/users/"+humanID+"/agents", nil)

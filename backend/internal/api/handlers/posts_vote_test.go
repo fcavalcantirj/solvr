@@ -20,7 +20,7 @@ import (
 // TestVote_Upvote tests successful upvote.
 func TestVote_Upvote(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPost("post-123", "Test Post", models.PostTypeProblem)
+	post := createTestPost("post-123", "Test Post", models.PostTypePost)
 	post.PostedByID = "other-user" // Different from voter
 	repo.SetPost(&post)
 
@@ -53,7 +53,7 @@ func TestVote_Upvote(t *testing.T) {
 // TestVote_ResponseIncludesScores tests vote response includes data.vote_score, upvotes, downvotes.
 func TestVote_ResponseIncludesScores(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPost("post-123", "Test Post", models.PostTypeProblem)
+	post := createTestPost("post-123", "Test Post", models.PostTypePost)
 	post.PostedByID = "other-user"
 	post.Upvotes = 10
 	post.Downvotes = 2
@@ -107,7 +107,7 @@ func TestVote_ResponseIncludesScores(t *testing.T) {
 // TestVote_Downvote tests successful downvote.
 func TestVote_Downvote(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPost("post-123", "Test Post", models.PostTypeProblem)
+	post := createTestPost("post-123", "Test Post", models.PostTypePost)
 	post.PostedByID = "other-user"
 	repo.SetPost(&post)
 
@@ -140,7 +140,7 @@ func TestVote_Downvote(t *testing.T) {
 // TestVote_InvalidDirection tests 400 for invalid direction.
 func TestVote_InvalidDirection(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPost("post-123", "Test Post", models.PostTypeProblem)
+	post := createTestPost("post-123", "Test Post", models.PostTypePost)
 	repo.SetPost(&post)
 
 	handler := NewPostsHandler(repo)
@@ -193,7 +193,7 @@ func TestVote_NoAuth(t *testing.T) {
 // TestVote_DuplicateVote tests 409 for duplicate vote.
 func TestVote_DuplicateVote(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPost("post-123", "Test Post", models.PostTypeProblem)
+	post := createTestPost("post-123", "Test Post", models.PostTypePost)
 	post.PostedByID = "other-user"
 	repo.SetPost(&post)
 	repo.SetVoteError(ErrDuplicateVote)
@@ -227,7 +227,7 @@ func TestVote_DuplicateVote(t *testing.T) {
 // TestGetMyVote_Success tests successful fetch of user's vote.
 func TestGetMyVote_Success_Upvote(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPost("post-123", "Test Post", models.PostTypeProblem)
+	post := createTestPost("post-123", "Test Post", models.PostTypePost)
 	repo.SetPost(&post)
 	upvote := "up"
 	repo.SetUserVote(&upvote)
@@ -270,7 +270,7 @@ func TestGetMyVote_Success_Upvote(t *testing.T) {
 // TestGetMyVote_NoVote tests when user hasn't voted.
 func TestGetMyVote_NoVote(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPost("post-123", "Test Post", models.PostTypeProblem)
+	post := createTestPost("post-123", "Test Post", models.PostTypePost)
 	repo.SetPost(&post)
 	repo.SetUserVote(nil) // No vote
 
@@ -308,7 +308,7 @@ func TestGetMyVote_NoVote(t *testing.T) {
 // TestGetMyVote_Unauthorized tests 401 when not authenticated.
 func TestGetMyVote_Unauthorized(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPost("post-123", "Test Post", models.PostTypeProblem)
+	post := createTestPost("post-123", "Test Post", models.PostTypePost)
 	repo.SetPost(&post)
 
 	handler := NewPostsHandler(repo)
@@ -335,7 +335,7 @@ func TestPostsHandler_List_UserVoteNullExplicit(t *testing.T) {
 	repo := NewMockPostsRepository()
 
 	// Post with UserVote = nil (user hasn't voted)
-	post := createTestPost("post-xyz", "Some Post", models.PostTypeProblem)
+	post := createTestPost("post-xyz", "Some Post", models.PostTypePost)
 	post.PostedByID = "other-user-456"
 	post.UserVote = nil // Explicitly no vote
 	repo.SetPosts([]models.PostWithAuthor{post}, 1)

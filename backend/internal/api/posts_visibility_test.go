@@ -133,7 +133,7 @@ func TestPostVisibility_FamilyPrivate_LeakSweep(t *testing.T) {
 
 	// 9. Write gate — an unclaimed agent cannot create a family post
 	_, unclaimedKey := registerRoomTestAgent(t, ts) // not claimed
-	body := `{"type":"question","title":"Unclaimed family attempt ` + marker + `","description":"` + strings.Repeat("x", 60) + `","visibility":"family"}`
+	body := `{"title":"Unclaimed family attempt ` + marker + `","description":"` + strings.Repeat("x", 60) + `","visibility":"family"}`
 	st, _ := doJSON(t, "POST", ts.URL+"/v1/posts", unclaimedKey, body)
 	require.Equal(t, http.StatusBadRequest, st, "create: unclaimed agent family post -> 400")
 

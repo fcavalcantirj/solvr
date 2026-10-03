@@ -21,7 +21,7 @@ import (
 // TestUpdatePost_Success tests successful post update.
 func TestUpdatePost_Success(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPost("post-123", "Original Title", models.PostTypeProblem)
+	post := createTestPost("post-123", "Original Title", models.PostTypePost)
 	repo.SetPost(&post)
 
 	handler := NewPostsHandler(repo)
@@ -56,7 +56,7 @@ func TestUpdatePost_Success(t *testing.T) {
 // bodies are rejected consistently on both write paths.
 func TestUpdatePost_DescriptionTooLong(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPost("post-123", "Original Title", models.PostTypeProblem)
+	post := createTestPost("post-123", "Original Title", models.PostTypePost)
 	repo.SetPost(&post)
 
 	handler := NewPostsHandler(repo)
@@ -97,7 +97,7 @@ func TestUpdatePost_DescriptionTooLong(t *testing.T) {
 // TestUpdatePost_NotOwner tests 403 for non-owner.
 func TestUpdatePost_NotOwner(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPost("post-123", "Original Title", models.PostTypeProblem)
+	post := createTestPost("post-123", "Original Title", models.PostTypePost)
 	repo.SetPost(&post)
 
 	handler := NewPostsHandler(repo)
@@ -187,7 +187,7 @@ func TestUpdatePost_NotFound(t *testing.T) {
 // TestUpdatePost_TooManyTags tests 400 for more than 10 tags on update.
 func TestUpdatePost_TooManyTags(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPost("post-123", "Original Title", models.PostTypeProblem)
+	post := createTestPost("post-123", "Original Title", models.PostTypePost)
 	repo.SetPost(&post)
 
 	handler := NewPostsHandler(repo)
@@ -263,10 +263,10 @@ func createTestPostWithStatus(id, title string, postType models.PostType, status
 	}
 }
 
-// TestUpdatePost_CannotEditSolved tests that editing a solved post returns 400.
-func TestUpdatePost_CannotEditSolved(t *testing.T) {
+// TestUpdatePost_CannotEditClosed tests that editing a solved post returns 400.
+func TestUpdatePost_CannotEditClosed(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPostWithStatus("post-123", "Solved Problem Post", models.PostTypeProblem, models.PostStatusSolved)
+	post := createTestPostWithStatus("post-123", "Closed Post Title", models.PostTypePost, models.PostStatusClosed)
 	repo.SetPost(&post)
 
 	handler := NewPostsHandler(repo)
@@ -297,15 +297,15 @@ func TestUpdatePost_CannotEditSolved(t *testing.T) {
 	}
 	errObj := resp["error"].(map[string]interface{})
 	msg := errObj["message"].(string)
-	if !strings.Contains(msg, "solved") {
-		t.Errorf("expected error message to mention 'solved', got %q", msg)
+	if !strings.Contains(msg, "closed") {
+		t.Errorf("expected error message to mention 'closed', got %q", msg)
 	}
 }
 
-// TestUpdatePost_CannotEditAnswered tests that editing an answered question returns 400.
-func TestUpdatePost_CannotEditAnswered(t *testing.T) {
+// TestUpdatePost_CannotEditStale tests that editing a stale post returns 400.
+func TestUpdatePost_CannotEditStale(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPostWithStatus("post-123", "Answered Question Post", models.PostTypeQuestion, models.PostStatusAnswered)
+	post := createTestPostWithStatus("post-123", "Stale Post Title Here", models.PostTypePost, models.PostStatusStale)
 	repo.SetPost(&post)
 
 	handler := NewPostsHandler(repo)
@@ -336,8 +336,8 @@ func TestUpdatePost_CannotEditAnswered(t *testing.T) {
 	}
 	errObj := resp["error"].(map[string]interface{})
 	msg := errObj["message"].(string)
-	if !strings.Contains(msg, "answered") {
-		t.Errorf("expected error message to mention 'answered', got %q", msg)
+	if !strings.Contains(msg, "stale") {
+		t.Errorf("expected error message to mention 'stale', got %q", msg)
 	}
 }
 
@@ -345,7 +345,7 @@ func TestUpdatePost_CannotEditAnswered(t *testing.T) {
 // changes status to pending_review and triggers re-moderation.
 func TestUpdatePost_RejectedTriggersReModeration(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPostWithStatus("post-123", "Rejected Post Title Here", models.PostTypeProblem, models.PostStatusRejected)
+	post := createTestPostWithStatus("post-123", "Rejected Post Title Here", models.PostTypePost, models.PostStatusRejected)
 	repo.SetPost(&post)
 
 	statusUpdater := NewMockPostStatusUpdater()
@@ -398,7 +398,7 @@ func TestUpdatePost_RejectedTriggersReModeration(t *testing.T) {
 // of an open post triggers re-moderation (status becomes pending_review).
 func TestUpdatePost_OpenContentChangeTriggersReModeration(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPostWithStatus("post-123", "Original Open Post Title", models.PostTypeProblem, models.PostStatusOpen)
+	post := createTestPostWithStatus("post-123", "Original Open Post Title", models.PostTypePost, models.PostStatusOpen)
 	repo.SetPost(&post)
 
 	statusUpdater := NewMockPostStatusUpdater()
@@ -451,7 +451,7 @@ func TestUpdatePost_OpenContentChangeTriggersReModeration(t *testing.T) {
 // on an open post does NOT trigger re-moderation (tags-only change stays open).
 func TestUpdatePost_OpenTagsOnlyNoReModeration(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPostWithStatus("post-123", "Original Open Post Title", models.PostTypeProblem, models.PostStatusOpen)
+	post := createTestPostWithStatus("post-123", "Original Open Post Title", models.PostTypePost, models.PostStatusOpen)
 	repo.SetPost(&post)
 
 	statusUpdater := NewMockPostStatusUpdater()
@@ -501,130 +501,3 @@ func TestUpdatePost_OpenTagsOnlyNoReModeration(t *testing.T) {
 // ============================================================================
 // Solved-Status Guard Tests
 // ============================================================================
-
-// MockApproachChecker implements ApproachCheckerInterface for testing.
-type MockApproachChecker struct {
-	hasSucceeded bool
-	err          error
-}
-
-func (m *MockApproachChecker) HasSucceededApproach(ctx context.Context, problemID string) (bool, error) {
-	return m.hasSucceeded, m.err
-}
-
-// TestUpdatePost_SolvedBlockedWithoutSucceededApproach tests that setting status=solved
-// on a problem is rejected when no succeeded approach exists.
-func TestUpdatePost_SolvedBlockedWithoutSucceededApproach(t *testing.T) {
-	repo := NewMockPostsRepository()
-	post := createTestPostWithStatus("post-123", "Open Problem Title Here", models.PostTypeProblem, models.PostStatusOpen)
-	repo.SetPost(&post)
-
-	handler := NewPostsHandler(repo)
-	handler.SetApproachChecker(&MockApproachChecker{hasSucceeded: false})
-
-	body := map[string]interface{}{
-		"status": "solved",
-	}
-	jsonBody, _ := json.Marshal(body)
-
-	req := httptest.NewRequest(http.MethodPatch, "/v1/posts/post-123", bytes.NewReader(jsonBody))
-	req.Header.Set("If-Match", postETag(post.UpdatedAt)) // required since idx 74 step 5
-	req.Header.Set("Content-Type", "application/json")
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", "post-123")
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-	req = addAuthContext(req, "user-123", "user")
-	w := httptest.NewRecorder()
-
-	handler.Update(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected status 400, got %d: %s", w.Code, w.Body.String())
-	}
-
-	var resp map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	errObj := resp["error"].(map[string]interface{})
-	msg := errObj["message"].(string)
-	if !strings.Contains(msg, "no succeeded approach") {
-		t.Errorf("expected error message to mention 'no succeeded approach', got %q", msg)
-	}
-}
-
-// TestUpdatePost_SolvedAllowedWithSucceededApproach tests that setting status=solved
-// on a problem is allowed when a succeeded approach exists.
-func TestUpdatePost_SolvedAllowedWithSucceededApproach(t *testing.T) {
-	repo := NewMockPostsRepository()
-	post := createTestPostWithStatus("post-123", "Open Problem Title Here", models.PostTypeProblem, models.PostStatusOpen)
-	repo.SetPost(&post)
-
-	handler := NewPostsHandler(repo)
-	handler.SetApproachChecker(&MockApproachChecker{hasSucceeded: true})
-
-	body := map[string]interface{}{
-		"status": "solved",
-	}
-	jsonBody, _ := json.Marshal(body)
-
-	req := httptest.NewRequest(http.MethodPatch, "/v1/posts/post-123", bytes.NewReader(jsonBody))
-	req.Header.Set("If-Match", postETag(post.UpdatedAt)) // required since idx 74 step 5
-	req.Header.Set("Content-Type", "application/json")
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", "post-123")
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-	req = addAuthContext(req, "user-123", "user")
-	w := httptest.NewRecorder()
-
-	handler.Update(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d: %s", w.Code, w.Body.String())
-	}
-
-	if repo.updatedPost == nil {
-		t.Fatal("expected post to be updated")
-	}
-	if repo.updatedPost.Status != models.PostStatusSolved {
-		t.Errorf("expected status 'solved', got '%s'", repo.updatedPost.Status)
-	}
-}
-
-// TestUpdatePost_SolvedAllowedWhenCheckerNil tests that setting status=solved
-// is allowed when no approach checker is configured (nil = no guard).
-func TestUpdatePost_SolvedAllowedWhenCheckerNil(t *testing.T) {
-	repo := NewMockPostsRepository()
-	post := createTestPostWithStatus("post-123", "Open Problem Title Here", models.PostTypeProblem, models.PostStatusOpen)
-	repo.SetPost(&post)
-
-	handler := NewPostsHandler(repo)
-	// Intentionally NOT calling handler.SetApproachChecker()
-
-	body := map[string]interface{}{
-		"status": "solved",
-	}
-	jsonBody, _ := json.Marshal(body)
-
-	req := httptest.NewRequest(http.MethodPatch, "/v1/posts/post-123", bytes.NewReader(jsonBody))
-	req.Header.Set("If-Match", postETag(post.UpdatedAt)) // required since idx 74 step 5
-	req.Header.Set("Content-Type", "application/json")
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", "post-123")
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-	req = addAuthContext(req, "user-123", "user")
-	w := httptest.NewRecorder()
-
-	handler.Update(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d: %s", w.Code, w.Body.String())
-	}
-
-	if repo.updatedPost == nil {
-		t.Fatal("expected post to be updated")
-	}
-	if repo.updatedPost.Status != models.PostStatusSolved {
-		t.Errorf("expected status 'solved', got '%s'", repo.updatedPost.Status)
-	}
-}

@@ -24,9 +24,9 @@ func setupBenchmarkData(b *testing.B, pool *Pool, numPosts, answersPerPost, appr
 	var postIDs []string
 
 	for i := 0; i < numPosts; i++ {
-		postType := models.PostTypeProblem
+		postType := models.PostTypePost
 		if i%2 == 0 {
-			postType = models.PostTypeQuestion
+			postType = models.PostTypePost
 		}
 
 		post, err := repo.Create(ctx, &models.Post{
@@ -44,7 +44,7 @@ func setupBenchmarkData(b *testing.B, pool *Pool, numPosts, answersPerPost, appr
 		postIDs = append(postIDs, post.ID)
 
 		// Insert answers (only for questions)
-		if postType == models.PostTypeQuestion {
+		if postType == models.PostTypePost {
 			for j := 0; j < answersPerPost; j++ {
 				_, err := pool.Exec(ctx, `INSERT INTO answers (question_id, author_type, author_id, content)
 					VALUES ($1, 'agent', 'bench_agent', $2)`, post.ID, fmt.Sprintf("Answer %d", j))
@@ -55,7 +55,7 @@ func setupBenchmarkData(b *testing.B, pool *Pool, numPosts, answersPerPost, appr
 		}
 
 		// Insert approaches (only for problems)
-		if postType == models.PostTypeProblem {
+		if postType == models.PostTypePost {
 			for k := 0; k < approachesPerPost; k++ {
 				_, err := pool.Exec(ctx, `INSERT INTO approaches (problem_id, author_type, author_id, angle)
 					VALUES ($1, 'agent', 'bench_agent', $2)`, post.ID, fmt.Sprintf("Approach %d", k))

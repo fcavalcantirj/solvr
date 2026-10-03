@@ -30,7 +30,7 @@ func TestProblemsEndpoints(t *testing.T) {
 	router := setupTestRouter(t)
 
 	t.Run("GET /v1/problems is retired (410 ENDPOINT_RETIRED)", func(t *testing.T) {
-		// idx 73: the typed list is retired; GET /v1/posts?type=problem lists these posts
+		// idx 73: the typed list is retired; GET /v1/posts lists these posts
 		// (TestTypeSpecificListEndpoints, router_legacy_discovery_test.go).
 		req := httptest.NewRequest(http.MethodGet, "/v1/problems", nil)
 		w := httptest.NewRecorder()
@@ -90,7 +90,7 @@ func TestQuestionsEndpoints(t *testing.T) {
 	router := setupTestRouter(t)
 
 	t.Run("GET /v1/questions is retired (410 ENDPOINT_RETIRED)", func(t *testing.T) {
-		// idx 73: the typed list is retired; GET /v1/posts?type=question lists these posts
+		// idx 73: the typed list is retired; GET /v1/posts lists these posts
 		// (TestTypeSpecificListEndpoints, router_legacy_discovery_test.go).
 		req := httptest.NewRequest(http.MethodGet, "/v1/questions", nil)
 		w := httptest.NewRecorder()
@@ -158,7 +158,7 @@ func TestIdeasEndpoints(t *testing.T) {
 	router := setupTestRouter(t)
 
 	t.Run("GET /v1/ideas is retired (410 ENDPOINT_RETIRED)", func(t *testing.T) {
-		// idx 73: the typed list is retired; GET /v1/posts?type=idea lists these posts
+		// idx 73: the typed list is retired; GET /v1/posts lists these posts
 		// (TestTypeSpecificListEndpoints, router_legacy_discovery_test.go).
 		req := httptest.NewRequest(http.MethodGet, "/v1/ideas", nil)
 		w := httptest.NewRecorder()
@@ -224,7 +224,7 @@ func TestIdeasEndpoints(t *testing.T) {
 // createCommentTargetProblem creates a problem with apiKey and returns its id.
 func createCommentTargetProblem(t *testing.T, router http.Handler, apiKey string) string {
 	t.Helper()
-	body := fmt.Sprintf(`{"type":"problem","title":"Comment list wiring target %d","description":"A problem that exists so the comment list route answers with a list of its comments"}`, time.Now().UnixNano())
+	body := fmt.Sprintf(`{"title":"Comment list wiring target %d","description":"A problem that exists so the comment list route answers with a list of its comments"}`, time.Now().UnixNano())
 	return createCommentTarget(t, router, apiKey, "/v1/posts", body)
 }
 
@@ -334,11 +334,10 @@ func TestTypeSpecificListEndpoints(t *testing.T) {
 		return w
 	}
 
-	t.Run("Problem created via /v1/posts appears in /v1/posts?type=problem", func(t *testing.T) {
+	t.Run("Problem created via /v1/posts appears in /v1/posts", func(t *testing.T) {
 		// Create a problem via /v1/posts
 		groqThrottle(t)
 		body := `{
-			"type": "problem",
 			"title": "Test problem title for listing",
 			"description": "This is a test problem description that needs to be long enough to pass validation, so here is some extra text to make it long enough.",
 			"success_criteria": ["Test passes"]
@@ -361,10 +360,10 @@ func TestTypeSpecificListEndpoints(t *testing.T) {
 			t.Skipf("post %s did not become open - GROQ rate limited or slow", postID)
 		}
 
-		// GET /v1/posts?type=problem should include this problem
-		w = authGet("/v1/posts?type=problem")
+		// GET /v1/posts should include this problem
+		w = authGet("/v1/posts")
 		if w.Code != http.StatusOK {
-			t.Fatalf("GET /v1/posts?type=problem failed: %d - %s", w.Code, w.Body.String())
+			t.Fatalf("GET /v1/posts failed: %d - %s", w.Code, w.Body.String())
 		}
 
 		var listResp map[string]interface{}
@@ -386,15 +385,14 @@ func TestTypeSpecificListEndpoints(t *testing.T) {
 			}
 		}
 		if !found {
-			t.Errorf("Problem with ID %s not found in /v1/posts?type=problem response. Got %d items", postID, len(dataArr))
+			t.Errorf("Problem with ID %s not found in /v1/posts response. Got %d items", postID, len(dataArr))
 		}
 	})
 
-	t.Run("Question created via /v1/posts appears in /v1/posts?type=question", func(t *testing.T) {
+	t.Run("Question created via /v1/posts appears in /v1/posts", func(t *testing.T) {
 		// Create a question via /v1/posts
 		groqThrottle(t)
 		body := `{
-			"type": "question",
 			"title": "Test question title for listing",
 			"description": "This is a test question description that needs to be long enough to pass validation, so here is some extra text to make it long enough."
 		}`
@@ -415,10 +413,10 @@ func TestTypeSpecificListEndpoints(t *testing.T) {
 			t.Skipf("post %s did not become open - GROQ rate limited or slow", postID)
 		}
 
-		// GET /v1/posts?type=question should include this question
-		w = authGet("/v1/posts?type=question")
+		// GET /v1/posts should include this question
+		w = authGet("/v1/posts")
 		if w.Code != http.StatusOK {
-			t.Fatalf("GET /v1/posts?type=question failed: %d - %s", w.Code, w.Body.String())
+			t.Fatalf("GET /v1/posts failed: %d - %s", w.Code, w.Body.String())
 		}
 
 		var listResp map[string]interface{}
@@ -439,15 +437,14 @@ func TestTypeSpecificListEndpoints(t *testing.T) {
 			}
 		}
 		if !found {
-			t.Errorf("Question with ID %s not found in /v1/posts?type=question response. Got %d items", postID, len(dataArr))
+			t.Errorf("Question with ID %s not found in /v1/posts response. Got %d items", postID, len(dataArr))
 		}
 	})
 
-	t.Run("Idea created via /v1/posts appears in /v1/posts?type=idea", func(t *testing.T) {
+	t.Run("Idea created via /v1/posts appears in /v1/posts", func(t *testing.T) {
 		// Create an idea via /v1/posts
 		groqThrottle(t)
 		body := `{
-			"type": "idea",
 			"title": "Test idea title for listing",
 			"description": "This is a test idea description that needs to be long enough to pass validation, so here is some extra text to make it long enough."
 		}`
@@ -468,10 +465,10 @@ func TestTypeSpecificListEndpoints(t *testing.T) {
 			t.Skipf("post %s did not become open - GROQ rate limited or slow", postID)
 		}
 
-		// GET /v1/posts?type=idea should include this idea
-		w = authGet("/v1/posts?type=idea")
+		// GET /v1/posts should include this idea
+		w = authGet("/v1/posts")
 		if w.Code != http.StatusOK {
-			t.Fatalf("GET /v1/posts?type=idea failed: %d - %s", w.Code, w.Body.String())
+			t.Fatalf("GET /v1/posts failed: %d - %s", w.Code, w.Body.String())
 		}
 
 		var listResp map[string]interface{}
@@ -492,7 +489,7 @@ func TestTypeSpecificListEndpoints(t *testing.T) {
 			}
 		}
 		if !found {
-			t.Errorf("Idea with ID %s not found in /v1/posts?type=idea response. Got %d items", postID, len(dataArr))
+			t.Errorf("Idea with ID %s not found in /v1/posts response. Got %d items", postID, len(dataArr))
 		}
 	})
 }

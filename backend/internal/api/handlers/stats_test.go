@@ -3,7 +3,6 @@ package handlers
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -15,40 +14,20 @@ import (
 type MockStatsRepository struct {
 	ActivePosts        int
 	TotalAgents        int
-	SolvedToday        int
 	PostedToday        int
-	ProblemsSolved     int
-	QuestionsAnswered  int
 	HumansCount        int
 	TotalPosts         int
 	TotalContributions int
 	CrystallizedPosts  int
 	TrendingPosts      []any
 	TrendingTags       []any
-	// Problems stats
-	ProblemsStatsResult      map[string]any
-	ProblemsStatsErr         error
-	RecentlySolvedResult     []map[string]any
-	RecentlySolvedErr        error
-	TopSolversResult         []map[string]any
-	TopSolversErr            error
-	// Questions stats
-	QuestionsStatsResult      map[string]any
-	QuestionsStatsErr         error
-	RecentlyAnsweredResult    []map[string]any
-	RecentlyAnsweredErr       error
-	TopAnswerersResult        []map[string]any
-	TopAnswerersErr           error
 }
 
 func (m *MockStatsRepository) GetAllStats(ctx context.Context) (*db.AllStatsResult, error) {
 	return &db.AllStatsResult{
 		ActivePosts:        m.ActivePosts,
 		TotalAgents:        m.TotalAgents,
-		SolvedToday:        m.SolvedToday,
 		PostedToday:        m.PostedToday,
-		ProblemsSolved:     m.ProblemsSolved,
-		QuestionsAnswered:  m.QuestionsAnswered,
 		HumansCount:        m.HumansCount,
 		TotalPosts:         m.TotalPosts,
 		TotalContributions: m.TotalContributions,
@@ -62,10 +41,6 @@ func (m *MockStatsRepository) GetActivePostsCount(ctx context.Context) (int, err
 
 func (m *MockStatsRepository) GetAgentsCount(ctx context.Context) (int, error) {
 	return m.TotalAgents, nil
-}
-
-func (m *MockStatsRepository) GetSolvedTodayCount(ctx context.Context) (int, error) {
-	return m.SolvedToday, nil
 }
 
 func (m *MockStatsRepository) GetPostedTodayCount(ctx context.Context) (int, error) {
@@ -86,14 +61,6 @@ func (m *MockStatsRepository) GetTrendingTags(ctx context.Context, limit int) ([
 	return m.TrendingTags[:limit], nil
 }
 
-func (m *MockStatsRepository) GetProblemsSolvedCount(ctx context.Context) (int, error) {
-	return m.ProblemsSolved, nil
-}
-
-func (m *MockStatsRepository) GetQuestionsAnsweredCount(ctx context.Context) (int, error) {
-	return m.QuestionsAnswered, nil
-}
-
 func (m *MockStatsRepository) GetHumansCount(ctx context.Context) (int, error) {
 	return m.HumansCount, nil
 }
@@ -106,112 +73,6 @@ func (m *MockStatsRepository) GetTotalContributionsCount(ctx context.Context) (i
 	return m.TotalContributions, nil
 }
 
-func (m *MockStatsRepository) GetIdeasCountByStatus(ctx context.Context) (map[string]int, error) {
-	return map[string]int{}, nil
-}
-
-func (m *MockStatsRepository) GetFreshSparks(ctx context.Context, limit int) ([]map[string]any, error) {
-	return []map[string]any{}, nil
-}
-
-func (m *MockStatsRepository) GetReadyToDevelop(ctx context.Context, limit int) ([]map[string]any, error) {
-	return []map[string]any{}, nil
-}
-
-func (m *MockStatsRepository) GetTopSparklers(ctx context.Context, limit int) ([]map[string]any, error) {
-	return []map[string]any{}, nil
-}
-
-func (m *MockStatsRepository) GetIdeaPipelineStats(ctx context.Context) (map[string]any, error) {
-	return map[string]any{}, nil
-}
-
-func (m *MockStatsRepository) GetRecentlyRealized(ctx context.Context, limit int) ([]map[string]any, error) {
-	return []map[string]any{}, nil
-}
-
-func (m *MockStatsRepository) GetProblemsStats(ctx context.Context) (map[string]any, error) {
-	if m.ProblemsStatsErr != nil {
-		return nil, m.ProblemsStatsErr
-	}
-	if m.ProblemsStatsResult != nil {
-		return m.ProblemsStatsResult, nil
-	}
-	return map[string]any{
-		"total_problems":      0,
-		"solved_count":        0,
-		"active_approaches":   0,
-		"avg_solve_time_days": 0,
-	}, nil
-}
-
-func (m *MockStatsRepository) GetRecentlySolvedProblems(ctx context.Context, limit int) ([]map[string]any, error) {
-	if m.RecentlySolvedErr != nil {
-		return nil, m.RecentlySolvedErr
-	}
-	if m.RecentlySolvedResult != nil {
-		if limit > len(m.RecentlySolvedResult) {
-			return m.RecentlySolvedResult, nil
-		}
-		return m.RecentlySolvedResult[:limit], nil
-	}
-	return []map[string]any{}, nil
-}
-
-func (m *MockStatsRepository) GetTopProblemSolvers(ctx context.Context, limit int) ([]map[string]any, error) {
-	if m.TopSolversErr != nil {
-		return nil, m.TopSolversErr
-	}
-	if m.TopSolversResult != nil {
-		if limit > len(m.TopSolversResult) {
-			return m.TopSolversResult, nil
-		}
-		return m.TopSolversResult[:limit], nil
-	}
-	return []map[string]any{}, nil
-}
-
-func (m *MockStatsRepository) GetQuestionsStats(ctx context.Context) (map[string]any, error) {
-	if m.QuestionsStatsErr != nil {
-		return nil, m.QuestionsStatsErr
-	}
-	if m.QuestionsStatsResult != nil {
-		return m.QuestionsStatsResult, nil
-	}
-	return map[string]any{
-		"total_questions":          0,
-		"answered_count":           0,
-		"response_rate":            0.0,
-		"avg_response_time_hours":  0.0,
-	}, nil
-}
-
-func (m *MockStatsRepository) GetRecentlyAnsweredQuestions(ctx context.Context, limit int) ([]map[string]any, error) {
-	if m.RecentlyAnsweredErr != nil {
-		return nil, m.RecentlyAnsweredErr
-	}
-	if m.RecentlyAnsweredResult != nil {
-		if limit > len(m.RecentlyAnsweredResult) {
-			return m.RecentlyAnsweredResult, nil
-		}
-		return m.RecentlyAnsweredResult[:limit], nil
-	}
-	return []map[string]any{}, nil
-}
-
-func (m *MockStatsRepository) GetTopAnswerers(ctx context.Context, limit int) ([]map[string]any, error) {
-	if m.TopAnswerersErr != nil {
-		return nil, m.TopAnswerersErr
-	}
-	if m.TopAnswerersResult != nil {
-		if limit > len(m.TopAnswerersResult) {
-			return m.TopAnswerersResult, nil
-		}
-		return m.TopAnswerersResult[:limit], nil
-	}
-	return []map[string]any{}, nil
-}
-
 func TestStatsHandler_GetStats(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -220,14 +81,11 @@ func TestStatsHandler_GetStats(t *testing.T) {
 		checkResponse  func(t *testing.T, body map[string]interface{})
 	}{
 		{
-			name: "returns all ten stats fields",
+			name: "returns the seven stats fields and none of the retired solved figures",
 			mockRepo: &MockStatsRepository{
 				ActivePosts:        147,
 				TotalAgents:        23,
-				SolvedToday:        12,
 				PostedToday:        25,
-				ProblemsSolved:     42,
-				QuestionsAnswered:  18,
 				HumansCount:        156,
 				TotalPosts:         500,
 				TotalContributions: 320,
@@ -239,10 +97,7 @@ func TestStatsHandler_GetStats(t *testing.T) {
 				checks := map[string]int{
 					"active_posts":        147,
 					"total_agents":        23,
-					"solved_today":        12,
 					"posted_today":        25,
-					"problems_solved":     42,
-					"questions_answered":  18,
 					"humans_count":        156,
 					"total_posts":         500,
 					"total_contributions": 320,
@@ -254,6 +109,11 @@ func TestStatsHandler_GetStats(t *testing.T) {
 						t.Errorf("expected %s=%d, got %d", field, expected, got)
 					}
 				}
+				for _, retired := range []string{"solved_today", "problems_solved", "questions_answered"} {
+					if _, ok := data[retired]; ok {
+						t.Errorf("%s was retired with the legacy post types (idx 68) and must not be returned", retired)
+					}
+				}
 			},
 		},
 		{
@@ -261,7 +121,6 @@ func TestStatsHandler_GetStats(t *testing.T) {
 			mockRepo: &MockStatsRepository{
 				ActivePosts: 0,
 				TotalAgents: 0,
-				SolvedToday: 0,
 			},
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, body map[string]interface{}) {
@@ -338,250 +197,6 @@ func TestStatsHandler_GetTrending(t *testing.T) {
 	}
 }
 
-func TestStatsHandler_GetProblemsStats(t *testing.T) {
-	t.Run("returns all four stats fields", func(t *testing.T) {
-		mockRepo := &MockStatsRepository{
-			ProblemsStatsResult: map[string]any{
-				"total_problems":      42,
-				"solved_count":        15,
-				"active_approaches":   23,
-				"avg_solve_time_days": 7,
-			},
-		}
-		handler := NewStatsHandler(mockRepo)
-		req := httptest.NewRequest("GET", "/v1/stats/problems", nil)
-		rec := httptest.NewRecorder()
-
-		handler.GetProblemsStats(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Errorf("expected status 200, got %d", rec.Code)
-		}
-
-		var body map[string]interface{}
-		if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
-			t.Fatalf("failed to decode response: %v", err)
-		}
-
-		data := body["data"].(map[string]interface{})
-		checks := map[string]int{
-			"total_problems":      42,
-			"solved_count":        15,
-			"active_approaches":   23,
-			"avg_solve_time_days": 7,
-		}
-		for field, expected := range checks {
-			got := int(data[field].(float64))
-			if got != expected {
-				t.Errorf("expected %s=%d, got %d", field, expected, got)
-			}
-		}
-	})
-
-	t.Run("returns zeros for empty database", func(t *testing.T) {
-		mockRepo := &MockStatsRepository{
-			ProblemsStatsResult: map[string]any{
-				"total_problems":      0,
-				"solved_count":        0,
-				"active_approaches":   0,
-				"avg_solve_time_days": 0,
-			},
-		}
-		handler := NewStatsHandler(mockRepo)
-		req := httptest.NewRequest("GET", "/v1/stats/problems", nil)
-		rec := httptest.NewRecorder()
-
-		handler.GetProblemsStats(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Errorf("expected status 200, got %d", rec.Code)
-		}
-
-		var body map[string]interface{}
-		if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
-			t.Fatalf("failed to decode response: %v", err)
-		}
-
-		data := body["data"].(map[string]interface{})
-		if int(data["total_problems"].(float64)) != 0 {
-			t.Errorf("expected total_problems=0, got %v", data["total_problems"])
-		}
-	})
-
-	t.Run("returns 500 on repository error", func(t *testing.T) {
-		mockRepo := &MockStatsRepository{
-			ProblemsStatsErr: fmt.Errorf("database error"),
-		}
-		handler := NewStatsHandler(mockRepo)
-		req := httptest.NewRequest("GET", "/v1/stats/problems", nil)
-		rec := httptest.NewRecorder()
-
-		handler.GetProblemsStats(rec, req)
-
-		if rec.Code != http.StatusInternalServerError {
-			t.Errorf("expected status 500, got %d", rec.Code)
-		}
-
-		var body map[string]interface{}
-		if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
-			t.Fatalf("failed to decode response: %v", err)
-		}
-
-		errObj := body["error"].(map[string]interface{})
-		if errObj["code"] != "INTERNAL_ERROR" {
-			t.Errorf("expected error code INTERNAL_ERROR, got %v", errObj["code"])
-		}
-	})
-
-	t.Run("includes recently_solved in response", func(t *testing.T) {
-		mockRepo := &MockStatsRepository{
-			ProblemsStatsResult: map[string]any{
-				"total_problems":      10,
-				"solved_count":        3,
-				"active_approaches":   5,
-				"avg_solve_time_days": 2,
-			},
-			RecentlySolvedResult: []map[string]any{
-				{"id": "p1", "title": "Fix auth bug", "solver_name": "agent-x", "solver_type": "agent", "time_to_solve_days": 3},
-				{"id": "p2", "title": "Memory leak", "solver_name": "alice", "solver_type": "human", "time_to_solve_days": 1},
-			},
-		}
-		handler := NewStatsHandler(mockRepo)
-		req := httptest.NewRequest("GET", "/v1/stats/problems", nil)
-		rec := httptest.NewRecorder()
-
-		handler.GetProblemsStats(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Errorf("expected status 200, got %d", rec.Code)
-		}
-
-		var body map[string]interface{}
-		if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
-			t.Fatalf("failed to decode response: %v", err)
-		}
-
-		data := body["data"].(map[string]interface{})
-		recentlySolved := data["recently_solved"].([]interface{})
-		if len(recentlySolved) != 2 {
-			t.Errorf("expected 2 recently solved, got %d", len(recentlySolved))
-		}
-
-		first := recentlySolved[0].(map[string]interface{})
-		if first["title"] != "Fix auth bug" {
-			t.Errorf("expected first title 'Fix auth bug', got %v", first["title"])
-		}
-		if first["solver_type"] != "agent" {
-			t.Errorf("expected solver_type 'agent', got %v", first["solver_type"])
-		}
-	})
-
-	t.Run("recently_solved is empty array when none exist", func(t *testing.T) {
-		mockRepo := &MockStatsRepository{
-			ProblemsStatsResult: map[string]any{
-				"total_problems":      5,
-				"solved_count":        0,
-				"active_approaches":   2,
-				"avg_solve_time_days": 0,
-			},
-		}
-		handler := NewStatsHandler(mockRepo)
-		req := httptest.NewRequest("GET", "/v1/stats/problems", nil)
-		rec := httptest.NewRecorder()
-
-		handler.GetProblemsStats(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Errorf("expected status 200, got %d", rec.Code)
-		}
-
-		var body map[string]interface{}
-		if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
-			t.Fatalf("failed to decode response: %v", err)
-		}
-
-		data := body["data"].(map[string]interface{})
-		recentlySolved := data["recently_solved"].([]interface{})
-		if len(recentlySolved) != 0 {
-			t.Errorf("expected 0 recently solved, got %d", len(recentlySolved))
-		}
-	})
-
-	t.Run("includes top_solvers in response", func(t *testing.T) {
-		mockRepo := &MockStatsRepository{
-			ProblemsStatsResult: map[string]any{
-				"total_problems":      20,
-				"solved_count":        10,
-				"active_approaches":   8,
-				"avg_solve_time_days": 4,
-			},
-			TopSolversResult: []map[string]any{
-				{"author_id": "a1", "display_name": "solver-bot", "author_type": "agent", "solved_count": 5},
-				{"author_id": "u1", "display_name": "alice", "author_type": "human", "solved_count": 3},
-			},
-		}
-		handler := NewStatsHandler(mockRepo)
-		req := httptest.NewRequest("GET", "/v1/stats/problems", nil)
-		rec := httptest.NewRecorder()
-
-		handler.GetProblemsStats(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Errorf("expected status 200, got %d", rec.Code)
-		}
-
-		var body map[string]interface{}
-		if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
-			t.Fatalf("failed to decode response: %v", err)
-		}
-
-		data := body["data"].(map[string]interface{})
-		topSolvers := data["top_solvers"].([]interface{})
-		if len(topSolvers) != 2 {
-			t.Errorf("expected 2 top solvers, got %d", len(topSolvers))
-		}
-
-		first := topSolvers[0].(map[string]interface{})
-		if first["display_name"] != "solver-bot" {
-			t.Errorf("expected first display_name 'solver-bot', got %v", first["display_name"])
-		}
-		if int(first["solved_count"].(float64)) != 5 {
-			t.Errorf("expected first solved_count 5, got %v", first["solved_count"])
-		}
-	})
-
-	t.Run("top_solvers is empty array when none exist", func(t *testing.T) {
-		mockRepo := &MockStatsRepository{
-			ProblemsStatsResult: map[string]any{
-				"total_problems":      5,
-				"solved_count":        0,
-				"active_approaches":   1,
-				"avg_solve_time_days": 0,
-			},
-		}
-		handler := NewStatsHandler(mockRepo)
-		req := httptest.NewRequest("GET", "/v1/stats/problems", nil)
-		rec := httptest.NewRecorder()
-
-		handler.GetProblemsStats(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Errorf("expected status 200, got %d", rec.Code)
-		}
-
-		var body map[string]interface{}
-		if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
-			t.Fatalf("failed to decode response: %v", err)
-		}
-
-		data := body["data"].(map[string]interface{})
-		topSolvers := data["top_solvers"].([]interface{})
-		if len(topSolvers) != 0 {
-			t.Errorf("expected 0 top solvers, got %d", len(topSolvers))
-		}
-	})
-}
-
 func TestGetStats_CacheControl(t *testing.T) {
 	mockRepo := &MockStatsRepository{}
 	handler := NewStatsHandler(mockRepo)
@@ -606,57 +221,6 @@ func TestGetTrending_CacheControl(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	handler.GetTrending(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", rec.Code)
-	}
-	cc := rec.Header().Get("Cache-Control")
-	if cc != "public, max-age=30" {
-		t.Errorf("expected Cache-Control 'public, max-age=30', got %q", cc)
-	}
-}
-
-func TestGetProblemsStats_CacheControl(t *testing.T) {
-	mockRepo := &MockStatsRepository{}
-	handler := NewStatsHandler(mockRepo)
-	req := httptest.NewRequest("GET", "/v1/stats/problems", nil)
-	rec := httptest.NewRecorder()
-
-	handler.GetProblemsStats(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", rec.Code)
-	}
-	cc := rec.Header().Get("Cache-Control")
-	if cc != "public, max-age=30" {
-		t.Errorf("expected Cache-Control 'public, max-age=30', got %q", cc)
-	}
-}
-
-func TestGetQuestionsStats_CacheControl(t *testing.T) {
-	mockRepo := &MockStatsRepository{}
-	handler := NewStatsHandler(mockRepo)
-	req := httptest.NewRequest("GET", "/v1/stats/questions", nil)
-	rec := httptest.NewRecorder()
-
-	handler.GetQuestionsStats(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", rec.Code)
-	}
-	cc := rec.Header().Get("Cache-Control")
-	if cc != "public, max-age=30" {
-		t.Errorf("expected Cache-Control 'public, max-age=30', got %q", cc)
-	}
-}
-
-func TestGetIdeasStats_CacheControl(t *testing.T) {
-	mockRepo := &MockStatsRepository{}
-	handler := NewStatsHandler(mockRepo)
-	req := httptest.NewRequest("GET", "/v1/stats/ideas", nil)
-	rec := httptest.NewRecorder()
-
-	handler.GetIdeasStats(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", rec.Code)

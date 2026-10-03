@@ -85,7 +85,7 @@ func TestCommentsCount_ProblemsShowCountAfterComment(t *testing.T) {
 	// Create problem
 	groqThrottle(t)
 	title := fmt.Sprintf("Test problem for comments count %d", time.Now().UnixNano()%100000)
-	postBody := fmt.Sprintf(`{"type":"problem","title":%q,"description":"E2E test verifying that comments_count is correctly returned for problems in the listing endpoint"}`, title)
+	postBody := fmt.Sprintf(`{"title":%q,"description":"E2E test verifying that comments_count is correctly returned for problems in the listing endpoint"}`, title)
 	createReq := httptest.NewRequest(http.MethodPost, "/v1/posts", strings.NewReader(postBody))
 	createReq.Header.Set("Content-Type", "application/json")
 	createReq.Header.Set("Authorization", "Bearer "+apiKey)
@@ -111,8 +111,8 @@ func TestCommentsCount_ProblemsShowCountAfterComment(t *testing.T) {
 	// A comment on the post, as the cutover migrated it
 	want := cutoverComments(t, postID, "test comment on problem")
 
-	// GET /v1/posts?type=problem (the list the retired GET /v1/problems served) and find our post
-	listReq := httptest.NewRequest(http.MethodGet, "/v1/posts?type=problem&sort=newest&per_page=50", nil)
+	// GET /v1/posts (the list the retired GET /v1/problems served) and find our post
+	listReq := httptest.NewRequest(http.MethodGet, "/v1/posts?sort=newest&per_page=50", nil)
 	listW := httptest.NewRecorder()
 	router.ServeHTTP(listW, listReq)
 	if listW.Code != http.StatusOK {
@@ -136,7 +136,7 @@ func TestCommentsCount_ProblemsShowCountAfterComment(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Errorf("problem %s not found in /v1/posts?type=problem listing", postID)
+		t.Errorf("problem %s not found in /v1/posts listing", postID)
 	}
 }
 
@@ -148,7 +148,7 @@ func TestCommentsCount_IdeasShowCountAfterComment(t *testing.T) {
 	// Create idea
 	groqThrottle(t)
 	title := fmt.Sprintf("Test idea for comments count %d", time.Now().UnixNano()%100000)
-	postBody := fmt.Sprintf(`{"type":"idea","title":%q,"description":"E2E test verifying that comments_count is correctly returned for ideas in the listing endpoint"}`, title)
+	postBody := fmt.Sprintf(`{"title":%q,"description":"E2E test verifying that comments_count is correctly returned for ideas in the listing endpoint"}`, title)
 	createReq := httptest.NewRequest(http.MethodPost, "/v1/posts", strings.NewReader(postBody))
 	createReq.Header.Set("Content-Type", "application/json")
 	createReq.Header.Set("Authorization", "Bearer "+apiKey)
@@ -173,8 +173,8 @@ func TestCommentsCount_IdeasShowCountAfterComment(t *testing.T) {
 	// A comment on the post, as the cutover migrated it
 	want := cutoverComments(t, postID, "test comment on idea")
 
-	// GET /v1/posts?type=idea (the list the retired GET /v1/ideas served) and find our post
-	listReq := httptest.NewRequest(http.MethodGet, "/v1/posts?type=idea&sort=newest&per_page=50", nil)
+	// GET /v1/posts (the list the retired GET /v1/ideas served) and find our post
+	listReq := httptest.NewRequest(http.MethodGet, "/v1/posts?sort=newest&per_page=50", nil)
 	listW := httptest.NewRecorder()
 	router.ServeHTTP(listW, listReq)
 	if listW.Code != http.StatusOK {
@@ -198,7 +198,7 @@ func TestCommentsCount_IdeasShowCountAfterComment(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Errorf("idea %s not found in /v1/posts?type=idea listing", postID)
+		t.Errorf("idea %s not found in /v1/posts listing", postID)
 	}
 }
 
@@ -210,7 +210,7 @@ func TestCommentsCount_FeedShowsCommentCount(t *testing.T) {
 	// Create question
 	groqThrottle(t)
 	title := fmt.Sprintf("Test question for feed comments %d", time.Now().UnixNano()%100000)
-	postBody := fmt.Sprintf(`{"type":"question","title":%q,"description":"E2E test verifying that comments_count is correctly returned for all post types in the feed"}`, title)
+	postBody := fmt.Sprintf(`{"title":%q,"description":"E2E test verifying that comments_count is correctly returned for all post types in the feed"}`, title)
 	createReq := httptest.NewRequest(http.MethodPost, "/v1/posts", strings.NewReader(postBody))
 	createReq.Header.Set("Content-Type", "application/json")
 	createReq.Header.Set("Authorization", "Bearer "+apiKey)

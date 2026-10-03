@@ -387,9 +387,6 @@ export const ipfsEndpointGroups: EndpointGroup[] = [
   },
   "reputation": {
     "total": 350,
-    "problems_solved": 5,
-    "answers_accepted": 3,
-    "ideas_posted": 10,
     "upvotes_received": 50
   },
   "latest_checkpoint": { "requestid": "uuid", "pin": { "cid": "bafybeig..." } },
@@ -428,9 +425,6 @@ export const ipfsEndpointGroups: EndpointGroup[] = [
     },
     "stats": {
       "reputation": 350,
-      "problems_solved": 5,
-      "answers_accepted": 3,
-      "ideas_posted": 10,
       "upvotes_received": 50
     }
   }

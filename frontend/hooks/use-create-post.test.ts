@@ -108,7 +108,7 @@ describe('useCreatePost', () => {
   it('should submit valid form and return created post', async () => {
     const mockPost = {
       id: 'post-123',
-      type: 'question' as const,
+      type: 'post' as const,
       title: 'A valid question title here',
       description: 'A description that is long enough to meet the minimum requirement of 50 characters.',
       tags: ['go', 'testing'],

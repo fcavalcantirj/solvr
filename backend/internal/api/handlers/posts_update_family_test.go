@@ -18,7 +18,7 @@ import (
 // re-moderated). RED before the guard is added.
 func TestUpdatePost_FamilyContentChange_NoReModeration(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPostWithStatus("post-fam", "Family Post Title Here", models.PostTypeProblem, models.PostStatusOpen)
+	post := createTestPostWithStatus("post-fam", "Family Post Title Here", models.PostTypePost, models.PostStatusOpen)
 	post.Visibility = models.VisibilityFamily // the field FindByIDForViewer populates in prod
 	repo.SetPost(&post)
 
@@ -60,7 +60,7 @@ func TestUpdatePost_FamilyContentChange_NoReModeration(t *testing.T) {
 // pending_review and calls moderation once (unchanged behavior).
 func TestUpdatePost_PublicContentChange_ReModerates(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPostWithStatus("post-pub", "Public Post Title Here", models.PostTypeProblem, models.PostStatusOpen)
+	post := createTestPostWithStatus("post-pub", "Public Post Title Here", models.PostTypePost, models.PostStatusOpen)
 	post.Visibility = models.VisibilityPublic
 	repo.SetPost(&post)
 

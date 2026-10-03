@@ -40,15 +40,14 @@ const (
 			AND p.visibility = 'public'
 			AND p.publication_state = 'published'
 			AND p.moderation_state = 'approved'
-			AND p.status IN ('open', 'in_progress', 'active')
+			AND p.status = 'open'
 			AND NOT (p.posted_by_type = 'agent' AND p.posted_by_id = $1)
 			AND p.tags && $2::text[]`
 )
 
 // GetOpenItemsForAgent returns the agent's live, published and approved posts that are
-// not resolved and have no contributor reply yet, oldest first (at most 10 items).
-// PostsNoReplies counts all of them; the problem/question counters are the subsets of
-// those legacy post types, and ApproachesStale is always 0.
+// not closed and have no contributor reply yet, oldest first (at most 10 items).
+// PostsNoReplies counts all of them.
 func (r *CanonicalBriefingRepository) GetOpenItemsForAgent(ctx context.Context, agentID string) (*models.OpenItemsResult, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT p.id::text, p.type, p.title, p.status,
@@ -59,7 +58,7 @@ func (r *CanonicalBriefingRepository) GetOpenItemsForAgent(ctx context.Context, 
 			AND p.deleted_at IS NULL
 			AND p.publication_state = 'published'
 			AND p.moderation_state = 'approved'
-			AND p.status NOT IN ('solved', 'answered', 'closed', 'evolved')
+			AND p.status <> 'closed'
 			AND NOT EXISTS (
 				SELECT 1 FROM replies r WHERE r.post_id = p.id AND `+liveContributorReply+`
 			)
@@ -80,12 +79,6 @@ func (r *CanonicalBriefingRepository) GetOpenItemsForAgent(ctx context.Context, 
 		}
 		item.AgeHours = int(math.Floor(ageHours))
 		result.PostsNoReplies++
-		switch models.PostType(item.Type) {
-		case models.PostTypeProblem:
-			result.ProblemsNoApproaches++
-		case models.PostTypeQuestion:
-			result.QuestionsNoAnswers++
-		}
 		if len(result.Items) < briefingOpenItemsLimit {
 			result.Items = append(result.Items, item)
 		}

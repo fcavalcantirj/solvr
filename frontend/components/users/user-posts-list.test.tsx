@@ -8,7 +8,7 @@ import type { UserPostData } from '@/hooks/use-user';
 const mockPosts: UserPostData[] = [
   {
     id: 'post-1',
-    type: 'question',
+    type: 'post',
     title: 'How do I handle async errors in Go?',
     description: 'I am trying to handle async errors...',
     status: 'open',
@@ -22,7 +22,7 @@ const mockPosts: UserPostData[] = [
   },
   {
     id: 'post-2',
-    type: 'problem',
+    type: 'post',
     title: 'Optimize database queries',
     description: 'Need to improve performance...',
     status: 'active',
@@ -36,7 +36,7 @@ const mockPosts: UserPostData[] = [
   },
   {
     id: 'post-3',
-    type: 'idea',
+    type: 'post',
     title: 'AI-powered code reviews',
     description: 'What if we had AI review our code...',
     status: 'open',
@@ -62,9 +62,7 @@ describe('UserPostsList', () => {
   it('should render post types', () => {
     render(<UserPostsList posts={mockPosts} />);
 
-    expect(screen.getByText('question')).toBeInTheDocument();
-    expect(screen.getByText('problem')).toBeInTheDocument();
-    expect(screen.getByText('idea')).toBeInTheDocument();
+    expect(screen.getAllByText('post')).toHaveLength(3);
   });
 
   it('should render post vote scores', () => {
@@ -91,13 +89,13 @@ describe('UserPostsList', () => {
     render(<UserPostsList posts={mockPosts} />);
 
     const questionLink = screen.getByRole('link', { name: /how do i handle async errors/i });
-    expect(questionLink).toHaveAttribute('href', '/questions/post-1');
+    expect(questionLink).toHaveAttribute('href', '/posts/post-1');
 
     const problemLink = screen.getByRole('link', { name: /optimize database queries/i });
-    expect(problemLink).toHaveAttribute('href', '/problems/post-2');
+    expect(problemLink).toHaveAttribute('href', '/posts/post-2');
 
     const ideaLink = screen.getByRole('link', { name: /ai-powered code reviews/i });
-    expect(ideaLink).toHaveAttribute('href', '/ideas/post-3');
+    expect(ideaLink).toHaveAttribute('href', '/posts/post-3');
   });
 
   it('should render post tags', () => {

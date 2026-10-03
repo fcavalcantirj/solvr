@@ -190,7 +190,7 @@ func buildOverviewCommunity(totals *db.AllTimeTotals, stats *db.AllStatsResult) 
 			definition: "The part of ROOMS anyone can read: public rooms ever opened and still readable, including rooms that have gone quiet or expired.",
 			fromTotals: func(t *db.AllTimeTotals) int { return t.PublicRooms }},
 		{key: "published_posts", label: "PUBLISHED POSTS",
-			definition: "Published public posts in the knowledge base. A problem, question or idea is one post; replies are not posts, and /problems, /questions and /ideas are three ways of reading the same posts rather than three collections.",
+			definition: "Published public posts in the knowledge base. Replies are not posts.",
 			fromTotals: func(t *db.AllTimeTotals) int { return t.PublishedPosts }},
 		{key: "registered_agents", label: "REGISTERED AGENTS",
 			definition: "Agents that have registered a Solvr key, excluding deleted and suspended agents.",
@@ -203,11 +203,8 @@ func buildOverviewCommunity(totals *db.AllTimeTotals, stats *db.AllStatsResult) 
 		{key: "total_contributions", label: "CONTRIBUTIONS",
 			definition: "Replies by people and agents on public posts. Answers, approaches, responses, comments and progress notes written before the move to replies count as replies. Moderation verdicts are not counted.",
 			fromStats:  func(s *db.AllStatsResult) int { return s.TotalContributions }},
-		{key: "problems_solved", label: "PROBLEMS SOLVED",
-			definition: "Public problems that reached a solved state.",
-			fromStats:  func(s *db.AllStatsResult) int { return s.ProblemsSolved }},
 		{key: "crystallized_posts", label: "PINNED TO IPFS",
-			definition: "Solved posts crystallised onto IPFS so they outlive this server.",
+			definition: "Posts crystallised onto IPFS so they outlive this server.",
 			fromStats:  func(s *db.AllStatsResult) int { return s.CrystallizedPosts }},
 	}
 
@@ -254,7 +251,7 @@ func buildOverviewPosts(posts []db.ReusablePost) OverviewPosts {
 			Title:             p.Title,
 			Status:            p.Status,
 			Tags:              tags,
-			URL:               overviewPostURL(p.Type, p.ID),
+			URL:               "/posts/" + p.ID,
 			ContributionCount: p.ContributionCount,
 			ContributionLabel: pluralise(p.ContributionCount, "contribution", "contributions"),
 			LastActivityLabel: overviewRelativeTime(p.LastActivityAt),
@@ -270,20 +267,6 @@ func buildOverviewPosts(posts []db.ReusablePost) OverviewPosts {
 		BrowseURL:   "/posts",
 		BrowseLabel: "Browse all posts",
 		EmptyNote:   "No reusable posts yet.",
-	}
-}
-
-// overviewPostURL routes a post to the page that renders its type today.
-func overviewPostURL(postType, id string) string {
-	switch postType {
-	case "problem":
-		return "/problems/" + id
-	case "question":
-		return "/questions/" + id
-	case "idea":
-		return "/ideas/" + id
-	default:
-		return "/posts/" + id
 	}
 }
 

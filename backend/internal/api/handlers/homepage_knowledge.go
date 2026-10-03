@@ -7,6 +7,11 @@ import (
 	"github.com/fcavalcantirj/solvr/internal/db"
 )
 
+// KnowledgeTotalsReader reads the one knowledge aggregate GET /v1/overview publishes.
+type KnowledgeTotalsReader interface {
+	GetKnowledgeTotals(ctx context.Context) ([]db.KnowledgeTypeTotals, error)
+}
+
 // OverviewStatsReader reads the product statistics and the knowledge aggregate the overview
 // shows (db.CanonicalStatsRepository in production).
 type OverviewStatsReader interface {
@@ -14,50 +19,43 @@ type OverviewStatsReader interface {
 	KnowledgeTotalsReader
 }
 
-// OverviewKnowledgeType is the knowledge aggregate for one post type.
+// OverviewKnowledgeType is the knowledge aggregate for one post type ("post" only since the
+// legacy post types were retired, idx 68).
 type OverviewKnowledgeType struct {
-	Type              string         `json:"type"`
-	Label             string         `json:"label"`
-	Total             int            `json:"total"`
-	ByStatus          map[string]int `json:"by_status"`
-	WithReplies       int            `json:"with_replies"`
-	WithAcceptedReply int            `json:"with_accepted_reply"`
-	Replies           int            `json:"replies"`
+	Type        string         `json:"type"`
+	Label       string         `json:"label"`
+	Total       int            `json:"total"`
+	ByStatus    map[string]int `json:"by_status"`
+	WithReplies int            `json:"with_replies"`
+	Replies     int            `json:"replies"`
 }
 
-// OverviewKnowledge is the overview's knowledge section: the one place per-type post and
-// reply counts are defined (task idx 72). It replaces the type-specific statistics routes.
+// OverviewKnowledge is the overview's knowledge section: the one place post and reply counts
+// are defined (task idx 72). It replaced the type-specific statistics routes.
 type OverviewKnowledge struct {
 	Heading    string                  `json:"heading"`
 	Definition string                  `json:"definition"`
 	Types      []OverviewKnowledgeType `json:"types"`
 }
 
-var overviewKnowledgeLabels = map[string]string{
-	"problem":  "Problems",
-	"question": "Questions",
-	"idea":     "Ideas",
-	"post":     "Posts",
-}
+var overviewKnowledgeLabels = map[string]string{"post": "Posts"}
 
 // buildOverviewKnowledge renders the knowledge aggregate. A nil read renders no types.
 func buildOverviewKnowledge(totals []db.KnowledgeTypeTotals) OverviewKnowledge {
 	k := OverviewKnowledge{
-		Heading: "Knowledge by post type",
+		Heading: "Knowledge",
 		Definition: "Counts the posts GET /v1/posts lists without signing in (public, not deleted, " +
-			"not draft, pending review or rejected), split by status, with their canonical replies. " +
-			"An accepted reply is one the post author marked as the answer.",
+			"not draft, pending review or rejected), split by status, with their canonical replies.",
 		Types: make([]OverviewKnowledgeType, 0, len(totals)),
 	}
 	for _, t := range totals {
 		k.Types = append(k.Types, OverviewKnowledgeType{
-			Type:              t.Type,
-			Label:             overviewKnowledgeLabels[t.Type],
-			Total:             t.Total,
-			ByStatus:          t.ByStatus,
-			WithReplies:       t.WithReplies,
-			WithAcceptedReply: t.WithAcceptedReply,
-			Replies:           t.Replies,
+			Type:        t.Type,
+			Label:       overviewKnowledgeLabels[t.Type],
+			Total:       t.Total,
+			ByStatus:    t.ByStatus,
+			WithReplies: t.WithReplies,
+			Replies:     t.Replies,
 		})
 	}
 	return k

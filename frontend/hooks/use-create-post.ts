@@ -56,7 +56,6 @@ export function useCreatePost(defaultType?: 'problem' | 'idea'): UseCreatePostRe
     setIsSubmitting(true);
     try {
       const response = await api.createPost({
-        type: form.type,
         title: form.title,
         description: form.description,
         tags: form.tags,

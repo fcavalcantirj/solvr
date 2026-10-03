@@ -46,7 +46,7 @@ func TestViewsRepository_RecordView(t *testing.T) {
 
 	// Create a test post
 	post := &models.Post{
-		Type:         models.PostTypeQuestion,
+		Type:         models.PostTypePost,
 		Title:        "Test question for views tracking",
 		Description:  "This is a test question to track views by users",
 		Tags:         []string{"test"},
@@ -84,7 +84,7 @@ func TestViewsRepository_RecordView_Duplicate(t *testing.T) {
 
 	// Create a test post
 	post := &models.Post{
-		Type:         models.PostTypeQuestion,
+		Type:         models.PostTypePost,
 		Title:        "Test question for duplicate views",
 		Description:  "This is a test question to test duplicate views",
 		Tags:         []string{"test"},
@@ -129,7 +129,7 @@ func TestViewsRepository_RecordView_MultipleUsers(t *testing.T) {
 
 	// Create a test post
 	post := &models.Post{
-		Type:         models.PostTypeQuestion,
+		Type:         models.PostTypePost,
 		Title:        "Test question for multiple viewers",
 		Description:  "This is a test question to test multiple viewers",
 		Tags:         []string{"test"},
@@ -172,7 +172,7 @@ func TestViewsRepository_GetViewCount(t *testing.T) {
 
 	// Create a test post
 	post := &models.Post{
-		Type:         models.PostTypeQuestion,
+		Type:         models.PostTypePost,
 		Title:        "Test question for getting view count",
 		Description:  "This is a test question to get view count",
 		Tags:         []string{"test"},

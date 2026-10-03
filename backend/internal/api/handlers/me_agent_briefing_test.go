@@ -65,7 +65,7 @@ func TestGetAgentBriefing_HumanOwnerSuccess(t *testing.T) {
 				},
 			},
 			MyOpenItems: &models.OpenItemsResult{
-				ProblemsNoApproaches: 1,
+				PostsNoReplies: 1,
 			},
 			SuggestedActions: []models.SuggestedAction{
 				{Action: "update_approach", Reason: "Stale for 48h"},
@@ -270,8 +270,8 @@ func TestAgentMeResponse_JSON_IncludesNewSections(t *testing.T) {
 				Items:       []models.BriefingInboxItem{{Type: "answer_created", Title: "New answer", BodyPreview: "preview", Link: "/q/1", CreatedAt: now}},
 			},
 			MyOpenItems: &models.OpenItemsResult{
-				ProblemsNoApproaches: 1,
-				Items:                []models.OpenItem{},
+				PostsNoReplies: 1,
+				Items:          []models.OpenItem{},
 			},
 			SuggestedActions: []models.SuggestedAction{
 				{Action: "update_approach", TargetID: "a1", TargetTitle: "Fix bug", Reason: "Stale"},
@@ -286,13 +286,13 @@ func TestAgentMeResponse_JSON_IncludesNewSections(t *testing.T) {
 			},
 			// 6 new sections
 			PlatformPulse: &models.PlatformPulse{
-				OpenProblems: 10, OpenQuestions: 5, ActiveIdeas: 3, NewPostsLast24h: 20, SolvedLast7d: 2, ActiveAgentsLast24h: 8, ContributorsThisWeek: 15,
+				OpenPosts: 10, NewPostsLast24h: 20, ActiveAgentsLast24h: 8, ContributorsThisWeek: 15,
 			},
 			TrendingNow: []models.TrendingPost{
 				{ID: "t1", Title: "Hot topic", Type: "question", VoteScore: 42, ViewCount: 10, AuthorName: "agent1", AuthorType: "agent"},
 			},
 			HardcoreUnsolved: []models.HardcoreUnsolved{
-				{ID: "h1", Title: "Hard bug", Weight: 3, TotalApproaches: 5, FailedCount: 3, AgeDays: 10, DifficultyScore: 15.5},
+				{ID: "h1", Title: "Hard bug", TotalApproaches: 5, FailedCount: 3, AgeDays: 10, DifficultyScore: 15.5},
 			},
 			RisingIdeas: []models.RisingIdea{
 				{ID: "r1", Title: "Cool idea", ResponseCount: 5, Upvotes: 10},
@@ -357,8 +357,11 @@ func TestAgentMeResponse_JSON_IncludesNewSections(t *testing.T) {
 	if !ok {
 		t.Fatal("platform_pulse is not a map")
 	}
-	if pulse["open_problems"].(float64) != 10 {
-		t.Errorf("expected open_problems=10, got %v", pulse["open_problems"])
+	if pulse["open_posts"].(float64) != 10 {
+		t.Errorf("expected open_posts=10, got %v", pulse["open_posts"])
+	}
+	if _, ok := pulse["open_problems"]; ok {
+		t.Error("open_problems was retired with the legacy post types (idx 68) and must not be returned")
 	}
 }
 

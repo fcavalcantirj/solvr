@@ -12,8 +12,8 @@ import (
 // replies, votes and room outcomes (task idx 76 step 3, feature:briefing). Every section
 // reads only public, published, approved posts; a contributor reply is a live human or
 // agent reply. Retired with the legacy lifecycles: the approach success/failure workflow
-// (FailedCount is always 0), the problem-only weight (Weight is always 1) and idea
-// evolution (EvolvedCount is always 0). A recent victory is a published room outcome.
+// (FailedCount is always 0); the problem-only weight and idea evolution went with the legacy
+// post types (idx 68). A recent victory is a published room outcome.
 type CanonicalPlatformBriefingRepository struct {
 	pool *Pool
 }
@@ -38,25 +38,20 @@ const (
 	canonicalAgeHours = `GREATEST(FLOOR(EXTRACT(EPOCH FROM (NOW() - p.created_at)) / 3600)::int, 0)`
 )
 
-// GetPlatformPulse counts public activity. Open posts have status open, in_progress or
-// active; the problem/question/idea counters are the subsets of those legacy post types.
+// GetPlatformPulse counts public activity. Open posts have status open.
 // Contributors are the distinct authors of this week's public posts and of this week's
 // contributor replies on public posts.
 func (r *CanonicalPlatformBriefingRepository) GetPlatformPulse(ctx context.Context) (*models.PlatformPulse, error) {
 	query := `
 		WITH public_posts AS (
-			SELECT p.type, p.status, p.created_at, p.updated_at
+			SELECT p.status, p.created_at
 			FROM posts p
 			WHERE ` + canonicalPublicPost + `
 		),
 		counts AS (
 			SELECT
-				COUNT(*) FILTER (WHERE status IN ('open', 'in_progress', 'active')) AS open_posts,
-				COUNT(*) FILTER (WHERE status IN ('open', 'in_progress', 'active') AND type = $1) AS open_problems,
-				COUNT(*) FILTER (WHERE status IN ('open', 'in_progress', 'active') AND type = $2) AS open_questions,
-				COUNT(*) FILTER (WHERE status IN ('open', 'in_progress', 'active') AND type = $3) AS active_ideas,
-				COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours') AS new_posts_24h,
-				COUNT(*) FILTER (WHERE status = 'solved' AND updated_at > NOW() - INTERVAL '7 days') AS solved_7d
+				COUNT(*) FILTER (WHERE status = 'open') AS open_posts,
+				COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours') AS new_posts_24h
 			FROM public_posts
 		),
 		contributors AS (
@@ -72,19 +67,15 @@ func (r *CanonicalPlatformBriefingRepository) GetPlatformPulse(ctx context.Conte
 				AND ` + liveContributorReply + `
 				AND r.created_at > date_trunc('week', NOW())
 		)
-		SELECT c.open_posts, c.open_problems, c.open_questions, c.active_ideas,
-			c.new_posts_24h, c.solved_7d,
+		SELECT c.open_posts, c.new_posts_24h,
 			(SELECT COUNT(*) FROM agents WHERE last_seen_at > NOW() - INTERVAL '24 hours' AND deleted_at IS NULL),
 			(SELECT COUNT(*) FROM contributors),
 			(SELECT COUNT(*) FROM blog_posts WHERE status = 'published' AND deleted_at IS NULL)
 		FROM counts c`
 
 	p := &models.PlatformPulse{}
-	err := r.pool.QueryRow(ctx, query,
-		string(models.PostTypeProblem), string(models.PostTypeQuestion), string(models.PostTypeIdea),
-	).Scan(
-		&p.OpenPosts, &p.OpenProblems, &p.OpenQuestions, &p.ActiveIdeas,
-		&p.NewPostsLast24h, &p.SolvedLast7d,
+	err := r.pool.QueryRow(ctx, query).Scan(
+		&p.OpenPosts, &p.NewPostsLast24h,
 		&p.ActiveAgentsLast24h, &p.ContributorsThisWeek, &p.BlogPostsPublished,
 	)
 	if err != nil {
@@ -134,7 +125,7 @@ func (r *CanonicalPlatformBriefingRepository) GetTrendingNow(ctx context.Context
 }
 
 // GetRisingIdeas returns public posts of every type gaining traction: at least one
-// contributor reply or upvote, not dormant or closed; ranked by contributor replies, then
+// contributor reply or upvote, not closed; ranked by contributor replies, then
 // upvotes, then recency. ResponseCount carries the contributor reply count.
 func (r *CanonicalPlatformBriefingRepository) GetRisingIdeas(ctx context.Context, limit int) ([]models.RisingIdea, error) {
 	rows, err := r.pool.Query(ctx, `
@@ -146,7 +137,7 @@ func (r *CanonicalPlatformBriefingRepository) GetRisingIdeas(ctx context.Context
 		FROM posts p
 		LEFT JOIN replies r ON r.post_id = p.id AND `+liveContributorReply+`
 		WHERE `+canonicalPublicPost+`
-			AND p.status NOT IN ('dormant', 'closed')
+			AND p.status <> 'closed'
 		GROUP BY p.id
 		HAVING COUNT(r.id) > 0 OR COALESCE(p.upvotes, 0) > 0
 		ORDER BY COUNT(r.id) DESC, COALESCE(p.upvotes, 0) DESC, p.created_at DESC, p.id
@@ -163,8 +154,8 @@ func (r *CanonicalPlatformBriefingRepository) GetRisingIdeas(ctx context.Context
 	})
 }
 
-// GetHardcoreUnsolved returns unresolved public posts that resist: 3+ contributor replies
-// and still unresolved, or older than 30 days with a positive score. Difficulty =
+// GetHardcoreUnsolved returns public posts that are not closed and resist: 3+ contributor
+// replies, or older than 30 days with a positive score. Difficulty =
 // (1 + replies) * ln(age_days + 2) * (1 + max(score, 0) * 0.5). TotalApproaches carries the
 // contributor reply count.
 func (r *CanonicalPlatformBriefingRepository) GetHardcoreUnsolved(ctx context.Context, limit int) ([]models.HardcoreUnsolved, error) {
@@ -177,7 +168,7 @@ func (r *CanonicalPlatformBriefingRepository) GetHardcoreUnsolved(ctx context.Co
 			FROM posts p
 			LEFT JOIN replies r ON r.post_id = p.id AND `+liveContributorReply+`
 			WHERE `+canonicalPublicPost+`
-				AND p.status NOT IN ('solved', 'answered', 'closed', 'evolved')
+				AND p.status <> 'closed'
 			GROUP BY p.id
 		)
 		SELECT id::text, title, reply_count, FLOOR(age_days)::int, tags,
@@ -192,7 +183,7 @@ func (r *CanonicalPlatformBriefingRepository) GetHardcoreUnsolved(ctx context.Co
 		return nil, err
 	}
 	return collectBriefingRows(ctx, rows, "CanonicalPlatformBriefing.GetHardcoreUnsolved", func(row pgx.Rows) (models.HardcoreUnsolved, error) {
-		h := models.HardcoreUnsolved{Weight: 1}
+		var h models.HardcoreUnsolved
 		err := row.Scan(&h.ID, &h.Title, &h.TotalApproaches, &h.AgeDays, &h.Tags, &h.DifficultyScore)
 		h.Tags = nonNilTags(h.Tags)
 		return h, err

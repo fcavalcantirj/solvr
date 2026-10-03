@@ -99,12 +99,10 @@ type resurrectionKnowledge struct {
 	Problems   []models.ResurrectionProblem  `json:"problems"`
 }
 
-// resurrectionReputation is the reputation section of the resurrection bundle.
+// resurrectionReputation is the reputation section of the resurrection bundle. The per-type
+// counters were retired with the legacy post types (idx 68).
 type resurrectionReputation struct {
 	Total           int `json:"total"`
-	ProblemsSolved  int `json:"problems_solved"`
-	AnswersAccepted int `json:"answers_accepted"`
-	IdeasPosted     int `json:"ideas_posted"`
 	UpvotesReceived int `json:"upvotes_received"`
 }
 
@@ -207,9 +205,6 @@ func (h *ResurrectionHandler) GetBundle(w http.ResponseWriter, r *http.Request, 
 		} else if stats != nil {
 			bundle.Reputation = resurrectionReputation{
 				Total:           stats.Reputation,
-				ProblemsSolved:  stats.ProblemsSolved,
-				AnswersAccepted: stats.AnswersAccepted,
-				IdeasPosted:     stats.IdeasPosted,
 				UpvotesReceived: stats.UpvotesReceived,
 			}
 		}

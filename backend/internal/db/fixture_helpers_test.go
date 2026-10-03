@@ -44,7 +44,7 @@ func createCommentTestPost(t *testing.T, pool *Pool, userID string) *models.Post
 	postRepo := NewPostRepository(pool)
 
 	post := &models.Post{
-		Type:         models.PostTypeQuestion,
+		Type:         models.PostTypePost,
 		Title:        "Test question for comments " + time.Now().Format("150405"),
 		Description:  "This is a test question used for comment testing",
 		Tags:         []string{"test"},

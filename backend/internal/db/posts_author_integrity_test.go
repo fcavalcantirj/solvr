@@ -51,12 +51,12 @@ func TestPostAuthors_ANewPostNamesExactlyOneExistingAccount(t *testing.T) {
 	byHuman, err := createAuthoredPost(ctx, pool, models.PostTypePost, models.AuthorTypeHuman, human)
 	require.NoError(t, err)
 	require.Equal(t, postAuthorLink{Human: &human}, postAuthorOf(ctx, t, pool, byHuman.ID))
-	upper, err := createAuthoredPost(ctx, pool, models.PostTypeQuestion, models.AuthorTypeHuman, strings.ToUpper(human))
+	upper, err := createAuthoredPost(ctx, pool, models.PostTypePost, models.AuthorTypeHuman, strings.ToUpper(human))
 	require.NoError(t, err, "a human id is a UUID, whatever its case")
 	require.Equal(t, postAuthorLink{Human: &human}, postAuthorOf(ctx, t, pool, upper.ID))
 
 	// No account behind the author: refused, for a canonical post and a legacy-typed one alike.
-	for _, postType := range []models.PostType{models.PostTypePost, models.PostTypeProblem} {
+	for _, postType := range []models.PostType{models.PostTypePost, models.PostTypePost} {
 		_, err = createAuthoredPost(ctx, pool, postType, models.AuthorTypeAgent, "no_such_agent")
 		requireConstraintViolation(t, err, "posts_author_agent_fkey")
 		_, err = createAuthoredPost(ctx, pool, postType, models.AuthorTypeHuman, "1b4e28ba-2fa1-41d2-883f-0016d3cca427")
@@ -132,7 +132,7 @@ func TestPostAuthors_TheMigrationLinksStoredPostsAndLabelsTheRest(t *testing.T) 
 	require.Equal(t, postAuthorLink{Agent: &agent}, postAuthorOf(ctx, t, pool, gone))
 
 	// A new post is never historical, even with the label a historical post carries.
-	_, err = createAuthoredPost(ctx, pool, models.PostTypeIdea, models.AuthorTypeHuman, "stored-human-name")
+	_, err = createAuthoredPost(ctx, pool, models.PostTypePost, models.AuthorTypeHuman, "stored-human-name")
 	requireConstraintViolation(t, err, "posts_author_human_fkey")
 
 	// With the trigger bypassed, the checks still refuse a post that links nothing or links an
@@ -161,7 +161,7 @@ func TestPostAuthors_AnAccountThatAuthorsPostsIsNotHardDeleted(t *testing.T) {
 	human := authorHuman(ctx, t, pool, "Hard Delete Post Human")
 	byAgent, err := createAuthoredPost(ctx, pool, models.PostTypePost, models.AuthorTypeAgent, agent)
 	require.NoError(t, err)
-	byHuman, err := createAuthoredPost(ctx, pool, models.PostTypeQuestion, models.AuthorTypeHuman, human)
+	byHuman, err := createAuthoredPost(ctx, pool, models.PostTypePost, models.AuthorTypeHuman, human)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `UPDATE posts SET deleted_at = NOW() WHERE id = $1`, byHuman.ID)
 	require.NoError(t, err, "a soft-deleted post still names its author")

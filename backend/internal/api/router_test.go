@@ -711,7 +711,7 @@ func TestCreatePostEndpointRequiresAuth(t *testing.T) {
 	router := setupTestRouter(t)
 
 	// POST /v1/posts without auth should return 401
-	reqBody := `{"type":"question","title":"Test question title","description":"This is a test question description that is long enough"}`
+	reqBody := `{"title":"Test question title","description":"This is a test question description that is long enough"}`
 	req := httptest.NewRequest(http.MethodPost, "/v1/posts", strings.NewReader(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 

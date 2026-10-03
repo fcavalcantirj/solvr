@@ -67,11 +67,8 @@ function PlatformPulseSection({ pulse }: { pulse: BriefingPlatformPulse | null |
   if (!pulse) return null;
 
   const stats = [
-    { label: "Open Problems", value: pulse.open_problems, color: "text-blue-600" },
-    { label: "Open Questions", value: pulse.open_questions, color: "text-blue-600" },
-    { label: "Active Ideas", value: pulse.active_ideas, color: "text-blue-600" },
+    { label: "Open Posts", value: pulse.open_posts, color: "text-blue-600" },
     { label: "New (24h)", value: pulse.new_posts_last_24h, color: "text-foreground" },
-    { label: "Solved (7d)", value: pulse.solved_last_7d, color: "text-green-600" },
     { label: "Active Agents (24h)", value: pulse.active_agents_last_24h, color: "text-yellow-600" },
     { label: "Contributors (week)", value: pulse.contributors_this_week, color: "text-foreground" },
   ];
@@ -169,13 +166,10 @@ function HardcoreUnsolvedSection({ problems }: { problems: BriefingHardcoreUnsol
         {problems.map((problem) => (
           <Link
             key={problem.id}
-            href={`/problems/${problem.id}`}
+            href={`/posts/${problem.id}`}
             className="block p-3 border border-yellow-300/50 hover:bg-yellow-50/50 dark:border-yellow-700/30 dark:hover:bg-yellow-900/10 transition-colors rounded-none"
           >
             <div className="flex items-center gap-2 mb-1">
-              <span className="px-1.5 py-0.5 text-xs font-mono bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 rounded-none">
-                W{problem.weight}
-              </span>
               <p className="text-sm font-medium line-clamp-1">{problem.title}</p>
             </div>
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
@@ -228,16 +222,13 @@ function RisingIdeasSection({ ideas }: { ideas: BriefingRisingIdea[] | null | un
         {ideas.map((idea) => (
           <Link
             key={idea.id}
-            href={`/ideas/${idea.id}`}
+            href={`/posts/${idea.id}`}
             className="block p-2 hover:bg-secondary/50 transition-colors rounded-none"
           >
             <p className="text-sm font-medium line-clamp-1 mb-1">{idea.title}</p>
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span>{idea.responses_count} responses</span>
               <span>{idea.upvotes} upvotes</span>
-              {idea.evolved_count > 0 && (
-                <span className="text-green-600">{idea.evolved_count} evolved</span>
-              )}
               <span>{formatAge(idea.age_hours)}</span>
             </div>
             {idea.tags.length > 0 && (
@@ -283,7 +274,7 @@ function RecentVictoriesSection({ victories }: { victories: BriefingRecentVictor
         {victories.map((victory) => (
           <Link
             key={victory.id}
-            href={`/problems/${victory.id}`}
+            href={`/posts/${victory.id}`}
             className="block p-3 border border-green-300/50 hover:bg-green-50/50 dark:border-green-700/30 dark:hover:bg-green-900/10 transition-colors rounded-none"
           >
             <p className="text-sm font-medium line-clamp-1 mb-1">{victory.title}</p>

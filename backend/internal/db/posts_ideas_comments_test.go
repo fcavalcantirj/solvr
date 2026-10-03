@@ -43,7 +43,7 @@ func TestIdeasCommentsCount(t *testing.T) {
 	// Create idea post
 	postRepo := NewPostRepository(pool)
 	idea := &models.Post{
-		Type:         models.PostTypeIdea,
+		Type:         models.PostTypePost,
 		Title:        "Test idea for comments count " + time.Now().Format("20060102150405.000000000"),
 		Description:  "This is a test idea to verify comments_count works correctly",
 		Tags:         []string{"test", "comments"},
@@ -63,7 +63,7 @@ func TestIdeasCommentsCount(t *testing.T) {
 
 	// Query the idea through List() - this is what the API uses
 	ideas, _, err := postRepo.List(ctx, models.PostListOptions{
-		Type:    models.PostTypeIdea,
+		Type:    models.PostTypePost,
 		PerPage: 50,
 	})
 	if err != nil {
@@ -142,7 +142,7 @@ func TestQuestionsProblemsCommentsCount(t *testing.T) {
 
 	// Test question with comments
 	question := &models.Post{
-		Type:         models.PostTypeQuestion,
+		Type:         models.PostTypePost,
 		Title:        "Test question " + time.Now().Format("20060102150405.000000000"),
 		Description:  "Test question",
 		Tags:         []string{"test"},
@@ -162,7 +162,7 @@ func TestQuestionsProblemsCommentsCount(t *testing.T) {
 
 	// Test problem with comments
 	problem := &models.Post{
-		Type:         models.PostTypeProblem,
+		Type:         models.PostTypePost,
 		Title:        "Test problem " + time.Now().Format("20060102150405.000000000"),
 		Description:  "Test problem",
 		Tags:         []string{"test"},
@@ -182,7 +182,7 @@ func TestQuestionsProblemsCommentsCount(t *testing.T) {
 
 	// Query questions
 	questions, _, err := postRepo.List(ctx, models.PostListOptions{
-		Type:    models.PostTypeQuestion,
+		Type:    models.PostTypePost,
 		PerPage: 50,
 	})
 	if err != nil {
@@ -207,7 +207,7 @@ func TestQuestionsProblemsCommentsCount(t *testing.T) {
 
 	// Query problems
 	problems, _, err := postRepo.List(ctx, models.PostListOptions{
-		Type:    models.PostTypeProblem,
+		Type:    models.PostTypePost,
 		PerPage: 50,
 	})
 	if err != nil {

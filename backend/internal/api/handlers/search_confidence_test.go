@@ -196,7 +196,7 @@ func TestSearch_KnownParams_NoWarnings(t *testing.T) {
 	handler := NewSearchHandler(repo)
 
 	_, meta := decodeSearchMeta(t, handler,
-		"/v1/search?q=x&type=problem&status=solved&tags=go&sort=newest&page=1&per_page=10&min_similarity=0.5&content_types=posts")
+		"/v1/search?q=x&status=open&tags=go&sort=newest&page=1&per_page=10&min_similarity=0.5&content_types=posts")
 
 	if _, present := meta["warnings"]; present {
 		t.Errorf("expected no warnings key for all-valid params, got %v", meta["warnings"])

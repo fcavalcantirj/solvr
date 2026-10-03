@@ -136,7 +136,7 @@ func TestSearch_Success(t *testing.T) {
 			AuthorType:   "agent",
 			AuthorName:   "Claude",
 			Score:        0.95,
-			VoteScore:        42,
+			VoteScore:    42,
 			AnswersCount: 5,
 			CreatedAt:    now,
 		},
@@ -181,70 +181,6 @@ func TestSearch_Success(t *testing.T) {
 	}
 }
 
-// TestSearch_TypeFilterProblem tests filtering by type=problem.
-func TestSearch_TypeFilterProblem(t *testing.T) {
-	repo := NewMockSearchRepository()
-	repo.SetResults([]models.SearchResult{}, 0)
-
-	handler := NewSearchHandler(repo)
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/search?q=test&type=problem", nil)
-	w := httptest.NewRecorder()
-
-	handler.Search(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-
-	// Verify the repository received the correct type filter
-	if repo.searchOpts.Type != "problem" {
-		t.Errorf("expected type filter 'problem', got '%s'", repo.searchOpts.Type)
-	}
-}
-
-// TestSearch_TypeFilterQuestion tests filtering by type=question.
-func TestSearch_TypeFilterQuestion(t *testing.T) {
-	repo := NewMockSearchRepository()
-	repo.SetResults([]models.SearchResult{}, 0)
-
-	handler := NewSearchHandler(repo)
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/search?q=test&type=question", nil)
-	w := httptest.NewRecorder()
-
-	handler.Search(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-
-	if repo.searchOpts.Type != "question" {
-		t.Errorf("expected type filter 'question', got '%s'", repo.searchOpts.Type)
-	}
-}
-
-// TestSearch_TypeFilterIdea tests filtering by type=idea.
-func TestSearch_TypeFilterIdea(t *testing.T) {
-	repo := NewMockSearchRepository()
-	repo.SetResults([]models.SearchResult{}, 0)
-
-	handler := NewSearchHandler(repo)
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/search?q=test&type=idea", nil)
-	w := httptest.NewRecorder()
-
-	handler.Search(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-
-	if repo.searchOpts.Type != "idea" {
-		t.Errorf("expected type filter 'idea', got '%s'", repo.searchOpts.Type)
-	}
-}
-
 // TestSearch_TagsFilter tests filtering by tags.
 func TestSearch_TagsFilter(t *testing.T) {
 	repo := NewMockSearchRepository()
@@ -277,7 +213,7 @@ func TestSearch_StatusFilter(t *testing.T) {
 
 	handler := NewSearchHandler(repo)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/search?q=test&status=solved", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/search?q=test&status=open", nil)
 	w := httptest.NewRecorder()
 
 	handler.Search(w, req)
@@ -286,8 +222,8 @@ func TestSearch_StatusFilter(t *testing.T) {
 		t.Errorf("expected status 200, got %d", w.Code)
 	}
 
-	if repo.searchOpts.Status != "solved" {
-		t.Errorf("expected status filter 'solved', got '%s'", repo.searchOpts.Status)
+	if repo.searchOpts.Status != "open" {
+		t.Errorf("expected status filter 'open', got '%s'", repo.searchOpts.Status)
 	}
 }
 

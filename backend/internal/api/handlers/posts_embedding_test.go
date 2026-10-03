@@ -38,7 +38,7 @@ func (m *MockEmbeddingService) GenerateQueryEmbedding(ctx context.Context, text 
 
 // Helper to create a valid post JSON body
 func validPostBody() string {
-	return `{"type":"question","title":"How to handle async operations in Go","description":"I am looking for a detailed explanation on how to handle asynchronous operations in Go using goroutines and channels effectively."}`
+	return `{"title":"How to handle async operations in Go","description":"I am looking for a detailed explanation on how to handle asynchronous operations in Go using goroutines and channels effectively."}`
 }
 
 // ============================================================================
@@ -139,7 +139,7 @@ func TestCreatePost_NoEmbeddingService(t *testing.T) {
 // TestUpdatePost_TitleChangeRegeneratesEmbedding tests embedding regeneration on title change.
 func TestUpdatePost_TitleChangeRegeneratesEmbedding(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPost("post-123", "Original Title for Testing", models.PostTypeQuestion)
+	post := createTestPost("post-123", "Original Title for Testing", models.PostTypePost)
 	repo.SetPost(&post)
 
 	mockEmbed := &MockEmbeddingService{
@@ -175,7 +175,7 @@ func TestUpdatePost_TitleChangeRegeneratesEmbedding(t *testing.T) {
 // TestUpdatePost_DescriptionChangeRegeneratesEmbedding tests embedding regeneration on description change.
 func TestUpdatePost_DescriptionChangeRegeneratesEmbedding(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPost("post-123", "Existing Title for Testing", models.PostTypeQuestion)
+	post := createTestPost("post-123", "Existing Title for Testing", models.PostTypePost)
 	repo.SetPost(&post)
 
 	mockEmbed := &MockEmbeddingService{
@@ -207,7 +207,7 @@ func TestUpdatePost_DescriptionChangeRegeneratesEmbedding(t *testing.T) {
 // TestUpdatePost_StatusOnlyNoEmbeddingRegeneration tests no embedding when only status changes.
 func TestUpdatePost_StatusOnlyNoEmbeddingRegeneration(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPost("post-123", "Existing Title for Testing", models.PostTypeQuestion)
+	post := createTestPost("post-123", "Existing Title for Testing", models.PostTypePost)
 	repo.SetPost(&post)
 
 	mockEmbed := &MockEmbeddingService{
@@ -216,7 +216,7 @@ func TestUpdatePost_StatusOnlyNoEmbeddingRegeneration(t *testing.T) {
 	handler := NewPostsHandler(repo)
 	handler.SetEmbeddingService(mockEmbed)
 
-	body := `{"status":"answered"}`
+	body := `{"status":"stale"}`
 	req := httptest.NewRequest(http.MethodPatch, "/v1/posts/post-123", strings.NewReader(body))
 	req.Header.Set("If-Match", postETag(post.UpdatedAt)) // required since idx 74 step 5
 	rctx := chi.NewRouteContext()

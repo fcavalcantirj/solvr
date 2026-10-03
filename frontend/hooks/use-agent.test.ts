@@ -26,13 +26,8 @@ const mockAgent = {
 
 // Mock stats matching REAL backend structure
 const mockStats = {
-  problems_solved: 20,
-  problems_contributed: 5,
-  questions_asked: 15,
-  questions_answered: 10,
-  answers_accepted: 3,
-  ideas_posted: 7,
-  responses_given: 8,
+  posts_created: 20,
+  contributions: 5,
   upvotes_received: 100,
   reputation: 1250,
 };
@@ -85,10 +80,9 @@ describe('useAgent', () => {
     expect(result.current.agent?.time).toBe('5d ago');
     // Stats object
     expect(result.current.agent?.stats.reputation).toBe(1250);
-    expect(result.current.agent?.stats.problemsSolved).toBe(20);
-    expect(result.current.agent?.stats.problemsContributed).toBe(5);
-    expect(result.current.agent?.stats.ideasPosted).toBe(7);
-    expect(result.current.agent?.stats.responsesGiven).toBe(8);
+    expect(result.current.agent?.stats.postsCreated).toBe(20);
+    expect(result.current.agent?.stats.contributions).toBe(5);
+    expect(result.current.agent?.stats.upvotesReceived).toBe(100);
     expect(result.current.error).toBeNull();
   });
 
@@ -183,13 +177,8 @@ describe('useAgent', () => {
       has_human_backed_badge: true,
     };
     const realStats = {
-      problems_solved: 5,
-      problems_contributed: 2,
-      questions_asked: 10,
-      questions_answered: 8,
-      answers_accepted: 3,
-      ideas_posted: 3,
-      responses_given: 12,
+      posts_created: 5,
+      contributions: 2,
       upvotes_received: 100,
       reputation: 500,
     };
@@ -208,10 +197,9 @@ describe('useAgent', () => {
     // Assert - stats from API are mapped correctly
     expect(result.current.agent?.reputation).toBe(500);
     expect(result.current.agent?.stats.reputation).toBe(500);
-    expect(result.current.agent?.stats.problemsSolved).toBe(5);
-    expect(result.current.agent?.stats.problemsContributed).toBe(2);
-    expect(result.current.agent?.stats.ideasPosted).toBe(3);
-    expect(result.current.agent?.stats.responsesGiven).toBe(12);
+    expect(result.current.agent?.stats.postsCreated).toBe(5);
+    expect(result.current.agent?.stats.contributions).toBe(2);
+    expect(result.current.agent?.stats.upvotesReceived).toBe(100);
   });
 
   it('handles agent with null optional fields', async () => {
@@ -227,13 +215,8 @@ describe('useAgent', () => {
       avatar_url: null,
     };
     const minimalStats = {
-      problems_solved: 0,
-      problems_contributed: 0,
-      questions_asked: 0,
-      questions_answered: 0,
-      answers_accepted: 0,
-      ideas_posted: 0,
-      responses_given: 0,
+      posts_created: 0,
+      contributions: 0,
       upvotes_received: 0,
       reputation: 0,
     };
@@ -253,7 +236,7 @@ describe('useAgent', () => {
     expect(result.current.agent?.avatarUrl).toBeUndefined();
     expect(result.current.agent?.bio).toBe('');
     expect(result.current.agent?.stats.reputation).toBe(0);
-    expect(result.current.agent?.stats.problemsSolved).toBe(0);
+    expect(result.current.agent?.stats.postsCreated).toBe(0);
     expect(result.current.error).toBeNull();
   });
 });

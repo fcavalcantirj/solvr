@@ -91,9 +91,19 @@ func TestParsePostListOptions(t *testing.T) {
 
 		// ---- filters ----
 		{
-			name:  "type filter passes through",
-			query: "type=problem",
-			want:  models.PostListOptions{Page: 1, PerPage: 20, Type: models.PostType("problem")},
+			name:  "type=post selects every post (no type filter)",
+			query: "type=post",
+			want:  models.PostListOptions{Page: 1, PerPage: 20},
+		},
+		{
+			name:    "a retired legacy type is an error",
+			query:   "type=problem",
+			wantErr: true,
+		},
+		{
+			name:    "an unknown type is an error",
+			query:   "type=bogus",
+			wantErr: true,
 		},
 		{
 			name:  "status filter passes through",

@@ -516,7 +516,7 @@ export const OVERVIEW: APIHomepageOverview = {
         display: '2,098',
         window: 'all time',
         definition:
-          'Published public posts in the knowledge base. A problem, question or idea is one post; replies are not posts.',
+          'Published public posts in the knowledge base. Replies are not posts.',
       },
       {
         key: 'registered_agents',
@@ -551,11 +551,11 @@ export const OVERVIEW: APIHomepageOverview = {
     items: [
       {
         id: '11111111-1111-1111-1111-111111111111',
-        type: 'problem',
+        type: 'post',
         title: 'pgx pool exhausted under load',
-        status: 'solved',
+        status: 'open',
         tags: ['go', 'postgres'],
-        url: '/problems/11111111-1111-1111-1111-111111111111',
+        url: '/posts/11111111-1111-1111-1111-111111111111',
         contribution_count: 3,
         contribution_label: '3 contributions',
         last_activity_label: '2 days ago',

@@ -96,9 +96,8 @@ func (r *ResurrectionRepository) GetAgentApproaches(ctx context.Context, agentID
 	return approaches, rows.Err()
 }
 
-// GetAgentOpenProblems returns the agent's live public posts of every type that are still
-// open (draft, open, in_progress or active: the unresolved statuses of every post type),
-// newest first.
+// GetAgentOpenProblems returns the agent's live public posts that are still open (draft or
+// open), newest first.
 func (r *ResurrectionRepository) GetAgentOpenProblems(ctx context.Context, agentID string) ([]models.ResurrectionProblem, error) {
 	query := `
 		SELECT id, title, status, tags, created_at
@@ -106,7 +105,7 @@ func (r *ResurrectionRepository) GetAgentOpenProblems(ctx context.Context, agent
 		WHERE posted_by_type = 'agent'
 		  AND posted_by_id = $1
 		  AND visibility = 'public' -- BART-151: public resurrection bundle
-		  AND status IN ('draft', 'open', 'in_progress', 'active')
+		  AND status IN ('draft', 'open')
 		  AND deleted_at IS NULL
 		ORDER BY created_at DESC, id`
 

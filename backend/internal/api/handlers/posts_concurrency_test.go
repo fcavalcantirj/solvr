@@ -41,7 +41,7 @@ func ownerPatchRequest(body map[string]interface{}, ifMatch string) *http.Reques
 // yields 412 PRECONDITION_FAILED and does not persist the edit.
 func TestUpdatePost_StaleIfMatchRejected(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPost("post-123", "Original Title", models.PostTypeProblem)
+	post := createTestPost("post-123", "Original Title", models.PostTypePost)
 	repo.SetPost(&post)
 	handler := NewPostsHandler(repo)
 
@@ -73,7 +73,7 @@ func TestUpdatePost_StaleIfMatchRejected(t *testing.T) {
 // current version passes the precondition and the edit is applied.
 func TestUpdatePost_MatchingIfMatchSucceeds(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPost("post-123", "Original Title", models.PostTypeProblem)
+	post := createTestPost("post-123", "Original Title", models.PostTypePost)
 	repo.SetPost(&post)
 	handler := NewPostsHandler(repo)
 
@@ -93,7 +93,7 @@ func TestUpdatePost_MatchingIfMatchSucceeds(t *testing.T) {
 // existing post.
 func TestUpdatePost_WildcardIfMatchSucceeds(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPost("post-123", "Original Title", models.PostTypeProblem)
+	post := createTestPost("post-123", "Original Title", models.PostTypePost)
 	repo.SetPost(&post)
 	handler := NewPostsHandler(repo)
 
@@ -112,7 +112,7 @@ func TestUpdatePost_WildcardIfMatchSucceeds(t *testing.T) {
 // client has to read the post before it can overwrite it.
 func TestUpdatePost_MissingIfMatchIs428(t *testing.T) {
 	repo := &conditionalPostsRepo{MockPostsRepository: NewMockPostsRepository()}
-	post := createTestPost("post-123", "Original Title", models.PostTypeProblem)
+	post := createTestPost("post-123", "Original Title", models.PostTypePost)
 	repo.SetPost(&post)
 	handler := NewPostsHandler(repo)
 
@@ -138,7 +138,7 @@ func TestUpdatePost_MissingIfMatchIs428(t *testing.T) {
 // checked before the precondition is required: a non-owner gets 403, not 428.
 func TestUpdatePost_NonOwnerWithoutIfMatchStillForbidden(t *testing.T) {
 	repo := &conditionalPostsRepo{MockPostsRepository: NewMockPostsRepository()}
-	post := createTestPost("post-123", "Original Title", models.PostTypeProblem)
+	post := createTestPost("post-123", "Original Title", models.PostTypePost)
 	repo.SetPost(&post)
 	handler := NewPostsHandler(repo)
 
@@ -161,7 +161,7 @@ func TestUpdatePost_NonOwnerWithoutIfMatchStillForbidden(t *testing.T) {
 // refuses a row another writer changed after the check.
 func TestUpdatePost_WritesAtTheVersionItChecked(t *testing.T) {
 	repo := &conditionalPostsRepo{MockPostsRepository: NewMockPostsRepository()}
-	post := createTestPost("post-123", "Original Title", models.PostTypeProblem)
+	post := createTestPost("post-123", "Original Title", models.PostTypePost)
 	repo.SetPost(&post)
 	handler := NewPostsHandler(repo)
 
@@ -180,7 +180,7 @@ func TestUpdatePost_WritesAtTheVersionItChecked(t *testing.T) {
 // explicit unconditional edit: the repository gets no expected version.
 func TestUpdatePost_WildcardWritesUnconditionally(t *testing.T) {
 	repo := &conditionalPostsRepo{MockPostsRepository: NewMockPostsRepository()}
-	post := createTestPost("post-123", "Original Title", models.PostTypeProblem)
+	post := createTestPost("post-123", "Original Title", models.PostTypePost)
 	repo.SetPost(&post)
 	handler := NewPostsHandler(repo)
 
@@ -199,7 +199,7 @@ func TestUpdatePost_WildcardWritesUnconditionally(t *testing.T) {
 // precondition matched but whose write found the row already changed (another
 // writer won the race) is 412 PRECONDITION_FAILED with the winner's ETag.
 func TestUpdatePost_EditLostToAConcurrentWriterIs412(t *testing.T) {
-	post := createTestPost("post-123", "Original Title", models.PostTypeProblem)
+	post := createTestPost("post-123", "Original Title", models.PostTypePost)
 	winner := post.UpdatedAt.Add(time.Second)
 	repo := &conditionalPostsRepo{MockPostsRepository: NewMockPostsRepository(), conflictAt: &winner}
 	repo.SetPost(&post)
@@ -224,7 +224,7 @@ func TestUpdatePost_EditLostToAConcurrentWriterIs412(t *testing.T) {
 // a 412 (they still receive 403).
 func TestUpdatePost_NonOwnerStaleIfMatchStillForbidden(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPost("post-123", "Original Title", models.PostTypeProblem)
+	post := createTestPost("post-123", "Original Title", models.PostTypePost)
 	repo.SetPost(&post)
 	handler := NewPostsHandler(repo)
 
@@ -248,7 +248,7 @@ func TestUpdatePost_NonOwnerStaleIfMatchStillForbidden(t *testing.T) {
 // can send it back as If-Match on a later edit.
 func TestGetPost_SetsETag(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPost("post-123", "Original Title", models.PostTypeProblem)
+	post := createTestPost("post-123", "Original Title", models.PostTypePost)
 	repo.SetPost(&post)
 	handler := NewPostsHandler(repo)
 

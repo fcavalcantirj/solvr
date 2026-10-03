@@ -3,7 +3,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -157,11 +156,6 @@ type NotificationServiceInterface interface {
 	NotifyOnModerationResult(ctx context.Context, postID, postTitle, postType, authorType, authorID string, approved bool, explanation string) error
 }
 
-// ApproachCheckerInterface checks if a problem has succeeded approaches.
-type ApproachCheckerInterface interface {
-	HasSucceededApproach(ctx context.Context, problemID string) (bool, error)
-}
-
 // PostTranslationTrigger triggers immediate translation + re-moderation
 // for posts that were rejected solely for language. Called inline from
 // moderatePostAsync when a language-only rejection is detected.
@@ -183,7 +177,6 @@ type PostsHandler struct {
 	flagCreator        FlagCreatorInterface
 	commentRepo        CommentCreatorInterface
 	notifService       NotificationServiceInterface
-	approachChecker    ApproachCheckerInterface
 	translationTrigger PostTranslationTrigger
 	retryDelays        []time.Duration
 	roomPrivacy        RoomPrivacyChecker
@@ -245,11 +238,6 @@ func (h *PostsHandler) SetNotificationService(svc NotificationServiceInterface) 
 	h.notifService = svc
 }
 
-// SetApproachChecker sets the approach checker for validating solved status.
-func (h *PostsHandler) SetApproachChecker(checker ApproachCheckerInterface) {
-	h.approachChecker = checker
-}
-
 // SetTranslationTrigger sets the inline translation trigger.
 // When set, language-only rejections trigger immediate translation
 // instead of waiting for the hourly sweep.
@@ -273,15 +261,13 @@ func (h *PostsHandler) TriggerAsync(postID, title, description string, tags []st
 
 // CreatePostRequest is the request body for creating a post.
 type CreatePostRequest struct {
-	Type            string   `json:"type"`
-	Title           string   `json:"title"`
-	Description     string   `json:"description"`
-	Content         string   `json:"content"` // Fallback for description (agents often send "content")
-	Tags            []string `json:"tags,omitempty"`
-	SuccessCriteria []string `json:"success_criteria,omitempty"` // For problems
-	Weight          *int     `json:"weight,omitempty"`           // For problems
-	Visibility      string   `json:"visibility,omitempty"`       // "public" (default) or "family" (BART-151)
-	SourceRoomID    *string  `json:"source_room_id,omitempty"`   // Optional room provenance (BART-583)
+	Type         string   `json:"type"` // "post" or omitted; anything else is LEGACY_FIELD_RETIRED (idx 68)
+	Title        string   `json:"title"`
+	Description  string   `json:"description"`
+	Content      string   `json:"content"` // Fallback for description (agents often send "content")
+	Tags         []string `json:"tags,omitempty"`
+	Visibility   string   `json:"visibility,omitempty"`     // "public" (default) or "family" (BART-151)
+	SourceRoomID *string  `json:"source_room_id,omitempty"` // Optional room provenance (BART-583)
 }
 
 // UpdatePostRequest is the request body for updating a post.
@@ -320,7 +306,7 @@ type PostResponse struct {
 func (h *PostsHandler) List(w http.ResponseWriter, r *http.Request) {
 	opts, err := parsePostListOptions(r)
 	if err != nil {
-		response.WriteValidationError(w, err.Error(), nil)
+		writeFilterError(w, err)
 		return
 	}
 
@@ -424,20 +410,26 @@ func (h *PostsHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// Parse request body
 	var req CreatePostRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	retiredField, err := decodePostBody(r, &req)
+	if err != nil {
 		writePostsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid JSON body")
 		return
 	}
 
-	// Type is optional (BART-583): an omitted type creates a canonical untyped post.
-	// A provided type must still be valid, so unknown values are still rejected.
+	// Type is optional (BART-583) and, when sent, must be "post": the legacy types and their
+	// problem-only fields were retired (idx 68) and are refused, never silently dropped.
 	postType := models.PostTypePost
-	if req.Type != "" {
-		postType = models.PostType(req.Type)
-		if !models.IsValidPostType(postType) {
-			writePostsError(w, http.StatusBadRequest, "INVALID_TYPE", "type must be one of: problem, question, idea")
-			return
-		}
+	if models.IsRetiredPostType(models.PostType(req.Type)) {
+		writeLegacyFieldRetired(w, "type", req.Type, legacyTypeInstead)
+		return
+	}
+	if req.Type != "" && !models.IsValidPostType(models.PostType(req.Type)) {
+		writePostsError(w, http.StatusBadRequest, "INVALID_TYPE", "type must be post or omitted")
+		return
+	}
+	if retiredField != "" {
+		writeLegacyFieldRetired(w, retiredField, "", legacyProblemFieldInstead)
+		return
 	}
 
 	// Validate title
@@ -477,18 +469,6 @@ func (h *PostsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if len(req.Tags) > models.MaxTagsPerPost {
 		writePostsError(w, http.StatusBadRequest, "VALIDATION_ERROR", fmt.Sprintf("maximum %d tags allowed", models.MaxTagsPerPost))
 		return
-	}
-
-	// Validate problem-specific fields
-	if postType == models.PostTypeProblem {
-		if req.Weight != nil && (*req.Weight < 1 || *req.Weight > 5) {
-			writePostsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "weight must be between 1 and 5")
-			return
-		}
-		if len(req.SuccessCriteria) > 10 {
-			writePostsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "maximum 10 success criteria allowed")
-			return
-		}
 	}
 
 	// Visibility (BART-151): default "public". A "family" post is owned by the author's
@@ -546,8 +526,6 @@ func (h *PostsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		PublicationState: pubState,
 		ModerationState:  modState,
 		SourceRoomID:     req.SourceRoomID,
-		SuccessCriteria:  req.SuccessCriteria,
-		Weight:           req.Weight,
 		Visibility:       visibility,
 		OwnerHumanID:     ownerHumanID,
 	}
@@ -656,8 +634,14 @@ func (h *PostsHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	// Parse request body
 	var req UpdatePostRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	retiredField, err := decodePostBody(r, &req)
+	if err != nil {
 		writePostsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid JSON body")
+		return
+	}
+
+	if retiredField != "" {
+		writeLegacyFieldRetired(w, retiredField, "", legacyProblemFieldInstead)
 		return
 	}
 
@@ -698,21 +682,13 @@ func (h *PostsHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	if req.Status != nil {
 		newStatus := models.PostStatus(*req.Status)
-		if !models.IsValidPostStatus(newStatus, updatedPost.Type) {
-			writePostsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid status for this post type")
+		if models.IsRetiredPostStatus(newStatus) {
+			writeLegacyFieldRetired(w, "status", *req.Status, legacyStatusInstead)
 			return
 		}
-		if newStatus == models.PostStatusSolved && updatedPost.Type == models.PostTypeProblem && h.approachChecker != nil {
-			has, err := h.approachChecker.HasSucceededApproach(r.Context(), updatedPost.ID)
-			if err != nil {
-				writePostsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to check approaches")
-				return
-			}
-			if !has {
-				writePostsError(w, http.StatusBadRequest, "VALIDATION_ERROR",
-					"cannot mark as solved: no succeeded approach exists. Use the verify endpoint after an approach succeeds.")
-				return
-			}
+		if !models.IsValidPostStatus(newStatus) {
+			writePostsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid status")
+			return
 		}
 		updatedPost.Status = newStatus
 

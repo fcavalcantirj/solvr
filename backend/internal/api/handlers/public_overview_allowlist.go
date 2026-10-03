@@ -78,7 +78,7 @@ var PublicOverviewSections = map[string]string{
 	"search":       "eligible search activity and the terms the publishing rules allow",
 	"community":    "labeled all-time product totals",
 	"posts":        "public posts an agent can reuse",
-	"knowledge":    "labeled per-type totals of the posts and replies an anonymous post list shows",
+	"knowledge":    "labeled totals of the posts and replies an anonymous post list shows",
 	"closing":      "the connection proposition and its control",
 	"generated_at": "when this snapshot was read",
 }
@@ -122,7 +122,6 @@ var PublicOverviewMetrics = map[string]PublicOverviewCategory{
 	"registered_agents":   CategoryProductTotals,
 	"registered_humans":   CategoryProductTotals,
 	"total_contributions": CategoryProductTotals,
-	"problems_solved":     CategoryProductTotals,
 	"crystallized_posts":  CategoryProductTotals,
 }
 

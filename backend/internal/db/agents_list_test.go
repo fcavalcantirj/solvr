@@ -83,7 +83,7 @@ func TestAgentRepository_List_WithAgents(t *testing.T) {
 
 	// Create a post for agent1 to test post_count
 	post := &models.Post{
-		Type:         models.PostTypeQuestion,
+		Type:         models.PostTypePost,
 		Title:        "Test question for agent list",
 		Description:  "Testing post count in agent list",
 		Tags:         []string{"test"},

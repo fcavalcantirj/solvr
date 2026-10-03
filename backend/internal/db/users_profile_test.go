@@ -55,7 +55,7 @@ func TestUserProfile_GetUserStats_Integration(t *testing.T) {
 	// Create some posts for the user
 	for i := 0; i < 3; i++ {
 		post := &models.Post{
-			Type:         models.PostTypeQuestion,
+			Type:         models.PostTypePost,
 			Title:        "Test question for profile stats",
 			Description:  "This is a test question to verify user stats calculation works correctly.",
 			Tags:         []string{"test"},
@@ -207,7 +207,7 @@ func TestPostListByAuthor_Integration(t *testing.T) {
 	// Create posts for user1 (3 posts)
 	for i := 0; i < 3; i++ {
 		post := &models.Post{
-			Type:         models.PostTypeQuestion,
+			Type:         models.PostTypePost,
 			Title:        "Test question from user 1",
 			Description:  "This is a test question from user 1 to verify author filtering.",
 			Tags:         []string{"test"},
@@ -224,7 +224,7 @@ func TestPostListByAuthor_Integration(t *testing.T) {
 	// Create posts for user2 (2 posts)
 	for i := 0; i < 2; i++ {
 		post := &models.Post{
-			Type:         models.PostTypeProblem,
+			Type:         models.PostTypePost,
 			Title:        "Test problem from user 2",
 			Description:  "This is a test problem from user 2 to verify author filtering works.",
 			Tags:         []string{"test"},

@@ -18,13 +18,16 @@ func TestDeriveStates(t *testing.T) {
 		{PostStatusRejected, PublicationDraft, ModerationRejected},
 		{PostStatusClosed, PublicationArchived, ModerationApproved},
 		{PostStatusOpen, PublicationPublished, ModerationApproved},
-		{PostStatusInProgress, PublicationPublished, ModerationApproved},
-		{PostStatusSolved, PublicationPublished, ModerationApproved},
-		{PostStatusAnswered, PublicationPublished, ModerationApproved},
-		{PostStatusActive, PublicationPublished, ModerationApproved},
-		{PostStatusDormant, PublicationPublished, ModerationApproved},
-		{PostStatusEvolved, PublicationPublished, ModerationApproved},
 		{PostStatusStale, PublicationPublished, ModerationApproved},
+	}
+	// A row still holding a retired legacy status (before the legacy archive migration turns it
+	// into open) keeps reading as published and approved.
+	for _, retired := range RetiredPostStatuses {
+		cases = append(cases, struct {
+			status  PostStatus
+			wantPub PublicationState
+			wantMod ModerationState
+		}{retired, PublicationPublished, ModerationApproved})
 	}
 	for _, c := range cases {
 		pub, mod := DeriveStates(c.status)
@@ -67,8 +70,8 @@ func TestPublicEligible_DeletedNeverPublic(t *testing.T) {
 	}
 }
 
-// TestIsValidPostType_CanonicalPost verifies the canonical untyped post is valid while
-// unknown types are still rejected (BART-583, step 3).
+// TestIsValidPostType_CanonicalPost verifies post is the only valid type: unknown types and
+// the legacy problem, question and idea types retired in idx 68 are invalid.
 func TestIsValidPostType_CanonicalPost(t *testing.T) {
 	if !IsValidPostType(PostTypePost) {
 		t.Error("PostTypePost must be a valid post type")
@@ -76,10 +79,13 @@ func TestIsValidPostType_CanonicalPost(t *testing.T) {
 	if IsValidPostType(PostType("invalid")) {
 		t.Error("unknown type must remain invalid")
 	}
-	for _, legacy := range []PostType{PostTypeProblem, PostTypeQuestion, PostTypeIdea} {
-		if !IsValidPostType(legacy) {
-			t.Errorf("legacy type %q must remain valid", legacy)
+	for _, legacy := range []PostType{"problem", "question", "idea"} {
+		if IsValidPostType(legacy) {
+			t.Errorf("legacy type %q was retired (idx 68) and must be invalid", legacy)
 		}
+	}
+	if got := ValidPostTypes(); len(got) != 1 || got[0] != PostTypePost {
+		t.Errorf("ValidPostTypes() = %v, want [post]", got)
 	}
 }
 
@@ -87,12 +93,12 @@ func TestIsValidPostType_CanonicalPost(t *testing.T) {
 // lifecycle statuses so status validation does not reject untyped posts.
 func TestIsValidPostStatus_CanonicalPost(t *testing.T) {
 	for _, s := range []PostStatus{PostStatusDraft, PostStatusOpen, PostStatusClosed, PostStatusStale} {
-		if !IsValidPostStatus(s, PostTypePost) {
+		if !IsValidPostStatus(s) {
 			t.Errorf("status %q must be valid for a canonical post", s)
 		}
 	}
 	// Moderation statuses are valid for any valid type.
-	if !IsValidPostStatus(PostStatusPendingReview, PostTypePost) {
+	if !IsValidPostStatus(PostStatusPendingReview) {
 		t.Error("pending_review must be valid for a canonical post")
 	}
 }

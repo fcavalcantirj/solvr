@@ -218,11 +218,11 @@ func PostContentFingerprints(ctx context.Context, pool *Pool, ids ...string) (ma
 
 	out := map[string]string{}
 	for rows.Next() {
-		var p models.Post
+		var p fingerprintedPost
 		if err := rows.Scan(
 			&p.ID, &p.Type, &p.Title, &p.Description, &p.Tags, &p.PostedByType, &p.PostedByID, &p.Status,
-			&p.Upvotes, &p.Downvotes, &p.ViewCount, &p.SuccessCriteria, &p.Weight, &p.AcceptedAnswerID,
-			&p.EvolvedInto, &p.CreatedAt, &p.DeletedAt, &p.CrystallizationCID, &p.CrystallizedAt,
+			&p.Upvotes, &p.Downvotes, &p.ViewCount, &p.successCriteria, &p.weight, &p.acceptedAnswerID,
+			&p.evolvedInto, &p.CreatedAt, &p.DeletedAt, &p.CrystallizationCID, &p.CrystallizedAt,
 			&p.Visibility, &p.OriginalLanguage, &p.OriginalTitle, &p.OriginalDescription, &p.OwnerHumanID,
 		); err != nil {
 			return nil, fmt.Errorf("post content fingerprints: scan: %w", err)
@@ -235,7 +235,18 @@ func PostContentFingerprints(ctx context.Context, pool *Pool, ids ...string) (ma
 	return out, nil
 }
 
-func contentFingerprint(p *models.Post) string {
+// fingerprintedPost is a post row with the legacy problem-only columns the cutover-time
+// fingerprint covers. They are no longer part of models.Post (idx 68); like the rest of the
+// cutover tool, the fingerprint runs only on a schema below the legacy archive.
+type fingerprintedPost struct {
+	models.Post
+	successCriteria  []string
+	weight           *int
+	acceptedAnswerID *string
+	evolvedInto      []string
+}
+
+func contentFingerprint(p *fingerprintedPost) string {
 	var b strings.Builder
 	w := func(label, v string) {
 		b.WriteString(label)
@@ -254,10 +265,10 @@ func contentFingerprint(p *models.Post) string {
 	w("upvotes", strconv.Itoa(p.Upvotes))
 	w("downvotes", strconv.Itoa(p.Downvotes))
 	w("view_count", strconv.Itoa(p.ViewCount))
-	w("success_criteria", strings.Join(p.SuccessCriteria, "\x1f"))
-	w("weight", intPtrStr(p.Weight))
-	w("accepted_answer_id", strPtrStr(p.AcceptedAnswerID))
-	w("evolved_into", strings.Join(p.EvolvedInto, "\x1f"))
+	w("success_criteria", strings.Join(p.successCriteria, "\x1f"))
+	w("weight", intPtrStr(p.weight))
+	w("accepted_answer_id", strPtrStr(p.acceptedAnswerID))
+	w("evolved_into", strings.Join(p.evolvedInto, "\x1f"))
 	w("created_at", p.CreatedAt.UTC().Format(time.RFC3339Nano))
 	w("deleted_at", timePtrStr(p.DeletedAt))
 	w("crystallization_cid", strPtrStr(p.CrystallizationCID))

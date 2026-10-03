@@ -88,8 +88,8 @@ func TestPostCountsRoute_CountCanonicalReplies(t *testing.T) {
 	assert.Equal(t, detail.Data.Replies, page.Meta.Total, "reply_count is the reply list total")
 
 	var list struct{ Data []counts }
-	get("/v1/posts?type=question&has_answer=true&tags="+tag, &list)
+	get("/v1/posts?has_answer=true&tags="+tag, &list)
 	assert.Equal(t, []counts{detail.Data}, list.Data, "the native reply answers the question")
-	get("/v1/posts?type=question&has_answer=false&tags="+tag, &list)
+	get("/v1/posts?has_answer=false&tags="+tag, &list)
 	assert.Equal(t, []counts{{ID: bare}}, list.Data)
 }

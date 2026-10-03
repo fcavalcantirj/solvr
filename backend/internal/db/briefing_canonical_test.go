@@ -120,8 +120,8 @@ func TestCanonicalBriefing_OpenItems(t *testing.T) {
 	}
 
 	canonical := mine("canonical post waiting", cbPostSeed{age: 50*time.Hour + 30*time.Minute})
-	problem := mine("legacy problem waiting", cbPostSeed{postType: "problem", age: 40 * time.Hour})
-	question := mine("legacy question waiting", cbPostSeed{postType: "question", age: 30 * time.Hour})
+	second := mine("second post waiting", cbPostSeed{age: 40 * time.Hour})
+	third := mine("third post waiting", cbPostSeed{age: 30 * time.Hour})
 	systemOnly := mine("only a system verdict", cbPostSeed{age: 20 * time.Hour})
 	cbInsertReply(t, pool, ctx, systemOnly, "system", "moderation", time.Hour, false)
 	deletedOnly := mine("only a deleted reply", cbPostSeed{age: 10 * time.Hour})
@@ -138,27 +138,23 @@ func TestCanonicalBriefing_OpenItems(t *testing.T) {
 	mine("rejected", cbPostSeed{moderation: "rejected"})
 	mine("deleted", cbPostSeed{deleted: true})
 	mine("closed", cbPostSeed{status: "closed"})
-	mine("solved problem", cbPostSeed{postType: "problem", status: "solved"})
-	mine("answered question", cbPostSeed{postType: "question", status: "answered"})
 	cbInsertPost(t, pool, ctx, "someone else's post", cbPostSeed{byID: other})
 
 	got, err := NewCanonicalBriefingRepository(pool).GetOpenItemsForAgent(ctx, me)
 	require.NoError(t, err)
 	require.Equal(t, 6, got.PostsNoReplies, "every live published approved post of mine without a contributor reply")
-	require.Equal(t, 1, got.ProblemsNoApproaches, "the problem-typed subset")
-	require.Equal(t, 1, got.QuestionsNoAnswers, "the question-typed subset")
-	require.Equal(t, 0, got.ApproachesStale, "the approach working-status lifecycle is retired")
 
 	var ids []string
 	for _, it := range got.Items {
 		ids = append(ids, it.ID)
 	}
-	require.Equal(t, []string{canonical, problem, question, systemOnly, deletedOnly, family}, ids, "oldest first")
+	require.Equal(t, []string{canonical, second, third, systemOnly, deletedOnly, family}, ids, "oldest first")
 	require.Equal(t, "post", got.Items[0].Type)
 	require.Equal(t, "open", got.Items[0].Status)
 	require.Equal(t, 50, got.Items[0].AgeHours)
-	require.Equal(t, "problem", got.Items[1].Type)
-	require.Equal(t, "question", got.Items[2].Type)
+	for _, it := range got.Items {
+		require.Equal(t, "post", it.Type, "every post is type post (idx 68)")
+	}
 }
 
 func TestCanonicalBriefing_OpenItems_ItemsCappedCountNot(t *testing.T) {
@@ -251,13 +247,12 @@ func TestCanonicalBriefing_Opportunities(t *testing.T) {
 	cbInsertReply(t, pool, ctx, replied, "agent", me, 5*time.Minute, false)
 	cbInsertReply(t, pool, ctx, replied, "system", "moderation", time.Minute, false)
 	cbInsertReply(t, pool, ctx, replied, "human", someone, time.Minute, true)
-	idea := theirs("active idea", cbPostSeed{postType: "idea", status: "active", age: 2 * time.Hour})
-	problem := theirs("problem in progress", cbPostSeed{postType: "problem", status: "in_progress", age: 3 * time.Hour})
+	idea := theirs("open post two hours old", cbPostSeed{age: 2 * time.Hour})
+	problem := theirs("open post three hours old", cbPostSeed{age: 3 * time.Hour})
 
 	cbInsertPost(t, pool, ctx, "my own post", cbPostSeed{byID: me, tags: []string{tag}})
 	theirs("closed", cbPostSeed{status: "closed"})
-	theirs("solved problem", cbPostSeed{postType: "problem", status: "solved"})
-	theirs("answered question", cbPostSeed{postType: "question", status: "answered"})
+	theirs("stale", cbPostSeed{status: "stale"})
 	theirs("draft", cbPostSeed{publication: "draft"})
 	theirs("pending", cbPostSeed{moderation: "pending"})
 	theirs("family", cbPostSeed{visibility: "family"})

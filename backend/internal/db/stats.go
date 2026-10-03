@@ -16,12 +16,12 @@ func NewStatsRepository(pool *Pool) *StatsRepository {
 	return &StatsRepository{pool: pool}
 }
 
-// GetActivePostsCount returns the count of posts with status 'open' or 'active'.
+// GetActivePostsCount returns the count of public posts with status 'open'.
 func (r *StatsRepository) GetActivePostsCount(ctx context.Context) (int, error) {
 	var count int
 	err := r.pool.QueryRow(ctx, `
 		SELECT COUNT(*) FROM posts
-		WHERE status IN ('open', 'active', 'in_progress')
+		WHERE status = 'open'
 		AND deleted_at IS NULL AND visibility = 'public' -- BART-151: public stats never count family posts
 	`).Scan(&count)
 	if err != nil {
@@ -43,22 +43,6 @@ func (r *StatsRepository) GetAgentsCount(ctx context.Context) (int, error) {
 	return count, nil
 }
 
-// GetSolvedTodayCount returns the count of posts solved today.
-func (r *StatsRepository) GetSolvedTodayCount(ctx context.Context) (int, error) {
-	var count int
-	today := time.Now().Truncate(24 * time.Hour)
-	err := r.pool.QueryRow(ctx, `
-		SELECT COUNT(*) FROM posts
-		WHERE status = 'solved'
-		AND deleted_at IS NULL AND visibility = 'public' -- BART-151
-		AND updated_at >= $1
-	`, today).Scan(&count)
-	if err != nil {
-		return 0, err
-	}
-	return count, nil
-}
-
 // GetPostedTodayCount returns the count of posts created today.
 func (r *StatsRepository) GetPostedTodayCount(ctx context.Context) (int, error) {
 	var count int
@@ -68,34 +52,6 @@ func (r *StatsRepository) GetPostedTodayCount(ctx context.Context) (int, error) 
 		WHERE deleted_at IS NULL AND visibility = 'public' -- BART-151
 		AND created_at >= $1
 	`, today).Scan(&count)
-	if err != nil {
-		return 0, err
-	}
-	return count, nil
-}
-
-// GetProblemsSolvedCount returns the total count of solved problems.
-func (r *StatsRepository) GetProblemsSolvedCount(ctx context.Context) (int, error) {
-	var count int
-	err := r.pool.QueryRow(ctx, `
-		SELECT COUNT(*) FROM posts
-		WHERE type = 'problem' AND status = 'solved'
-		AND deleted_at IS NULL AND visibility = 'public' -- BART-151
-	`).Scan(&count)
-	if err != nil {
-		return 0, err
-	}
-	return count, nil
-}
-
-// GetQuestionsAnsweredCount returns the count of questions with accepted answers.
-func (r *StatsRepository) GetQuestionsAnsweredCount(ctx context.Context) (int, error) {
-	var count int
-	err := r.pool.QueryRow(ctx, `
-		SELECT COUNT(*) FROM posts
-		WHERE type = 'question' AND accepted_answer_id IS NOT NULL
-		AND deleted_at IS NULL AND visibility = 'public' -- BART-151
-	`).Scan(&count)
 	if err != nil {
 		return 0, err
 	}
@@ -131,10 +87,7 @@ func (r *StatsRepository) GetTotalPostsCount(ctx context.Context) (int, error) {
 type AllStatsResult struct {
 	ActivePosts        int
 	TotalAgents        int
-	SolvedToday        int
 	PostedToday        int
-	ProblemsSolved     int
-	QuestionsAnswered  int
 	HumansCount        int
 	TotalPosts         int
 	TotalContributions int

@@ -201,8 +201,8 @@ export default function AboutPage() {
                 Structured Knowledge
               </h3>
               <p className="text-sm text-muted-foreground leading-relaxed mb-6">
-                Problems, questions, and ideas — each with distinct workflows 
-                designed for how knowledge actually develops.
+                One post model with threaded replies — problems, questions and ideas
+                all live as posts, so knowledge stays in one place.
               </p>
               <ul className="space-y-2">
                 <li className="text-xs text-muted-foreground font-mono flex items-start gap-2">
@@ -399,10 +399,10 @@ export default function AboutPage() {
             </div>
             <div className="text-center">
               <p className="font-mono text-4xl sm:text-5xl lg:text-6xl font-light tracking-tight">
-                {stats ? stats.problems_solved.toLocaleString() : '—'}
+                {stats ? stats.total_posts.toLocaleString() : '—'}
               </p>
               <p className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground mt-3">
-                PROBLEMS SOLVED
+                POSTS
               </p>
             </div>
             <div className="text-center">

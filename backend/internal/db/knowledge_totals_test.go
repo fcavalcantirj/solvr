@@ -40,6 +40,7 @@ func insertKnowledgeReply(t *testing.T, pool *Pool, postID string, deleted bool)
 	return id
 }
 
+// One entry, post: the per-type entries were retired with the legacy post types (idx 68).
 func TestGetKnowledgeTotals_ListsEveryKnowledgeTypeInOrder(t *testing.T) {
 	pool := setupTestDB(t)
 	t.Cleanup(pool.Close)
@@ -55,7 +56,7 @@ func TestGetKnowledgeTotals_ListsEveryKnowledgeTypeInOrder(t *testing.T) {
 			t.Errorf("%s: by_status must be an empty map, never nil", k.Type)
 		}
 	}
-	want := []string{"problem", "question", "idea", "post"}
+	want := []string{"post"}
 	if len(types) != len(want) {
 		t.Fatalf("types = %v, want %v", types, want)
 	}
@@ -72,15 +73,15 @@ func TestGetKnowledgeTotals_CountsWhatAnAnonymousListShows(t *testing.T) {
 	repo := NewStatsRepository(pool)
 	ctx := context.Background()
 
-	before := knowledgeTotalsFor(t, repo, "question")
+	before := knowledgeTotalsFor(t, repo, "post")
 
-	open := insertVisibilityTestPost(t, pool, ctx, "question", "Knowledge open question", "open", "public", 0)
-	solved := insertVisibilityTestPost(t, pool, ctx, "question", "Knowledge solved question", "solved", "public", 0)
+	open := insertVisibilityTestPost(t, pool, ctx, "post", "Knowledge open post", "open", "public", 0)
+	closed := insertVisibilityTestPost(t, pool, ctx, "post", "Knowledge closed post", "closed", "public", 0)
 	// None of these is visible to an anonymous list, so none may count.
-	insertVisibilityTestPost(t, pool, ctx, "question", "Knowledge family question", "open", "family", 0)
-	insertVisibilityTestPost(t, pool, ctx, "question", "Knowledge draft question", "draft", "public", 0)
-	insertVisibilityTestPost(t, pool, ctx, "question", "Knowledge pending question", "pending_review", "public", 0)
-	deleted := insertVisibilityTestPost(t, pool, ctx, "question", "Knowledge deleted question", "open", "public", 0)
+	insertVisibilityTestPost(t, pool, ctx, "post", "Knowledge family post", "open", "family", 0)
+	insertVisibilityTestPost(t, pool, ctx, "post", "Knowledge draft post", "draft", "public", 0)
+	insertVisibilityTestPost(t, pool, ctx, "post", "Knowledge pending post", "pending_review", "public", 0)
+	deleted := insertVisibilityTestPost(t, pool, ctx, "post", "Knowledge deleted post", "open", "public", 0)
 	if _, err := pool.Exec(ctx, "UPDATE posts SET deleted_at = NOW() WHERE id = $1", deleted); err != nil {
 		t.Fatalf("soft-delete: %v", err)
 	}
@@ -88,22 +89,19 @@ func TestGetKnowledgeTotals_CountsWhatAnAnonymousListShows(t *testing.T) {
 	insertKnowledgeReply(t, pool, open, false)
 	insertKnowledgeReply(t, pool, open, false)
 	insertKnowledgeReply(t, pool, open, true) // deleted reply: not counted
-	accepted := insertKnowledgeReply(t, pool, solved, false)
+	insertKnowledgeReply(t, pool, closed, false)
 	insertKnowledgeReply(t, pool, deleted, false) // reply on a deleted post: not counted
-	if _, err := pool.Exec(ctx, "UPDATE posts SET accepted_answer_id = $2 WHERE id = $1", solved, accepted); err != nil {
-		t.Fatalf("accept reply: %v", err)
-	}
 
-	after := knowledgeTotalsFor(t, repo, "question")
+	after := knowledgeTotalsFor(t, repo, "post")
 
 	if got, want := after.Total, before.Total+2; got != want {
-		t.Errorf("Total = %d, want %d (only the two visible questions)", got, want)
+		t.Errorf("Total = %d, want %d (only the two visible posts)", got, want)
 	}
 	if got, want := after.ByStatus["open"], before.ByStatus["open"]+1; got != want {
 		t.Errorf("ByStatus[open] = %d, want %d", got, want)
 	}
-	if got, want := after.ByStatus["solved"], before.ByStatus["solved"]+1; got != want {
-		t.Errorf("ByStatus[solved] = %d, want %d", got, want)
+	if got, want := after.ByStatus["closed"], before.ByStatus["closed"]+1; got != want {
+		t.Errorf("ByStatus[closed] = %d, want %d", got, want)
 	}
 	for _, hidden := range []string{"draft", "pending_review"} {
 		if after.ByStatus[hidden] != before.ByStatus[hidden] {
@@ -115,9 +113,6 @@ func TestGetKnowledgeTotals_CountsWhatAnAnonymousListShows(t *testing.T) {
 	}
 	if got, want := after.Replies, before.Replies+3; got != want {
 		t.Errorf("Replies = %d, want %d (deleted replies and replies on deleted posts excluded)", got, want)
-	}
-	if got, want := after.WithAcceptedReply, before.WithAcceptedReply+1; got != want {
-		t.Errorf("WithAcceptedReply = %d, want %d", got, want)
 	}
 	sum := 0
 	for _, n := range after.ByStatus {

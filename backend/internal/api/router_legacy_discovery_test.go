@@ -87,23 +87,22 @@ func seedLegacyDiscovery(t *testing.T, pool *db.Pool, authorID string) legacyDis
 	repo := db.NewPostRepository(pool)
 	create := func(pt models.PostType, title string) string {
 		p, err := repo.Create(ctx, &models.Post{
-			Type:            pt,
-			Title:           title,
-			Description:     "Legacy discovery adapter body for " + title,
-			Tags:            []string{s.tag},
-			PostedByType:    models.AuthorTypeAgent,
-			PostedByID:      authorID,
-			Status:          models.PostStatusOpen,
-			Visibility:      models.VisibilityPublic,
-			SuccessCriteria: []string{"it works"},
+			Type:         pt,
+			Title:        title,
+			Description:  "Legacy discovery adapter body for " + title,
+			Tags:         []string{s.tag},
+			PostedByType: models.AuthorTypeAgent,
+			PostedByID:   authorID,
+			Status:       models.PostStatusOpen,
+			Visibility:   models.VisibilityPublic,
 		})
 		require.NoError(t, err)
 		return p.ID
 	}
-	s.problem = create(models.PostTypeProblem, "Legacy discovery problem")
-	s.unanswered = create(models.PostTypeQuestion, "Legacy discovery unanswered question")
-	s.answered = create(models.PostTypeQuestion, "Legacy discovery answered question")
-	s.idea = create(models.PostTypeIdea, "Legacy discovery idea")
+	s.problem = create(models.PostTypePost, "Legacy discovery problem")
+	s.unanswered = create(models.PostTypePost, "Legacy discovery unanswered question")
+	s.answered = create(models.PostTypePost, "Legacy discovery answered question")
+	s.idea = create(models.PostTypePost, "Legacy discovery idea")
 
 	// A reply shaped like the one the contribution cutover made from a legacy answer: has_answer
 	// and the answer count read replies (task idx 76).
@@ -124,9 +123,9 @@ var legacyTypedLists = []struct {
 	postType  string
 	canonical string
 }{
-	{"/v1/problems", "problem", "/v1/posts?type=problem"},
-	{"/v1/questions", "question", "/v1/posts?type=question"},
-	{"/v1/ideas", "idea", "/v1/posts?type=idea"},
+	{"/v1/problems", "problem", "/v1/posts"},
+	{"/v1/questions", "question", "/v1/posts"},
+	{"/v1/ideas", "idea", "/v1/posts"},
 }
 
 // TestRetiredTypedDiscovery_NamedQueryListsWhatTheRouteListed: each retired route names GET
@@ -181,7 +180,7 @@ func TestRetiredTypedDiscovery_EveryLegacyQueryShapeGetsTheMigrationError(t *tes
 	for _, lt := range legacyTypedLists {
 		ret := readRetirement(t, lt.path)
 		message, _ := retirementAnswer(ret)
-		for _, query := range []string{"", "?per_page=200", "?page=abc&per_page=0", "?type=idea&tags=x", "?has_answer=true"} {
+		for _, query := range []string{"", "?per_page=200", "?page=abc&per_page=0", "?tags=x", "?has_answer=true"} {
 			got, err := callStatusContract(http.DefaultClient, http.MethodGet, ts.URL+lt.path+query, "", "")
 			require.NoError(t, err)
 			require.Equal(t, http.StatusGone, got.status, "%s%s: %s", lt.path, query, got.body)
@@ -209,7 +208,7 @@ func TestPostsList_HasAnswerFilterDefinedOnce(t *testing.T) {
 	agentID, _ := registerRoomTestAgent(t, ts)
 	s := seedLegacyDiscovery(t, pool, agentID)
 
-	base := "/v1/posts?type=question&"
+	base := "/v1/posts?"
 	resp, unanswered := getLegacyList(t, ts.URL+base+"has_answer=false&tags="+s.tag)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	require.Len(t, unanswered.Data, 1, "%s has_answer=false", base)

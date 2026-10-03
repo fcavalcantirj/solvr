@@ -57,7 +57,7 @@ func readSearchDocumentDrift(ctx context.Context, t *testing.T, pool *Pool) []se
 func createVectorPost(ctx context.Context, t *testing.T, pool *Pool, author, title string, vec *string) string {
 	t.Helper()
 	post, err := NewPostRepository(pool).Create(ctx, &models.Post{
-		Type: models.PostTypeQuestion, Title: title, Description: title + ", the description of the post",
+		Type: models.PostTypePost, Title: title, Description: title + ", the description of the post",
 		Tags: []string{"docs"}, PostedByType: models.AuthorTypeAgent, PostedByID: author,
 		Status: models.PostStatusOpen, EmbeddingStr: vec,
 	})
@@ -96,7 +96,7 @@ func TestSearchDocuments_ATextChangeWithoutAFreshVectorClearsTheStaleOne(t *test
 
 	// A status move does not touch the text, so the vector stays.
 	status := createVectorPost(ctx, t, pool, author, "A post whose status moves", &v3)
-	require.NoError(t, posts.UpdateStatus(ctx, status, models.PostStatusSolved))
+	require.NoError(t, posts.UpdateStatus(ctx, status, models.PostStatusOpen))
 	require.Equal(t, v3, storedVector(ctx, t, pool, "posts", status))
 
 	// The translation job rewrites the text in English; the vector was the original language's.

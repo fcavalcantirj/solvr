@@ -471,16 +471,15 @@ func (m *MockBriefingOpenItemsRepo) GetOpenItemsForAgent(ctx context.Context, ag
 	return m.result, nil
 }
 
-// TestAgentMe_OpenItemsProblemsNoApproaches verifies that my_open_items reports problems with no approaches.
-func TestAgentMe_OpenItemsProblemsNoApproaches(t *testing.T) {
+// TestAgentMe_OpenItemsPostsNoReplies verifies that my_open_items reports the agent's open posts
+// with no contributor reply, and none of the per-type counters retired in idx 68.
+func TestAgentMe_OpenItemsPostsNoReplies(t *testing.T) {
 	repo := NewMockMeUserRepository()
 	config := &OAuthConfig{JWTSecret: "test-secret-key"}
 
 	openItemsRepo := &MockBriefingOpenItemsRepo{
 		result: &models.OpenItemsResult{
-			ProblemsNoApproaches: 1,
-			QuestionsNoAnswers:   0,
-			ApproachesStale:      0,
+			PostsNoReplies: 1,
 			Items: []models.OpenItem{
 				{
 					Type:     "problem",
@@ -521,107 +520,13 @@ func TestAgentMe_OpenItemsProblemsNoApproaches(t *testing.T) {
 		t.Fatal("response missing 'my_open_items' field or it's not an object")
 	}
 
-	pna := int(openItems["problems_no_approaches"].(float64))
-	if pna != 1 {
-		t.Errorf("expected problems_no_approaches=1, got %d", pna)
+	if pnr := int(openItems["posts_no_replies"].(float64)); pnr != 1 {
+		t.Errorf("expected posts_no_replies=1, got %d", pnr)
 	}
-
-	qna := int(openItems["questions_no_answers"].(float64))
-	if qna != 0 {
-		t.Errorf("expected questions_no_answers=0, got %d", qna)
-	}
-}
-
-// TestAgentMe_OpenItemsQuestionsNoAnswers verifies questions without answers are counted.
-func TestAgentMe_OpenItemsQuestionsNoAnswers(t *testing.T) {
-	repo := NewMockMeUserRepository()
-	config := &OAuthConfig{JWTSecret: "test-secret-key"}
-
-	openItemsRepo := &MockBriefingOpenItemsRepo{
-		result: &models.OpenItemsResult{
-			ProblemsNoApproaches: 0,
-			QuestionsNoAnswers:   2,
-			ApproachesStale:      0,
-			Items: []models.OpenItem{
-				{Type: "question", ID: "q-1", Title: "Unanswered Q1", Status: "open", AgeHours: 24},
-				{Type: "question", ID: "q-2", Title: "Unanswered Q2", Status: "open", AgeHours: 12},
-			},
-		},
-	}
-
-	handler := NewMeHandler(config, repo, nil, nil, nil)
-	handler.openItemsRepo = openItemsRepo
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
-	agent := &models.Agent{
-		ID:          "qna_agent",
-		DisplayName: "QNA Agent",
-		Status:      "active",
-	}
-	ctx := auth.ContextWithAgent(req.Context(), agent)
-	req = req.WithContext(ctx)
-
-	rr := httptest.NewRecorder()
-	handler.Me(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d: %s", rr.Code, rr.Body.String())
-	}
-
-	var response map[string]interface{}
-	json.NewDecoder(rr.Body).Decode(&response)
-	data := response["data"].(map[string]interface{})
-	openItems := data["my_open_items"].(map[string]interface{})
-
-	qna := int(openItems["questions_no_answers"].(float64))
-	if qna != 2 {
-		t.Errorf("expected questions_no_answers=2, got %d", qna)
-	}
-}
-
-// TestAgentMe_OpenItemsStaleApproaches verifies stale approaches (working for >24h) are counted.
-func TestAgentMe_OpenItemsStaleApproaches(t *testing.T) {
-	repo := NewMockMeUserRepository()
-	config := &OAuthConfig{JWTSecret: "test-secret-key"}
-
-	openItemsRepo := &MockBriefingOpenItemsRepo{
-		result: &models.OpenItemsResult{
-			ProblemsNoApproaches: 0,
-			QuestionsNoAnswers:   0,
-			ApproachesStale:      1,
-			Items: []models.OpenItem{
-				{Type: "approach", ID: "app-old", Title: "Stale approach", Status: "working", AgeHours: 36},
-			},
-		},
-	}
-
-	handler := NewMeHandler(config, repo, nil, nil, nil)
-	handler.openItemsRepo = openItemsRepo
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
-	agent := &models.Agent{
-		ID:          "stale_agent",
-		DisplayName: "Stale Agent",
-		Status:      "active",
-	}
-	ctx := auth.ContextWithAgent(req.Context(), agent)
-	req = req.WithContext(ctx)
-
-	rr := httptest.NewRecorder()
-	handler.Me(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d: %s", rr.Code, rr.Body.String())
-	}
-
-	var response map[string]interface{}
-	json.NewDecoder(rr.Body).Decode(&response)
-	data := response["data"].(map[string]interface{})
-	openItems := data["my_open_items"].(map[string]interface{})
-
-	stale := int(openItems["approaches_stale"].(float64))
-	if stale != 1 {
-		t.Errorf("expected approaches_stale=1, got %d", stale)
+	for _, retired := range []string{"problems_no_approaches", "questions_no_answers", "approaches_stale"} {
+		if _, ok := openItems[retired]; ok {
+			t.Errorf("%s was retired with the legacy post types (idx 68) and must not be returned", retired)
+		}
 	}
 }
 
@@ -632,9 +537,7 @@ func TestAgentMe_OpenItemsWithDetails(t *testing.T) {
 
 	openItemsRepo := &MockBriefingOpenItemsRepo{
 		result: &models.OpenItemsResult{
-			ProblemsNoApproaches: 1,
-			QuestionsNoAnswers:   1,
-			ApproachesStale:      1,
+			PostsNoReplies: 1,
 			Items: []models.OpenItem{
 				{Type: "problem", ID: "prob-1", Title: "My Problem", Status: "open", AgeHours: 72},
 				{Type: "question", ID: "q-1", Title: "My Question", Status: "open", AgeHours: 48},
@@ -704,10 +607,8 @@ func TestAgentMe_OpenItemsEmpty(t *testing.T) {
 
 	openItemsRepo := &MockBriefingOpenItemsRepo{
 		result: &models.OpenItemsResult{
-			ProblemsNoApproaches: 0,
-			QuestionsNoAnswers:   0,
-			ApproachesStale:      0,
-			Items:                []models.OpenItem{},
+			PostsNoReplies: 0,
+			Items:          []models.OpenItem{},
 		},
 	}
 
@@ -735,18 +636,8 @@ func TestAgentMe_OpenItemsEmpty(t *testing.T) {
 	data := response["data"].(map[string]interface{})
 	openItems := data["my_open_items"].(map[string]interface{})
 
-	pna := int(openItems["problems_no_approaches"].(float64))
-	qna := int(openItems["questions_no_answers"].(float64))
-	stale := int(openItems["approaches_stale"].(float64))
-
-	if pna != 0 {
-		t.Errorf("expected problems_no_approaches=0, got %d", pna)
-	}
-	if qna != 0 {
-		t.Errorf("expected questions_no_answers=0, got %d", qna)
-	}
-	if stale != 0 {
-		t.Errorf("expected approaches_stale=0, got %d", stale)
+	if pnr := int(openItems["posts_no_replies"].(float64)); pnr != 0 {
+		t.Errorf("expected posts_no_replies=0, got %d", pnr)
 	}
 
 	items := openItems["items"].([]interface{})

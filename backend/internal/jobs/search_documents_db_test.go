@@ -118,7 +118,7 @@ func TestSearchDocumentJob_ClearedVectorsComeBackOnceAcrossInstances(t *testing.
 	create := func(title string, vec *string) string {
 		t.Helper()
 		p, err := posts.Create(ctx, &models.Post{
-			Type: models.PostTypeQuestion, Title: title, Description: title + ", described",
+			Type: models.PostTypePost, Title: title, Description: title + ", described",
 			Tags: []string{"sweep"}, PostedByType: models.AuthorTypeAgent, PostedByID: agent,
 			Status: models.PostStatusOpen, EmbeddingStr: vec,
 		})

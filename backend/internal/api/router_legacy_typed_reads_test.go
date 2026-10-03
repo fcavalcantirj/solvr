@@ -255,7 +255,7 @@ func TestRetiredTypedReads_CanonicalReadsServeWhatTheRouteServed(t *testing.T) {
 		} {
 			replacement, instructions := retired(t, path)
 			require.Equal(t, "GET /v1/posts/{id}", replacement, path)
-			require.Contains(t, instructions, "check data.type", path)
+			require.Contains(t, instructions, "every post is type post since the legacy types were retired", path)
 			p := readPost(t, want.id)
 			require.Equal(t, want.id, p.ID, path)
 			require.Equal(t, models.PostType(want.typ), p.Type, "%s: data.type names the legacy type", path)
@@ -263,12 +263,11 @@ func TestRetiredTypedReads_CanonicalReadsServeWhatTheRouteServed(t *testing.T) {
 			require.Equal(t, agentID, p.Author.ID, path)
 		}
 		_, instructions := retired(t, "/v1/questions/"+question)
-		require.Contains(t, instructions, "accepted_answer_id names the reply migrated from the accepted answer")
+		require.Contains(t, instructions, "accepted_answer_id was retired: the accepted answer is the reply whose provenance.is_accepted is true")
 		acceptedReply := ofType(readReplies(t, question, "?limit=100"), "answer")[0]
 		require.Equal(t, accepted.id, *acceptedReply.LegacyID)
-		p := readPost(t, question)
-		require.NotNil(t, p.AcceptedAnswerID)
-		require.Equal(t, acceptedReply.ID, *p.AcceptedAnswerID, "accepted_answer_id names the accepted answer's reply")
+		require.Equal(t, true, acceptedReply.Provenance["is_accepted"],
+			"the accepted answer's reply carries is_accepted in its provenance")
 	})
 
 	t.Run("answers", func(t *testing.T) {

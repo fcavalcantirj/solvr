@@ -39,7 +39,6 @@ func TestCreatePost_AgentAuth(t *testing.T) {
 	handler := NewPostsHandler(repo)
 
 	body := map[string]interface{}{
-		"type":        "problem",
 		"title":       "Test Problem Title Posted By Agent",
 		"description": "This is a test description that needs to be at least fifty characters long to pass validation requirements.",
 		"tags":        []string{"go", "testing"},
@@ -87,7 +86,6 @@ func TestCreatePost_AgentAuth_Question(t *testing.T) {
 	handler := NewPostsHandler(repo)
 
 	body := map[string]interface{}{
-		"type":        "question",
 		"title":       "How do I handle async operations in Go?",
 		"description": "I need to understand how to properly handle async operations in Go. What are the best practices for concurrency?",
 		"tags":        []string{"go", "async", "concurrency"},
@@ -105,8 +103,8 @@ func TestCreatePost_AgentAuth_Question(t *testing.T) {
 		t.Errorf("expected status 201, got %d. Body: %s", w.Code, w.Body.String())
 	}
 
-	if repo.createdPost.Type != models.PostTypeQuestion {
-		t.Errorf("expected type 'question', got '%s'", repo.createdPost.Type)
+	if repo.createdPost.Type != models.PostTypePost {
+		t.Errorf("expected type 'post', got '%s'", repo.createdPost.Type)
 	}
 }
 
@@ -116,7 +114,6 @@ func TestCreatePost_AgentAuth_Idea(t *testing.T) {
 	handler := NewPostsHandler(repo)
 
 	body := map[string]interface{}{
-		"type":        "idea",
 		"title":       "Observation about async patterns in modern codebases",
 		"description": "I've noticed that most async bugs stem from improper error handling in concurrent code. Here are my observations and suggestions for improvement.",
 		"tags":        []string{"patterns", "async", "best-practices"},
@@ -134,7 +131,7 @@ func TestCreatePost_AgentAuth_Idea(t *testing.T) {
 		t.Errorf("expected status 201, got %d. Body: %s", w.Code, w.Body.String())
 	}
 
-	if repo.createdPost.Type != models.PostTypeIdea {
+	if repo.createdPost.Type != models.PostTypePost {
 		t.Errorf("expected type 'idea', got '%s'", repo.createdPost.Type)
 	}
 }
@@ -143,7 +140,7 @@ func TestCreatePost_AgentAuth_Idea(t *testing.T) {
 func TestVotePost_AgentAuth(t *testing.T) {
 	repo := NewMockPostsRepository()
 	// Create a post by a different user (so agent can vote on it)
-	post := createTestPost("post-123", "Test Post", models.PostTypeProblem)
+	post := createTestPost("post-123", "Test Post", models.PostTypePost)
 	post.PostedByType = models.AuthorTypeHuman
 	post.PostedByID = "human-user-456"
 	repo.SetPost(&post)
@@ -191,7 +188,7 @@ func TestVotePost_AgentCannotVoteOwnContent(t *testing.T) {
 	post := models.PostWithAuthor{
 		Post: models.Post{
 			ID:           "agent-post-123",
-			Type:         models.PostTypeProblem,
+			Type:         models.PostTypePost,
 			Title:        "Agent's Own Post",
 			Description:  "This is a post created by an agent, description must be at least fifty characters long.",
 			PostedByType: models.AuthorTypeAgent,
@@ -237,7 +234,7 @@ func TestUpdatePost_AgentCanUpdateOwnPost(t *testing.T) {
 	post := models.PostWithAuthor{
 		Post: models.Post{
 			ID:           "agent-post-456",
-			Type:         models.PostTypeProblem,
+			Type:         models.PostTypePost,
 			Title:        "Original Title Needs To Be Long Enough",
 			Description:  "Original description that is at least fifty characters long for validation purposes.",
 			PostedByType: models.AuthorTypeAgent,
@@ -289,7 +286,7 @@ func TestUpdatePost_AgentCanUpdateOwnPost(t *testing.T) {
 // TestUpdatePost_AgentCannotUpdateOthersPost tests agents cannot update others' posts.
 func TestUpdatePost_AgentCannotUpdateOthersPost(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPost("human-post-789", "Human's Post", models.PostTypeProblem)
+	post := createTestPost("human-post-789", "Human's Post", models.PostTypePost)
 	// Post is owned by human user-123
 	repo.SetPost(&post)
 
@@ -322,7 +319,7 @@ func TestDeletePost_AgentCanDeleteOwnPost(t *testing.T) {
 	post := models.PostWithAuthor{
 		Post: models.Post{
 			ID:           "agent-post-delete",
-			Type:         models.PostTypeProblem,
+			Type:         models.PostTypePost,
 			Title:        "Agent's Post To Delete",
 			Description:  "Description that is at least fifty characters long for validation purposes.",
 			PostedByType: models.AuthorTypeAgent,
@@ -362,7 +359,7 @@ func TestDeletePost_AgentCanDeleteOwnPost(t *testing.T) {
 // TestDeletePost_AgentCannotDeleteOthersPost tests agents cannot delete others' posts.
 func TestDeletePost_AgentCannotDeleteOthersPost(t *testing.T) {
 	repo := NewMockPostsRepository()
-	post := createTestPost("human-post-delete", "Human's Post", models.PostTypeProblem)
+	post := createTestPost("human-post-delete", "Human's Post", models.PostTypePost)
 	repo.SetPost(&post)
 
 	handler := NewPostsHandler(repo)
@@ -387,7 +384,6 @@ func TestBothAuthMethods_JWTStillWorks(t *testing.T) {
 	handler := NewPostsHandler(repo)
 
 	body := map[string]interface{}{
-		"type":        "problem",
 		"title":       "JWT Auth Test Problem Title Here",
 		"description": "This is a test description that needs to be at least fifty characters long to pass validation.",
 		"tags":        []string{"jwt", "testing"},

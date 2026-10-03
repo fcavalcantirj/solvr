@@ -235,8 +235,8 @@ func TestAgentRepository_GetAgentStats(t *testing.T) {
 	}
 
 	// New agent should have zero stats
-	if stats.ProblemsSolved != 0 {
-		t.Errorf("expected 0 problems solved, got %d", stats.ProblemsSolved)
+	if stats.PostsCreated != 0 || stats.Contributions != 0 || stats.UpvotesReceived != 0 {
+		t.Errorf("expected zero stats for a new agent, got %+v", stats)
 	}
 	if stats.Reputation != 0 {
 		t.Errorf("expected 0 reputation for new agent, got %d", stats.Reputation)

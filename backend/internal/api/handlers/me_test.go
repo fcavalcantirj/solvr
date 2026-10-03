@@ -71,8 +71,7 @@ func TestMe_Success(t *testing.T) {
 	}
 	repo.stats[userID] = &models.UserStats{
 		PostsCreated:    10,
-		AnswersGiven:    25,
-		AnswersAccepted: 5,
+		Contributions:   25,
 		UpvotesReceived: 100,
 		Reputation:      500,
 	}
@@ -232,8 +231,7 @@ func TestMe_IncludesAllStats(t *testing.T) {
 	}
 	repo.stats[userID] = &models.UserStats{
 		PostsCreated:    15,
-		AnswersGiven:    30,
-		AnswersAccepted: 8,
+		Contributions:   30,
 		UpvotesReceived: 200,
 		Reputation:      750,
 	}
@@ -274,8 +272,7 @@ func TestMe_IncludesAllStats(t *testing.T) {
 	// Check all stats fields per SPEC.md Part 2.8
 	expectedStats := map[string]float64{
 		"posts_created":    15,
-		"answers_given":    30,
-		"answers_accepted": 8,
+		"contributions":    30,
 		"upvotes_received": 200,
 		"reputation":       750,
 	}
@@ -367,8 +364,8 @@ func TestMe_Agent_ReturnsComputedReputation(t *testing.T) {
 	repo := NewMockMeUserRepository()
 	agentStats := NewMockMeAgentStats()
 	agentStats.stats["agent-with-activity"] = &models.AgentStats{
-		ProblemsSolved: 5,
-		Reputation:     750, // Computed: much higher than raw bonus of 50
+		PostsCreated: 5,
+		Reputation:   750, // Computed: much higher than raw bonus of 50
 	}
 
 	config := &OAuthConfig{JWTSecret: "test-secret-key"}

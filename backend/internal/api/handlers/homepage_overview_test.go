@@ -138,7 +138,6 @@ func TestOverviewAllTimeSection_ShowsScaleWithoutConflatingRegistrationsWithUse(
 	}
 	stats := &db.AllStatsResult{
 		TotalContributions: 3327,
-		ProblemsSolved:     41,
 		CrystallizedPosts:  12,
 	}
 
@@ -177,7 +176,7 @@ func TestOverviewAllTimeSection_ShowsScaleWithoutConflatingRegistrationsWithUse(
 
 	// Scale that is usage keeps its place beside the registrations.
 	assert.Equal(t, 3327, byKey["total_contributions"].Value)
-	assert.Equal(t, 41, byKey["problems_solved"].Value)
+	assert.NotContains(t, byKey, "problems_solved", "the solved metric was retired with the legacy post types (idx 68)")
 	assert.Equal(t, 12, byKey["crystallized_posts"].Value)
 }
 
@@ -185,7 +184,7 @@ func TestOverviewAllTimeSection_ShowsScaleWithoutConflatingRegistrationsWithUse(
 // is not a zero: a zero would claim Solvr is empty.
 func TestOverviewAllTimeSection_ReportsEachUnreadTotalSeparately(t *testing.T) {
 	registrationKeys := []string{"public_rooms", "published_posts", "registered_agents", "registered_humans"}
-	usageKeys := []string{"total_contributions", "problems_solved", "crystallized_posts"}
+	usageKeys := []string{"total_contributions", "crystallized_posts"}
 
 	t.Run("totals unread", func(t *testing.T) {
 		section := buildOverviewCommunity(nil, &db.AllStatsResult{TotalContributions: 9})
@@ -240,7 +239,7 @@ func TestOverviewPostsSection_LinksReusableKnowledge(t *testing.T) {
 
 	require.Len(t, section.Items, 1)
 	item := section.Items[0]
-	assert.Equal(t, "/problems/11111111-1111-1111-1111-111111111111", item.URL)
+	assert.Equal(t, "/posts/11111111-1111-1111-1111-111111111111", item.URL)
 	assert.Equal(t, "pgx pool exhausted under load", item.Title)
 	assert.NotEmpty(t, item.ContributionLabel)
 	assert.Equal(t, "2 days ago", item.LastActivityLabel)
@@ -248,16 +247,13 @@ func TestOverviewPostsSection_LinksReusableKnowledge(t *testing.T) {
 	assert.Equal(t, "/posts", section.BrowseURL)
 }
 
-func TestOverviewPostsSection_RoutesEachTypeToItsOwnPage(t *testing.T) {
-	for typ, want := range map[string]string{
-		"problem":  "/problems/abc",
-		"question": "/questions/abc",
-		"idea":     "/ideas/abc",
-		"other":    "/posts/abc",
-	} {
+// Every post links to its /posts page, whatever type a row still stores before the legacy
+// archive migration relabels it (idx 68).
+func TestOverviewPostsSection_LinksEveryPostToItsPostPage(t *testing.T) {
+	for _, typ := range []string{"post", "problem", "question", "idea"} {
 		section := buildOverviewPosts([]db.ReusablePost{{ID: "abc", Type: typ, Title: "t"}})
 		require.Len(t, section.Items, 1)
-		assert.Equal(t, want, section.Items[0].URL, "type %q", typ)
+		assert.Equal(t, "/posts/abc", section.Items[0].URL, "type %q", typ)
 	}
 }
 

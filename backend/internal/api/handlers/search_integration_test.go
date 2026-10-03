@@ -38,7 +38,7 @@ func TestSearchIntegration_FullFlow(t *testing.T) {
 			AuthorType:   "agent",
 			AuthorName:   "Claude",
 			Score:        0.95,
-			VoteScore:        42,
+			VoteScore:    42,
 			AnswersCount: 5,
 			CreatedAt:    now.Add(-24 * time.Hour),
 		})
@@ -54,7 +54,7 @@ func TestSearchIntegration_FullFlow(t *testing.T) {
 			AuthorType:   "human",
 			AuthorName:   "John Developer",
 			Score:        0.88,
-			VoteScore:        15,
+			VoteScore:    15,
 			AnswersCount: 2,
 			CreatedAt:    now.Add(-12 * time.Hour),
 		})
@@ -70,7 +70,7 @@ func TestSearchIntegration_FullFlow(t *testing.T) {
 			AuthorType:   "agent",
 			AuthorName:   "Helper Bot",
 			Score:        0.82,
-			VoteScore:        28,
+			VoteScore:    28,
 			AnswersCount: 3,
 			CreatedAt:    now.Add(-6 * time.Hour),
 		})
@@ -86,7 +86,7 @@ func TestSearchIntegration_FullFlow(t *testing.T) {
 			AuthorType:   "human",
 			AuthorName:   "Jane Coder",
 			Score:        0.75,
-			VoteScore:        10,
+			VoteScore:    10,
 			AnswersCount: 0,
 			CreatedAt:    now.Add(-1 * time.Hour),
 		})
@@ -137,62 +137,21 @@ func TestSearchIntegration_FullFlow(t *testing.T) {
 	})
 
 	// Step 3: Type filter - filter by type=problem
+	// Steps 3-4: the legacy type and status filters are refused, never silently ignored (idx 68)
 	t.Run("Step3_TypeFilter", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/v1/search?q=async&type=problem", nil)
 		w := httptest.NewRecorder()
-
-		handler.Search(w, req)
-
-		if w.Code != http.StatusOK {
-			t.Fatalf("Step 3 failed: expected status 200, got %d", w.Code)
+		handler.Search(w, httptest.NewRequest(http.MethodGet, "/v1/search?q=async&type=problem", nil))
+		if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), ErrCodeLegacyFieldRetired) {
+			t.Fatalf("Step 3: a legacy type filter must answer 400 %s, got %d: %s", ErrCodeLegacyFieldRetired, w.Code, w.Body.String())
 		}
-
-		var resp SearchResponse
-		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
-			t.Fatalf("Step 3 failed: failed to decode response: %v", err)
-		}
-
-		// Should find 2 problems
-		if len(resp.Data) != 2 {
-			t.Errorf("Step 3: expected 2 problem results, got %d", len(resp.Data))
-		}
-
-		// Verify all results are problems
-		for _, result := range resp.Data {
-			if result.Type != "problem" {
-				t.Errorf("Step 3: expected type 'problem', got '%s'", result.Type)
-			}
-		}
-
-		t.Logf("Step 3 passed: Type filter returned %d problems", len(resp.Data))
 	})
 
-	// Step 4: Status filter - filter by status=solved
 	t.Run("Step4_StatusFilter", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/v1/search?q=async&status=solved", nil)
 		w := httptest.NewRecorder()
-
-		handler.Search(w, req)
-
-		if w.Code != http.StatusOK {
-			t.Fatalf("Step 4 failed: expected status 200, got %d", w.Code)
+		handler.Search(w, httptest.NewRequest(http.MethodGet, "/v1/search?q=async&status=solved", nil))
+		if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), ErrCodeLegacyFieldRetired) {
+			t.Fatalf("Step 4: a legacy status filter must answer 400 %s, got %d: %s", ErrCodeLegacyFieldRetired, w.Code, w.Body.String())
 		}
-
-		var resp SearchResponse
-		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
-			t.Fatalf("Step 4 failed: failed to decode response: %v", err)
-		}
-
-		// Should find 1 solved post
-		if len(resp.Data) != 1 {
-			t.Errorf("Step 4: expected 1 solved result, got %d", len(resp.Data))
-		}
-
-		if len(resp.Data) > 0 && resp.Data[0].Status != "solved" {
-			t.Errorf("Step 4: expected status 'solved', got '%s'", resp.Data[0].Status)
-		}
-
-		t.Logf("Step 4 passed: Status filter returned %d solved posts", len(resp.Data))
 	})
 
 	// Step 5: Tags filter - filter by tags=go
@@ -398,7 +357,7 @@ func TestSearchIntegration_FullFlow(t *testing.T) {
 
 	// Step 11: Combined filters
 	t.Run("Step11_CombinedFilters", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/v1/search?q=async&type=problem&tags=go&sort=votes", nil)
+		req := httptest.NewRequest(http.MethodGet, "/v1/search?q=async&tags=go&sort=votes", nil)
 		w := httptest.NewRecorder()
 
 		handler.Search(w, req)
@@ -412,15 +371,9 @@ func TestSearchIntegration_FullFlow(t *testing.T) {
 			t.Fatalf("Step 11 failed: failed to decode response: %v", err)
 		}
 
-		// Should find 1 problem with "go" tag (problem-1)
-		if len(resp.Data) != 1 {
-			t.Errorf("Step 11: expected 1 result with combined filters, got %d", len(resp.Data))
-		}
-
-		if len(resp.Data) > 0 {
-			if resp.Data[0].Type != "problem" {
-				t.Errorf("Step 11: expected type 'problem', got '%s'", resp.Data[0].Type)
-			}
+		// Both posts tagged "go" (the type filter that narrowed this to one was retired, idx 68)
+		if len(resp.Data) != 2 {
+			t.Errorf("Step 11: expected 2 results with combined filters, got %d", len(resp.Data))
 		}
 
 		t.Logf("Step 11 passed: Combined filters work correctly")
@@ -464,7 +417,6 @@ func TestSearchIntegration_ResponseFormat(t *testing.T) {
 	handler := NewSearchHandler(repo)
 
 	now := time.Now()
-	solvedAt := now.Add(-1 * time.Hour)
 
 	repo.AddPost(models.SearchResult{
 		ID:           "post-123",
@@ -477,10 +429,9 @@ func TestSearchIntegration_ResponseFormat(t *testing.T) {
 		AuthorType:   "agent",
 		AuthorName:   "Test Agent",
 		Score:        0.95,
-		VoteScore:        42,
+		VoteScore:    42,
 		AnswersCount: 5,
 		CreatedAt:    now,
-		SolvedAt:     &solvedAt,
 	})
 
 	t.Run("VerifyResponseStructure", func(t *testing.T) {
@@ -569,9 +520,9 @@ func TestSearchIntegration_ResponseFormat(t *testing.T) {
 			t.Errorf("expected author display_name 'Test Agent', got %v", author["display_name"])
 		}
 
-		// Verify solved_at is included for solved posts
-		if _, ok := item["solved_at"]; !ok {
-			t.Error("expected 'solved_at' for solved post")
+		// solved_at was retired with the legacy statuses (idx 68)
+		if _, ok := item["solved_at"]; ok {
+			t.Error("solved_at was retired with the legacy statuses (idx 68) and must not be returned")
 		}
 
 		t.Logf("Response format verification passed")

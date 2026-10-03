@@ -49,7 +49,7 @@ func TestCreateFamilyPost_SkipsModeration_InstantSearch(t *testing.T) {
 	// --- Family post: 201 + status=open (skips moderation) ---
 	famTitle := "Family private problem " + famKW + " " + marker
 	famDesc := "Internal onvida runbook detail " + famKW + " " + strings.Repeat("x", 40)
-	famBody := fmt.Sprintf(`{"type":"problem","title":%q,"description":%q,"visibility":"family"}`, famTitle, famDesc)
+	famBody := fmt.Sprintf(`{"title":%q,"description":%q,"visibility":"family"}`, famTitle, famDesc)
 	st, out := doJSON(t, "POST", ts.URL+"/v1/posts", agentAKey, famBody)
 	require.Equal(t, http.StatusCreated, st, "family create should 201: %v", out)
 	famData, _ := out["data"].(map[string]any)
@@ -58,7 +58,7 @@ func TestCreateFamilyPost_SkipsModeration_InstantSearch(t *testing.T) {
 	// --- Public post: 201 + status=pending_review (unchanged) ---
 	pubTitle := "Public shared problem " + pubKW + " " + marker
 	pubDesc := "Public knowledge writeup " + pubKW + " " + strings.Repeat("y", 40)
-	pubBody := fmt.Sprintf(`{"type":"problem","title":%q,"description":%q,"visibility":"public"}`, pubTitle, pubDesc)
+	pubBody := fmt.Sprintf(`{"title":%q,"description":%q,"visibility":"public"}`, pubTitle, pubDesc)
 	st, out = doJSON(t, "POST", ts.URL+"/v1/posts", agentAKey, pubBody)
 	require.Equal(t, http.StatusCreated, st, "public create should 201: %v", out)
 	pubData, _ := out["data"].(map[string]any)

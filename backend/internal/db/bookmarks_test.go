@@ -45,7 +45,7 @@ func TestBookmarkRepository_AddBookmark(t *testing.T) {
 
 	// Create a test post
 	post := &models.Post{
-		Type:         models.PostTypeQuestion,
+		Type:         models.PostTypePost,
 		Title:        "Test question for bookmarks",
 		Description:  "This is a test question to be bookmarked by users",
 		Tags:         []string{"test"},
@@ -89,7 +89,7 @@ func TestBookmarkRepository_AddBookmark_Duplicate(t *testing.T) {
 
 	// Create a test post
 	post := &models.Post{
-		Type:         models.PostTypeQuestion,
+		Type:         models.PostTypePost,
 		Title:        "Test question for duplicate bookmark",
 		Description:  "This is a test question to test duplicate bookmarks",
 		Tags:         []string{"test"},
@@ -129,7 +129,7 @@ func TestBookmarkRepository_RemoveBookmark(t *testing.T) {
 
 	// Create a test post
 	post := &models.Post{
-		Type:         models.PostTypeQuestion,
+		Type:         models.PostTypePost,
 		Title:        "Test question for removing bookmark",
 		Description:  "This is a test question for removing bookmarks",
 		Tags:         []string{"test"},
@@ -179,7 +179,7 @@ func TestBookmarkRepository_ListByUser(t *testing.T) {
 	// Create multiple test posts
 	for i := 0; i < 3; i++ {
 		post := &models.Post{
-			Type:         models.PostTypeQuestion,
+			Type:         models.PostTypePost,
 			Title:        "Test question for listing bookmarks " + string(rune('A'+i)),
 			Description:  "This is test question number for listing bookmarks",
 			Tags:         []string{"test"},
@@ -226,7 +226,7 @@ func TestBookmarkRepository_IsBookmarked(t *testing.T) {
 
 	// Create a test post
 	post := &models.Post{
-		Type:         models.PostTypeQuestion,
+		Type:         models.PostTypePost,
 		Title:        "Test question for checking bookmark",
 		Description:  "This is a test question to check if bookmarked",
 		Tags:         []string{"test"},

@@ -20,7 +20,7 @@ import (
 // title carries a fresh UUID, and nothing in it reads as a day counter or a status report.
 func uniquePostBody() string {
 	marker := uuid.NewString()
-	return fmt.Sprintf(`{"type":"question","title":"How should a Go service bound retries %s","description":"The client retries forever when the upstream answers slowly; what is a sane way to cap it %s?"}`, marker, marker)
+	return fmt.Sprintf(`{"title":"How should a Go service bound retries %s","description":"The client retries forever when the upstream answers slowly; what is a sane way to cap it %s?"}`, marker, marker)
 }
 
 // postCreatesUntilRefused sends up to limit+1 post creates with bearer and returns the status

@@ -89,9 +89,7 @@ func TestBriefingService_AllSections(t *testing.T) {
 	}
 	openItemsRepo := &mockOpenItemsRepo{
 		result: &models.OpenItemsResult{
-			ProblemsNoApproaches: 1,
-			QuestionsNoAnswers:   2,
-			ApproachesStale:      0,
+			PostsNoReplies: 1,
 			Items: []models.OpenItem{
 				{Type: "problem", ID: "p1", Title: "Bug", Status: "open", AgeHours: 48},
 			},
@@ -157,8 +155,8 @@ func TestBriefingService_AllSections(t *testing.T) {
 	if briefing.MyOpenItems == nil {
 		t.Fatal("expected MyOpenItems to be populated")
 	}
-	if briefing.MyOpenItems.ProblemsNoApproaches != 1 {
-		t.Errorf("expected ProblemsNoApproaches=1, got %d", briefing.MyOpenItems.ProblemsNoApproaches)
+	if briefing.MyOpenItems.PostsNoReplies != 1 {
+		t.Errorf("expected PostsNoReplies=1, got %d", briefing.MyOpenItems.PostsNoReplies)
 	}
 
 	// Verify suggested actions
@@ -197,8 +195,8 @@ func TestBriefingService_GracefulDegradation(t *testing.T) {
 
 	openItemsRepo := &mockOpenItemsRepo{
 		result: &models.OpenItemsResult{
-			ProblemsNoApproaches: 2,
-			Items:                []models.OpenItem{},
+			PostsNoReplies: 2,
+			Items:          []models.OpenItem{},
 		},
 	}
 	suggestedActionsRepo := &mockSuggestedActionsRepo{
@@ -365,7 +363,7 @@ func TestNewBriefingServiceWithDeps_AllSections(t *testing.T) {
 			totalUnread: 1,
 		},
 		OpenItemsRepo: &mockOpenItemsRepo{
-			result: &models.OpenItemsResult{ProblemsNoApproaches: 1, Items: []models.OpenItem{}},
+			result: &models.OpenItemsResult{PostsNoReplies: 1, Items: []models.OpenItem{}},
 		},
 		SuggestedActionsRepo: &mockSuggestedActionsRepo{
 			actions: []models.SuggestedAction{{Action: "update", TargetID: "a1", TargetTitle: "Fix", Reason: "Stale"}},
@@ -378,13 +376,13 @@ func TestNewBriefingServiceWithDeps_AllSections(t *testing.T) {
 		},
 		AgentRepo: &mockAgentBriefingRepo{},
 		PlatformPulseRepo: &mockPlatformPulseRepo{
-			result: &models.PlatformPulse{OpenProblems: 10, OpenQuestions: 5, ActiveIdeas: 3, NewPostsLast24h: 20, SolvedLast7d: 2, ActiveAgentsLast24h: 8, ContributorsThisWeek: 15},
+			result: &models.PlatformPulse{OpenPosts: 10, NewPostsLast24h: 20, ActiveAgentsLast24h: 8, ContributorsThisWeek: 15},
 		},
 		TrendingRepo: &mockTrendingRepo{
 			result: []models.TrendingPost{{ID: "t1", Title: "Hot topic", Type: "question", VoteScore: 42, ViewCount: 10, AuthorName: "agent1", AuthorType: "agent"}},
 		},
 		HardcoreRepo: &mockHardcoreRepo{
-			result: []models.HardcoreUnsolved{{ID: "h1", Title: "Hard bug", Weight: 3, TotalApproaches: 5, FailedCount: 3, AgeDays: 10, DifficultyScore: 15.5}},
+			result: []models.HardcoreUnsolved{{ID: "h1", Title: "Hard bug", TotalApproaches: 5, FailedCount: 3, AgeDays: 10, DifficultyScore: 15.5}},
 		},
 		RisingIdeasRepo: &mockRisingIdeasRepo{
 			result: []models.RisingIdea{{ID: "r1", Title: "Cool idea", ResponseCount: 5, Upvotes: 10}},
@@ -431,8 +429,8 @@ func TestNewBriefingServiceWithDeps_AllSections(t *testing.T) {
 	// Verify all 6 new sections
 	if briefing.PlatformPulse == nil {
 		t.Error("expected PlatformPulse to be populated")
-	} else if briefing.PlatformPulse.OpenProblems != 10 {
-		t.Errorf("expected OpenProblems=10, got %d", briefing.PlatformPulse.OpenProblems)
+	} else if briefing.PlatformPulse.OpenPosts != 10 {
+		t.Errorf("expected OpenPosts=10, got %d", briefing.PlatformPulse.OpenPosts)
 	}
 	if briefing.TrendingNow == nil || len(briefing.TrendingNow) != 1 {
 		t.Errorf("expected 1 trending post, got %v", briefing.TrendingNow)
@@ -592,10 +590,8 @@ func TestBriefingService_EmptyAgent(t *testing.T) {
 
 	inboxRepo := &mockInboxRepo{notifications: []models.Notification{}, totalUnread: 0}
 	openItemsRepo := &mockOpenItemsRepo{result: &models.OpenItemsResult{
-		ProblemsNoApproaches: 0,
-		QuestionsNoAnswers:   0,
-		ApproachesStale:      0,
-		Items:                []models.OpenItem{},
+		PostsNoReplies: 0,
+		Items:          []models.OpenItem{},
 	}}
 	suggestedActionsRepo := &mockSuggestedActionsRepo{actions: []models.SuggestedAction{}}
 	opportunitiesRepo := &mockOpportunitiesRepo{result: &models.OpportunitiesSection{
@@ -642,8 +638,8 @@ func TestBriefingService_EmptyAgent(t *testing.T) {
 	if briefing.MyOpenItems == nil {
 		t.Fatal("expected MyOpenItems to be present")
 	}
-	if briefing.MyOpenItems.ProblemsNoApproaches != 0 {
-		t.Errorf("expected 0 problems_no_approaches, got %d", briefing.MyOpenItems.ProblemsNoApproaches)
+	if briefing.MyOpenItems.PostsNoReplies != 0 {
+		t.Errorf("expected 0 posts_no_replies, got %d", briefing.MyOpenItems.PostsNoReplies)
 	}
 
 	if briefing.SuggestedActions == nil {

@@ -20,7 +20,7 @@ type replySearchSource struct {
 var (
 	answerReplySearch = replySearchSource{
 		contentType: "answers", source: "answer", bucket: replyAnswerBucket,
-		status: `CASE WHEN p.accepted_answer_id = r.id THEN 'accepted' ELSE '' END`,
+		status: `CASE WHEN r.provenance->>'is_accepted' = 'true' THEN 'accepted' ELSE '' END`,
 	}
 	approachReplySearch = replySearchSource{
 		contentType: "approaches", source: "approach", bucket: replyApproachBucket,
@@ -61,7 +61,6 @@ func (r *SearchRepository) searchReplies(ctx context.Context, src replySearchSou
 			0 as comments_count,
 			0 as view_count,
 			r.created_at,
-			NULL::timestamptz as solved_at,
 			NULL::float8 as similarity
 		FROM replies r
 		JOIN posts p ON p.id = r.post_id

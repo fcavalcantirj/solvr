@@ -25,7 +25,7 @@ const canonicalAgentActivity = `
 			AND p.visibility = 'public'
 		UNION ALL
 		SELECT r.id::text, 'reply', 'replied', LEFT(r.body, 100), '',
-			CASE WHEN p.accepted_answer_id = r.id THEN 'accepted' ELSE '' END, r.created_at,
+			CASE WHEN r.provenance->>'is_accepted' = 'true' THEN 'accepted' ELSE '' END, r.created_at,
 			p.id::text, CASE WHEN p.visibility = 'public' THEN p.title ELSE '' END
 		FROM replies r JOIN posts p ON p.id = r.post_id
 		WHERE r.author_type = 'agent' AND r.author_id = $1 AND r.deleted_at IS NULL

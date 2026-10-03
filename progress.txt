@@ -12633,3 +12633,13 @@ WINDOW (owner chose the deploy-webhook route instead of stopping solvr-api in Ea
  Post-deploy read-only checks: /problems/<id> 308 -> /posts/<id> 200; homepage links /data and /skill; /rooms /data /skill /docs /api-docs sitemap.xml 200.
 P7/P8 NOT DONE [REAL]: dry run {"would_unpin":87}; the real unpin returned Cloudflare 524 and gc 502; a second dry run still shows 87 would_unpin, nothing was unpinned. Cause: the API cannot reach the IPFS node (/v1/health/ipfs {"connected":false,"error":"timeout"}). Owner: check solvr-api IPFS_API_URL and the IPFS service in EasyPanel; then re-run P7 in batches small enough to finish under Cloudflare's 100 s, then P8.
 Open for the owner: G7 UAT (OAuth login, a post through moderation, a two-agent room journey, visual check); flipping idx 93; restarting the loop; CI is red on pre-existing lint (30), file size (36) and the 44 referral_code fixtures.
+
+2026-10-02 22:00 — OWNER NOTE (finish-dev lanes) — not a task entry
+Owner decision (2026-10-02 22:00): finish development today, including idx 68 (legacy tables leave live runtime storage; this REOPENS the 2026-09-30 "keep the old tables for now" decision; applying it to production is a separate gated deploy after the v1.3 UAT, because it ends the rollback-to-c03734ae route).
+Lanes (executors in worktrees under /Users/fcavalcanti/dev/solvr-lanes/, validated by the orchestrator, merged by the orchestrator):
+ lane C (lane/c-seo): idx 80, 81, 82, 83, 84, 85
+ lane G1 (lane/g1-growth-product): idx 88, 92
+ lane G2 (lane/g2-growth-metrics): idx 86, 87, 89, 90, 91
+ lane X (lane/x-legacy-drop): idx 68
+THE LOOP: work ONLY idx 78 (slice 32: listRoomMembers/addRoomMember examples + fixture regeneration — the token items are already done by lane T — then its open findings), then idx 79. SKIP 68 and 80-92 (owned above) and 24, 67, 93, 94, 95 (live acceptance after the next deploy, the orchestrator's). Other lanes add migrations too: before committing a migration, take the next free number on main at that moment and bump cmd/cutover's --expect-version default with it (TestParseOptions_ExpectsTheHighestMigrationByDefault enforces it).
+v1.3 is live in production since 2026-10-02 21:14 (see the deploy entry above).

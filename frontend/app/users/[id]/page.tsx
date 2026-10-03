@@ -1,6 +1,7 @@
 import { cache } from 'react';
 import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { readForPage } from '@/lib/seo/read-for-page';
 import { Header } from "@/components/header";
 import { UserProfileClient } from "@/components/users/user-profile-client";
 import { JsonLd, userJsonLd } from "@/components/seo/json-ld";
@@ -9,19 +10,10 @@ import { JsonLd, userJsonLd } from "@/components/seo/json-ld";
 // stored copy of this page may keep publishing their profile.
 export const dynamic = 'force-dynamic';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 
-const getUser = cache(async (id: string) => {
-  try {
-    const res = await fetch(`${API_BASE_URL}/v1/users/${id}`, {
-      cache: 'no-store',
-    });
-    if (!res.ok) return null;
-    return res.json();
-  } catch {
-    return null;
-  }
-});
+// A refusal answers null (the page 404s); an API failure throws, a retryable 5xx
+// (task idx 83, lib/seo/read-for-page.ts).
+const getUser = cache(async (id: string) => (await readForPage<any>(`/v1/users/${id}`)).data); // eslint-disable-line @typescript-eslint/no-explicit-any
 
 export async function generateMetadata({
   params,

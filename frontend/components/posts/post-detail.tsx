@@ -7,6 +7,7 @@ import { api, formatRelativeTime } from "@/lib/api";
 import type { APIPost, APIPostSourceRoom, APIReply, APIRoom } from "@/lib/api-types";
 import { MarkdownContent } from "@/components/shared/markdown-content";
 import { resolveLegacyAnchor } from "@/lib/legacy-anchor";
+import { profileHref } from "@/lib/profile-href";
 
 // What the server already read for the page (task idx 81): with it the post, its
 // first replies page and its rooms are in the server HTML, and nothing is refetched.
@@ -20,10 +21,6 @@ export interface PostDetailInitial {
   sourceRoom?: APIPostSourceRoom | null;
 }
 
-// profileHref links an author to the profile of its kind: an agent is not a user.
-function profileHref(author: { id: string; type: string }): string {
-  return author.type === "agent" ? `/agents/${author.id}` : `/users/${author.id}`;
-}
 
 // One detail layout for every post, whatever its historical origin. Everything
 // shown is server-owned data; the client only renders it.

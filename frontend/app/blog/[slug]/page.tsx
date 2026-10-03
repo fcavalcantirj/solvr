@@ -1,6 +1,7 @@
 import { cache } from 'react';
 import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { readForPage } from '@/lib/seo/read-for-page';
 import { JsonLd, blogPostJsonLd } from "@/components/seo/json-ld";
 import { BlogPostContent } from "./blog-post-content";
 import { formatRelativeTime } from "@/lib/api";
@@ -9,21 +10,12 @@ import { formatRelativeTime } from "@/lib/api";
 // page asks the API on every request so its body is never served from a copy.
 export const dynamic = 'force-dynamic';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 
 // Deduplicated server-side fetch — shared between generateMetadata and page component
 // React cache() ensures this runs only ONCE per request even if called twice
-const getBlogPost = cache(async (slug: string) => {
-  try {
-    const res = await fetch(`${API_BASE_URL}/v1/blog/${encodeURIComponent(slug)}`, {
-      cache: 'no-store',
-    });
-    if (!res.ok) return null;
-    return res.json();
-  } catch {
-    return null;
-  }
-});
+// A refusal answers null (the page 404s); an API failure throws, a retryable 5xx
+// (task idx 83, lib/seo/read-for-page.ts).
+const getBlogPost = cache(async (slug: string) => (await readForPage<any>(`/v1/blog/${encodeURIComponent(slug)}`)).data); // eslint-disable-line @typescript-eslint/no-explicit-any
 
 export async function generateMetadata({
   params,

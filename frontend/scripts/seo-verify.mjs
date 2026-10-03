@@ -7,6 +7,8 @@
 //        --index /,/posts --noindex /login,/posts?q=x
 //   node scripts/seo-verify.mjs crawl --base http://127.0.0.1:3400 --room <slug> [--expect-messages N]
 //   node scripts/seo-verify.mjs structured --base http://127.0.0.1:3400 --index /,/posts/<id>
+//   node scripts/seo-verify.mjs legacy --base http://127.0.0.1:3400 --file legacy-urls.txt
+//   node scripts/seo-verify.mjs sample --base http://127.0.0.1:3400 [--per 5] [--noindex /login,...]
 //
 // --site is the canonical origin pages declare (default https://solvr.dev).
 
@@ -183,6 +185,73 @@ export function structuredProblems(path, html, site) {
   return { problems, types };
 }
 
+// legacyProblems classifies one legacy URL (task idx 83): it must take exactly one
+// permanent redirect to the post with the same id, and that post page must answer 200
+// (still published) or 404 (purged or deleted) itself, never another redirect.
+export function legacyProblems(path, first, second) {
+  const id = path.split('/')[2];
+  const want = `/posts/${id}`;
+  if (first.status !== 308) return [`${path}: status ${first.status}, want 308`];
+  const target = first.location ? new URL(first.location, 'http://x').pathname : '';
+  if (target !== want) return [`${path}: redirects to ${target || '(none)'}, want ${want}`];
+  if (second.status !== 200 && second.status !== 404) return [`${want}: status ${second.status}, want 200 or 404`];
+  return [];
+}
+
+async function runLegacy(opts) {
+  const { readFileSync } = await import('node:fs');
+  const paths = readFileSync(opts.file, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean);
+  const problems = [];
+  const tally = { checked: 0, live: 0, gone: 0 };
+  for (const path of paths) {
+    const first = await fetchPage(opts.base + path);
+    const target = first.location ? new URL(first.location, 'http://x').pathname : '';
+    const second = target ? await fetchPage(opts.base + target) : { status: 0 };
+    const found = legacyProblems(path, first, second);
+    problems.push(...found);
+    tally.checked++;
+    if (!found.length) tally[second.status === 200 ? 'live' : 'gone']++;
+  }
+  return { rows: [{ summary: tally }], problems };
+}
+
+// runSample checks that the sitemaps and the pages agree (task idx 83): every sampled
+// sitemap URL answers 200 with itself as canonical and no noindex, the internal links
+// on those pages resolve, and no noindex route is listed anywhere.
+async function runSample(opts) {
+  const per = Number(opts.per || 5);
+  const local = (loc) => loc.replace(opts.site, opts.base);
+  const locsOf = (xml) => [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+  const problems = [];
+  const rows = [];
+  const index = await fetchPage(`${opts.base}/sitemap.xml`);
+  const listed = [];
+  const links = new Set();
+  for (const sub of locsOf(index.html)) {
+    const subPage = await fetchPage(local(sub));
+    const locs = locsOf(subPage.html);
+    listed.push(...locs);
+    for (const loc of locs.slice(0, per)) {
+      const page = await fetchPage(local(loc));
+      const path = loc.replace(opts.site, '') || '/';
+      const head = parseHead(page.html);
+      rows.push({ path, status: page.status, canonical: head.canonical ?? null, robots: head.robots ?? null });
+      problems.push(...checkPage(path, 'index', page, opts.site));
+      extractLinks(page.html).slice(0, 8).forEach((l) => links.add(l));
+    }
+  }
+  for (const link of [...links].slice(0, 60)) {
+    const page = await fetchPage(opts.base + link);
+    if (page.status >= 400) problems.push(`internal link ${link}: status ${page.status}`);
+  }
+  for (const route of opts.noindex) {
+    const hit = listed.find((l) => l.replace(opts.site, '') === route);
+    if (hit) problems.push(`${route} is noindex but listed in a sitemap`);
+  }
+  rows.push({ summary: { sitemapUrls: listed.length, sampled: rows.length, linksChecked: Math.min(links.size, 60) } });
+  return { rows, problems };
+}
+
 function parseArgs(argv) {
   const [mode, ...rest] = argv;
   const opts = { mode, base: 'http://127.0.0.1:3400', site: 'https://solvr.dev', index: [], noindex: [] };
@@ -228,7 +297,7 @@ async function runStructured(opts) {
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
-  const modes = { check: runCheck, crawl: runCrawl, structured: runStructured };
+  const modes = { check: runCheck, crawl: runCrawl, structured: runStructured, legacy: runLegacy, sample: runSample };
   const run = modes[opts.mode];
   if (!run) {
     console.error(`usage: seo-verify.mjs <${Object.keys(modes).join('|')}> [--base URL] ...`);

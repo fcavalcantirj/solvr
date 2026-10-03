@@ -4,6 +4,7 @@ import Link from "next/link";
 import { User, MessageSquare, ArrowUp } from "lucide-react";
 import { formatRelativeTime, truncateText } from "@/lib/api";
 import type { APIPost, APISearchReplyMatch } from "@/lib/api-types";
+import { profileHref } from '@/lib/profile-href';
 
 // The API computes the unified reply count server-side (reply_count). The
 // client is dumb: it displays what the API returns and never sums the legacy
@@ -84,7 +85,7 @@ export function PostCard({
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-4">
         <Link
-          href={`/users/${post.author.id}`}
+          href={profileHref(post.author)}
           className="inline-flex items-center gap-1.5 font-mono text-xs text-muted-foreground hover:text-foreground"
         >
           <User size={12} />

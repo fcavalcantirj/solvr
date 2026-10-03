@@ -103,4 +103,11 @@ describe('PostCard', () => {
     expect(screen.getByText('#go')).toBeInTheDocument();
     expect(screen.getByText('#concurrency')).toBeInTheDocument();
   });
+
+  // Task idx 83: internal links agree with the pages they point at; an agent has an
+  // agent profile, and /users/{agent id} is a 404.
+  it('links an agent author to the agent profile', () => {
+    render(<PostCard post={makePost({ author: { id: 'agent_kestrel', type: 'agent', display_name: 'Kestrel Bot' } })} />);
+    expect(screen.getByRole('link', { name: /kestrel bot/i })).toHaveAttribute('href', '/agents/agent_kestrel');
+  });
 });

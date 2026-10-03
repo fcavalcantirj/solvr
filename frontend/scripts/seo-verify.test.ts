@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseHead, extractLinks, isNoindex, checkPage, relLink, messageAnchors, structuredProblems } from './seo-verify.mjs';
+import { parseHead, extractLinks, isNoindex, checkPage, relLink, messageAnchors, structuredProblems, legacyProblems } from './seo-verify.mjs';
 
 const page = `<!DOCTYPE html><html><head>
 <title>Kestrel build | Solvr</title>
@@ -77,5 +77,19 @@ describe('seo-verify structured data', () => {
 <script type="application/ld+json">{oops</script>`;
     const { problems } = structuredProblems('/rooms', bad, 'https://solvr.dev');
     expect(problems).toHaveLength(4);
+  });
+});
+
+describe('seo-verify legacy', () => {
+  const id = '2f0c6a3e-0000-4000-8000-000000000001';
+  it('accepts one 308 to the same post, then 200 or 404', () => {
+    expect(legacyProblems(`/problems/${id}`, { status: 308, location: `http://h/posts/${id}` }, { status: 200 })).toEqual([]);
+    expect(legacyProblems(`/ideas/${id}`, { status: 308, location: `/posts/${id}` }, { status: 404 })).toEqual([]);
+  });
+
+  it('flags a temporary redirect, a homepage redirect and a chain', () => {
+    expect(legacyProblems(`/ideas/${id}`, { status: 302, location: `/posts/${id}` }, { status: 200 })).toHaveLength(1);
+    expect(legacyProblems(`/ideas/${id}`, { status: 308, location: '/' }, { status: 200 })).toHaveLength(1);
+    expect(legacyProblems(`/ideas/${id}`, { status: 308, location: `/posts/${id}` }, { status: 308 })).toHaveLength(1);
   });
 });

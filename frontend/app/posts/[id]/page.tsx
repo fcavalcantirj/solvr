@@ -1,9 +1,11 @@
 import { cache } from "react";
 import { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { Header } from "@/components/header";
+import { readForPage } from "@/lib/seo/read-for-page";
 import { PostDetail, type PostDetailInitial } from "@/components/posts/post-detail";
 import { JsonLd, postPageJsonLd, breadcrumbJsonLd } from "@/components/seo/json-ld";
-import type { APIPostSourceRoom, APIReply, APIRoom } from "@/lib/api-types";
+import type { APIPost, APIPostSourceRoom, APIReply, APIRoom } from "@/lib/api-types";
 import { NOINDEX } from "@/lib/seo/route-policy";
 import { fetchSEO } from "@/lib/seo/fetch-seo";
 import type { APIPostSEO } from "@/lib/api-types";
@@ -14,15 +16,9 @@ export const dynamic = "force-dynamic";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.solvr.dev";
 
-const getPost = cache(async (id: string) => {
-  try {
-    const res = await fetch(`${API_BASE_URL}/v1/posts/${id}`, { cache: "no-store" });
-    if (!res.ok) return null;
-    return res.json();
-  } catch {
-    return null;
-  }
-});
+// A refusal answers null (the page 404s); an API failure throws, a retryable 5xx
+// (task idx 83, lib/seo/read-for-page.ts).
+const getPost = cache(async (id: string) => (await readForPage<{ data: APIPost }>(`/v1/posts/${id}`)).data);
 
 // The page's search verdict (task idx 80): the API decides it at its own endpoint.
 const getPostSEO = cache((id: string) => fetchSEO<APIPostSEO>(`/v1/posts/${id}/seo`));
@@ -91,8 +87,10 @@ export default async function PostDetailPage({
 }) {
   const { id } = await params;
   const data = await getPost(id);
-  const [first, rooms, seo] = await Promise.all([getFirstReplies(id), getRooms(id), getPostSEO(id)]);
   const post = data?.data;
+  // A post the API does not have is a real 404, not a 200 "Could not load" page.
+  if (!post) notFound();
+  const [first, rooms, seo] = await Promise.all([getFirstReplies(id), getRooms(id), getPostSEO(id)]);
   const initial: PostDetailInitial | undefined =
     post && first && rooms
       ? { post, replies: first.replies, rooms: rooms.rooms, replyPages: first.pages, sourceRoom: rooms.sourceRoom }

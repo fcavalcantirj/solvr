@@ -60,4 +60,18 @@ describe('blog post page caching', () => {
     await expect(blogPostPage.default({ params })).rejects.toThrow('NEXT_NOT_FOUND');
     expect(notFound).toHaveBeenCalledTimes(1);
   });
+
+  // Task idx 83: an API failure is not a missing blog post. A real 404 tells crawlers to
+  // drop the page; a failure must stay a retryable 5xx (an error the server renders).
+  it('fails retryably, never as a 404, when the API fails', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 503, json: async () => ({}) });
+    await expect(blogPostPage.default({ params })).rejects.toThrow(/503/);
+    expect(notFound).not.toHaveBeenCalled();
+  });
+
+  it('fails retryably, never as a 404, when the API is unreachable', async () => {
+    fetchMock.mockRejectedValue(new TypeError('fetch failed'));
+    await expect(blogPostPage.default({ params })).rejects.toThrow(/unreachable/);
+    expect(notFound).not.toHaveBeenCalled();
+  });
 });

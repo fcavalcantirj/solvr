@@ -154,6 +154,8 @@ func (h *SitemapHandler) GetSitemapCounts(w http.ResponseWriter, r *http.Request
 			"users":      counts.Users,
 			"blog_posts": counts.BlogPosts,
 			"rooms":      counts.Rooms,
+			// Each type's newest material change, for the sitemap index (task idx 83).
+			"lastmod": counts.Lastmod,
 		},
 	}
 

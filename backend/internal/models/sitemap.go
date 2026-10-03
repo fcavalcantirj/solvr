@@ -49,6 +49,17 @@ type SitemapCounts struct {
 	Users     int `json:"users"`
 	BlogPosts int `json:"blog_posts"`
 	Rooms     int `json:"rooms"`
+	// Lastmod is each listed type's newest lastmod (task idx 83): when its sub-sitemap
+	// last changed materially. Null for a type with nothing listed.
+	Lastmod SitemapLastmods `json:"lastmod"`
+}
+
+// SitemapLastmods holds each sitemap type's newest material change.
+type SitemapLastmods struct {
+	Posts     *time.Time `json:"posts"`
+	Agents    *time.Time `json:"agents"`
+	BlogPosts *time.Time `json:"blog_posts"`
+	Rooms     *time.Time `json:"rooms"`
 }
 
 // SitemapURLsOptions holds pagination options for paginated sitemap URL queries.

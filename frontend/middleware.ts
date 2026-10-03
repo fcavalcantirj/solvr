@@ -7,6 +7,8 @@ const BLOCKED_PATHS = ['/adfa']
 // The pre-redesign product split knowledge into /problems, /ideas and
 // /questions collections (plus the /feed aggregate). All of that is now one
 // canonical /posts collection, so those routes redirect permanently.
+// These redirects are permanent and outlive the API's compatibility sunset (task idx 83):
+// they are decided from the path alone and never ask the API.
 const LEGACY_SEGMENTS = ['problems', 'ideas', 'questions']
 
 // canonicalPath returns the canonical /posts destination for a legacy route, or

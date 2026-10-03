@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { middleware, canonicalPath, config } from './middleware';
 
@@ -77,5 +77,32 @@ describe('the old /new composer (idx 52: the web client creates canonical posts)
 
   it('runs the middleware on /new', () => {
     expect(config.matcher).toContain('/new');
+  });
+});
+
+// Task idx 83: the legacy redirects are permanent and outlive the API's compatibility
+// sunset. They are decided from the path alone, so they never ask the API: a retired or
+// unreachable API cannot turn a legacy URL into an error or a redirect chain.
+describe('legacy redirects need no API', () => {
+  it('answers every legacy URL with one 308 to its exact canonical post, without fetching', () => {
+    const fetchSpy = vi.fn(() => {
+      throw new Error('the API was called');
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+    try {
+      for (const [legacy, canonical] of [
+        ['/problems/2f0c6a3e-0000-4000-8000-000000000001', '/posts/2f0c6a3e-0000-4000-8000-000000000001'],
+        ['/ideas/2f0c6a3e-0000-4000-8000-000000000002', '/posts/2f0c6a3e-0000-4000-8000-000000000002'],
+        ['/questions/2f0c6a3e-0000-4000-8000-000000000003', '/posts/2f0c6a3e-0000-4000-8000-000000000003'],
+      ]) {
+        const res = middleware(new NextRequest(`https://solvr.dev${legacy}`));
+        expect(res.status).toBe(308);
+        expect(new URL(res.headers.get('location')!).pathname).toBe(canonical);
+        expect(new URL(res.headers.get('location')!).pathname).not.toBe('/');
+      }
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

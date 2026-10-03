@@ -5,6 +5,7 @@ import { Header } from "@/components/header";
 import { RoomDetailClient } from "@/components/rooms/room-detail-client";
 import { PrivateRoomView } from "@/components/rooms/private-room-view";
 import { RoomArchiveNav } from "@/components/rooms/room-archive-nav";
+import { readForPage } from "@/lib/seo/read-for-page";
 import { JsonLd, roomJsonLd, breadcrumbJsonLd } from "@/components/seo/json-ld";
 import type { APIRoomDetailResponse } from "@/lib/api-types";
 import { NOINDEX } from "@/lib/seo/route-policy";
@@ -24,18 +25,11 @@ export const dynamic = "force-dynamic";
 // The SSR fetch carries no auth (there's no browser JWT during SSR), so a PRIVATE room
 // returns 403 here — we surface the status so the page can hand off to a client-side
 // authenticated gate instead of 404ing the owner (BART-156).
-const getRoom = cache(async (slug: string): Promise<{ status: number; data: unknown }> => {
-  try {
-    const res = await fetch(
-      `${API_BASE_URL}/v1/rooms/${encodeURIComponent(slug)}`,
-      { cache: "no-store" }
-    );
-    if (!res.ok) return { status: res.status, data: null };
-    return { status: res.status, data: await res.json() };
-  } catch {
-    return { status: 0, data: null };
-  }
-});
+// An API failure (5xx) or an unreachable API throws, a retryable 5xx (task idx 83): it
+// is neither a private room (the gate) nor a missing one (a real 404).
+const getRoom = cache((slug: string): Promise<{ status: number; data: unknown }> =>
+  readForPage<unknown>(`/v1/rooms/${encodeURIComponent(slug)}`)
+);
 
 // The page's search verdict (task idx 80): the API decides it at its own endpoint.
 const getRoomSEO = cache((slug: string) =>
@@ -95,9 +89,9 @@ export default async function RoomDetailPage({
   // Googlebot gets a real 404, not a 200 spinner.
   if (status === 404) notFound();
 
-  // Private room (SSR got 403 with no JWT), auth error, or a transient failure: render the
-  // client-side authenticated gate, which re-fetches with the human's JWT (BART-156). No
-  // private-room data is ever server-rendered, so private rooms stay unindexed.
+  // Private room (SSR got 403 with no JWT) or another refusal: render the client-side
+  // authenticated gate, which re-fetches with the human's JWT (BART-156). No private-room
+  // data is ever server-rendered, so private rooms stay unindexed. API failures threw above.
   if (!payload?.data?.room) {
     return (
       <div className="min-h-screen lg:h-screen flex flex-col bg-background lg:overflow-hidden">

@@ -45,10 +45,10 @@ func (r *SitemapRepository) GetSitemapURLs(ctx context.Context) (*models.Sitemap
 	}
 
 	postRows, err := r.pool.Query(ctx, `
-		SELECT id, type, updated_at
+		SELECT id, type, `+sitemapPostLastmod+` AS lastmod
 		FROM posts
 		WHERE `+sitemapPostEligible+`
-		ORDER BY updated_at DESC
+		ORDER BY lastmod DESC
 	`)
 	if err != nil {
 		return nil, err
@@ -196,6 +196,11 @@ func (r *SitemapRepository) GetSitemapCounts(ctx context.Context) (*models.Sitem
 		return nil, err
 	}
 
+	// Each type's newest material change, for the sitemap index (task idx 83).
+	if counts.Lastmod, err = r.sitemapLastmods(ctx); err != nil {
+		return nil, err
+	}
+
 	return counts, nil
 }
 
@@ -214,10 +219,10 @@ func (r *SitemapRepository) GetPaginatedSitemapURLs(ctx context.Context, opts mo
 	switch opts.Type {
 	case "posts":
 		rows, err := r.pool.Query(ctx, `
-			SELECT id, type, updated_at
+			SELECT id, type, `+sitemapPostLastmod+` AS lastmod
 			FROM posts
 			WHERE `+sitemapPostEligible+`
-			ORDER BY updated_at DESC
+			ORDER BY lastmod DESC
 			LIMIT $1 OFFSET $2
 		`, opts.PerPage, offset)
 		if err != nil {

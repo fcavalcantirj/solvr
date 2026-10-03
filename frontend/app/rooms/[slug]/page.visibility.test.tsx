@@ -130,3 +130,14 @@ describe('room page follows the API for HTML and social metadata', () => {
     await expect(RoomDetailPage(params())).rejects.toThrow('NEXT_NOT_FOUND');
   });
 });
+
+// Task idx 83: an API failure is neither a private room nor a missing one: it fails
+// retryably instead of rendering the authenticated gate with a 200.
+describe('room page when the API fails', () => {
+  it('fails retryably on a 5xx and when the API is unreachable', async () => {
+    apiAnswers(503);
+    await expect(RoomDetailPage(params())).rejects.toThrow(/503/);
+    fetchMock.mockRejectedValue(new TypeError('fetch failed'));
+    await expect(RoomDetailPage(params())).rejects.toThrow(/unreachable/);
+  });
+});

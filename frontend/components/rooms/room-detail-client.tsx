@@ -18,6 +18,7 @@ import { mergeMessages, isNearBottom } from '@/lib/rooms/message-view';
 import { recordRoomView } from '@/lib/recently-viewed-rooms';
 import { useShareVisit } from '@/hooks/use-share-visit';
 import { useRoomViewer } from '@/hooks/use-room-viewer';
+import { RoomNotifyToggle } from './room-notify-toggle';
 
 interface RoomDetailClientProps {
   room: APIRoom;
@@ -94,7 +95,7 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
 
   // Pinned directives (idx 92): the API says whether this viewer may pin, and answers a
   // pin change with the entry as it now stands and the directive now in force.
-  const { canPin } = useRoomViewer(room.slug);
+  const { canPin, notifications } = useRoomViewer(room.slug);
   const [directive, setDirective] = useState<APIRoomMessage | null | undefined>(latestPinned);
   const togglePin = useCallback(async (message: APIRoomMessage) => {
     try {
@@ -322,6 +323,9 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
           reader does not have to scroll a long transcript to find them. */}
       <div className="shrink-0">
         <RoomContextPanel initialTask={initialTask} latestPinned={directive} />
+        <div className="mt-2">
+          <RoomNotifyToggle slug={room.slug} initial={notifications} />
+        </div>
       </div>
 
       {/* Fast direct-create landing (task: humans who created the room here). It

@@ -13,9 +13,12 @@ describe('useRoomViewer', () => {
   });
 
   it('exposes the API answer', async () => {
-    vi.mocked(api.getRoomViewer).mockResolvedValue({ data: { can_pin: true } });
+    vi.mocked(api.getRoomViewer).mockResolvedValue({
+      data: { can_pin: true, notifications: { available: true, subscribed: true, paused: false } },
+    });
     const { result } = renderHook(() => useRoomViewer('ttt-room'));
     await waitFor(() => expect(result.current.canPin).toBe(true));
+    expect(result.current.notifications).toEqual({ available: true, subscribed: true, paused: false });
     expect(api.getRoomViewer).toHaveBeenCalledWith('ttt-room');
   });
 

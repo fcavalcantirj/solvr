@@ -1104,6 +1104,7 @@ export interface NotificationSubject {
   post_id?: string;
   reply_id?: string;
   room_id?: string;
+  entry_id?: number;
 }
 
 export interface BriefingInboxItem {

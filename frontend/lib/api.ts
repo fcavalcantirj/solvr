@@ -19,6 +19,9 @@ import type {
   APIRoomShareResponse,
   APIRoomViewerResponse,
   APIPinEntryResponse,
+  APIRoomNotificationStateResponse,
+  APINotificationSettingsResponse,
+  APIUserNotificationsResponse,
   APIPostsResponse,
   APISearchResponse,
   APIAnswersResponse,
@@ -529,6 +532,41 @@ class SolvrAPI extends SolvrAPIBase {
   /** GET /v1/rooms/{slug}/viewer — what this caller may do in the room (idx 92). */
   async getRoomViewer(slug: string): Promise<APIRoomViewerResponse> {
     return this.fetch<APIRoomViewerResponse>(`/v1/rooms/${encodeURIComponent(slug)}/viewer`);
+  }
+
+  /** PUT (on) / DELETE (off) /v1/rooms/{slug}/notifications — the per-room opt-in (idx 92). */
+  async setRoomNotifications(slug: string, on: boolean): Promise<APIRoomNotificationStateResponse> {
+    return this.fetch<APIRoomNotificationStateResponse>(`/v1/rooms/${encodeURIComponent(slug)}/notifications`, {
+      method: on ? 'PUT' : 'DELETE',
+    });
+  }
+
+  /** GET /v1/me/notification-settings — the global room-notification switch. */
+  async getNotificationSettings(): Promise<APINotificationSettingsResponse> {
+    return this.fetch<APINotificationSettingsResponse>('/v1/me/notification-settings');
+  }
+
+  /** PATCH /v1/me/notification-settings — pause or resume every room notification. */
+  async updateNotificationSettings(value: 'on' | 'paused'): Promise<APINotificationSettingsResponse> {
+    return this.fetch<APINotificationSettingsResponse>('/v1/me/notification-settings', {
+      method: 'PATCH',
+      body: JSON.stringify({ room_notifications: value }),
+    });
+  }
+
+  /** GET /v1/notifications — the signed-in person's notifications, newest first. */
+  async listNotifications(): Promise<APIUserNotificationsResponse> {
+    return this.fetch<APIUserNotificationsResponse>('/v1/notifications?per_page=50');
+  }
+
+  /** POST /v1/notifications/{id}/read */
+  async markNotificationRead(id: string): Promise<void> {
+    await this.fetch(`/v1/notifications/${encodeURIComponent(id)}/read`, { method: 'POST' });
+  }
+
+  /** POST /v1/notifications/read-all */
+  async markAllNotificationsRead(): Promise<void> {
+    await this.fetch('/v1/notifications/read-all', { method: 'POST' });
   }
 
   /** POST /v1/rooms/{slug}/entries/{id}/pin — pin a message as the directive (idx 92). */

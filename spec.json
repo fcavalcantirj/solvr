@@ -1054,7 +1054,7 @@
       "Ensure JSON-LD describes visible content, uses canonical URLs and real timestamps, and escapes script-closing content safely; validate representative pages with the Rich Results Test.",
       "Follow https://developers.google.com/search/docs/appearance/structured-data/discussion-forum and treat schema validity or eligibility as distinct from a guaranteed rich result."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "seo",

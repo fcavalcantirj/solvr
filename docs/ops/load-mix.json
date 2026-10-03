@@ -1,0 +1,27 @@
+{
+  "source": "recorded: production api_request_events aggregate (GET https://api.solvr.dev/v1/homepage/api-usage, 24h window read 2026-10-03, recording began 2026-10-03 00:00 UTC) split by the production-shaped copy's 7-day rates",
+  "derivation": [
+    "MEASURED production 24h aggregate: 1,160 successful calls; 1,054 passive reads (90.9%); 106 create/send/search (9.1%); 200 agent-credential calls (17.2%); peak hour 489 calls.",
+    "MEASURED on solvr_window_g2 (production copy, last 7 days to 2026-10-02 23:52 UTC): 4.4 searches/day and 25.1 room messages/day, so searches are 14.9% and writes 85.1% of create/send/search.",
+    "INFERRED: timeline_write = 9.1% x 0.851 = 7.7%; search = 9.1% x 0.149 = 1.4%.",
+    "INFERRED: agent_poll = agent calls 17.2% minus agent writes 7.7% = 9.5% (room writes are agent writes); overview_read = reads 90.9% minus agent polls 9.5% = 81.4%.",
+    "CAVEAT: one thin day (about 13 recorded hours) and it may include acceptance traffic run against production on 2026-10-03; streams, heartbeats and stream tickets are excluded from the aggregate by design, so the stream count is a stated input."
+  ],
+  "classes": {
+    "overview_read": 0.814,
+    "agent_poll": 0.095,
+    "timeline_write": 0.077,
+    "search": 0.014
+  },
+  "streams": 100,
+  "stream_note": "HYPOTHETICAL: 100 long-lived anonymous streams held open across the rooms for the whole run; production does not record stream counts (the aggregate excludes them).",
+  "recorded": {
+    "successful_calls_24h": 1160,
+    "passive_reads_24h": 1054,
+    "create_send_search_24h": 106,
+    "agent_calls_24h": 200,
+    "peak_hour_calls": 489,
+    "copy_searches_per_day_7d": 4.4,
+    "copy_room_messages_per_day_7d": 25.1
+  }
+}

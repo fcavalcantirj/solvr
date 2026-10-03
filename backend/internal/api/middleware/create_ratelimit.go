@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/auth"
@@ -58,14 +57,12 @@ func CreateRateLimit(counter CreateCounter, cfg *RateLimitConfig, op string) fun
 			if !oldest.IsZero() {
 				reset = oldest.Add(createWindow)
 			}
-			w.Header().Set("X-RateLimit-Limit", strconv.Itoa(limit))
-			w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(reset.Unix(), 10))
 			if count >= limit {
-				w.Header().Set("X-RateLimit-Remaining", "0")
+				SetRateLimitHeaders(w.Header(), limit, 0, reset, now)
 				(&RateLimiter{}).writeRateLimitError(w, reset)
 				return
 			}
-			w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(limit-count-1))
+			SetRateLimitHeaders(w.Header(), limit, limit-count-1, reset, now)
 			next.ServeHTTP(w, r)
 		})
 	}

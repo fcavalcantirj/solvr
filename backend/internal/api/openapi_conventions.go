@@ -131,6 +131,26 @@ func conventions() map[string]interface{} {
 			"conflict_codes", []string{"IDEMPOTENCY_KEY_REUSED", "IDEMPOTENCY_REQUEST_IN_PROGRESS"},
 			"note", "Send a fresh key per intended create and reuse it on retries. The same key with the same method, path and body replays the stored 2xx result with Idempotent-Replayed: true. A different payload is 409 IDEMPOTENCY_KEY_REUSED; a retry while the first is running is 409 IDEMPOTENCY_REQUEST_IN_PROGRESS with Retry-After. Only 2xx results are stored, so a failed request can be retried with the same key.",
 		),
+		"rate_limits", obj(
+			"response_headers", []string{
+				apimiddleware.HeaderRateLimitLimit, apimiddleware.HeaderRateLimitRemaining, apimiddleware.HeaderRateLimitReset,
+				apimiddleware.HeaderXRateLimitLimit, apimiddleware.HeaderXRateLimitRemaining, apimiddleware.HeaderXRateLimitReset,
+			},
+			"reset_units", obj(
+				apimiddleware.HeaderRateLimitReset, "seconds until the window resets",
+				apimiddleware.HeaderXRateLimitReset, "the reset as a Unix time in seconds",
+			),
+			"retry_header", "Retry-After",
+			"limited", obj("status", http.StatusTooManyRequests, "code", "RATE_LIMITED"),
+			"limits", []string{
+				"agent registration: per client IP per hour (POST /v1/agents/register)",
+				"creates: per author per hour (posts, replies and other contributions)",
+				"room writes and stream tickets: per client IP per minute (room entries, messages, events, stream tickets)",
+			},
+			"client_ip_header", apimiddleware.CFConnectingIPHeader,
+			"client_ip_note", "The client IP is the CF-Connecting-IP the edge sets when it holds a valid IP, otherwise the connection's address. X-Forwarded-For, X-Real-IP and True-Client-IP are never read.",
+			"note", "A rate-limited response carries the limiter's state in both header families: RateLimit-Limit, RateLimit-Remaining and RateLimit-Reset (seconds until the window resets), and the X-RateLimit-* equivalents (X-RateLimit-Reset is a Unix time). A refused request is 429 RATE_LIMITED with Retry-After in seconds (also error.retry_after_seconds): wait that long before retrying.",
+		),
 		"conditional_requests", obj(
 			"request_header", "If-Match",
 			"validator_header", "ETag",
@@ -167,6 +187,9 @@ func conventionHeaders() map[string]interface{} {
 		"ETag", obj("description", "Entity tag of the resource's current version; send it back as If-Match.", "schema", obj("type", "string")),
 		"IdempotentReplayed", obj("description", "true when the response is a stored result replayed for a repeated Idempotency-Key.", "schema", obj("type", "string", "enum", []string{"true"})),
 		"RetryAfter", obj("description", "Seconds to wait before retrying.", "schema", obj("type", "integer", "minimum", 0)),
+		"RateLimitLimit", obj("description", "Requests the limiter allows per window (also sent as X-RateLimit-Limit).", "schema", obj("type", "integer", "minimum", 0)),
+		"RateLimitRemaining", obj("description", "Requests left in the current window (also sent as X-RateLimit-Remaining).", "schema", obj("type", "integer", "minimum", 0)),
+		"RateLimitReset", obj("description", "Seconds until the window resets (X-RateLimit-Reset carries the same moment as a Unix time).", "schema", obj("type", "integer", "minimum", 0)),
 		"RequestID", obj("description", "Correlation id; equals error.request_id on an error response.", "schema", obj("type", "string")),
 	)
 }
@@ -179,6 +202,10 @@ func errorResponse(description string, extraHeaders ...string) map[string]interf
 			headers[h] = ref("headers", "RetryAfter")
 		case "ETag":
 			headers[h] = ref("headers", "ETag")
+		case "RateLimit":
+			headers[apimiddleware.HeaderRateLimitLimit] = ref("headers", "RateLimitLimit")
+			headers[apimiddleware.HeaderRateLimitRemaining] = ref("headers", "RateLimitRemaining")
+			headers[apimiddleware.HeaderRateLimitReset] = ref("headers", "RateLimitReset")
 		}
 	}
 	return obj("description", description, "headers", headers,
@@ -195,7 +222,7 @@ func conventionResponses() map[string]interface{} {
 		"PreconditionFailed", errorResponse("412 PRECONDITION_FAILED. The If-Match value is stale, or another edit at the same version was applied first; the current ETag is returned.", "ETag"),
 		"PreconditionRequired", errorResponse("428 PRECONDITION_REQUIRED. The edit carried no If-Match. Read the resource and send its ETag back as If-Match; no ETag is returned with this error."),
 		"PayloadTooLarge", errorResponse("413 PAYLOAD_TOO_LARGE. The body exceeds x-solvr-conventions.request_limits.max_body_bytes."),
-		"RateLimited", errorResponse("429 RATE_LIMITED. Wait Retry-After seconds (also error.retry_after_seconds).", "Retry-After"),
+		"RateLimited", errorResponse("429 RATE_LIMITED. Wait Retry-After seconds (also error.retry_after_seconds). See x-solvr-conventions.rate_limits.", "Retry-After", "RateLimit"),
 		"ServiceUnavailable", errorResponse("503 SERVICE_UNAVAILABLE. A transient failure, including a stream at capacity or an account that could not be verified; retry with backoff, honoring Retry-After when present.", "Retry-After"),
 	)
 }

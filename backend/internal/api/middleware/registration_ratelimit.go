@@ -83,6 +83,9 @@ func (rl *RegistrationRateLimiter) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
+		SetRateLimitHeaders(w.Header(), rl.config.MaxPerIP, rl.config.MaxPerIP-record.Count,
+			record.WindowStart.Add(rl.config.Window), time.Now())
+
 		// Log suspicious patterns (only if threshold is configured)
 		if rl.config.SuspiciousThreshold > 0 && record.Count >= rl.config.SuspiciousThreshold {
 			log.Printf("[%s] SUSPICIOUS: IP %s has made %d registration attempts in window (threshold: %d)",

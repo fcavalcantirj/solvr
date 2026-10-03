@@ -151,14 +151,8 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 		// Calculate reset time
 		resetTime := record.WindowStart.Add(window)
 
-		// Set rate limit headers
-		w.Header().Set("X-RateLimit-Limit", strconv.Itoa(limit))
-		remaining := limit - record.Count
-		if remaining < 0 {
-			remaining = 0
-		}
-		w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(remaining))
-		w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(resetTime.Unix(), 10))
+		// Set rate limit headers (RateLimit-* and X-RateLimit-*)
+		SetRateLimitHeaders(w.Header(), limit, limit-record.Count, resetTime, time.Now())
 
 		// Check if rate limited
 		if record.Count > limit {

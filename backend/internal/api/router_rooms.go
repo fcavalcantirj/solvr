@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/httprate"
 
 	"github.com/fcavalcantirj/solvr/internal/api/handlers"
 	apimiddleware "github.com/fcavalcantirj/solvr/internal/api/middleware"
@@ -82,7 +81,7 @@ func mountRoomRoutes(
 	wireContentGate(pool, roomSavePostHandler)
 	roomSavePostHandler.SetPostModerator(postModerator)
 	streamTicketHandler := handlers.NewRoomStreamTicketHandler(streamTicketSecret)
-	streamTicketLimit := httprate.LimitByIP(30, time.Minute)
+	streamTicketLimit := apimiddleware.LimitByClientIP(30, time.Minute)
 
 	// Canonical timeline routes accept human, agent-account and room-scoped credentials
 	// through ONE authorization policy (RoomPolicyGuard). Writes share the adapters'
@@ -90,8 +89,8 @@ func mountRoomRoutes(
 	// 60/min bucket as POST /r/{slug}/message and POST /r/{slug}/events, a human write against the same 10/min bucket as
 	// POST /v1/rooms/{slug}/messages. Each limiter is built once and mounted on both.
 	entriesHandler := handlers.NewRoomEntriesHandler(entryRepo, msgHandler, eventsHandler)
-	agentWriteLimit := httprate.LimitByIP(60, time.Minute)
-	humanWriteLimit := httprate.LimitByIP(10, time.Minute)
+	agentWriteLimit := apimiddleware.LimitByClientIP(60, time.Minute)
+	humanWriteLimit := apimiddleware.LimitByClientIP(10, time.Minute)
 	entryWriteLimit := func(next http.Handler) http.Handler {
 		agentNext, humanNext := agentWriteLimit(next), humanWriteLimit(next)
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

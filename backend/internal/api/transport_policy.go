@@ -42,6 +42,7 @@ var (
 	// validator, the replay marker and the retry delay.
 	corsExposedHeaders = []string{
 		"X-Request-ID", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset",
+		"RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset",
 		"ETag", "Idempotent-Replayed", "Retry-After",
 	}
 )

@@ -206,7 +206,7 @@ func (t *target) openStreams(ctx context.Context, n int, tracker *DeliveryTracke
 				return
 			}
 			req.Header.Set("Accept", "text/event-stream")
-			req.Header.Set("X-Real-IP", clientIP(79, i))
+			req.Header.Set("CF-Connecting-IP", clientIP(79, i))
 			resp, err := streamClient.Do(req)
 			if err != nil || resp.StatusCode != http.StatusOK {
 				failed.Add(1)

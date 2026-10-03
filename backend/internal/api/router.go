@@ -39,7 +39,7 @@ func NewRouter(pool *db.Pool, hubMgr *hub.HubManager, registry *hub.PresenceRegi
 	// Middleware stack
 	r.Use(requestIDMiddleware)
 	r.Use(apimiddleware.ErrorEnvelope) // after request ID, outside Recoverer
-	r.Use(middleware.RealIP)
+	r.Use(apimiddleware.RealClientIP)  // CF-Connecting-IP or the connection address; never X-Forwarded-For/X-Real-IP/True-Client-IP
 	r.Use(middleware.Recoverer)
 
 	// CORS configuration - MUST be early in the chain so error responses include CORS headers

@@ -4,10 +4,8 @@ package middleware
 import (
 	"encoding/json"
 	"log"
-	"net"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -65,7 +63,7 @@ func NewRegistrationRateLimiter(store RateLimitStore, config *RegistrationRateLi
 func (rl *RegistrationRateLimiter) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Extract client IP
-		clientIP := ExtractClientIP(r)
+		clientIP := ClientIP(r)
 		if clientIP == "" {
 			// If we can't determine IP, allow through but log it
 			log.Printf("[%s] WARNING: could not determine client IP for request", rl.config.LogPrefix)
@@ -138,61 +136,4 @@ func (rl *RegistrationRateLimiter) writeRateLimitError(w http.ResponseWriter, r 
 	}
 
 	json.NewEncoder(w).Encode(response)
-}
-
-// ExtractClientIP extracts the client IP address from the request.
-// It checks headers commonly set by proxies/load balancers.
-// Order of precedence: X-Forwarded-For (first IP), X-Real-IP, RemoteAddr
-func ExtractClientIP(r *http.Request) string {
-	// Check X-Forwarded-For header (commonly set by proxies)
-	xff := r.Header.Get("X-Forwarded-For")
-	if xff != "" {
-		// X-Forwarded-For can contain multiple IPs: client, proxy1, proxy2...
-		// The first one is the original client
-		ips := strings.Split(xff, ",")
-		if len(ips) > 0 {
-			ip := strings.TrimSpace(ips[0])
-			if ip != "" {
-				return ip
-			}
-		}
-	}
-
-	// Check X-Real-IP header (set by nginx)
-	xrip := r.Header.Get("X-Real-IP")
-	if xrip != "" {
-		return strings.TrimSpace(xrip)
-	}
-
-	// Fall back to RemoteAddr
-	return extractIPFromAddr(r.RemoteAddr)
-}
-
-// extractIPFromAddr extracts the IP from an address string like "ip:port" or "[ipv6]:port".
-func extractIPFromAddr(addr string) string {
-	if addr == "" {
-		return ""
-	}
-
-	// Handle IPv6 addresses in brackets
-	if strings.HasPrefix(addr, "[") {
-		// Format: [ipv6]:port
-		host, _, err := net.SplitHostPort(addr)
-		if err != nil {
-			// Try without port
-			if idx := strings.Index(addr, "]:"); idx != -1 {
-				return addr[1:idx]
-			}
-			return strings.Trim(addr, "[]")
-		}
-		return host
-	}
-
-	// Handle IPv4 or IPv6 without brackets
-	host, _, err := net.SplitHostPort(addr)
-	if err != nil {
-		// No port, return as-is
-		return addr
-	}
-	return host
 }

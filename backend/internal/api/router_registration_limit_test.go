@@ -31,11 +31,18 @@ type registrationAnswer struct {
 
 func registerFrom(t *testing.T, ts *httptest.Server, pool *db.Pool, ip string) registrationAnswer {
 	t.Helper()
+	return registerWithHeaders(t, ts, pool, map[string]string{"CF-Connecting-IP": ip})
+}
+
+func registerWithHeaders(t *testing.T, ts *httptest.Server, pool *db.Pool, headers map[string]string) registrationAnswer {
+	t.Helper()
 	name := "rl_" + strings.ReplaceAll(uuid.NewString(), "-", "")[:12]
 	req, err := http.NewRequest(http.MethodPost, ts.URL+"/v1/agents/register", strings.NewReader(fmt.Sprintf(`{"name":%q}`, name)))
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Real-IP", ip)
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -91,4 +98,25 @@ func TestRegistrationLimit_AnUnusableEnvironmentValueKeepsTheDefault(t *testing.
 	}
 	t.Setenv(registrationLimitEnv, "7")
 	assert.Equal(t, 7, registrationLimitPerIPPerHour())
+}
+
+// The client IP is Cloudflare's CF-Connecting-IP or the connection's own address: the
+// forwarding headers any caller can set are never read, so varying them opens no new
+// registration bucket.
+func TestRegistrationLimit_SpoofedForwardingHeadersShareOneBucket(t *testing.T) {
+	t.Setenv(registrationLimitEnv, "3")
+	ts, pool, _ := newBillingFreeServer(t)
+
+	spoofs := []map[string]string{
+		{"X-Forwarded-For": "203.0.113.21"},
+		{"X-Real-IP": "203.0.113.22"},
+		{"True-Client-IP": "203.0.113.23"},
+	}
+	for i, h := range spoofs {
+		got := registerWithHeaders(t, ts, pool, h)
+		require.Equal(t, http.StatusCreated, got.status, "registration %d of 3: %v", i+1, got.body)
+	}
+	assertRegistrationRefused(t, registerWithHeaders(t, ts, pool, map[string]string{
+		"X-Forwarded-For": "203.0.113.24", "X-Real-IP": "203.0.113.25", "True-Client-IP": "203.0.113.26",
+	}), 3)
 }

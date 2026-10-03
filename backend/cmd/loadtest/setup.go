@@ -13,8 +13,9 @@ import (
 )
 
 // agent is one registered load-test agent with its own client address. Each agent sends
-// X-Real-IP so the API's per-IP write limit (60/min, router_rooms.go) buckets it apart, as
-// it would buckets distinct real clients; the harness never raises or removes that limit.
+// CF-Connecting-IP, the only forwarded address the API trusts, so the API's per-IP write
+// limit (60/min, router_rooms.go) buckets it apart, as it buckets distinct real clients; the
+// harness never raises or removes that limit.
 type agent struct {
 	key  string
 	ip   string
@@ -55,7 +56,7 @@ func (t *target) do(ctx context.Context, method, path, bearer, ip string, body a
 		req.Header.Set("Authorization", "Bearer "+bearer)
 	}
 	if ip != "" {
-		req.Header.Set("X-Real-IP", ip)
+		req.Header.Set("CF-Connecting-IP", ip)
 	}
 	resp, err := t.client.Do(req)
 	if err != nil {

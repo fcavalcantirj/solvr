@@ -236,52 +236,6 @@ func TestRegistrationRateLimiter_DifferentIPsIndependent(t *testing.T) {
 	}
 }
 
-// TestRegistrationRateLimiter_XForwardedFor tests that X-Forwarded-For header is respected.
-func TestRegistrationRateLimiter_XForwardedFor(t *testing.T) {
-	store := NewMockIPRateLimitStore()
-	config := &RegistrationRateLimitConfig{
-		MaxPerIP:  2,
-		Window:    time.Hour,
-		LogPrefix: "test",
-	}
-	rl := NewRegistrationRateLimiter(store, config)
-
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusCreated)
-	})
-
-	// Make requests with same RemoteAddr but different X-Forwarded-For
-	for i := 0; i < 2; i++ {
-		req := httptest.NewRequest(http.MethodPost, "/v1/agents/register", nil)
-		req.RemoteAddr = "10.0.0.1:12345" // Proxy address
-		req.Header.Set("X-Forwarded-For", "203.0.113.1") // Real client IP
-		rr := httptest.NewRecorder()
-		rl.Middleware(handler).ServeHTTP(rr, req)
-	}
-
-	// 3rd request from same X-Forwarded-For should be blocked
-	req := httptest.NewRequest(http.MethodPost, "/v1/agents/register", nil)
-	req.RemoteAddr = "10.0.0.1:12345"
-	req.Header.Set("X-Forwarded-For", "203.0.113.1")
-	rr := httptest.NewRecorder()
-	rl.Middleware(handler).ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusTooManyRequests {
-		t.Errorf("expected 429 for same X-Forwarded-For IP, got %d", rr.Code)
-	}
-
-	// Request from different X-Forwarded-For should pass
-	req2 := httptest.NewRequest(http.MethodPost, "/v1/agents/register", nil)
-	req2.RemoteAddr = "10.0.0.1:12345"
-	req2.Header.Set("X-Forwarded-For", "203.0.113.2") // Different real client IP
-	rr2 := httptest.NewRecorder()
-	rl.Middleware(handler).ServeHTTP(rr2, req2)
-
-	if rr2.Code != http.StatusCreated {
-		t.Errorf("expected 201 for different X-Forwarded-For IP, got %d", rr2.Code)
-	}
-}
-
 // TestRegistrationRateLimiter_DefaultConfig tests the default configuration.
 func TestRegistrationRateLimiter_DefaultConfig(t *testing.T) {
 	config := DefaultRegistrationRateLimitConfig()
@@ -336,76 +290,6 @@ func TestRegistrationRateLimiter_IncludesHintInError(t *testing.T) {
 	// Should mention registration limit
 	if message == "" {
 		t.Error("expected error message to be set")
-	}
-}
-
-// TestExtractClientIP tests the IP extraction logic.
-func TestExtractClientIP(t *testing.T) {
-	tests := []struct {
-		name          string
-		remoteAddr    string
-		xForwardedFor string
-		xRealIP       string
-		expectedIP    string
-	}{
-		{
-			name:       "simple remote addr",
-			remoteAddr: "192.168.1.1:12345",
-			expectedIP: "192.168.1.1",
-		},
-		{
-			name:       "remote addr without port",
-			remoteAddr: "192.168.1.1",
-			expectedIP: "192.168.1.1",
-		},
-		{
-			name:          "x-forwarded-for single",
-			remoteAddr:    "10.0.0.1:12345",
-			xForwardedFor: "203.0.113.1",
-			expectedIP:    "203.0.113.1",
-		},
-		{
-			name:          "x-forwarded-for multiple (use first)",
-			remoteAddr:    "10.0.0.1:12345",
-			xForwardedFor: "203.0.113.1, 10.0.0.2, 10.0.0.3",
-			expectedIP:    "203.0.113.1",
-		},
-		{
-			name:       "x-real-ip",
-			remoteAddr: "10.0.0.1:12345",
-			xRealIP:    "203.0.113.5",
-			expectedIP: "203.0.113.5",
-		},
-		{
-			name:          "x-forwarded-for takes precedence over x-real-ip",
-			remoteAddr:    "10.0.0.1:12345",
-			xForwardedFor: "203.0.113.1",
-			xRealIP:       "203.0.113.5",
-			expectedIP:    "203.0.113.1",
-		},
-		{
-			name:       "ipv6 address",
-			remoteAddr: "[2001:db8::1]:12345",
-			expectedIP: "2001:db8::1",
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodPost, "/", nil)
-			req.RemoteAddr = tc.remoteAddr
-			if tc.xForwardedFor != "" {
-				req.Header.Set("X-Forwarded-For", tc.xForwardedFor)
-			}
-			if tc.xRealIP != "" {
-				req.Header.Set("X-Real-IP", tc.xRealIP)
-			}
-
-			ip := ExtractClientIP(req)
-			if ip != tc.expectedIP {
-				t.Errorf("expected IP %q, got %q", tc.expectedIP, ip)
-			}
-		})
 	}
 }
 
@@ -488,4 +372,38 @@ func TestRegistrationRateLimiter_NoLoggingBelowThreshold(t *testing.T) {
 	}
 	// Tests pass - logging verification would require capturing log output
 	// which is done implicitly by the fact that the code runs without error
+}
+
+// The limiter buckets by the client IP Cloudflare reports in CF-Connecting-IP; a spoofed
+// X-Forwarded-For neither splits one client's bucket nor joins another's.
+func TestRegistrationRateLimiter_BucketsByCFConnectingIP(t *testing.T) {
+	rl := NewRegistrationRateLimiter(NewMockIPRateLimitStore(), &RegistrationRateLimitConfig{
+		MaxPerIP:  2,
+		Window:    time.Hour,
+		LogPrefix: "test",
+	})
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+	})
+	send := func(cf, xff string) int {
+		req := httptest.NewRequest(http.MethodPost, "/v1/agents/register", nil)
+		req.RemoteAddr = "10.0.0.1:12345" // the proxy in front of the API
+		req.Header.Set("CF-Connecting-IP", cf)
+		req.Header.Set("X-Forwarded-For", xff)
+		rr := httptest.NewRecorder()
+		rl.Middleware(handler).ServeHTTP(rr, req)
+		return rr.Code
+	}
+
+	for i, xff := range []string{"198.51.100.1", "198.51.100.2"} {
+		if code := send("203.0.113.1", xff); code != http.StatusCreated {
+			t.Fatalf("registration %d from 203.0.113.1: got %d, want 201", i+1, code)
+		}
+	}
+	if code := send("203.0.113.1", "198.51.100.3"); code != http.StatusTooManyRequests {
+		t.Errorf("third registration from CF-Connecting-IP 203.0.113.1 with a new X-Forwarded-For: got %d, want 429", code)
+	}
+	if code := send("203.0.113.2", "198.51.100.1"); code != http.StatusCreated {
+		t.Errorf("a different CF-Connecting-IP has its own bucket: got %d, want 201", code)
+	}
 }

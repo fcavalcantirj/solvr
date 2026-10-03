@@ -51,6 +51,9 @@ const (
 	WebhookEventBlogPostRejected  WebhookEventType = NotificationBlogPostRejected
 	WebhookEventRoomMemberAdded   WebhookEventType = NotificationRoomMemberAdded
 	WebhookEventRoomMemberRemoved WebhookEventType = NotificationRoomMemberRemoved
+	// Version 3 (idx 92): delivered only while the agent is opted in to the room.
+	WebhookEventRoomReply           WebhookEventType = NotificationRoomReply
+	WebhookEventRoomReviewRequested WebhookEventType = NotificationRoomReviewRequested
 )
 
 // ValidWebhookEventTypes lists all valid webhook event types.
@@ -62,6 +65,8 @@ var ValidWebhookEventTypes = []WebhookEventType{
 	WebhookEventBlogPostRejected,
 	WebhookEventRoomMemberAdded,
 	WebhookEventRoomMemberRemoved,
+	WebhookEventRoomReply,
+	WebhookEventRoomReviewRequested,
 }
 
 // RetiredWebhookEventTypes are the event names of the problem/question/idea model. Nothing

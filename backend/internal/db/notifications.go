@@ -22,13 +22,14 @@ func NewNotificationsRepository(pool *Pool) *NotificationsRepository {
 
 // notificationColumns is the column list every notification read returns, in scanNotification's order.
 const notificationColumns = `id, user_id, agent_id, type, title, COALESCE(body, '') AS body, COALESCE(link, '') AS link,
-	read_at, created_at, schema_version, post_id::text, reply_id::text, room_id::text`
+	read_at, created_at, schema_version, post_id::text, reply_id::text, room_id::text, entry_id`
 
 // scanNotification reads one row selected with notificationColumns.
 func scanNotification(row pgx.Row) (models.Notification, error) {
 	var n models.Notification
 	err := row.Scan(&n.ID, &n.UserID, &n.AgentID, &n.Type, &n.Title, &n.Body, &n.Link,
-		&n.ReadAt, &n.CreatedAt, &n.SchemaVersion, &n.Subject.PostID, &n.Subject.ReplyID, &n.Subject.RoomID)
+		&n.ReadAt, &n.CreatedAt, &n.SchemaVersion, &n.Subject.PostID, &n.Subject.ReplyID, &n.Subject.RoomID,
+		&n.Subject.EntryID)
 	return n, err
 }
 

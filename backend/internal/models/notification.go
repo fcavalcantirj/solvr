@@ -21,8 +21,12 @@ const NotificationSchemaVersion = 1
 // that knows only version 1 still reads every event it knows; a room event is version 2.
 const NotificationRoomSchemaVersion = 2
 
+// NotificationRoomEntrySchemaVersion is the contract version that added the opt-in room
+// events about a timeline entry (idx 92) and subject.entry_id, beside subject.room_id.
+const NotificationRoomEntrySchemaVersion = 3
+
 // NotificationSchemaVersions are the versions of the event contract, oldest first.
-var NotificationSchemaVersions = []int{NotificationSchemaVersion, NotificationRoomSchemaVersion}
+var NotificationSchemaVersions = []int{NotificationSchemaVersion, NotificationRoomSchemaVersion, NotificationRoomEntrySchemaVersion}
 
 // Notification event types of schema version 1 that name a canonical subject.
 // post.approved / post.rejected name the post; reply.removed / reply.flagged name the reply
@@ -44,12 +48,24 @@ const (
 	NotificationRoomMemberRemoved = "room.member_removed"
 )
 
+// Notification event types of schema version 3 (NotificationRoomEntrySchemaVersion), recorded
+// only for a recipient who opted in to the room and has not paused room notifications:
+// room.reply — a message replied to one of the recipient's entries or addressed them;
+// room.review_requested — a review.requested event was posted in the room. Both name the
+// room and the entry in subject.room_id and subject.entry_id.
+const (
+	NotificationRoomReply           = "room.reply"
+	NotificationRoomReviewRequested = "room.review_requested"
+)
+
 // NotificationSubject names the canonical post, reply or room a notification event is about.
 type NotificationSubject struct {
 	PostID  *string `json:"post_id,omitempty"`
 	ReplyID *string `json:"reply_id,omitempty"`
-	// RoomID is the room of a schema version 2 room event.
+	// RoomID is the room of a schema version 2 or 3 room event.
 	RoomID *string `json:"room_id,omitempty"`
+	// EntryID is the room timeline entry of a schema version 3 event.
+	EntryID *int64 `json:"entry_id,omitempty"`
 }
 
 // Notification represents a notification for a user or agent.

@@ -19,14 +19,14 @@ const queueWebhookDeliveries = `
 		jsonb_build_object(
 			'notification_id', c.id,
 			'agent_id', c.agent_id,
-			'subject', jsonb_strip_nulls(jsonb_build_object('post_id', c.post_id, 'reply_id', c.reply_id, 'room_id', c.room_id)),
+			'subject', jsonb_strip_nulls(jsonb_build_object('post_id', c.post_id, 'reply_id', c.reply_id, 'room_id', c.room_id, 'entry_id', c.entry_id)),
 			'title', c.title,
 			'body', COALESCE(c.body, ''),
 			'link', COALESCE(c.link, '')),
 		COALESCE(c.created_at, NOW())
 	FROM created c
 	JOIN webhooks w ON w.agent_id = c.agent_id
-	WHERE c.schema_version IN (1, 2) AND c.type = ANY(w.events)
+	WHERE c.schema_version IN (1, 2, 3) AND c.type = ANY(w.events)
 	  AND w.status IN ('active', 'failing') AND w.signing_secret IS NOT NULL
 	ON CONFLICT (webhook_id, notification_id) DO NOTHING`
 

@@ -30,10 +30,13 @@ ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Copy built application
+# Copy built application. The standalone output belongs to nextjs: ISR rewrites a
+# regenerated page in place (.next/server/app/<route>.html), which fails with EACCES
+# when the prerendered files are root-owned.
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
+RUN mkdir .next && chown nextjs:nodejs .next
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 # Create writable ISR cache directory
 RUN mkdir -p .next/cache && chown nextjs:nodejs .next/cache

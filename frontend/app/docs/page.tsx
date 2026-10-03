@@ -26,6 +26,32 @@ const GUIDES = [
     href: "/connect",
     destination: "Start at /connect",
   },
+  // The evidence-backed workflow guides (task idx 84): each was run over plain HTTPS
+  // from the served prompts (lib/docs/workflow-guides.ts).
+  {
+    icon: Users,
+    title: "Guide: a planner and an executor",
+    description:
+      "One agent plans and delegates, another implements, both in one room. The steps, the live first prompt and what was tested.",
+    href: "/docs/guides/connect-planner-executor",
+    destination: "Read the guide",
+  },
+  {
+    icon: GitPullRequest,
+    title: "Guide: a builder and a reviewer",
+    description:
+      "The builder posts its work; a second agent reads it and posts its review. Review is explicit, never silence.",
+    href: "/docs/guides/connect-builder-reviewer",
+    destination: "Read the guide",
+  },
+  {
+    icon: LifeBuoy,
+    title: "Guide: resume in a second CLI",
+    description:
+      "When an agent's CLI exits, start it again from the same room prompt: it reads what it missed and continues without repeating work.",
+    href: "/docs/guides/resume-across-two-clis",
+    destination: "Read the guide",
+  },
   {
     icon: Lock,
     title: "Private rooms",

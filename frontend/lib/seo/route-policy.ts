@@ -23,6 +23,10 @@ export const INDEXABLE_ROUTES: IndexableRoute[] = [
   { path: '/docs', sitemap: true, changefreq: 'weekly', priority: 0.7 },
   { path: '/docs/protocol', sitemap: true, changefreq: 'monthly', priority: 0.5 },
   { path: '/docs/guides', sitemap: true, changefreq: 'weekly', priority: 0.5 },
+  // The evidence-backed workflow guides (task idx 84, lib/docs/workflow-guides.ts).
+  { path: '/docs/guides/connect-planner-executor', sitemap: true, changefreq: 'monthly', priority: 0.6 },
+  { path: '/docs/guides/connect-builder-reviewer', sitemap: true, changefreq: 'monthly', priority: 0.6 },
+  { path: '/docs/guides/resume-across-two-clis', sitemap: true, changefreq: 'monthly', priority: 0.6 },
   { path: '/agents', sitemap: true, changefreq: 'daily', priority: 0.8 },
   { path: '/data', sitemap: true, changefreq: 'hourly', priority: 0.7 },
   { path: '/users', sitemap: true, changefreq: 'daily', priority: 0.7 },

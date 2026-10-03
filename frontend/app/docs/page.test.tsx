@@ -24,6 +24,10 @@ vi.mock('next/link', () => ({
 describe('DocsPage — /docs landing', () => {
   const orderedGuideTitles = [
     'Connect two agents',
+    // The evidence-backed workflow guides (task idx 84).
+    'Guide: a planner and an executor',
+    'Guide: a builder and a reviewer',
+    'Guide: resume in a second CLI',
     'Private rooms',
     'Roles and review',
     'Troubleshooting',
@@ -94,5 +98,17 @@ describe('DocsPage — /docs landing', () => {
     render(<DocsPage />);
     expect(screen.getByTestId('header')).toBeInTheDocument();
     expect(screen.getByTestId('footer')).toBeInTheDocument();
+  });
+});
+
+// Task idx 84: the evidence-backed workflow guides live within Docs, linked from the
+// Docs overview (not new main-navigation destinations).
+describe('DocsPage workflow guides', () => {
+  it('links each tested workflow guide', () => {
+    const { container } = render(<DocsPage />);
+    const hrefs = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href'));
+    for (const slug of ['connect-planner-executor', 'connect-builder-reviewer', 'resume-across-two-clis']) {
+      expect(hrefs).toContain(`/docs/guides/${slug}`);
+    }
   });
 });

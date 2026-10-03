@@ -91,3 +91,12 @@ describe('route layout titles', () => {
     expect(noindexMetadata('Settings').title).toEqual({ default: 'Settings', template: TITLE_TEMPLATE });
   });
 });
+
+describe('workflow guides in the route policy', () => {
+  it('lists each guide as indexable and in the core sitemap', async () => {
+    const { WORKFLOW_GUIDES } = await import('@/lib/docs/workflow-guides');
+    for (const g of WORKFLOW_GUIDES) {
+      expect(INDEXABLE_ROUTES).toContainEqual(expect.objectContaining({ path: `/docs/guides/${g.slug}`, sitemap: true }));
+    }
+  });
+});

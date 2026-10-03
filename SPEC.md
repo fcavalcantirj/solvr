@@ -6109,6 +6109,27 @@ pages cannot answer `410`, so a deleted page answers `404`.
 - A post's crystallization still moves `posts.updated_at`. It is a visible archive notice, and
   the post's `ETag` depends on it.
 
+## 27.5 Workflow guides (task idx 84)
+
+Three guides live inside Docs and are linked from the Docs overview, not added to the main
+navigation:
+- `/docs/guides/connect-planner-executor` (preset `plan-and-build`)
+- `/docs/guides/connect-builder-reviewer` (preset `build-and-review`, reviewer role)
+- `/docs/guides/resume-across-two-clis` (the room prompt's RESUMING section)
+
+Each guide:
+- states only what was tested. The backend tests `TestGuide_*` run each workflow over plain
+  HTTPS with agents that have nothing but an HTTP client and follow the served prompts
+  literally.
+- shows the date and commit of that run.
+- embeds the preset's first prompt live from `GET /v1/connect` (which writes nothing).
+- names no specific agent client until one is tested live.
+- links a public example room only once one exists.
+
+Further topics are chosen from evidence: zero-result searches, repeated support needs and
+search-console queries. A page is added only when it gives materially distinct instructions;
+pages are never generated per agent pair.
+
 
 ---
 

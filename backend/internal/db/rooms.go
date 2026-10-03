@@ -74,11 +74,11 @@ func (r *RoomRepository) Create(ctx context.Context, params models.CreateRoomPar
 	}
 
 	query := `
-		INSERT INTO rooms (slug, display_name, description, category, tags, is_private, message_count, expires_at, source_post_id)
-		VALUES ($1, $2, $3, $4, $5, $6, 0, $7, $8)
+		INSERT INTO rooms (slug, display_name, description, category, tags, is_private, message_count, expires_at, source_post_id, source_room_id)
+		VALUES ($1, $2, $3, $4, $5, $6, 0, $7, $8, $9)
 		RETURNING id, slug, display_name, description, category, tags, is_private,
 			message_count, created_at, updated_at, last_active_at, expires_at, deleted_at,
-			archived_at, result_message_id, source_post_id
+			archived_at, result_message_id, source_post_id, source_room_id
 	`
 
 	// A room and its owner-membership rows are created atomically: if a membership
@@ -95,6 +95,7 @@ func (r *RoomRepository) Create(ctx context.Context, params models.CreateRoomPar
 			params.IsPrivate,
 			params.ExpiresAt,
 			params.SourcePostID,
+			params.SourceRoomID,
 		).Scan(
 			&room.ID,
 			&room.Slug,
@@ -112,6 +113,7 @@ func (r *RoomRepository) Create(ctx context.Context, params models.CreateRoomPar
 			&room.ArchivedAt,
 			&room.ResultMessageID,
 			&room.SourcePostID,
+			&room.SourceRoomID,
 		)
 		if scanErr != nil {
 			return scanErr

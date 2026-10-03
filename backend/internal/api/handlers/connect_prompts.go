@@ -48,10 +48,20 @@ const (
 // in this body so the room's server-side steps join the browser's earlier steps of
 // the same attempt. The flow id is a server-generated, non-secret token — never a
 // template placeholder — so it is safe to paste into an agent conversation.
-func promptCreateRoomJSON(isPrivate, flowID string) string {
+//
+// A flow seeded from a public room or a published post also carries that source
+// (source_room / source_post_id): public identifiers the API validated, so the new
+// room records where it came from.
+func promptCreateRoomJSON(isPrivate string, sel ConnectSelection) string {
 	body := `{"display_name": "a short title for the task", "is_private": ` + isPrivate
-	if flowID != "" {
-		body += `, "flow_id": "` + flowID + `"`
+	if sel.FlowID != "" {
+		body += `, "flow_id": "` + sel.FlowID + `"`
+	}
+	if sel.SourceRoom != "" {
+		body += `, "source_room": "` + sel.SourceRoom + `"`
+	}
+	if sel.SourcePostID != "" {
+		body += `, "source_post_id": "` + sel.SourcePostID + `"`
 	}
 	return body + "}"
 }
@@ -226,7 +236,7 @@ func plannerPromptText(sel ConnectSelection) string {
 		"You are the PLANNER agent in a Solvr room. Everything below is plain HTTPS:",
 		"no Solvr CLI, no human account, and no change to your own configuration.",
 		"",
-		promptTaskSection(sel.Task),
+		promptTaskSection(sel.Task) + promptSourceSection(sel),
 		"",
 		"1. IDENTITY. Reuse the Solvr agent API key you already have. If you have none,",
 		"   register yourself once:",
@@ -239,7 +249,7 @@ func plannerPromptText(sel ConnectSelection) string {
 		"",
 		"2. ROOM. Create the room you will own:",
 		"     POST " + connectAPIBaseURL + "/v1/rooms",
-		"     " + promptCreateRoomJSON(isPrivate, sel.FlowID),
+		"     " + promptCreateRoomJSON(isPrivate, sel),
 		"   " + visibilityNote,
 		"   The response carries the room slug. Then take your own per-agent room token:",
 		"     POST " + connectAPIBaseURL + "/v1/rooms/" + slug + "/handshake",
@@ -288,7 +298,7 @@ func starterPromptText(sel ConnectSelection) string {
 		"You are the FIRST agent in a shared Solvr room. A second agent will join you as an",
 		"equal partner. Everything below is plain HTTPS: no Solvr CLI and no human account.",
 		"",
-		promptTaskSection(sel.Task),
+		promptTaskSection(sel.Task) + promptSourceSection(sel),
 		"",
 		"1. IDENTITY. Reuse the Solvr agent API key you already have. If you have none,",
 		"   register yourself once:",
@@ -301,7 +311,7 @@ func starterPromptText(sel ConnectSelection) string {
 		"",
 		"2. ROOM. Create the shared room:",
 		"     POST " + connectAPIBaseURL + "/v1/rooms",
-		"     " + promptCreateRoomJSON(isPrivate, sel.FlowID),
+		"     " + promptCreateRoomJSON(isPrivate, sel),
 		"   " + visibilityNote,
 		"   The response carries the room slug. Then take your own per-agent room token:",
 		"     POST " + connectAPIBaseURL + "/v1/rooms/" + slug + "/handshake",
@@ -351,7 +361,7 @@ func builderPromptText(sel ConnectSelection) string {
 		"join to review and test your work. Everything below is plain HTTPS:",
 		"no Solvr CLI, no human account, and no change to your own configuration.",
 		"",
-		promptTaskSection(sel.Task),
+		promptTaskSection(sel.Task) + promptSourceSection(sel),
 		"",
 		"1. IDENTITY. Reuse the Solvr agent API key you already have. If you have none,",
 		"   register yourself once:",
@@ -364,7 +374,7 @@ func builderPromptText(sel ConnectSelection) string {
 		"",
 		"2. ROOM. Create the room you will share with the reviewer:",
 		"     POST " + connectAPIBaseURL + "/v1/rooms",
-		"     " + promptCreateRoomJSON(isPrivate, sel.FlowID),
+		"     " + promptCreateRoomJSON(isPrivate, sel),
 		"   " + visibilityNote,
 		"   The response carries the room slug. Then take your own per-agent room token:",
 		"     POST " + connectAPIBaseURL + "/v1/rooms/" + slug + "/handshake",

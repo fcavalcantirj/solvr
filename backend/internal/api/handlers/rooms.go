@@ -92,10 +92,17 @@ type createRoomRequest struct {
 	// ("Discuss with agents"). It is a provenance pointer only — the post's content is
 	// never copied into the room. Must be a valid UUID when supplied.
 	SourcePostID *string `json:"source_post_id,omitempty"`
+	// SourceRoom, when present, is the slug of a PUBLIC room whose task structure seeds
+	// this one ("Try this workflow"). Only description, category and tags are copied, and
+	// only where this request leaves them out; the source is recorded as source_room_id.
+	SourceRoom *string `json:"source_room,omitempty"`
 	// FlowID is the non-secret connection-funnel identifier the planner prompt carried
 	// from GET /v1/connect. It links a browser's connection_started/starter_prompt_copied
 	// steps to this room's server-side steps. Analytics-only: it never affects the room.
 	FlowID *string `json:"flow_id,omitempty"`
+
+	// sourceRoomID is the resolved source room (set by applyRoomTemplate, never decoded).
+	sourceRoomID *uuid.UUID
 }
 
 // CreateRoom handles POST /v1/rooms.
@@ -155,6 +162,22 @@ func (h *RoomHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 		sourcePostID = req.SourcePostID
 	}
 
+	// A source_room must name a public, existing room. A private room and a missing one
+	// get the same answer, so the refusal never reveals that a private room exists.
+	if req.SourceRoom != nil && *req.SourceRoom != "" {
+		tmpl, err := h.roomRepo.FindPublicRoomTemplate(r.Context(), *req.SourceRoom)
+		if err != nil {
+			if !errors.Is(err, db.ErrRoomNotFound) {
+				slog.Error("failed to read source room", "error", err)
+			}
+			roomWriteError(w, http.StatusBadRequest, "INVALID_SOURCE_ROOM",
+				"source_room must name a public room that exists")
+			return
+		}
+		scrubRoomTemplate(r.Context(), tmpl, h.roomRepo)
+		applyRoomTemplate(&req, tmpl)
+	}
+
 	params := models.CreateRoomParams{
 		Slug:           req.Slug,
 		DisplayName:    req.DisplayName,
@@ -165,6 +188,7 @@ func (h *RoomHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 		OwnerID:        ownerID,
 		CreatorAgentID: creatorAgentID,
 		SourcePostID:   sourcePostID,
+		SourceRoomID:   req.sourceRoomID,
 	}
 
 	room, err := h.roomRepo.Create(r.Context(), params)

@@ -93,6 +93,11 @@ type ConnectSelection struct {
 	Preset     string `json:"preset"`
 	Visibility string `json:"visibility"`
 	FlowID     string `json:"flow_id,omitempty"`
+	// SourceRoom / SourcePostID name the validated source this flow was seeded from
+	// (at most one). The prompt carries it into the create-room body so the new room
+	// records its provenance; both are public identifiers, never a credential.
+	SourceRoom   string `json:"source_room,omitempty"`
+	SourcePostID string `json:"source_post_id,omitempty"`
 }
 
 // ConnectPrompt is the one thing the visitor copies.
@@ -184,11 +189,12 @@ type ConnectRequirements struct {
 // post ever produces a source; a draft, rejected, family, private, or missing post
 // degrades to the ordinary contract with no source and no title leaked.
 type ConnectSource struct {
-	Kind   string `json:"kind"` // "post"
-	PostID string `json:"post_id"`
-	Title  string `json:"title"`
-	URL    string `json:"url"`
-	Detail string `json:"detail"`
+	Kind     string `json:"kind"` // "post" | "room"
+	PostID   string `json:"post_id,omitempty"`
+	RoomSlug string `json:"room_slug,omitempty"`
+	Title    string `json:"title"`
+	URL      string `json:"url"`
+	Detail   string `json:"detail"`
 }
 
 // ConnectStart is the whole contract.
@@ -211,7 +217,7 @@ type ConnectStart struct {
 	Requirements       ConnectRequirements     `json:"requirements"`
 	AddAgent           ConnectAddAgentControl  `json:"add_agent"`
 	Customize          ConnectCustomizeSection `json:"customize"`
-	// Source is set only when the flow was seeded from a published post. Omitted otherwise.
+	// Source is set only when the flow was seeded from a published post or a public room.
 	Source *ConnectSource `json:"source,omitempty"`
 }
 
@@ -231,6 +237,7 @@ type connectPostLookup interface {
 type ConnectHandler struct {
 	rooms       connectRoomLookup
 	posts       connectPostLookup
+	roomSources connectRoomSourceLookup
 	exampleSlug string
 }
 
@@ -304,13 +311,32 @@ func (h *ConnectHandler) GetConnect(w http.ResponseWriter, r *http.Request) {
 
 	// A ?post=<id> seeds the flow from a published post: it carries the post's title and
 	// a link back, and — only when the visitor typed no task of their own — a task derived
-	// from the post. A protected or missing post degrades to the ordinary contract.
-	source := h.resolvePostSource(r.Context(), strings.TrimSpace(query.Get("post")))
+	// from the post. A ?from_room=<slug> seeds it from a public room's task structure
+	// ("Try this workflow"). A protected or missing source degrades to the ordinary contract.
+	fromRoom := strings.TrimSpace(query.Get("from_room"))
+	fromPost := strings.TrimSpace(query.Get("post"))
+	if fromRoom != "" && fromPost != "" {
+		roomWriteError(w, http.StatusBadRequest, "AMBIGUOUS_SOURCE",
+			"a start flow is seeded from one source: send from_room or post, not both")
+		return
+	}
+	var source *ConnectSource
+	var sourceTask string
+	if fromRoom != "" {
+		source, sourceTask = h.resolveRoomSource(r.Context(), fromRoom)
+	} else if source = h.resolvePostSource(r.Context(), fromPost); source != nil {
+		sourceTask = connectTaskFromPost(source)
+	}
 	if source != nil && task == "" {
-		task = connectTaskFromPost(source)
+		task = sourceTask
 	}
 
 	selection := ConnectSelection{Task: task, Preset: preset, Visibility: visibility, FlowID: newFlowID()}
+	if source != nil && source.Kind == "room" {
+		selection.SourceRoom = source.RoomSlug
+	} else if source != nil {
+		selection.SourcePostID = source.PostID
+	}
 
 	start := buildConnectStart(selection, h.resolveExample(r.Context()))
 	start.Source = source

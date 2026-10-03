@@ -34,6 +34,9 @@ type Room struct {
 	// "Discuss with agents" (inverse of posts.source_room_id). Populated on Create; the
 	// shared read scanners leave it nil, so it is exposed only where explicitly selected.
 	SourcePostID *string `json:"source_post_id,omitempty"`
+	// SourceRoomID optionally records the public room this room's task structure was
+	// copied from ("Try this workflow"). Populated on Create only, like SourcePostID.
+	SourceRoomID *uuid.UUID `json:"source_room_id,omitempty"`
 }
 
 // IsArchived reports whether the room has been marked Finished.
@@ -67,6 +70,8 @@ type CreateRoomParams struct {
 	// SourcePostID, when set, records the published Post this room was seeded from.
 	// It is a provenance pointer only — the post's content is never copied into the room.
 	SourcePostID *string `json:"source_post_id,omitempty"`
+	// SourceRoomID, when set, records the public room whose task structure seeded this one.
+	SourceRoomID *uuid.UUID `json:"source_room_id,omitempty"`
 }
 
 // UpdateRoomParams holds parameters for updating a room.

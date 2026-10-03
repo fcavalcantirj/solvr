@@ -28,7 +28,7 @@ The derivation is spelled out in `load-mix.json`.
 **Load shape.**
 - Open loop: arrivals do not wait for responses.
 - Constant arrival rate per stage, 60 s per stage.
-- Concurrency is capped at **256 requests in flight**, plus the 100 streams. An arrival past the
+- Stated concurrency: at most **256 requests in flight**, plus the 100 streams. An arrival past the
   cap is counted as dropped by the client, and as an error.
 - 40 agents in 8 public rooms; 200 in the knee search.
 - Each agent sends its own `X-Real-IP`, so the 60/min per-IP room-write limit buckets it the way

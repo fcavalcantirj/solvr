@@ -13029,3 +13029,115 @@ git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this en
 Try this workflow: GET /v1/connect?from_room=<public slug> seeds a FRESH room from the room's scrubbed initial task; POST /v1/rooms source_room copies only description/category/tags and records rooms.source_room_id (migration 000136). Prompts end with a clean room link + offer-an-excerpt (never post). GET /v1/rooms/{slug}/share (public only; 409 private). try_workflow_url on room reads; homepage Try this fixed. Funnel steps carry source_kind/source_id; share_visit + share_link_copied; /admin/share-attribution (visits, invitations, attributed rooms/activations, new agents/humans with anonymous unresolved, 7/28-day returns, k as experiment_metric).
 Verify [TEST]: frontend 208 files / 1784 tests + build; backend fresh DB = baseline 45 + 9 failures whose message is SQLSTATE 53300 too many clients (shared-machine overload, infra) + 1 OpenAPI schema test fixed in c3fb7881. [REAL] API smoke on a local copy.
 UAT: migration 000136 applies with the next deploy (before the API image). UAT: actual share visits, conversion, k and 7/28-day returns need real traffic after deploy.
+
+2026-10-02 23:37 — Task idx 78 (spec.json, category functional) — IN PROGRESS, passes STAYS false
+"Keep SDKs, CLI, MCP, skills, and webhooks consistent with the redesigned product"
+SLICE 35 (REMAINING item "35."): gap 5b. The skill's guides, the installer banner and the /skill page stop steering
+agents to removed choices (start/post an approach, update approach status, accept an answer, typed/status search).
+A shell test and a vitest hold them; sync-skill.sh re-run so solvr.dev's copies and the zip follow.
+================================================================================
+
+TASK SELECTION [REAL, spec.json + progress.txt read this session]: false tasks 24, 67, 68, 78-92, 94, 95. OWNER NOTE
+  2026-10-02 22:00: the loop works ONLY idx 78, then idx 79. Continued from slice 34 (HEAD d4fbed71). Tree clean at
+  start.
+
+FACTS THE NEW PROSE RESTS ON [REAL, code read this session]:
+  - GET /v1/search still reads type and status (handlers/search.go:120-121, db/search.go:405-415: exact p.type /
+    p.status match); the served OpenAPI calls them "Legacy post type filter: problem, question or idea." and "Legacy
+    status filter." (openapi_post_schemas.go searchPath). POST /v1/posts with no type creates type "post"
+    (handlers/posts.go:431-439), which a type filter never matches; a raw caller can still send problem/question/idea.
+  - Inbox notifications recorded today: post.approved/post.rejected to the post author
+    (services/notification.go NotifyOnModerationResult), reply.removed/reply.flagged to the reply author
+    (handlers/contribution_moderation.go notifyAuthor), room.member_added/removed to the member agent itself
+    (handlers/rooms_member_events.go notifyMember). Nothing is recorded when someone replies to a post, so the old
+    "Agent A gets an inbox notification" step was false.
+  - Briefing suggested action on main: action "update_approach_status", reason "Marked working N days ago. Succeeded
+    or failed?", for the agent's legacy approaches with status 'working' not updated in 24h (db/briefing.go:176-210).
+    `solvr replies` marks migrated replies "[migrated <legacy_type>]" (solvr.sh:325).
+
+WHAT CHANGED [REAL, git status --porcelain: 14 M + 1 new; git diff --stat: 132+/110- in tracked files]:
+  SKILL DOCS (sources):
+  M skill/SKILL.md (+9/-9): "Every session" step 2 and "The Workflow" step 2 reply with what you will try instead of
+    starting an approach; the workflow diagram is POST + REPLY / WORK (reply under your reply: --parent) / REPLY WITH
+    THE OUTCOME; the line under it; briefing "Suggested Actions" bullet (record the outcome as a reply under the
+    attempt's reply); etiquette "contribute approaches" -> reply to them, "Update approach status promptly ... auto-
+    abandoned after 30 days" -> "Reply with the outcome promptly". The "Migrating from 3.x to 4.0.0" notes untouched.
+  M skill/HEARTBEAT.md (+29/-29): Inbox row and section 3 list the notifications that exist (above) and say replies are
+    read with `solvr replies`; Suggested Actions row quotes the real reason text; section 2 reads the post and its
+    replies; section 4 finds the "[migrated approach]" reply and replies under it with the outcome; section 5 "update
+    the approach" -> reply under that reply; "When to Answer" -> "When to Reply"; quality bullet; the "Before" block
+    loses its two typed searches (type=question&status=open, type=problem&status=stuck); the collaboration loop and its
+    numbered steps use replies and no longer claim an inbox notification or a "marked solved" step; schedule row.
+  M skill/references/examples.md (+5/-5): Step 1 search drops &type=problem; "Search Variations" type/status and
+    status=stuck examples -> tags and sort=newest examples.
+  M skill/references/api.md (+3/-3): GET /search `type` row (was "problem, question, idea, approach, all") and
+    `status` row (was "open, solved, stuck, active") now say legacy filter + leave it out to search every post;
+    the example request uses tags=postgresql instead of type=problem&status=solved.
+  M scripts/install-solvr-skill.sh (+3/-3): banner steps 2-4 reply with what you will try / reply under your reply /
+    reply with the outcome (was "Post your approach BEFORE starting").
+  SERVED COPIES (bash scripts/sync-skill.sh, exit 0, run twice: after the edits and after one wording fix):
+  M frontend/public/skill.md, heartbeat.md, references/api.md, references/examples.md, install.sh (= their sources)
+  M frontend/public/solvr-skill.zip (66481 -> 66710 bytes). frontend/public/skill.json unchanged (version stays 4.0.0).
+  /skill PAGE:
+  M frontend/components/skill/skill-hero.tsx (+5/-5): tagline "Post approaches" -> "Reply with what you will try";
+    workflow steps "Post approach" -> "Reply with what you will try", "Post outcome" -> "Reply with the outcome",
+    step 3 note replies under your reply.
+  M frontend/components/skill/skill-preview.tsx (+7/-7): the preview's workflow block is now SKILL.md's block
+    verbatim; its intro and closing lines say replies instead of approaches.
+  TESTS:
+  M skill/scripts/test_migration.sh (+22): section 9. A removed-choice pattern (approach/answer commands, post <type>,
+    --type, --include approaches|answers, start/post/contribute an approach, approach status, update ... approach,
+    accept it/if/the answer, mark them failed, type=problem|question|idea, status=open|solved|stuck) must not match
+    SKILL.md outside its "## Migrating from 3.x" notes, HEARTBEAT.md, references/examples.md or the installer;
+    references/api.md's "### GET /search" section uses no type/status filter and its type and status rows say Legacy.
+  ?? frontend/components/skill/skill-workflow.test.tsx (new, 3 tests): SkillHero and SkillPreview text matches no
+    removed choice; the hero names the four reply-workflow steps; the preview's workflow block equals skill/SKILL.md's.
+
+TESTS FIRST [logs /tmp/solvr_idx78_s35/; no database needed: these tests are offline]:
+  [TEST] RED (tdd/red.log, `bash skill/scripts/test_migration.sh`): exit 1, Passed 127 Failed 7, all in section 9
+    (SKILL.md, HEARTBEAT.md, examples.md, installer, api.md search example, api.md type row, api.md status row).
+  [TEST] RED (tdd/fe_red.log, `npx vitest run components/skill/skill-workflow.test.tsx`): 3 failed (hero and preview
+    text match the removed-choice pattern; preview workflow differs from SKILL.md's).
+  [TEST] GREEN (tdd/green2_*.log, tdd/green_*.log): test_migration 134/0; test.sh "All tests passed!"; test_contract
+    51/0; test_members 22/0; test_room_credentials 13/0; test_canonical_posts 55/0. skill-workflow.test.tsx 3/3.
+  [TEST] MUTATION (tdd/mut.log): "Then update the approach status." appended at the END of SKILL.md (after the
+    migration notes) -> exit 1, "skill/SKILL.md steers to no removed choice" FAILS (plus the two copy checks); file
+    restored from backup, `shasum -c` OK.
+  [TEST] backend docs tests (tdd/published.log, `go test -count=1 -v -run TestPublished ./internal/api/`): 10 PASS,
+    0 FAIL/SKIP, ok.
+  [TEST] frontend suite (frontend.log, `npm test`): 209 files / 1787 tests passed, no skips. typecheck exit 0. eslint
+    on the three skill files exit 0.
+
+OTHER CHECKS [this session]:
+  [REAL] ./scripts/check-file-size.sh: "Found 32 file(s) exceeding 800 lines" (same as slices 17-34); none of this
+    slice's files is listed. test_migration.sh now 303 lines.
+  Not run: full backend suite (no Go file changed; the Go tests that read the changed docs ran above); SDK, CLI and
+    mcp-server suites (none of their files changed); golangci-lint.
+
+FINDINGS, NOT FIXED:
+  - Backend (idx 68 territory, lane X deletes the legacy briefing queries): main's briefing still nudges
+    "update_approach_status" for legacy approaches, a status no client can change any more (PATCH /v1/approaches/{id}
+    answers 410), so replying with the outcome records it for readers but does not clear the nudge.
+  - references/api.md's /me briefing response example still shows legacy fields ("action": "Update approach status",
+    which also differs from the emitted "update_approach_status"; answer_on_question inbox item; problems_no_approaches)
+    — left for when lane X's briefing lands. Its rate-limit table still lists "Answers | 30/hour"
+    (middleware/ratelimit.go DetectOperation: the "answers" bucket only matches retired /answers paths; replies count
+    as "general") — [UNVERIFIED] whether create_ratelimit.go limits replies separately.
+  - POST /v1/posts still accepts type problem/question/idea from raw API callers (handlers/posts.go:433). First-party
+    clients send none. Owner call (v0, no backwards compatibility).
+  - Lane G2 (lane/g2-growth-metrics, e3001b3a) inserts a section after SKILL.md line 26; this slice's SKILL.md hunks
+    are lines 22 and 96-119 onward, not adjacent to it.
+  - Slices 6-34 findings stand (members list owner-only; MCP versions; dashed adapter commands; solvr.sh over 800
+    lines; sdk-python .venv lacks types-requests; shared Postgres max_connections).
+
+REMAINING FOR idx 78 (next slice):
+  36. closing slice: re-run every consumer suite (Go/TS/Python SDKs, packages/cli, cli/, mcp-server, backend /v1/mcp,
+    skill) and the full backend at that HEAD (fresh DB), then close with the UAT lines below if all green.
+
+UAT (for when idx 78 closes, not now): as slices 32-34 (push + deploy so solvr.dev serves skill 4.0.0 including the
+  rebuilt zip and these guides, decide the version numbers, deploy the API so production /v1/openapi.json and /v1/mcp
+  serve the member examples and tools, publish @solvr/cli and @solvr/mcp-server, release the Go CLI); owner calls:
+  members list visibility, adapter-command retirement; visual check of solvr.dev/skill's hero and preview after deploy.
+
+git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged (idx 78
+  passes stays false).

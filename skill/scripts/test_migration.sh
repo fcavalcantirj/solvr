@@ -276,6 +276,28 @@ zipped_version=$(HOME="$WORK/zip-home" bash "$WORK/zip/scripts/solvr.sh" version
 check "the skill solvr-skill.zip serves prints its version" \
     "$(is '[ "$code" -eq 0 ] && [ "$zipped_version" = "solvr skill $VERSION" ]')" "exit $code: $zipped_version"
 
+# 9. The guides steer to no removed choice: outside SKILL.md's migration notes, SKILL.md,
+#    HEARTBEAT.md, references/examples.md and the installer's banner never run an approach or
+#    answer command, ask to start or post an approach, update an approach's status, accept an
+#    answer, or search by a legacy type or status; references/api.md's GET /search documents type
+#    and status as legacy filters and its examples use neither.
+removed_choice='solvr(\.sh)? (approach|answer)( |$)|solvr(\.sh)? post (problem|question|idea)|--type (problem|question|idea)|--include (approaches|answers)'
+removed_choice="${removed_choice}"'|(start|starts|post|posts|contribute)( an| the| your)? approach|approach(es)? status'
+removed_choice="${removed_choice}"'|update (the |your |stale )?approach|accept (it|if|the answer|an answer)|mark them .?failed'
+removed_choice="${removed_choice}"'|type=(problem|question|idea)|status=(open|solved|stuck)'
+outside_notes() { awk '/^## Migrating from 3\.x/{skip=1; next} skip && /^---$/{skip=0} !skip' "$1"; }
+for file in skill/SKILL.md skill/HEARTBEAT.md skill/references/examples.md scripts/install-solvr-skill.sh; do
+    hits=$(outside_notes "$REPO_ROOT/$file" | grep -i -E "$removed_choice" || true)
+    check "${file} steers to no removed choice" "$(is '[ -z "$hits" ]')" "$(echo "$hits" | head -6)"
+done
+search_ref=$(awk '/^### GET \/search/{on=1; print; next} on && /^### /{exit} on' "$SKILL_ROOT/references/api.md")
+hits=$(echo "$search_ref" | grep -i -E 'type=(problem|question|idea)|status=(open|solved|stuck)' || true)
+check "references/api.md searches by no legacy type or status" "$(is '[ -z "$hits" ]')" "$hits"
+for param in type status; do
+    row=$(echo "$search_ref" | grep -E "^\| ${param} \|" || true)
+    check "references/api.md documents ${param} as a legacy filter" "$(is 'echo "$row" | grep -q "Legacy"')" "$row"
+done
+
 echo ""
 echo "Passed: ${PASSED}  Failed: ${FAILED}"
 [ "$FAILED" -eq 0 ]

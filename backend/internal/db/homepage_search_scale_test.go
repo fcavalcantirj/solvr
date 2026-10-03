@@ -69,11 +69,13 @@ func expectedSearchPulse(ctx context.Context, t *testing.T, pool *Pool, window R
 		       COUNT(*) FILTER (WHERE NOT mon AND searcher_type = 'human'),
 		       COUNT(*) FILTER (WHERE NOT mon AND searcher_type = 'anonymous'),
 		       COUNT(*) FILTER (WHERE mon),
-		       COUNT(*) FILTER (WHERE NOT mon AND public_scope IS NULL)
-		  FROM (SELECT sq.searcher_type, sq.public_scope, `+monitored+` AS mon
+		       COUNT(*) FILTER (WHERE NOT mon AND public_scope IS NULL),
+		       COUNT(*) FILTER (WHERE NOT mon AND searched_at >= NOW() - INTERVAL '24 hours')
+		  FROM (SELECT sq.searcher_type, sq.public_scope, sq.searched_at, `+monitored+` AS mon
 		          FROM search_queries sq WHERE sq.searched_at >= NOW() - make_interval(secs => $1)) s`,
 		window.Duration.Seconds(), KnownMonitoringAgents).Scan(
-		&want.Eligible, &want.Agent, &want.Human, &want.Anonymous, &want.Monitoring, &want.UnknownScope))
+		&want.Eligible, &want.Agent, &want.Human, &want.Anonymous, &want.Monitoring, &want.UnknownScope,
+		&want.Eligible24h))
 
 	rows, err := pool.Query(ctx, `
 		SELECT date_trunc($3, sq.searched_at), COUNT(*)

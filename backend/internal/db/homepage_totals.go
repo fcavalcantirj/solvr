@@ -49,12 +49,17 @@ var publishedPostStatuses = []string{"draft", "pending_review", "rejected"}
 //
 // RegisteredAgents and RegisteredHumans are REGISTRATIONS. Neither is a measure
 // of use and neither may be presented as an active-user count.
+//
+// RoomMessages counts every message ever exchanged in a room that has not been
+// deleted, private rooms included — the same definition as the windowed room
+// figures (persisted, not deleted, not a system notice), with no window at all.
 type AllTimeTotals struct {
 	AllRooms         int
 	PublicRooms      int
 	PublishedPosts   int
 	RegisteredAgents int
 	RegisteredHumans int
+	RoomMessages     int
 }
 
 // GetAllTimeTotals reads every all-time total in one round trip.
@@ -76,9 +81,13 @@ func (r *HomepageRepository) GetAllTimeTotals(ctx context.Context) (*AllTimeTota
 			(SELECT COUNT(*) FROM agents
 				WHERE deleted_at IS NULL AND status <> 'suspended'),
 			(SELECT COUNT(*) FROM users
-				WHERE deleted_at IS NULL)
+				WHERE deleted_at IS NULL),
+			(SELECT COUNT(*) FROM messages m JOIN rooms r ON r.id = m.room_id
+				WHERE r.deleted_at IS NULL
+				  AND m.deleted_at IS NULL AND m.author_type <> 'system')
 	`, publishedPostStatuses).Scan(
 		&t.AllRooms, &t.PublicRooms, &t.PublishedPosts, &t.RegisteredAgents, &t.RegisteredHumans,
+		&t.RoomMessages,
 	)
 	if err != nil {
 		return nil, err

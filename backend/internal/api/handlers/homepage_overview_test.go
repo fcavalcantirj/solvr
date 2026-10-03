@@ -300,14 +300,13 @@ func previewSlugs(section OverviewPreviews) []string {
 //
 // They are pure builder tests — no database needed.
 
-func TestOverviewMeta_StaleAndLastUpdatedLabelPresent(t *testing.T) {
+func TestOverviewMeta_StaleLabelPresent(t *testing.T) {
 	partialErrors := []string{"search statistics unavailable: simulated failure"}
 
 	meta := buildOverviewMeta(db.DefaultRoomStatsWindow(), partialErrors)
 
 	// A partial error marks the snapshot stale: the data is retained, not fresh.
 	assert.True(t, meta.Stale, "partial errors must mark the snapshot stale")
-	assert.NotEmpty(t, meta.LastUpdatedLabel, "the API pre-formats a last-updated label")
 	assert.NotEmpty(t, meta.StaleLabel, "a stale snapshot carries a label the page can show")
 }
 
@@ -316,16 +315,6 @@ func TestOverviewMeta_NoStaleWhenNoPartialErrors(t *testing.T) {
 
 	assert.False(t, meta.Stale, "no partial errors means a fresh snapshot")
 	assert.Empty(t, meta.StaleLabel, "a fresh snapshot has no stale label")
-}
-
-func TestOverviewMeta_LastUpdatedLabelIsReadableText(t *testing.T) {
-	// buildOverviewMeta stamps generated_at at "now", so the label is the
-	// word "Updated" plus a timestamp — plain text, not a raw RFC3339 blob.
-	partialErrors := []string{"activity stream unavailable: something failed"}
-	meta := buildOverviewMeta(db.DefaultRoomStatsWindow(), partialErrors)
-
-	assert.Contains(t, meta.LastUpdatedLabel, "Updated",
-		"the label must be a readable word, not a bare timestamp")
 }
 
 func TestBuildStaleLabel_EmptyWhenNoErrors(t *testing.T) {

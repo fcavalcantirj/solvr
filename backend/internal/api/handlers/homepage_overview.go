@@ -139,16 +139,17 @@ type OverviewClosing struct {
 
 // HomepageOverview is the whole payload, in the order the page reads.
 type HomepageOverview struct {
-	Rooms       OverviewRooms     `json:"rooms"`
-	Activity    OverviewActivity  `json:"activity"`
-	Previews    OverviewPreviews  `json:"previews"`
-	APIUsage    OverviewAPIUsage  `json:"api_usage"`
-	Search      OverviewSearch    `json:"search"`
-	Community   OverviewCommunity `json:"community"`
-	Posts       OverviewPosts     `json:"posts"`
-	Knowledge   OverviewKnowledge `json:"knowledge"`
-	Closing     OverviewClosing   `json:"closing"`
-	GeneratedAt time.Time         `json:"generated_at"`
+	HeroNumbers []OverviewHeroNumber `json:"hero_numbers"`
+	Rooms       OverviewRooms        `json:"rooms"`
+	Activity    OverviewActivity     `json:"activity"`
+	Previews    OverviewPreviews     `json:"previews"`
+	APIUsage    OverviewAPIUsage     `json:"api_usage"`
+	Search      OverviewSearch       `json:"search"`
+	Community   OverviewCommunity    `json:"community"`
+	Posts       OverviewPosts        `json:"posts"`
+	Knowledge   OverviewKnowledge    `json:"knowledge"`
+	Closing     OverviewClosing      `json:"closing"`
+	GeneratedAt time.Time            `json:"generated_at"`
 }
 
 // ---------------------------------------------------------------------------
@@ -203,6 +204,9 @@ func buildOverviewCommunity(totals *db.AllTimeTotals, stats *db.AllStatsResult) 
 		{key: "total_contributions", label: "CONTRIBUTIONS",
 			definition: "Replies by people and agents on public posts. Answers, approaches, responses, comments and progress notes written before the move to replies count as replies. Moderation verdicts are not counted.",
 			fromStats:  func(s *db.AllStatsResult) int { return s.TotalContributions }},
+		{key: "room_messages", label: "MESSAGES IN ROOMS",
+			definition: "Messages agents and people have posted in every room ever opened and not deleted, private rooms included. A private room adds to this number only: its name and contents are never shown. System notices and deleted messages are not counted.",
+			fromTotals: func(t *db.AllTimeTotals) int { return t.RoomMessages }},
 		{key: "crystallized_posts", label: "PINNED TO IPFS",
 			definition: "Posts crystallised onto IPFS so they outlive this server.",
 			fromStats:  func(s *db.AllStatsResult) int { return s.CrystallizedPosts }},
@@ -437,10 +441,6 @@ type OverviewMeta struct {
 	// refresh is never mistaken for "nothing happened".
 	Stale bool `json:"stale"`
 
-	// LastUpdatedLabel is a readable, API-formatted timestamp like "Updated 10:32
-	// AM" so the page renders it without doing any time arithmetic of its own.
-	LastUpdatedLabel string `json:"last_updated_label"`
-
 	// StaleLabel is a non-blocking notice the page can surface when the snapshot
 	// is stale — for instance "Data retained from a partial refresh". Empty when
 	// the snapshot is fresh.
@@ -478,6 +478,7 @@ func (h *HomepageOverviewHandler) buildOverview(ctx Context, window db.RoomStats
 	partialErrors := []string{}
 
 	pulse, err := h.homeRepo.GetRoomPulse(ctx, window)
+	roomsRead := err == nil
 	if err != nil {
 		slog.Error("homepage overview: room pulse failed", "error", err, "window", window.Value)
 		pulse = db.RoomPulse{Window: window}
@@ -505,6 +506,7 @@ func (h *HomepageOverviewHandler) buildOverview(ctx Context, window db.RoomStats
 	}
 
 	searchPulse, err := h.homeRepo.GetSearchPulse(ctx, window, searchTermDisplayLimit)
+	searchRead := err == nil
 	if err != nil {
 		slog.Error("homepage overview: search pulse failed", "error", err, "window", window.Value)
 		searchPulse = db.SearchPulse{Window: window}
@@ -542,6 +544,7 @@ func (h *HomepageOverviewHandler) buildOverview(ctx Context, window db.RoomStats
 	}
 
 	overview := HomepageOverview{
+		HeroNumbers: buildOverviewHeroNumbers(totals, pulse, roomsRead, searchPulse, searchRead),
 		Rooms:       buildOverviewRooms(pulse, recentRooms),
 		Activity:    buildOverviewActivity(activityRows, overviewActivityDefaultLimit, 0, 0, time.Now()),
 		Previews:    buildOverviewPreviews(h.loadPreviewSources(ctx), h.previewSlugs),
@@ -600,7 +603,6 @@ func buildOverviewMeta(window db.RoomStatsWindow, partialErrors []string) Overvi
 		SourceAvailability: sourceAvailability(partialErrors),
 		PartialErrors:      partialErrors,
 		Stale:              len(partialErrors) > 0,
-		LastUpdatedLabel:   "Updated " + now.Format("3:04 PM"),
 		StaleLabel:         buildStaleLabel(partialErrors),
 	}
 }
@@ -629,6 +631,7 @@ func (h *HomepageOverviewHandler) GetOverview(w http.ResponseWriter, r *http.Req
 	window := parseRoomStatsWindow(r)
 
 	pulse, err := h.homeRepo.GetRoomPulse(ctx, window)
+	roomsRead := err == nil
 	if err != nil {
 		slog.Error("homepage overview: room pulse failed", "error", err, "window", window.Value)
 		pulse = db.RoomPulse{Window: window}
@@ -658,6 +661,7 @@ func (h *HomepageOverviewHandler) GetOverview(w http.ResponseWriter, r *http.Req
 	// drives both. A failed read degrades to an empty measured window rather
 	// than failing the page.
 	searchPulse, err := h.homeRepo.GetSearchPulse(ctx, window, searchTermDisplayLimit)
+	searchRead := err == nil
 	if err != nil {
 		slog.Error("homepage overview: search pulse failed", "error", err, "window", window.Value)
 		searchPulse = db.SearchPulse{Window: window}
@@ -689,6 +693,7 @@ func (h *HomepageOverviewHandler) GetOverview(w http.ResponseWriter, r *http.Req
 	}
 
 	overview := HomepageOverview{
+		HeroNumbers: buildOverviewHeroNumbers(totals, pulse, roomsRead, searchPulse, searchRead),
 		Rooms:       buildOverviewRooms(pulse, recentRooms),
 		Activity:    buildOverviewActivity(activityRows, overviewActivityDefaultLimit, 0, 0, time.Now()),
 		Previews:    buildOverviewPreviews(h.loadPreviewSources(ctx), h.previewSlugs),

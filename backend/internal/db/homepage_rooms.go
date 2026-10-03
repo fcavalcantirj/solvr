@@ -171,6 +171,9 @@ type RoomPulse struct {
 	// Messages24h is pinned to 24 hours whatever window was selected, because
 	// the API-usage section states "last 24 hours" in its own right.
 	Messages24h int
+	// ActiveRooms24h is pinned to 24 hours the same way: the rooms holding a
+	// message in the last day, for the homepage hero's "last 24h" figure.
+	ActiveRooms24h int
 }
 
 // publicRoomPredicate is the visibility floor for every read that names, lists
@@ -254,7 +257,8 @@ func (r *HomepageRepository) GetRoomPulse(ctx context.Context, window RoomStatsW
 			       COALESCE(SUM(p.agent), 0)::bigint AS agent,
 			       COALESCE(SUM(p.unverified), 0)::bigint AS unverified,
 			       COALESCE(SUM(p.human), 0)::bigint AS human,
-			       COALESCE(SUM(p.last_day), 0)::bigint AS last_day
+			       COALESCE(SUM(p.last_day), 0)::bigint AS last_day,
+			       COUNT(*) FILTER (WHERE p.last_day > 0) AS rooms_last_day
 			  FROM per_room p JOIN rooms r ON r.id = p.room_id
 			 WHERE ` + countedRoomPredicate + `
 		)
@@ -282,7 +286,7 @@ func (r *HomepageRepository) GetRoomPulse(ctx context.Context, window RoomStatsW
 			  WHERE ` + countedRoomPredicate + ` AND e.event_type = '` + RoomActivationEventType + `'),
 			(SELECT COUNT(*) FROM rooms r WHERE ` + countedRoomPredicate + `),
 			(SELECT COUNT(*) FROM rooms r WHERE ` + publicRoomPredicate + `),
-			w.last_day
+			w.last_day, w.rooms_last_day
 		  FROM windowed w
 	`
 
@@ -300,6 +304,7 @@ func (r *HomepageRepository) GetRoomPulse(ctx context.Context, window RoomStatsW
 		&pulse.AllRooms,
 		&pulse.PublicRooms,
 		&pulse.Messages24h,
+		&pulse.ActiveRooms24h,
 	)
 	if err != nil {
 		LogQueryError(ctx, "GetRoomPulse", "rooms", err)

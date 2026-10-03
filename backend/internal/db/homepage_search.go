@@ -93,6 +93,10 @@ type SearchPulse struct {
 	Human     int
 	Anonymous int
 
+	// Eligible24h is Eligible pinned to the last 24 hours whatever window was
+	// selected, for the homepage hero's "last 24h" figure.
+	Eligible24h int
+
 	// Monitoring is the separated figure: known automated monitoring, counted
 	// so it can be stated, never mixed into the view above.
 	Monitoring int
@@ -182,11 +186,13 @@ func (r *HomepageRepository) searchTotals(ctx context.Context, window RoomStatsW
 		  COALESCE(SUM(n) FILTER (WHERE NOT monitored AND searcher_type = 'anonymous'), 0)::bigint,
 		  COALESCE(SUM(n) FILTER (WHERE monitored), 0)::bigint,
 		  COALESCE(SUM(n) FILTER (WHERE NOT monitored AND unknown_scope), 0)::bigint,
-		  COALESCE(array_agg(DISTINCT COALESCE(user_agent, '')) FILTER (WHERE monitored), '{}')::text[]
+		  COALESCE(array_agg(DISTINCT COALESCE(user_agent, '')) FILTER (WHERE monitored), '{}')::text[],
+		  COALESCE(SUM(n_day) FILTER (WHERE NOT monitored), 0)::bigint
 		  FROM (
-		    SELECT user_agent, searcher_type, unknown_scope, n, `+monitoredExpr+` AS monitored
+		    SELECT user_agent, searcher_type, unknown_scope, n, n_day, `+monitoredExpr+` AS monitored
 		      FROM (
-		        SELECT user_agent, searcher_type, public_scope IS NULL AS unknown_scope, COUNT(*) AS n
+		        SELECT user_agent, searcher_type, public_scope IS NULL AS unknown_scope, COUNT(*) AS n,
+		               COUNT(*) FILTER (WHERE searched_at >= NOW() - INTERVAL '24 hours') AS n_day
 		          FROM search_queries
 		         WHERE searched_at >= NOW() - $1::interval
 		         GROUP BY user_agent, searcher_type, public_scope IS NULL
@@ -194,7 +200,7 @@ func (r *HomepageRepository) searchTotals(ctx context.Context, window RoomStatsW
 		  ) s
 	`, window.interval(), KnownMonitoringAgents).Scan(
 		&pulse.Eligible, &pulse.Agent, &pulse.Human, &pulse.Anonymous,
-		&pulse.Monitoring, &pulse.UnknownScope, &monitored,
+		&pulse.Monitoring, &pulse.UnknownScope, &monitored, &pulse.Eligible24h,
 	)
 	if err != nil {
 		LogQueryError(ctx, "searchTotals", "search_queries", err)

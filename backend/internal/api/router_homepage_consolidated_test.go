@@ -32,7 +32,6 @@ type overviewMeta struct {
 	SourceAvailability map[string]bool    `json:"source_availability"`
 	PartialErrors      []string           `json:"partial_errors"`
 	Stale              bool               `json:"stale"`
-	LastUpdatedLabel   string             `json:"last_updated_label"`
 	StaleLabel         string             `json:"stale_label"`
 }
 
@@ -138,7 +137,7 @@ func TestOverviewConsolidated_EnvelopeShape(t *testing.T) {
 		"planner says hi", "executor replies",
 	})
 
-	resp, _ := getConsolidatedOverview(t, ts.URL)
+	resp, body := getConsolidatedOverview(t, ts.URL)
 
 	// The meta envelope must carry the fields task 14 names.
 	assert.False(t, resp.Meta.GeneratedAt.IsZero(), "generated_at must be set")
@@ -157,15 +156,19 @@ func TestOverviewConsolidated_EnvelopeShape(t *testing.T) {
 	assert.Contains(t, resp.Meta.SourceAvailability, "search")
 	assert.Contains(t, resp.Meta.SourceAvailability, "community")
 
-	// Task 16: the meta envelope carries a readable Last updated timestamp,
-	// and a stale flag that is false on a clean read.
-	assert.NotEmpty(t, resp.Meta.LastUpdatedLabel, "last_updated_label must be a readable string")
-	assert.Contains(t, resp.Meta.LastUpdatedLabel, "Updated", "last_updated_label must be human-readable text")
+	// The meta envelope carries no clock-time label (a server-UTC "Updated" time
+	// read as local time was removed), and a stale flag that is false on a clean read.
+	var envelope struct {
+		Meta map[string]json.RawMessage `json:"meta"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(body), &envelope))
+	assert.NotContains(t, envelope.Meta, "last_updated_label", "the meta envelope carries no clock-time label")
 	assert.False(t, resp.Meta.Stale, "a clean read is not stale")
 	assert.Empty(t, resp.Meta.StaleLabel, "a fresh snapshot has no stale label")
 	assert.Empty(t, resp.Meta.PartialErrors, "no partial errors on a clean read")
 
-	// data must still be the existing HomepageOverview shape.
+	// data must still be the existing HomepageOverview shape, now led by the hero numbers.
+	assert.NotEmpty(t, resp.Data.HeroNumbers, "the seeded room's messages give the hero something to say")
 	assert.False(t, resp.Data.GeneratedAt.IsZero())
 	assert.NotEmpty(t, resp.Data.Closing.ConnectURL)
 }

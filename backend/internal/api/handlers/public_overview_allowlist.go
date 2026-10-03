@@ -71,6 +71,7 @@ const (
 // carry, and what each one is for. A new section cannot appear in the payload
 // without being named here.
 var PublicOverviewSections = map[string]string{
+	"hero_numbers": "four labeled headline figures the API chooses: all-time totals, and last-24h activity only when there was some",
 	"rooms":        "room statistics counted over every room, private ones included: presence now, and activity over the selected window",
 	"activity":     "recent activity in public rooms, bounded and paginated",
 	"previews":     "the editorially selected public rooms, quoted from public messages only",
@@ -122,6 +123,7 @@ var PublicOverviewMetrics = map[string]PublicOverviewCategory{
 	"registered_agents":   CategoryProductTotals,
 	"registered_humans":   CategoryProductTotals,
 	"total_contributions": CategoryProductTotals,
+	"room_messages":       CategoryProductTotals,
 	"crystallized_posts":  CategoryProductTotals,
 }
 
@@ -267,6 +269,7 @@ func enforcePublicOverviewMetrics(o *HomepageOverview) {
 	for section, metrics := range overviewMetricSlices(o) {
 		*metrics = filterPublicMetrics(section, *metrics)
 	}
+	enforcePublicHeroNumbers(o)
 	if o.Search.Monitoring != nil {
 		if _, ok := PublicOverviewAllowsMetric(o.Search.Monitoring.Key); !ok {
 			slog.Error("public overview: metric withheld, not on the public allowlist",

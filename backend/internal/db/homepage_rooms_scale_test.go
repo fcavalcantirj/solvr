@@ -48,6 +48,9 @@ const pulseByDefinition = `
 		(SELECT COUNT(*) FROM rooms r WHERE r.deleted_at IS NULL AND r.is_private = FALSE),
 		(SELECT COUNT(*) FROM messages m JOIN rooms r ON r.id = m.room_id
 		  WHERE r.deleted_at IS NULL AND m.deleted_at IS NULL AND m.author_type <> 'system'
+		    AND m.created_at > NOW() - INTERVAL '24 hours'),
+		(SELECT COUNT(DISTINCT m.room_id) FROM messages m JOIN rooms r ON r.id = m.room_id
+		  WHERE r.deleted_at IS NULL AND m.deleted_at IS NULL AND m.author_type <> 'system'
 		    AND m.created_at > NOW() - INTERVAL '24 hours')`
 
 // roomPulseByDefinition reads the figures and the series as defined. The series is returned as
@@ -59,7 +62,7 @@ func roomPulseByDefinition(ctx context.Context, t *testing.T, pool *Pool, w Room
 		&p.Presence.AgentsOnline, &p.Presence.PublicAgentsOnline, &p.Presence.VerifiedAgentsOnline,
 		&p.Presence.RoomsWithAgentsOnline, &p.Stats.RoomsWithConversation, &p.Stats.AgentMessages,
 		&p.Stats.UnverifiedAgentMessages, &p.Stats.HumanMessages, &p.Stats.TwoWayExchangeRooms,
-		&p.Stats.ActivationInstrumentedSince, &p.AllRooms, &p.PublicRooms, &p.Messages24h))
+		&p.Stats.ActivationInstrumentedSince, &p.AllRooms, &p.PublicRooms, &p.Messages24h, &p.ActiveRooms24h))
 	p.Presence.UnverifiedAgentsOnline = p.Presence.AgentsOnline - p.Presence.VerifiedAgentsOnline
 
 	rows, err := pool.Query(ctx, `

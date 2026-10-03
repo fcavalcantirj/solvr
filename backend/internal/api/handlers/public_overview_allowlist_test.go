@@ -37,16 +37,21 @@ func buildPublicOverviewFixture() HomepageOverview {
 		PublicRooms: 52,
 		Messages24h: 321,
 		Presence:    db.RoomPresenceStats{AgentsOnline: 5, RoomsWithAgentsOnline: 2},
+		// ActiveRooms24h feeds the hero's live "active rooms" slot.
+		ActiveRooms24h: 4,
 	}
 	searchPulse := db.SearchPulse{
 		Window: window, Eligible: 140, Agent: 90, Human: 30, Anonymous: 20, Monitoring: 8,
+		Eligible24h: 140,
 	}
 	instrumentedSince := time.Now().Add(-90 * 24 * time.Hour)
+	totals := &db.AllTimeTotals{AllRooms: 219, PublicRooms: 214, PublishedPosts: 2098, RegisteredAgents: 64, RegisteredHumans: 1003, RoomMessages: 8800}
 
 	return HomepageOverview{
-		Rooms:    buildOverviewRooms(pulse, nil),
-		Activity: buildOverviewActivity(nil, overviewActivityDefaultLimit, 0, 0, time.Now()),
-		Previews: buildOverviewPreviews(nil, PreviewSlugsFromEnv()),
+		HeroNumbers: buildOverviewHeroNumbers(totals, pulse, true, searchPulse, true),
+		Rooms:       buildOverviewRooms(pulse, nil),
+		Activity:    buildOverviewActivity(nil, overviewActivityDefaultLimit, 0, 0, time.Now()),
+		Previews:    buildOverviewPreviews(nil, PreviewSlugsFromEnv()),
 		APIUsage: buildOverviewAPIUsage(db.APIUsagePulse{
 			Window: window, SuccessfulCalls: 4210, AgentCalls: 3100, HumanCalls: 900,
 			AnonymousCalls: 210, PassivePolls: 2600, WriteAndSearchCalls: 1610,
@@ -54,7 +59,7 @@ func buildPublicOverviewFixture() HomepageOverview {
 		}),
 		Search: buildOverviewSearch(searchPulse),
 		Community: buildOverviewCommunity(
-			&db.AllTimeTotals{AllRooms: 219, PublicRooms: 214, PublishedPosts: 2098, RegisteredAgents: 64, RegisteredHumans: 1003},
+			totals,
 			&db.AllStatsResult{TotalContributions: 3327, CrystallizedPosts: 12},
 		),
 		Posts:       buildOverviewPosts(nil),

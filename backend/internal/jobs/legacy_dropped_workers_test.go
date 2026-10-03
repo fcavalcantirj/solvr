@@ -200,12 +200,42 @@ func newMigratedScratchURL(t *testing.T, prefix string) string {
 	return newScratchURL(t, prefix, append(before, after...))
 }
 
-// newPreArchiveScratchURL is a scratch database migrated below the legacy archive migration,
-// checked to hold the legacy tables: the state before the cutover and the archive.
+// archiveIndependentMigrations are migrations numbered after the legacy archive that do not
+// touch the legacy tables and that the code at head needs on every request: the router's
+// API-usage recorder writes api_request_events.duration_ms (000139) on the probe's traced
+// pool. The pre-archive database gets them too, so a probe measures the legacy tables and
+// not a column the head code writes regardless of the archive.
+var archiveIndependentMigrations = []string{"000139_api_request_duration.up.sql"}
+
+// splitArchiveIndependent separates archiveIndependentMigrations out of the migrations
+// from the legacy archive on, keeping order, and fails if one of them is missing.
+func splitArchiveIndependent(t *testing.T, after []string) (independent, rest []string) {
+	t.Helper()
+	listed := map[string]bool{}
+	for _, name := range archiveIndependentMigrations {
+		listed[name] = true
+	}
+	for _, f := range after {
+		if listed[filepath.Base(f)] {
+			independent = append(independent, f)
+			continue
+		}
+		rest = append(rest, f)
+	}
+	if len(independent) != len(archiveIndependentMigrations) {
+		t.Fatalf("archive-independent migrations %v: found %d of them after the legacy archive", archiveIndependentMigrations, len(independent))
+	}
+	return independent, rest
+}
+
+// newPreArchiveScratchURL is a scratch database migrated below the legacy archive migration
+// (plus archiveIndependentMigrations), checked to hold the legacy tables: the state before
+// the cutover and the archive.
 func newPreArchiveScratchURL(t *testing.T, prefix string) string {
 	t.Helper()
-	before, _ := legacyArchiveSplit(t)
-	scratchURL := newScratchURL(t, prefix, before)
+	before, after := legacyArchiveSplit(t)
+	independent, _ := splitArchiveIndependent(t, after)
+	scratchURL := newScratchURL(t, prefix, append(before, independent...))
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	conn, err := pgx.Connect(ctx, scratchURL)
@@ -268,7 +298,8 @@ func newLegacyDroppedDatabase(t *testing.T, beforeDrop ...func(ctx context.Conte
 	}
 	cutoverPool.Close()
 	_, after := legacyArchiveSplit(t)
-	applyMigrationFiles(ctx, t, scratchURL, after)
+	_, rest := splitArchiveIndependent(t, after) // already applied by newPreArchiveScratchURL
+	applyMigrationFiles(ctx, t, scratchURL, rest)
 
 	d := &legacyDroppedDatabase{tracer: &dbErrorTracer{}, url: scratchURL}
 	rows, err := conn.Query(ctx, `SELECT CASE kind

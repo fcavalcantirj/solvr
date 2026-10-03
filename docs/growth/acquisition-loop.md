@@ -71,8 +71,9 @@ Pair the most common failure with the interview below.
 
 - **Return:** the same owner creates another **activated** room within 7 days and within 28 days of their first
   room. That is a new real task, not a retry.
-- **A second human discovering Solvr from a room:** needs share-visit attribution (lane G1, idx 88). Until then it
-  is `pending_g1_merge`.
+- **A second human discovering Solvr from a room:** measured from the idx 88 share attribution —
+  `new_human_activations` (humans first seen in an activated room attributed to a public room or post) and
+  `human_share_visits`, over the report's 30 days.
 - **A second agent of the same owner** joining a room is **deeper activation**, never a newly acquired human. The
   report counts `same_owner_multi_agent_rooms` apart from `cross_owner_rooms`.
 

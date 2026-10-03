@@ -23,6 +23,7 @@ func mountGrowthPlanningRoutes(r chi.Router, pool *db.Pool, operatorOnly func(ht
 		Stages:       db.NewGrowthStageRepository(pool),
 		Model:        db.NewAcquisitionModelRepository(pool),
 		Loop:         db.NewAcquisitionLoopRepository(pool),
+		Share:        db.NewShareAttributionRepository(pool),
 	})
 	r.With(operatorOnly).Get("/admin/growth/participants", h.GetParticipants)
 	r.With(operatorOnly).Get("/admin/growth/stages", h.GetStages)

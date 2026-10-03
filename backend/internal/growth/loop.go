@@ -41,6 +41,7 @@ type LoopMeasures struct {
 	SameOwnerMultiAgentRooms        int
 	CrossOwnerRooms                 int
 	DistinctOwnersInMultiAgentRooms int
+	Source                          SourceMeasures
 }
 
 // ExampleRoomReport is one example room in the report.
@@ -85,6 +86,14 @@ type AgentDepthReport struct {
 	Note                            string `json:"note"`
 }
 
+// DiscoveryReport is whether new humans discover Solvr through a shared room or post.
+type DiscoveryReport struct {
+	Status              string `json:"status"`
+	NewHumanActivations *int   `json:"new_human_activations"`
+	HumanShareVisits    *int   `json:"human_share_visits"`
+	Note                string `json:"note"`
+}
+
 // StatusNote is a status with its reason.
 type StatusNote struct {
 	Status string `json:"status"`
@@ -99,7 +108,7 @@ type LoopReport struct {
 	FirstConnections     FirstConnectionReport `json:"first_connections"`
 	Returns              LoopReturns           `json:"returns"`
 	AgentDepth           AgentDepthReport      `json:"agent_depth"`
-	SecondHumanDiscovery StatusNote            `json:"second_human_discovery"`
+	SecondHumanDiscovery DiscoveryReport       `json:"second_human_discovery"`
 	InitialCohort        StatusNote            `json:"initial_cohort"`
 	Planning             string                `json:"planning"`
 	Privacy              string                `json:"privacy"`
@@ -118,8 +127,8 @@ const (
 		"created another ACTIVATED room within N days: a return for another real task, not a retry."
 	agentDepthNote = "A second agent of the same owner joining a room is deeper product activation, never a newly " +
 		"acquired human. Owners are an agent's claiming human, or the agent when unclaimed."
-	secondHumanNote = "Whether a second human discovers Solvr from a room needs share-visit attribution, recorded " +
-		"by lane G1 (spec.json idx 88)."
+	secondHumanNote = "Humans first seen in an activated room attributed to a public room or post (lane G1 share " +
+		"attribution, spec.json idx 88), and human visits to shared rooms or posts, in the 30 days before end."
 	initialCohortNote = "Recruiting the initial cohort is owner-led demo work with voluntary participants; outreach " +
 		"is not authorized by this report or by the planning docs."
 	loopPlanning = "Planning artifacts: docs/growth/acquisition-loop.md (positioning, demo walkthrough, recruitment " +
@@ -177,11 +186,20 @@ func BuildLoopReport(m LoopMeasures) LoopReport {
 			DistinctOwnersInMultiAgentRooms: m.DistinctOwnersInMultiAgentRooms,
 			Note:                            agentDepthNote,
 		},
-		SecondHumanDiscovery: StatusNote{Status: StatusPendingG1Merge, Note: secondHumanNote},
+		SecondHumanDiscovery: discovery(m.Source),
 		InitialCohort:        StatusNote{Status: StatusNotYetMeasurable, Note: initialCohortNote},
 		Planning:             loopPlanning,
 		Privacy:              GrowthPrivacy,
 	}
+}
+
+// discovery reads whether new humans discover Solvr through a shared public room or post.
+func discovery(src SourceMeasures) DiscoveryReport {
+	if !src.Available {
+		return DiscoveryReport{Status: StatusNotYetMeasurable, Note: shareNotRead}
+	}
+	humans, visits := src.NewHumanActivations, src.HumanShareVisits
+	return DiscoveryReport{Status: StatusMeasured, NewHumanActivations: &humans, HumanShareVisits: &visits, Note: secondHumanNote}
 }
 
 // returnReport is one return window: a rate only over a non-empty cohort.

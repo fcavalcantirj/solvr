@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/growth"
 )
 
@@ -226,7 +227,11 @@ func TestGrowthLoop_ReadsTheDemoAndEditorialExamples(t *testing.T) {
 	t.Setenv("ADMIN_API_KEY", "op-key")
 	t.Setenv(previewSlugsEnv, "editorial-one, "+growth.PublicDemoRoomSlug)
 	loop := &fakeLoopReader{measures: growth.LoopMeasures{FirstConnections: growth.FirstConnectionPoints{CreatedOnly: 2, Activated: 1}}}
-	h := NewGrowthReportsHandler(GrowthReaders{Loop: loop})
+	share := &fakeGrowthShareReader{report: db.ShareAttributionReport{
+		ShareVisits: db.ShareVisitSplit{Total: 9, Human: 3}, AttributedRoomsActivated: 2, NewHumanActivations: 1,
+		HumanReturns28d: db.ShareReturns{Eligible: 1, Returned: 1},
+	}}
+	h := NewGrowthReportsHandler(GrowthReaders{Loop: loop, Share: share})
 
 	rec := growthRequest(t, h.GetAcquisitionLoop, "/admin/growth/acquisition-loop?end=2026-10-01T00:00:00Z",
 		map[string]string{OperatorAccessHeader: "op-key"})
@@ -239,7 +244,71 @@ func TestGrowthLoop_ReadsTheDemoAndEditorialExamples(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
 	assert.Equal(t, 3, body.Data.FirstConnections.Total)
-	assert.Equal(t, growth.StatusPendingG1Merge, body.Data.SecondHumanDiscovery.Status)
+	assert.Equal(t, growth.StatusMeasured, body.Data.SecondHumanDiscovery.Status)
+	require.NotNil(t, body.Data.SecondHumanDiscovery.NewHumanActivations)
+	assert.Equal(t, 1, *body.Data.SecondHumanDiscovery.NewHumanActivations)
+	assert.Equal(t, time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), share.gotFrom, "the same 30 days the loop reads")
+	assert.Equal(t, time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC), share.gotTo)
 
 	assert.Equal(t, http.StatusUnauthorized, growthRequest(t, h.GetAcquisitionLoop, "/admin/growth/acquisition-loop", nil).Code)
+}
+
+// fakeGrowthShareReader returns a canned lane G1 share-attribution report for the window it was asked for.
+type fakeGrowthShareReader struct {
+	gotFrom, gotTo time.Time
+	report         db.ShareAttributionReport
+	err            error
+}
+
+func (f *fakeGrowthShareReader) Measure(_ context.Context, from, to, _ time.Time) (db.ShareAttributionReport, error) {
+	f.gotFrom, f.gotTo = from, to
+	return f.report, f.err
+}
+
+func TestGrowthModel_BindsThePublicSharingChannelToShareAttribution(t *testing.T) {
+	t.Setenv("ADMIN_API_KEY", "op-key")
+	share := &fakeGrowthShareReader{report: db.ShareAttributionReport{
+		AttributedRoomsActivated: 4,
+		HumanReturns28d:          db.ShareReturns{Eligible: 2, Returned: 1},
+		AgentReturns28d:          db.ShareReturns{Eligible: 3, Returned: 2},
+	}}
+	h := NewGrowthReportsHandler(GrowthReaders{Stages: &fakeStageReader{}, Model: &fakeModelReader{}, Share: share})
+	rec := growthRequest(t, h.GetModel, "/admin/growth/model?month=2026-08", map[string]string{OperatorAccessHeader: "op-key"})
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC), share.gotFrom, "the model reads the calendar month")
+	assert.Equal(t, time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), share.gotTo)
+
+	var body struct {
+		Data growth.ModelReport `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	shared := body.Data.Channels[1]
+	assert.Equal(t, "public_room_sharing", shared.Channel)
+	assert.Equal(t, growth.StatusMeasured, shared.Status)
+	require.NotNil(t, shared.RetainedActivations)
+	assert.Equal(t, 3, *shared.RetainedActivations)
+}
+
+func TestGrowthStages_ReadsShareAttributionOverTheStageWindow(t *testing.T) {
+	t.Setenv("ADMIN_API_KEY", "op-key")
+	share := &fakeGrowthShareReader{report: db.ShareAttributionReport{AttributedRoomsActivated: 3}}
+	h := NewGrowthReportsHandler(GrowthReaders{Participants: &fakeParticipantReader{}, Stages: &fakeStageReader{}, Share: share})
+	rec := growthRequest(t, h.GetStages, "/admin/growth/stages?end=2026-10-01T00:00:00Z", map[string]string{OperatorAccessHeader: "op-key"})
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), share.gotFrom)
+	var body struct {
+		Data growth.StageReport `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	for _, g := range body.Data.Stages[2].Gates {
+		if g.Key == "acquisition_channels" {
+			assert.Equal(t, growth.StatusUnmet, g.Status)
+		}
+	}
+
+	failing := NewGrowthReportsHandler(GrowthReaders{Participants: &fakeParticipantReader{}, Stages: &fakeStageReader{},
+		Share: &fakeGrowthShareReader{err: errors.New("share boom")}})
+	rec = growthRequest(t, failing.GetStages, "/admin/growth/stages", map[string]string{OperatorAccessHeader: "op-key"})
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.NotContains(t, rec.Body.String(), "share boom")
 }

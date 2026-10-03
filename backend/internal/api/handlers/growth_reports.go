@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/growth"
 )
 
@@ -43,12 +44,18 @@ type LoopReader interface {
 	Measure(ctx context.Context, end time.Time, exampleSlugs []string) (growth.LoopMeasures, error)
 }
 
+// ShareReader is lane G1's share attribution (db.ShareAttributionRepository).
+type ShareReader interface {
+	Measure(ctx context.Context, from, to, now time.Time) (db.ShareAttributionReport, error)
+}
+
 // GrowthReaders are the measurements the growth reports read.
 type GrowthReaders struct {
 	Participants ParticipantReader
 	Stages       StageReader
 	Model        ModelReader
 	Loop         LoopReader
+	Share        ShareReader
 }
 
 // GrowthReportsHandler serves the operator growth reports.
@@ -94,6 +101,9 @@ func (h *GrowthReportsHandler) GetStages(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	m, err := h.readers.Stages.Measure(r.Context(), end)
+	if err == nil {
+		m.Source, err = h.readSource(r.Context(), end.AddDate(0, 0, -growth.ParticipantWindowDays), end)
+	}
 	if err != nil {
 		slog.Error("growth stages report failed: stages", "error", err)
 		writeOperatorError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to compute the stage report")
@@ -124,12 +134,16 @@ func (h *GrowthReportsHandler) GetModel(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	stages, err := h.readers.Stages.Measure(r.Context(), month.AddDate(0, 1, 0))
+	var source growth.SourceMeasures
+	if err == nil {
+		source, err = h.readSource(r.Context(), month, month.AddDate(0, 1, 0))
+	}
 	if err != nil {
-		slog.Error("growth model report failed: stages", "error", err)
+		slog.Error("growth model report failed: stages or sources", "error", err)
 		writeOperatorError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to compute the acquisition model")
 		return
 	}
-	writeActivationJSON(w, http.StatusOK, map[string]any{"data": growth.BuildModelReport(flows, stages)})
+	writeActivationJSON(w, http.StatusOK, map[string]any{"data": growth.BuildModelReport(flows, stages, source)})
 }
 
 // reportMonthPattern is a calendar month, YYYY-MM.
@@ -160,6 +174,9 @@ func (h *GrowthReportsHandler) GetAcquisitionLoop(w http.ResponseWriter, r *http
 		return
 	}
 	m, err := h.readers.Loop.Measure(r.Context(), end, exampleRoomSlugs())
+	if err == nil {
+		m.Source, err = h.readSource(r.Context(), end.AddDate(0, 0, -growth.ParticipantWindowDays), end)
+	}
 	if err != nil {
 		slog.Error("growth acquisition loop report failed", "error", err)
 		writeOperatorError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to compute the acquisition loop")
@@ -179,6 +196,33 @@ func exampleRoomSlugs() []string {
 		}
 	}
 	return slugs
+}
+
+// readSource reads lane G1's share attribution for [from, to) and reduces it to the source figures
+// the growth reports read. With no share reader configured the figures are reported unavailable.
+func (h *GrowthReportsHandler) readSource(ctx context.Context, from, to time.Time) (growth.SourceMeasures, error) {
+	if h.readers.Share == nil {
+		return growth.SourceMeasures{}, nil
+	}
+	rep, err := h.readers.Share.Measure(ctx, from, to, to)
+	if err != nil {
+		return growth.SourceMeasures{}, err
+	}
+	ret := func(r db.ShareReturns) growth.ReturnCount {
+		return growth.ReturnCount{Eligible: r.Eligible, Returned: r.Returned}
+	}
+	return growth.SourceMeasures{
+		Available:                true,
+		ShareVisits:              rep.ShareVisits.Total,
+		HumanShareVisits:         rep.ShareVisits.Human,
+		AttributedRoomsActivated: rep.AttributedRoomsActivated,
+		NewHumanActivations:      rep.NewHumanActivations,
+		NewAgentActivations:      rep.NewAgentActivations,
+		HumanReturns7d:           ret(rep.HumanReturns7d),
+		HumanReturns28d:          ret(rep.HumanReturns28d),
+		AgentReturns7d:           ret(rep.AgentReturns7d),
+		AgentReturns28d:          ret(rep.AgentReturns28d),
+	}, nil
 }
 
 // participantTargetInputs reduces participant measures to the identity sums a target reads.

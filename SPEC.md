@@ -2886,8 +2886,8 @@ The staged plan (spec.json idx 89; `backend/internal/growth/stages.go`, `backend
 `docs/growth/stage-plan.md`). `data.stages` is four stages in order, each `{number, name, target, status, gates,
 deadline: null, budget: null}`; every gate is `{key, description, threshold, proposed_threshold, measured, sample,
 min_sample, proposed_min_sample, status, evidence}` and is judged on its own. Statuses: `met`, `unmet`,
-`not_yet_measurable` (too little sample, no data source, or an owner observation), `pending_g1_merge` (needs the
-source attribution / return recording of idx 88/92), `blocked_by_previous_stage`. A stage is `met` only when all its
+`not_yet_measurable` (too little sample, no data source, or an owner observation), `pending_g1_merge` (reserved
+for a metric whose recording has not merged; none currently), `blocked_by_previous_stage`. A stage is `met` only when all its
 gates are met and the previous stage is met; gates of a blocked stage are still measured.
 
 - **Stage 1** (100 weekly activated rooms): weekly activated rooms ≥ 100; independent owners ≥ 2 (proposed; an
@@ -2896,11 +2896,14 @@ gates are met and the previous stage is met; gates of a blocked stage are still 
   days ending 24 h before `end` reaching a two-way exchange within 24 h ≥ 60 % over ≥ 100 rooms (proposed minimum);
   gate B — owners whose first room fell in the 30 days ending 7 days before `end` creating another activated room
   within 7 days ≥ 25 % over ≥ 100 owners.
-- **Stage 2** (10,000 participants, sustained): the idx 86 counter; activation and retention by source pending G1.
+- **Stage 2** (10,000 participants, sustained): the idx 86 counter; activation and retention by source — the public
+  room/post source is measured from the idx 88 share attribution, other channels have no recorded source, and
+  repeating the analysis is an owner review.
 - **Stage 3** (100,000 participants): core-service (api, database) operational checks ≥ 99.5 % over 30 days
   (proposed); cost per activated room not yet measurable; moderation backlog (pending flags, reports and posts
-  older than 7 days) = 0 (proposed); ≥ 2 measured channels pending G1.
-- **Stage 4** (1,000,000 participants): retained channel cohorts pending G1; tested capacity not yet measurable.
+  older than 7 days) = 0 (proposed); ≥ 2 measured channels — only public sharing has a recorded source, so 1 (unmet).
+- **Stage 4** (1,000,000 participants): retained channel cohorts — public sharing's 28-day returns are measured,
+  proof across channels is an owner judgment; tested capacity not yet measurable.
   No dates or budgets are invented; they come from observed growth in the private operator plan.
 
 ### GET /admin/growth/model?month=YYYY-MM
@@ -2922,9 +2925,11 @@ complete calendar month (UTC); a malformed month answers 400 `INVALID_MONTH`.
   observed, retention and activation rate are hypothetical (the base case uses measured retention once ≥ 30
   identities were active the month before); 12-month projection, steady state, implied and stay-flat qualified
   visits.
-- `data.channels`: SEO, public-room sharing, agent-ecosystem referrals, direct — by retained activations and cost,
-  each `pending_g1_merge` until attribution is recorded; `data.paid_acquisition.ready` is false until retention is
-  measured and channel cost is known.
+- `data.channels`: SEO, public-room sharing, agent-ecosystem referrals, direct — by retained activations and cost.
+  Public-room sharing is `measured` from the idx 88 share attribution for the month (`activations`, `eligible_28d`,
+  `retained_activations` = identities, humans + agent identities, that returned within 28 days); the other three have
+  no recorded source (`not_yet_measurable`); no cost source is connected. `data.paid_acquisition.ready` is false
+  until retention is measured and channel cost is known.
 - `data.bottleneck`: capacity (reliability) → connection success (gate A) → repeat usage (gate B) → reach, read
   from the stage gates at the month's end; an unjudgeable check is named in `missing`.
 - `data.review`: monthly cadence and checklist; outcomes are recorded in the private operator plan.
@@ -2944,7 +2949,9 @@ The planner-to-executor acquisition loop (spec.json idx 87; `backend/internal/gr
   who created another activated room within N days (`rate` null over an empty cohort).
 - `data.agent_depth`: multi-agent rooms whose agents share one owner (deeper activation, never a new human) versus
   rooms joining several owners.
-- `data.second_human_discovery`: `pending_g1_merge` (share-visit attribution, idx 88); `data.initial_cohort`:
+- `data.second_human_discovery`: `measured` from the idx 88 share attribution over the same 30 days —
+  `new_human_activations` (humans first seen in an activated room attributed to a public room or post) and
+  `human_share_visits`; `data.initial_cohort`:
   owner-led, `not_yet_measurable`.
 
 ---

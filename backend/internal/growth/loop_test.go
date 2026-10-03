@@ -27,6 +27,7 @@ func TestBuildLoopReport_SeparatesDeeperActivationFromNewHumans(t *testing.T) {
 		SameOwnerMultiAgentRooms:        5,
 		CrossOwnerRooms:                 2,
 		DistinctOwnersInMultiAgentRooms: 6,
+		Source:                          sampleSource(),
 	}
 	r := BuildLoopReport(m)
 
@@ -50,7 +51,13 @@ func TestBuildLoopReport_SeparatesDeeperActivationFromNewHumans(t *testing.T) {
 	assert.Equal(t, 5, r.AgentDepth.SameOwnerMultiAgentRooms)
 	assert.Equal(t, 2, r.AgentDepth.CrossOwnerRooms)
 	assert.Contains(t, r.AgentDepth.Note, "never")
-	assert.Equal(t, StatusPendingG1Merge, r.SecondHumanDiscovery.Status)
+	d := r.SecondHumanDiscovery
+	assert.Equal(t, StatusMeasured, d.Status)
+	require.NotNil(t, d.NewHumanActivations)
+	assert.Equal(t, 4, *d.NewHumanActivations)
+	require.NotNil(t, d.HumanShareVisits)
+	assert.Equal(t, 12, *d.HumanShareVisits)
+	assert.Contains(t, d.Note, "public room or post")
 	assert.Equal(t, StatusNotYetMeasurable, r.InitialCohort.Status, "recruiting a cohort is owner-led work, not a system verdict")
 }
 
@@ -63,4 +70,11 @@ func TestBuildLoopReport_NoFirstConnectionsHasNoMostCommonFailure(t *testing.T) 
 
 func TestPublicDemoRoomSlug_IsTheTicTacToeExample(t *testing.T) {
 	assert.Equal(t, "tictactoe-human-vs-computer-20260920", PublicDemoRoomSlug)
+}
+
+func TestBuildLoopReport_WithoutShareAttributionDiscoveryIsNotMeasured(t *testing.T) {
+	d := BuildLoopReport(LoopMeasures{}).SecondHumanDiscovery
+	assert.Equal(t, StatusNotYetMeasurable, d.Status)
+	assert.Nil(t, d.NewHumanActivations)
+	assert.Contains(t, d.Note, "share attribution was not read")
 }

@@ -92,6 +92,8 @@ type Scenario struct {
 // ChannelRow is one acquisition channel in the comparison.
 type ChannelRow struct {
 	Channel                   string   `json:"channel"`
+	Activations               *int     `json:"activations"`
+	Eligible28d               *int     `json:"eligible_28d"`
 	RetainedActivations       *int     `json:"retained_activations"`
 	CostPerRetainedActivation *float64 `json:"cost_per_retained_activation"`
 	Status                    string   `json:"status"`
@@ -151,8 +153,9 @@ const (
 	paidNotReady = "Do not scale paid acquisition: it waits until retention is measured from cohorts and the " +
 		"cost per retained activation is known for the channel."
 	paidReady   = "Retention is measured and channel cost is known; paid acquisition can be tested against them."
-	channelNote = "Source attribution for this channel is recorded by lane G1 (spec.json idx 88); no cost source " +
-		"is connected. Compared by retained activations and cost, never by visits or downloads."
+	channelNote = "Measured from lane G1's share attribution (spec.json idx 88): activated rooms attributed to a " +
+		"public room or post, and the identities they activated that returned within 28 days. No cost source is " +
+		"connected. Compared by retained activations and cost, never by visits or downloads."
 )
 
 // NextActive is one month of the illustrative model.
@@ -290,12 +293,26 @@ func BuildScenarios(population string, f PopulationFlows, duplicates int) []Scen
 	return out
 }
 
-// ChannelComparison is the four channels compared by retained activation and cost. Until source
-// attribution is recorded every row is pending, with no figure guessed.
-func ChannelComparison() []ChannelRow {
+// ChannelComparison is the four channels compared by retained activation and cost. Public-room
+// sharing is measured from lane G1's share attribution: its activated rooms, and the identities
+// (humans + agent identities) they activated that returned within 28 days. The other channels have
+// no recorded source and say so rather than guessing a figure. No cost source is connected.
+func ChannelComparison(source SourceMeasures) []ChannelRow {
 	rows := []ChannelRow{}
 	for _, c := range []string{"seo", "public_room_sharing", "agent_ecosystem_referrals", "direct"} {
-		rows = append(rows, ChannelRow{Channel: c, Status: StatusPendingG1Merge, Note: channelNote})
+		row := ChannelRow{Channel: c, Status: StatusNotYetMeasurable, Note: noRecordedSource}
+		if c == "public_room_sharing" {
+			row.Note = shareNotRead
+			if source.Available {
+				activations := source.AttributedRoomsActivated
+				eligible := source.HumanReturns28d.Eligible + source.AgentReturns28d.Eligible
+				retained := source.HumanReturns28d.Returned + source.AgentReturns28d.Returned
+				row.Activations, row.Eligible28d, row.RetainedActivations = &activations, &eligible, &retained
+				row.Status = StatusMeasured
+				row.Note = channelNote
+			}
+		}
+		rows = append(rows, row)
 	}
 	return rows
 }
@@ -352,7 +369,7 @@ var reviewChecklist = []string{
 
 // BuildModelReport assembles the monthly model from observed flows and the stage gates at the
 // month's end.
-func BuildModelReport(flows MonthlyFlows, stages StageMeasures) ModelReport {
+func BuildModelReport(flows MonthlyFlows, stages StageMeasures, source SourceMeasures) ModelReport {
 	flows.Humans.Survival = SurvivalFromCohorts(flows.Humans.Cohorts)
 	flows.Agents.Survival = SurvivalFromCohorts(flows.Agents.Cohorts)
 	if flows.Humans.Cohorts == nil {
@@ -379,7 +396,7 @@ func BuildModelReport(flows MonthlyFlows, stages StageMeasures) ModelReport {
 		Formula:         modelFormula,
 		Arithmetic:      GoalArithmetic(),
 		Scenarios:       scenarios,
-		Channels:        ChannelComparison(),
+		Channels:        ChannelComparison(source),
 		PaidAcquisition: PaidAcquisition{Ready: ready, Note: note},
 		Bottleneck: ClassifyBottleneck(pick(stage3, "core_service_reliability"),
 			pick(stage1, "gate_a_two_way_within_24h"), pick(stage1, "gate_b_creator_return_7d")),

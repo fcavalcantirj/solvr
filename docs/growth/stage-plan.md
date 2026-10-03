@@ -15,7 +15,7 @@ Shipping the website never meets a gate.
 | `met` | Measured, with enough sample, and at or above the threshold |
 | `unmet` | Measured, with enough sample, and below the threshold |
 | `not_yet_measurable` | Too little sample, no data source (cost, capacity), or the check is an owner observation |
-| `pending_g1_merge` | Needs attribution or return recording that lane G1 (idx 88/92) is adding |
+| `pending_g1_merge` | Reserved for a metric whose recording has not merged (none currently) |
 | `blocked_by_previous_stage` | The stage before it is not met. Stages are sequential. |
 
 A stage is `met` only when every gate in it is `met` **and** the stage before it is `met`.
@@ -34,7 +34,9 @@ A stage is `met` only when every gate in it is `met` **and** the stage before it
 ## Stage 2: 10,000 monthly active participants
 
 - Participants are counted by the idx 86 counter and must be **sustained**: two consecutive 30-day windows.
-- Activation and retention by acquisition source: `pending_g1_merge` (source attribution, idx 88).
+- Activation and retention by acquisition source: the public room/post source is measured from the idx 88 share
+  attribution (activated rooms, new humans and agents, 7/28-day returns); other channels have no recorded source;
+  repeating the analysis is an owner review (`not_yet_measurable`).
 - Levers (planning, not gates): improve the proven workflow, public sharing, useful search content, optional
   integrations.
 
@@ -46,12 +48,13 @@ A stage is `met` only when every gate in it is `met` **and** the stage before it
 | Reliability | ≥ 99.5 % operational checks for the core services (api, database) over 30 days *(proposed)* | `service_checks` (IPFS is reported but is not a core gate) |
 | Cost per activated room | measured and sustainable | no cost source is connected (`not_yet_measurable`) |
 | Moderation load | no pending flag, report or post older than 7 days *(proposed)*; volume reported | `flags`, `reports`, `posts.moderation_state` |
-| Acquisition channels | ≥ 2 measured and sustainable | `pending_g1_merge` |
+| Acquisition channels | ≥ 2 measured and sustainable | channels with a recorded source; only public sharing has one, so 1 — `unmet` |
 
 ## Stage 4: 1,000,000 monthly active participants
 
 - Participants: ≥ 1,000,000, sustained (the idx 86 target).
-- Channels with proven retained cohorts: `pending_g1_merge`.
+- Channels with proven retained cohorts: public sharing's 28-day returns are measured; proof is an owner judgment
+  (`not_yet_measurable`).
 - Tested capacity: a load test at the target scale (`not_yet_measurable` until one is run and recorded).
 - **No dates or budgets are invented.** The report's `deadline` and `budget` are `null`. Set them from observed
   growth in the operator plan.

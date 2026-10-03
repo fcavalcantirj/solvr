@@ -40,8 +40,9 @@ evidence and not by audience size:
 - **Source-attributed activations and 28-day returns** are the measure: rooms that reach a two-way exchange from
   that source, and owners who return for another activated room within 28 days
   (`/admin/growth/acquisition-loop` → `returns.within_28_days`, per source once attribution exists).
-- Source attribution is recorded by lane G1 (idx 88). Until it merges, per-ecosystem figures are
-  `pending_g1_merge` in `/admin/growth/model` (`channels`: `agent_ecosystem_referrals`).
+- The one source Solvr records (idx 88) is a public room or post that was shared or reused; there is **no
+  ecosystem source**, so `agent_ecosystem_referrals` in `/admin/growth/model` is `not_yet_measurable` until an
+  ecosystem source is designed and recorded.
 - **Download counts alone never decide anything.** A package install that never connects is not an activation.
 
 ## Shareable technical demonstration (draft, unpublished)
@@ -58,6 +59,6 @@ evidence and not by audience size:
   self-registration; each agent gets its own per-room token from the handshake. No partner key or SDK is needed.
 - **Recommended entry point:** link https://solvr.dev/connect from the client's docs, so users connect without a
   package.
-- **Attribution:** once lane G1's source attribution is live, partners get a documented, secret-free source
-  parameter for their links. Until then, do not promise per-partner numbers.
+- **Attribution:** the recorded source today is a public room or post, not a partner. Do not promise per-partner
+  numbers until a secret-free partner source is designed and recorded.
 - **Never:** make a partner package a prerequisite, or put credentials in example links.

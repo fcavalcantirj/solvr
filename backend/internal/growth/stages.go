@@ -2,6 +2,7 @@ package growth
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -42,6 +43,7 @@ type StageMeasures struct {
 	Services                []ServiceUptime
 	ModerationVolume        int
 	ModerationBacklog       int
+	Source                  SourceMeasures
 }
 
 // TargetInputs is the participant counts a participant gate reads.
@@ -103,7 +105,6 @@ const (
 		"meets a gate. No deadline or budget is set here: dates and budgets come from observed growth and live in " +
 		"the private operator plan, which also records every unmet target."
 	ownerObservation = "An owner observation (UAT), never auto-passed by the system."
-	pendingG1        = "Needs source attribution / return recording from lane G1 (spec.json idx 88, 92); defined, not yet recorded."
 )
 
 func intPtr(v int) *int           { return &v }
@@ -166,6 +167,39 @@ func participantGate(goal int, p TargetInputs) Gate {
 	}
 }
 
+// sourceAnalysisGate is stage 2's activation and retention by acquisition source: the public-source
+// figures are measured from lane G1's share attribution; repeating the analysis is an owner review.
+func sourceAnalysisGate(src SourceMeasures) Gate {
+	g := fixedGate("activation_retention_by_source", "Activation and retention repeated by acquisition source.",
+		StatusNotYetMeasurable, shareNotRead)
+	if src.Available {
+		g.Evidence = sourceEvidence(src) + ". Other channels have no recorded source. " + ownerObservation
+	}
+	return g
+}
+
+// channelsGate is stage 3's "at least two acquisition channels measured": only channels with a
+// recorded source count, and public sharing is the only one Solvr records.
+func channelsGate(src SourceMeasures) Gate {
+	if !src.Available {
+		return fixedGate("acquisition_channels", "At least two acquisition channels measured and sustainable.",
+			StatusNotYetMeasurable, shareNotRead)
+	}
+	return countGate("acquisition_channels", "At least two acquisition channels measured and sustainable.", 1, 2, false,
+		"measured: public_room_sharing; not recorded: "+strings.Join(unrecordedChannels, ", ")+
+			". Whether a measured channel is sustainable is an owner judgment.")
+}
+
+// retainedCohortsGate is stage 4's "channels with proven retained cohorts": the public-sharing
+// cohort's returns are measured; proving a channel's cohorts is an owner judgment across channels.
+func retainedCohortsGate(src SourceMeasures) Gate {
+	g := fixedGate("retained_channel_cohorts", "Channels with proven retained cohorts.", StatusNotYetMeasurable, shareNotRead)
+	if src.Available {
+		g.Evidence = "public_room_sharing — " + sourceEvidence(src) + ". " + ownerObservation
+	}
+	return g
+}
+
 // CombineStageStatus folds a stage's gates into its status. A stage whose predecessor is not met
 // is blocked whatever its own gates say; otherwise any unmet gate makes it unmet, then a gate
 // pending lane G1, then a gate not yet measurable; only all-met is met.
@@ -216,7 +250,7 @@ func EvaluateStages(m StageMeasures, p TargetInputs) StageReport {
 	}
 	stage2 := []Gate{
 		participantGate(StageTwoParticipants, p),
-		fixedGate("activation_retention_by_source", "Activation and retention repeated by acquisition source.", StatusPendingG1Merge, pendingG1),
+		sourceAnalysisGate(m.Source),
 	}
 	reliability := RateGate("core_service_reliability",
 		"Operational health checks of the core services (api, database) over 30 days; IPFS is reported, not gated.",
@@ -241,11 +275,11 @@ func EvaluateStages(m StageMeasures, p TargetInputs) StageReport {
 		fixedGate("cost_per_activated_room", "Cost per activated room, measured and sustainable.", StatusNotYetMeasurable,
 			"No cost data source is connected."),
 		backlog,
-		fixedGate("acquisition_channels", "At least two acquisition channels measured and sustainable.", StatusPendingG1Merge, pendingG1),
+		channelsGate(m.Source),
 	}
 	stage4 := []Gate{
 		participantGate(MonthlyActiveParticipantGoal, p),
-		fixedGate("retained_channel_cohorts", "Channels with proven retained cohorts.", StatusPendingG1Merge, pendingG1),
+		retainedCohortsGate(m.Source),
 		fixedGate("tested_capacity", "Capacity tested at the target scale.", StatusNotYetMeasurable,
 			"No load test at the target scale is recorded."),
 	}

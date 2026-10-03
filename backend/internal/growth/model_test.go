@@ -115,17 +115,35 @@ func TestScenarios_TooLittleHistoryKeepsRetentionHypothetical(t *testing.T) {
 	assert.Equal(t, SourceHypothetical, base.MonthlyRetention.Source)
 }
 
-func TestChannels_ArePendingAndPaidAcquisitionWaits(t *testing.T) {
-	channels := ChannelComparison()
+func TestChannels_PublicSharingIsMeasuredTheOthersAreNotRecorded(t *testing.T) {
+	channels := ChannelComparison(sampleSource())
 	keys := []string{}
 	for _, c := range channels {
 		keys = append(keys, c.Channel)
-		assert.Equal(t, StatusPendingG1Merge, c.Status)
-		assert.Nil(t, c.RetainedActivations)
-		assert.Nil(t, c.CostPerRetainedActivation)
+		assert.Nil(t, c.CostPerRetainedActivation, "no cost source is connected")
 	}
 	assert.Equal(t, []string{"seo", "public_room_sharing", "agent_ecosystem_referrals", "direct"}, keys)
 
+	shared := channels[1]
+	assert.Equal(t, StatusMeasured, shared.Status)
+	require.NotNil(t, shared.Activations)
+	assert.Equal(t, 9, *shared.Activations)
+	require.NotNil(t, shared.RetainedActivations)
+	assert.Equal(t, 5, *shared.RetainedActivations, "2 humans + 3 agent identities returned within 28 days")
+	require.NotNil(t, shared.Eligible28d)
+	assert.Equal(t, 11, *shared.Eligible28d)
+	for _, i := range []int{0, 2, 3} {
+		assert.Equal(t, StatusNotYetMeasurable, channels[i].Status, channels[i].Channel)
+		assert.Nil(t, channels[i].RetainedActivations)
+		assert.Contains(t, channels[i].Note, "no recorded source")
+	}
+
+	for _, c := range ChannelComparison(SourceMeasures{}) {
+		assert.Equal(t, StatusNotYetMeasurable, c.Status, "%s without share attribution", c.Channel)
+	}
+}
+
+func TestPaidAcquisition_WaitsForMeasuredRetentionAndCost(t *testing.T) {
 	ready, why := PaidAcquisitionReady(false, false)
 	assert.False(t, ready)
 	assert.Contains(t, why, "retention")

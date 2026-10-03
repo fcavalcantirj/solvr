@@ -49,8 +49,10 @@ and the qualified visits it would need to stay flat.
 ## Channels
 
 SEO, public-room sharing, agent-ecosystem referrals and direct traffic are compared by **retained activations and
-cost**, never by visits or downloads. Every row is `pending_g1_merge` until source attribution is recorded
-(idx 88). No cost source is connected. **Paid acquisition stays off** until retention is measured from cohorts
+cost**, never by visits or downloads. **Public-room sharing** is measured from the idx 88 share attribution for
+the month: activated rooms attributed to a public room or post, and the identities they activated that returned
+within 28 days. SEO, agent-ecosystem referrals and direct traffic have **no recorded source** and stay
+`not_yet_measurable`. No cost source is connected. **Paid acquisition stays off** until retention is measured from cohorts
 and the cost per retained activation is known for the channel.
 
 ## Bottleneck

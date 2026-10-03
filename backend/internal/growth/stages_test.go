@@ -68,6 +68,7 @@ func healthyStage1() StageMeasures {
 		GateBEligible: 120, GateBReturned: 40,
 		CoreChecks: 17280, CoreOperational: 17270,
 		ModerationVolume: 12, ModerationBacklog: 0,
+		Source: sampleSource(),
 	}
 }
 
@@ -99,7 +100,10 @@ func TestEvaluateStages_LaterGatesAreStillMeasuredWhileBlocked(t *testing.T) {
 	participants := gateByKey(t, s2, "monthly_active_participants")
 	assert.Equal(t, StatusUnmet, participants.Status)
 	assert.InDelta(t, 50, *participants.Measured, 1e-9)
-	assert.Equal(t, StatusPendingG1Merge, gateByKey(t, s2, "activation_retention_by_source").Status)
+	bySource := gateByKey(t, s2, "activation_retention_by_source")
+	assert.Equal(t, StatusNotYetMeasurable, bySource.Status, "repeating the analysis by source is an owner review")
+	assert.Contains(t, bySource.Evidence, "public room or post: 9 activated rooms")
+	assert.Contains(t, bySource.Evidence, "humans 2/5, agents 3/6")
 
 	s3 := r.Stages[2]
 	reliability := gateByKey(t, s3, "core_service_reliability")
@@ -107,10 +111,15 @@ func TestEvaluateStages_LaterGatesAreStillMeasuredWhileBlocked(t *testing.T) {
 	assert.True(t, reliability.ProposedThreshold)
 	assert.Equal(t, StatusNotYetMeasurable, gateByKey(t, s3, "cost_per_activated_room").Status)
 	assert.Equal(t, StatusMet, gateByKey(t, s3, "moderation_backlog").Status)
-	assert.Equal(t, StatusPendingG1Merge, gateByKey(t, s3, "acquisition_channels").Status)
+	channels := gateByKey(t, s3, "acquisition_channels")
+	assert.Equal(t, StatusUnmet, channels.Status, "only public sharing has a recorded source")
+	assert.InDelta(t, 1, *channels.Measured, 1e-9)
+	assert.Contains(t, channels.Evidence, "not recorded: seo, agent_ecosystem_referrals, direct")
 
 	s4 := r.Stages[3]
-	assert.Equal(t, StatusPendingG1Merge, gateByKey(t, s4, "retained_channel_cohorts").Status)
+	cohorts := gateByKey(t, s4, "retained_channel_cohorts")
+	assert.Equal(t, StatusNotYetMeasurable, cohorts.Status)
+	assert.Contains(t, cohorts.Evidence, "public_room_sharing")
 	assert.Equal(t, StatusNotYetMeasurable, gateByKey(t, s4, "tested_capacity").Status)
 }
 
@@ -166,4 +175,27 @@ func TestEvaluateStages_InventsNoDatesOrBudgets(t *testing.T) {
 	assert.Equal(t, []int{100, 10_000, 100_000, 1_000_000}, []int{
 		StageOneWeeklyActivatedRooms, StageTwoParticipants, StageThreeParticipants, MonthlyActiveParticipantGoal,
 	})
+}
+
+func sampleSource() SourceMeasures {
+	return SourceMeasures{
+		Available: true, ShareVisits: 40, HumanShareVisits: 12,
+		AttributedRoomsActivated: 9, NewHumanActivations: 4, NewAgentActivations: 7,
+		HumanReturns7d: ReturnCount{Eligible: 4, Returned: 1}, HumanReturns28d: ReturnCount{Eligible: 5, Returned: 2},
+		AgentReturns7d: ReturnCount{Eligible: 7, Returned: 2}, AgentReturns28d: ReturnCount{Eligible: 6, Returned: 3},
+	}
+}
+
+func TestEvaluateStages_WithoutShareAttributionTheSourceGatesSaySo(t *testing.T) {
+	m := healthyStage1()
+	m.Source = SourceMeasures{}
+	r := EvaluateStages(m, TargetInputs{})
+	for _, g := range []Gate{
+		gateByKey(t, r.Stages[1], "activation_retention_by_source"),
+		gateByKey(t, r.Stages[2], "acquisition_channels"),
+		gateByKey(t, r.Stages[3], "retained_channel_cohorts"),
+	} {
+		assert.Equal(t, StatusNotYetMeasurable, g.Status, g.Key)
+		assert.Contains(t, g.Evidence, "share attribution was not read", g.Key)
+	}
 }

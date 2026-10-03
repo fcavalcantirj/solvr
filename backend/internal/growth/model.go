@@ -1,6 +1,9 @@
 package growth
 
-import "time"
+import (
+	"math"
+	"time"
+)
 
 // Input sources.
 const (
@@ -187,8 +190,10 @@ func SteadyStateOK(inflow, retention float64) (float64, bool) {
 
 // GoalArithmetic is the spec's worked example, computed rather than typed in.
 func GoalArithmetic() WorkedArithmetic {
-	inflow := InflowToStayFlat(MonthlyActiveParticipantGoal, 0.80)
+	// Rounded to whole participants and visits: 1e6 × (1 − 0.8) is 199999.99999999997 in floating point.
+	inflow := math.Round(InflowToStayFlat(MonthlyActiveParticipantGoal, 0.80))
 	visits, _ := QualifiedVisitsNeeded(inflow, 0.10)
+	visits = math.Round(visits)
 	return WorkedArithmetic{
 		Active: MonthlyActiveParticipantGoal, MonthlyRetention: 0.80, InflowToStayFlat: inflow,
 		ActivationRate: 0.10, QualifiedVisitsToStayFlat: visits, Hypothetical: true, Note: arithmeticNote,

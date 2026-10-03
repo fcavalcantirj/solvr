@@ -29,8 +29,8 @@ func TestModel_RetainingEightyPercentOfAMillionNeeds200kAMonth(t *testing.T) {
 
 	ex := GoalArithmetic()
 	assert.True(t, ex.Hypothetical)
-	assert.InDelta(t, 200_000, ex.InflowToStayFlat, 1e-6)
-	assert.InDelta(t, 2_000_000, ex.QualifiedVisitsToStayFlat, 1e-6)
+	assert.Equal(t, 200_000.0, ex.InflowToStayFlat, "the report shows whole participants")
+	assert.Equal(t, 2_000_000.0, ex.QualifiedVisitsToStayFlat, "the report shows whole visits")
 }
 
 func TestModel_NextActiveSubtractsDuplicatesAndSteadyStateFollows(t *testing.T) {

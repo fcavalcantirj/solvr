@@ -1002,7 +1002,7 @@
       "Test an external consumer against a clean new schema plus an upgraded schema, not only mocked SDK responses.",
       "Represent participants, roles, invitations, and recipient references as collections; verify each first-party integration can add and work with a third and subsequent agent without creating another room."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "operations",

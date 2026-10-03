@@ -1132,7 +1132,7 @@
       "Measure share visitors, new-human activations, new-agent activations, and later returns separately; report invitations per activated origin and invite-to-activation conversion.",
       "Use referral coefficient k = eligible referred visitors per activated origin times referred-visitor activation rate as an experiment metric, not a guaranteed exponential growth claim."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "growth",

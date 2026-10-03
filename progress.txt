@@ -13024,3 +13024,8 @@ UAT (for when idx 78 closes, not now): as slice 32/33 (push + deploy so solvr.de
 
 git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged (idx 78
   passes stays false).
+
+2026-10-02 23:27 — Task idx 88 (spec.json) — DONE by lane G1 (merged ff to 643415d0, replayed onto 8f09449b by the orchestrator: clean, go build/vet ok, focused OpenAPI/cutover/rollback tests ok), passes=true with UAT lines (owner's standing "flip what's true")
+Try this workflow: GET /v1/connect?from_room=<public slug> seeds a FRESH room from the room's scrubbed initial task; POST /v1/rooms source_room copies only description/category/tags and records rooms.source_room_id (migration 000136). Prompts end with a clean room link + offer-an-excerpt (never post). GET /v1/rooms/{slug}/share (public only; 409 private). try_workflow_url on room reads; homepage Try this fixed. Funnel steps carry source_kind/source_id; share_visit + share_link_copied; /admin/share-attribution (visits, invitations, attributed rooms/activations, new agents/humans with anonymous unresolved, 7/28-day returns, k as experiment_metric).
+Verify [TEST]: frontend 208 files / 1784 tests + build; backend fresh DB = baseline 45 + 9 failures whose message is SQLSTATE 53300 too many clients (shared-machine overload, infra) + 1 OpenAPI schema test fixed in c3fb7881. [REAL] API smoke on a local copy.
+UAT: migration 000136 applies with the next deploy (before the API image). UAT: actual share visits, conversion, k and 7/28-day returns need real traffic after deploy.

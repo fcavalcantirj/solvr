@@ -4,6 +4,7 @@
 #
 # Syncs:
 # - skill/SKILL.md -> frontend/public/skill.md
+# - skill/llms.txt -> frontend/public/llms.txt
 # - scripts/install-solvr-skill.sh -> frontend/public/install.sh
 # - skill/ folder -> frontend/public/solvr-skill.zip
 
@@ -46,6 +47,13 @@ SOURCE_SKILL_JSON="$REPO_ROOT/skill/skill.json"
 if [ -f "$SOURCE_SKILL_JSON" ]; then
     cp "$SOURCE_SKILL_JSON" "$PUBLIC_DIR/skill.json"
     echo "Synced: skill/skill.json -> frontend/public/skill.json"
+fi
+
+# 1e. Sync llms.txt (the llmstxt.org index served at solvr.dev/llms.txt)
+SOURCE_LLMS="$REPO_ROOT/skill/llms.txt"
+if [ -f "$SOURCE_LLMS" ]; then
+    cp "$SOURCE_LLMS" "$PUBLIC_DIR/llms.txt"
+    echo "Synced: skill/llms.txt -> frontend/public/llms.txt"
 fi
 
 # 2. Sync install script

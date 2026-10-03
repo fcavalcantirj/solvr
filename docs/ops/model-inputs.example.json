@@ -11,7 +11,8 @@
     "stream_share": {"value": 0.05, "source": "hypothetical"},
     "stream_hours_per_day": {"value": 1, "source": "hypothetical"},
     "stream_heartbeat_seconds": {"value": 30, "source": "observed"},
-    "burst_factor": {"value": 10.1, "source": "observed"}
+    "burst_factor": {"value": 10.1, "source": "observed"},
+    "measured_capacity_rps": {"value": 800, "source": "observed"}
   },
   "cost": {
     "prices": {

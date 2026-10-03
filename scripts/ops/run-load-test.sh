@@ -20,6 +20,10 @@ LOAD_PORT="${LOAD_PORT:-18650}"
 LOGS="${LOGS:-/tmp/solvr-lane-o}"
 STAGES="${STAGES:-10:60s,25:60s,50:60s,100:60s,200:60s,400:60s}"
 BASELINE="${BASELINE:-30s}"
+# Agents spread timeline writes under the 60/min per-IP room write limit: keep
+# writes/min = 0.077 x peak RPS x 60 below ~45 per agent.
+AGENTS="${AGENTS:-40}"
+ROOMS="${ROOMS:-8}"
 # The compose database (docker-compose.yml), set from LOAD_PG*, never from an inherited PG*.
 export PGHOST="${LOAD_PGHOST:-localhost}" PGPORT="${LOAD_PGPORT:-5435}" PGUSER="${LOAD_PGUSER:-solvr}"
 export PGPASSWORD="${LOAD_PGPASSWORD:-solvr_dev}"
@@ -56,7 +60,7 @@ trap 'kill $API_PID 2>/dev/null || true; wait $API_PID 2>/dev/null || true' EXIT
 
 echo "== load test (stages $STAGES)"
 STARTED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-(cd "$ROOT/backend" && timeout 1800 "$LOGS/solvr-loadtest" -base-url "http://127.0.0.1:$LOAD_PORT" -stages "$STAGES" -baseline "$BASELINE" \
+(cd "$ROOT/backend" && timeout 1800 "$LOGS/solvr-loadtest" -base-url "http://127.0.0.1:$LOAD_PORT" -stages "$STAGES" -baseline "$BASELINE" -agents "$AGENTS" -rooms "$ROOMS" \
   -mix "$ROOT/docs/ops/load-mix.json" \
   -dataset "$LOAD_DB = TEMPLATE $TEMPLATE_DB (production copy taken 2026-10-02) migrated to head" \
   -out-json "$LOGS/load.json" -out-md "$LOGS/load.md") > "$LOGS/load-harness.log" 2>&1

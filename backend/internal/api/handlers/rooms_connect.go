@@ -31,6 +31,9 @@ type roomConnectEnvelope struct {
 	Role               string `json:"role"`
 	FirstMessageID     int64  `json:"first_message_id"`
 	FirstMessageURL    string `json:"first_message_url"`
+	// CurrentDirective is the directive in force (idx 92): the newest pin followed to its
+	// latest revision. Omitted when the room has none; the prompt then has no section.
+	CurrentDirective *roomConnectDirective `json:"current_directive,omitempty"`
 }
 
 // firstMessageLookup is the slice of the message repository this handler needs.
@@ -50,8 +53,9 @@ type firstMessageLookup interface {
 // replaces sharing the room token. The handler ALSO refuses a private room that the
 // guard did not admit, so calling it without the middleware still yields 403.
 type RoomConnectHandler struct {
-	rooms connectRoomLookup
-	msgs  firstMessageLookup
+	rooms      connectRoomLookup
+	msgs       firstMessageLookup
+	directives directiveLookup
 }
 
 // NewRoomConnectHandler wires the handler to the room and message repositories.
@@ -108,6 +112,7 @@ func (h *RoomConnectHandler) GetRoomConnect(w http.ResponseWriter, r *http.Reque
 	}
 
 	envelope := buildRoomConnectEnvelope(room, firstMsg, role)
+	h.addCurrentDirective(r.Context(), room, &envelope)
 	roomWriteJSON(w, http.StatusOK, map[string]any{"data": envelope})
 }
 

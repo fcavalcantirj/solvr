@@ -137,8 +137,8 @@ func (h *RoomHandler) excerptFromMessage(ctx context.Context, room *models.Room,
 			return true
 		}
 	}
-	if pins, err := h.msgRepo.ListPinned(ctx, room.ID); err == nil && len(pins) > 0 {
-		ex.Text, ex.Source = pins[0].Content, "pinned"
+	if pinned, err := h.msgRepo.LatestDirective(ctx, room.ID); err == nil && pinned != nil {
+		ex.Text, ex.Source = pinned.Content, "pinned"
 		return true
 	}
 	if first, err := h.msgRepo.GetFirstMessage(ctx, room.ID); err == nil && first != nil {

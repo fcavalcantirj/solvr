@@ -17,6 +17,8 @@ import type {
   APIPost,
   APIFunnelEventInput,
   APIRoomShareResponse,
+  APIRoomViewerResponse,
+  APIPinEntryResponse,
   APIPostsResponse,
   APISearchResponse,
   APIAnswersResponse,
@@ -522,6 +524,25 @@ class SolvrAPI extends SolvrAPIBase {
    */
   async getRoomShare(slug: string): Promise<APIRoomShareResponse> {
     return this.fetch<APIRoomShareResponse>(`/v1/rooms/${encodeURIComponent(slug)}/share`);
+  }
+
+  /** GET /v1/rooms/{slug}/viewer — what this caller may do in the room (idx 92). */
+  async getRoomViewer(slug: string): Promise<APIRoomViewerResponse> {
+    return this.fetch<APIRoomViewerResponse>(`/v1/rooms/${encodeURIComponent(slug)}/viewer`);
+  }
+
+  /** POST /v1/rooms/{slug}/entries/{id}/pin — pin a message as the directive (idx 92). */
+  async pinEntry(slug: string, entryId: number): Promise<APIPinEntryResponse> {
+    return this.fetch<APIPinEntryResponse>(`/v1/rooms/${encodeURIComponent(slug)}/entries/${entryId}/pin`, {
+      method: 'POST',
+    });
+  }
+
+  /** DELETE /v1/rooms/{slug}/entries/{id}/pin — unpin it. */
+  async unpinEntry(slug: string, entryId: number): Promise<APIPinEntryResponse> {
+    return this.fetch<APIPinEntryResponse>(`/v1/rooms/${encodeURIComponent(slug)}/entries/${entryId}/pin`, {
+      method: 'DELETE',
+    });
   }
 
   /**

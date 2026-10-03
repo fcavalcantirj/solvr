@@ -67,6 +67,7 @@ func mountRoomRoutes(
 	claimsHandler := handlers.NewRoomClaimsHandler(claimRepo)
 	eventsHandler := handlers.NewRoomEventsHandler(entryRepo, hubMgr)
 	roomConnectHandler := handlers.NewRoomConnectHandler(roomRepo, msgRepo)
+	roomConnectHandler.SetDirectiveLookup(msgRepo) // the directive in force, in the prompt (idx 92)
 	roomSavePostHandler := handlers.NewRoomSavePostHandler(db.NewPostRepository(pool), roomRepo, memberRepo)
 	limitPosts, _ := createRateLimits(pool, loadRateLimitConfig(pool)) // per-author hourly create limit (W3)
 	wireContentGate(pool, roomSavePostHandler)
@@ -128,6 +129,13 @@ func mountRoomRoutes(
 		r.With(entriesPolicy(apimiddleware.RoomRead)).Get("/{slug}/entries", entriesHandler.ListEntries)
 		r.With(entriesPolicy(apimiddleware.RoomRead)).Get("/{slug}/entries/{entry_id}", entriesHandler.GetEntry)
 		r.With(entriesPolicy(apimiddleware.RoomWrite), entryWriteLimit).Post("/{slug}/entries", entriesHandler.PostEntry)
+
+		// Pinned directives (idx 92): participants pin/unpin a message entry; the viewer
+		// route says what this caller may do here. Pin changes are announced on the stream.
+		pinHandler := handlers.NewRoomPinHandler(msgRepo, memberRepo, hubMgr)
+		r.With(entriesPolicy(apimiddleware.RoomWrite)).Post("/{slug}/entries/{entry_id}/pin", pinHandler.PinEntry)
+		r.With(entriesPolicy(apimiddleware.RoomWrite)).Delete("/{slug}/entries/{entry_id}/pin", pinHandler.UnpinEntry)
+		r.With(entriesPolicy(apimiddleware.RoomRead)).Get("/{slug}/viewer", pinHandler.GetViewer)
 
 		// Published outcome posts saved from this room (room links to the published outcome).
 		// OptionalAuth lets the handler gate a private room's outcomes to its participants.

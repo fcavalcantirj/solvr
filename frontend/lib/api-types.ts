@@ -1641,3 +1641,4 @@ export interface APICollaborationExampleResponse {
 // '@/lib/api-types' stays the single import point for API shapes.
 export * from './homepage-types';
 export * from './connect-types';
+export * from './room-viewer-types';

@@ -310,11 +310,12 @@ func (h *RoomHandler) GetRoom(w http.ResponseWriter, r *http.Request) {
 		initialTask = first
 	}
 
+	// The directive in force: the newest pin followed through its revisions (idx 92).
 	var latestPinned *models.Message
-	if pins, err := h.msgRepo.ListPinned(r.Context(), room.ID); err != nil {
-		slog.Error("failed to list pinned messages", "error", err, "room_id", room.ID)
-	} else if len(pins) > 0 {
-		latestPinned = &pins[0]
+	if pinned, err := h.msgRepo.LatestDirective(r.Context(), room.ID); err == nil {
+		latestPinned = pinned
+	} else if !errors.Is(err, db.ErrMessageNotFound) {
+		slog.Error("failed to read the latest directive", "error", err, "room_id", room.ID)
 	}
 
 	history, err := h.historyInfo(r.Context(), room.ID)

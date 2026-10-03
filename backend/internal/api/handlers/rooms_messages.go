@@ -396,6 +396,7 @@ func (h *RoomMessagesHandler) setMessagePinned(w http.ResponseWriter, r *http.Re
 		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to update pin")
 		return
 	}
+	publishPinChange(r.Context(), h.hubMgr, h.msgRepo, room, msg)
 
 	roomWriteJSON(w, http.StatusOK, map[string]interface{}{"data": msg})
 }

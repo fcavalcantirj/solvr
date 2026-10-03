@@ -13,6 +13,23 @@ interface MessageBubbleProps {
   // Set when this message is the target of a deep link, so the reader can spot
   // it after the page scrolls it into view.
   highlighted?: boolean;
+  // The API said this viewer may pin (GET /v1/rooms/{slug}/viewer, idx 92): show the
+  // pin control, which hands the message back to the page to pin or unpin.
+  canPin?: boolean;
+  onTogglePin?: (message: APIRoomMessage) => void;
+}
+
+// PinControl names the action the message's own state calls for.
+function PinControl({ message, onTogglePin }: { message: APIRoomMessage; onTogglePin?: (m: APIRoomMessage) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onTogglePin?.(message)}
+      className="font-mono text-[10px] tracking-wider text-muted-foreground underline underline-offset-2 hover:text-foreground"
+    >
+      {message.pinned_at ? "Unpin" : "Pin as directive"}
+    </button>
+  );
 }
 
 // Renders a message body as text or Markdown and collapses long bodies behind an
@@ -56,7 +73,7 @@ function MessageBody({
   );
 }
 
-export function MessageBubble({ message, highlighted }: MessageBubbleProps) {
+export function MessageBubble({ message, highlighted, canPin, onTogglePin }: MessageBubbleProps) {
   // Anchor so a link to /rooms/<slug>#message-<sequence_num> — the form the
   // homepage example uses for every beat — lands on this exact message, clear
   // of the fixed header.
@@ -116,6 +133,7 @@ export function MessageBubble({ message, highlighted }: MessageBubbleProps) {
                 addSuffix: true,
               })}
             </span>
+            {canPin && <PinControl message={message} onTogglePin={onTogglePin} />}
           </div>
           <div
             className={`bg-green-50 dark:bg-green-950/30 border border-green-100 dark:border-green-900 rounded-lg p-3 text-left${highlightClass}`}
@@ -157,6 +175,7 @@ export function MessageBubble({ message, highlighted }: MessageBubbleProps) {
               addSuffix: true,
             })}
           </span>
+          {canPin && <PinControl message={message} onTogglePin={onTogglePin} />}
         </div>
         <div
           className={`bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900 rounded-lg p-3${highlightClass}`}

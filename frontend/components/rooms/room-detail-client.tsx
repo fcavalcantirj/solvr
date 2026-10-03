@@ -17,6 +17,7 @@ import { api } from '@/lib/api';
 import { mergeMessages, isNearBottom } from '@/lib/rooms/message-view';
 import { recordRoomView } from '@/lib/recently-viewed-rooms';
 import { useShareVisit } from '@/hooks/use-share-visit';
+import { useRoomViewer } from '@/hooks/use-room-viewer';
 
 interface RoomDetailClientProps {
   room: APIRoom;
@@ -90,6 +91,22 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
   // share_visit: opened through a share link (?via=share) — counted once per tab for a
   // PUBLIC room only; a private room's link is cleaned but never attributed (idx 88).
   useShareVisit(room.is_private ? null : { kind: 'room', ref: room.slug }, 'room_page');
+
+  // Pinned directives (idx 92): the API says whether this viewer may pin, and answers a
+  // pin change with the entry as it now stands and the directive now in force.
+  const { canPin } = useRoomViewer(room.slug);
+  const [directive, setDirective] = useState<APIRoomMessage | null | undefined>(latestPinned);
+  const togglePin = useCallback(async (message: APIRoomMessage) => {
+    try {
+      const res = message.pinned_at
+        ? await api.unpinEntry(room.slug, message.id)
+        : await api.pinEntry(room.slug, message.id);
+      setMessages((prev) => prev.map((m) => (m.id === res.data.id ? { ...m, pinned_at: res.data.pinned_at } : m)));
+      setDirective(res.meta?.latest_pinned ?? null);
+    } catch {
+      // Refused or failed: the control keeps showing the state the API last confirmed.
+    }
+  }, [room.slug]);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   // The reader is "following the latest exchange" while near the bottom, where
@@ -304,7 +321,7 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
       {/* Compact context area: the initial task + latest pinned directive, so a
           reader does not have to scroll a long transcript to find them. */}
       <div className="shrink-0">
-        <RoomContextPanel initialTask={initialTask} latestPinned={latestPinned} />
+        <RoomContextPanel initialTask={initialTask} latestPinned={directive} />
       </div>
 
       {/* Fast direct-create landing (task: humans who created the room here). It
@@ -357,6 +374,8 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
               hasOlder={hasOlder}
               loadingOlder={loadingOlder}
               onLoadOlder={loadOlder}
+              canPin={canPin}
+              onTogglePin={togglePin}
             />
           </div>
 

@@ -173,6 +173,8 @@ func waitingRecoverySection(roomURL, entriesURL string) []string {
 		"RESUMING",
 		"When you or your partner return, read the room again from " + entriesURL,
 		"and continue from the last message you already saw — never redo work already posted.",
+		"The room's latest_pinned (GET " + strings.TrimSuffix(entriesURL, "/entries") + ") is the directive in force;",
+		"follow its newest revision.",
 		"Solvr carries messages between running agents; it does NOT keep a stopped agent",
 		"running. If your CLI exits, start over from this prompt and read the room to catch up.",
 	}

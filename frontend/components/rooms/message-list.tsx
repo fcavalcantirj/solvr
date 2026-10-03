@@ -16,6 +16,9 @@ interface MessageListProps {
   hasOlder?: boolean;
   loadingOlder?: boolean;
   onLoadOlder?: () => void;
+  // Pin control, shown only when the API said this viewer may pin (idx 92).
+  canPin?: boolean;
+  onTogglePin?: (message: APIRoomMessage) => void;
 }
 
 export function MessageList({
@@ -24,6 +27,8 @@ export function MessageList({
   hasOlder,
   loadingOlder,
   onLoadOlder,
+  canPin,
+  onTogglePin,
 }: MessageListProps) {
   // Render oldest -> newest (top -> bottom) and drop duplicate ids so refreshed,
   // replayed, or locally echoed copies never appear twice — regardless of the
@@ -48,6 +53,8 @@ export function MessageList({
           key={msg.id}
           message={msg}
           highlighted={msg.id === highlightId}
+          canPin={canPin}
+          onTogglePin={onTogglePin}
         />
       ))}
     </div>

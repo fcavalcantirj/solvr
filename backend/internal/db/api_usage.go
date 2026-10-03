@@ -84,6 +84,9 @@ type APIRequestEvent struct {
 	// StatusClass is the response class: 2 for 2xx, 4 for 4xx, 5 for 5xx.
 	StatusClass int
 	OccurredAt  time.Time
+	// DurationMs is how long the server took to answer, from the boundary to
+	// the end of the handler. Nil when it was not measured; stored as NULL.
+	DurationMs *int
 }
 
 // APIUsageRepository writes recorded requests.
@@ -106,14 +109,14 @@ func (r *APIUsageRepository) RecordRequests(ctx context.Context, events []APIReq
 		return nil
 	}
 
-	const columns = 9
+	const columns = 10
 	values := make([]string, 0, len(events))
 	args := make([]any, 0, len(events)*columns)
 
 	for i, event := range events {
 		base := i * columns
-		values = append(values, fmt.Sprintf("($%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d)",
-			base+1, base+2, base+3, base+4, base+5, base+6, base+7, base+8, base+9))
+		values = append(values, fmt.Sprintf("($%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d)",
+			base+1, base+2, base+3, base+4, base+5, base+6, base+7, base+8, base+9, base+10))
 
 		occurredAt := event.OccurredAt
 		if occurredAt.IsZero() {
@@ -129,13 +132,14 @@ func (r *APIUsageRepository) RecordRequests(ctx context.Context, events []APIReq
 			event.ActorType,
 			event.StatusClass,
 			occurredAt,
+			event.DurationMs,
 		)
 	}
 
 	_, err := r.pool.Exec(ctx, `
 		INSERT INTO api_request_events (
 			request_id, route_template, method, operation,
-			operation_family, operation_kind, actor_type, status_class, occurred_at
+			operation_family, operation_kind, actor_type, status_class, occurred_at, duration_ms
 		) VALUES `+strings.Join(values, ", ")+`
 		ON CONFLICT (request_id) WHERE request_id IS NOT NULL DO NOTHING
 	`, args...)

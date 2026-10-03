@@ -154,7 +154,9 @@ func APIUsage(recorder APIUsageRecorder) func(http.Handler) http.Handler {
 			}
 
 			wrapped := &apiUsageWriter{ResponseWriter: w, status: http.StatusOK}
+			start := time.Now()
 			next.ServeHTTP(wrapped, r)
+			durationMs := int(time.Since(start).Milliseconds())
 
 			// The route pattern is only known once routing has happened, so
 			// the decision is taken here rather than on the way in.
@@ -173,6 +175,7 @@ func APIUsage(recorder APIUsageRecorder) func(http.Handler) http.Handler {
 				ActorType:       apiUsageActorType(r),
 				StatusClass:     wrapped.status / 100,
 				OccurredAt:      time.Now(),
+				DurationMs:      &durationMs,
 			})
 		})
 	}

@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
@@ -311,6 +312,28 @@ func TestAPIUsageRouteTemplate_IsNormalised(t *testing.T) {
 	require.Len(t, spy.events, 1)
 	assert.Equal(t, "/v1/rooms", spy.events[0].RouteTemplate)
 	assert.False(t, strings.HasSuffix(spy.events[0].RouteTemplate, "/"))
+}
+
+// A recorded request carries how long the server took to answer it, so the
+// operations report can compute latency percentiles (spec.json idx 79). It is
+// server-side time from the boundary to the last byte the handler wrote.
+func TestAPIUsage_RecordsHowLongTheServerTookToAnswer(t *testing.T) {
+	spy := &recordingSpy{}
+	r := chi.NewRouter()
+	r.Use(APIUsage(spy))
+	r.Get("/v1/posts", func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(25 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+	})
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/posts", nil))
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Len(t, spy.events, 1)
+	require.NotNil(t, spy.events[0].DurationMs, "every recorded request carries its duration")
+	assert.GreaterOrEqual(t, *spy.events[0].DurationMs, 25)
+	assert.Less(t, *spy.events[0].DurationMs, 5000)
 }
 
 // Without a recorder there is nothing to record, and the middleware must stay

@@ -240,6 +240,32 @@ func TestAPIUsagePulse_ReportsWhenInstrumentationBegan(t *testing.T) {
 		"instrumentation cannot have begun in the future")
 }
 
+// The served duration is stored when the boundary measured one, and stays NULL
+// when it did not (rows recorded before 000139 have none).
+func TestRecordRequests_StoresTheServedDuration(t *testing.T) {
+	pool, ctx, done := newRoomStatsPool(t)
+	defer done()
+
+	f := newAPIUsageFixture(t, ctx, pool)
+	defer f.cleanup()
+
+	timed := f.event("knowledge.post.read", db.APIFamilyKnowledge, db.APIOperationPoll, db.APIActorAnonymous, 2, time.Minute)
+	ms := 123
+	timed.DurationMs = &ms
+	untimed := f.event("knowledge.post.read", db.APIFamilyKnowledge, db.APIOperationPoll, db.APIActorAnonymous, 2, time.Minute)
+	f.record(timed, untimed)
+
+	var stored *int
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT duration_ms FROM api_request_events WHERE request_id = $1`, timed.RequestID).Scan(&stored))
+	require.NotNil(t, stored)
+	assert.Equal(t, 123, *stored)
+
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT duration_ms FROM api_request_events WHERE request_id = $1`, untimed.RequestID).Scan(&stored))
+	assert.Nil(t, stored, "a request recorded without a duration keeps NULL, never zero")
+}
+
 // A row keeps nothing that could identify anybody: no slug, no id, no body,
 // no address, no credential. The route TEMPLATE is what is stored.
 func TestRecordRequests_StoresTemplatesNotIdentifiers(t *testing.T) {

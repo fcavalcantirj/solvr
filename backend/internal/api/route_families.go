@@ -502,6 +502,7 @@ var RouteFamilies = []RouteFamily{
 			"POST /admin/bans",
 			"POST /admin/ipfs/unpin",
 			"POST /admin/ipfs/gc",
+			"GET /admin/share-attribution",
 		},
 	},
 }

@@ -98,6 +98,11 @@ var OperatorReports = []OperatorReport{
 		Path:    "/admin/query",
 		Reports: "raw database diagnostics, which can read anything the product stores",
 	},
+	{
+		Method:  http.MethodGet,
+		Path:    "/admin/share-attribution",
+		Reports: "share visits, invitations, attributed activations, new agents and humans, returns, and the k experiment metric",
+	},
 }
 
 // ApplyOperatorReportCachePolicy marks a response as one caller's private

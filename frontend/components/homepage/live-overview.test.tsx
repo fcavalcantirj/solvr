@@ -1,3 +1,4 @@
+import type { ComponentProps } from 'react';
 import { render, screen, within, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -7,13 +8,13 @@ import { OVERVIEW, STALE_META, HEALTHY_META_NULL_ERRORS } from './overview-fixtu
 import { LiveOverview } from './live-overview';
 import { api } from '@/lib/api';
 
-// LiveOverview is the one component that fetches the overview and lays the
-// whole index out. The order it renders in IS the specification of the page.
+// LiveOverview lays the index out below the hero, from the overview state
+// HomeOverview hands it (one read of GET /v1/overview, seeded on the server).
+// The order it renders in IS the specification of the page.
 
-const mockUseOverview = vi.fn();
-vi.mock('@/hooks/use-homepage-overview', () => ({
-  useHomepageOverview: () => mockUseOverview(),
-}));
+type OverviewState = ComponentProps<typeof LiveOverview>;
+let state: OverviewState;
+const renderOverview = () => render(<LiveOverview {...state} />);
 
 vi.mock('@/components/collaboration-example', () => ({
   CollaborationExample: () => <section data-testid="collab-example" />,
@@ -32,7 +33,7 @@ const read = (file: string) => readFileSync(join(process.cwd(), file), 'utf8');
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockUseOverview.mockReturnValue({ overview: OVERVIEW, meta: null, loading: false, error: null });
+  state = { overview: OVERVIEW, meta: null, loading: false, error: null };
   vi.mocked(api.getHomepageRooms).mockResolvedValue({
     data: { ...OVERVIEW.rooms, selected_window: '30d' },
   });
@@ -40,7 +41,7 @@ beforeEach(() => {
 
 describe('LiveOverview layout', () => {
   it('lays the index out in the specified order', () => {
-    render(<LiveOverview />);
+    renderOverview();
     const order = screen
       .getAllByTestId(/^overview-section-|^collab-example$/)
       .map((node) => node.getAttribute('data-testid'));
@@ -59,7 +60,7 @@ describe('LiveOverview layout', () => {
   });
 
   it('ends on the connection control', () => {
-    render(<LiveOverview />);
+    renderOverview();
     const sections = screen.getAllByTestId(/^overview-section-/);
     expect(sections[sections.length - 1]).toHaveAttribute(
       'data-testid',
@@ -71,7 +72,7 @@ describe('LiveOverview layout', () => {
   });
 
   it('carries the public statistics itself, so the Data page is not a detour', () => {
-    render(<LiveOverview />);
+    renderOverview();
     // What /data exists to show: the search totals broken down by who searched,
     // the terms themselves, and the series behind them.
     expect(screen.getByTestId('search-top-table')).toBeInTheDocument();
@@ -81,15 +82,15 @@ describe('LiveOverview layout', () => {
   });
 
   it('shows a loading state instead of empty numbers while the API answers', () => {
-    mockUseOverview.mockReturnValue({ overview: null, loading: true, error: null });
-    render(<LiveOverview />);
+    state = { overview: null, meta: null, loading: true, error: null };
+    renderOverview();
     expect(screen.getByTestId('overview-loading')).toBeInTheDocument();
     expect(screen.queryByTestId('overview-section-rooms')).not.toBeInTheDocument();
   });
 
   it('reports a failed read and still offers the connection control', () => {
-    mockUseOverview.mockReturnValue({ overview: null, loading: false, error: 'boom' });
-    render(<LiveOverview />);
+    state = { overview: null, meta: null, loading: false, error: 'boom' };
+    renderOverview();
     expect(screen.getByRole('alert')).toHaveTextContent('boom');
     expect(screen.getByRole('link', { name: /connect agents/i })).toHaveAttribute(
       'href',
@@ -101,7 +102,7 @@ describe('LiveOverview layout', () => {
   // are not fetched with it and are not re-read when it changes, so a visitor
   // switching to 30 days cannot make Solvr's scale move.
   it('keeps the all-time totals out of the activity window', async () => {
-    render(<LiveOverview />);
+    renderOverview();
 
     const before = screen.getByTestId('overview-section-community').textContent;
 
@@ -129,34 +130,33 @@ describe('LiveOverview layout', () => {
 });
 
 describe('LiveOverview meta banner', () => {
-  it('renders the meta banner when the API sends partial_errors as null', () => {
-    // A healthy Solvr sends partial_errors: null (Go nil slice). Reading .length off
+  // Replaces 'renders the meta banner when the API sends partial_errors as null'.
+  // The null guard stays proven (no throw); a healthy snapshot now shows no banner,
+  // because the banner's only healthy content was the removed "Updated" label.
+  it('renders no banner for a healthy snapshot, even when partial_errors is null', () => {
+    // A healthy Solvr once sent partial_errors: null (Go nil slice). Reading .length off
     // it threw "Cannot read properties of null" and took the whole homepage down —
     // on a perfectly healthy system. Measured against the live API 2026-09-29.
-    mockUseOverview.mockReturnValue({
-      overview: OVERVIEW,
-      meta: HEALTHY_META_NULL_ERRORS,
-      loading: false,
-      error: null,
-    });
+    state = { overview: OVERVIEW, meta: HEALTHY_META_NULL_ERRORS, loading: false, error: null };
 
-    expect(() => render(<LiveOverview />)).not.toThrow();
-    expect(screen.getByText(HEALTHY_META_NULL_ERRORS.last_updated_label)).toBeInTheDocument();
+    expect(() => renderOverview()).not.toThrow();
+    expect(screen.queryByTestId('overview-meta-banner')).not.toBeInTheDocument();
     expect(screen.queryByTestId('overview-partial-errors')).not.toBeInTheDocument();
   });
 
-  it('renders the Last updated timestamp when meta is present', () => {
-    mockUseOverview.mockReturnValue({ overview: OVERVIEW, meta: STALE_META, loading: false, error: null });
-    render(<LiveOverview />);
+  // Replaces 'renders the Last updated timestamp when meta is present': the label
+  // was server UTC time read as local time, and the API no longer sends it.
+  it('never renders an Updated label', () => {
+    state = { overview: OVERVIEW, meta: STALE_META, loading: false, error: null };
+    const { container } = renderOverview();
 
-    expect(screen.getByTestId('overview-last-updated')).toHaveTextContent(
-      STALE_META.last_updated_label,
-    );
+    expect(screen.queryByTestId('overview-last-updated')).not.toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/\bUpdated\b/);
   });
 
   it('shows the stale label and partial errors when a refresh degraded', () => {
-    mockUseOverview.mockReturnValue({ overview: OVERVIEW, meta: STALE_META, loading: false, error: null });
-    render(<LiveOverview />);
+    state = { overview: OVERVIEW, meta: STALE_META, loading: false, error: null };
+    renderOverview();
 
     expect(screen.getByTestId('overview-stale-label')).toHaveTextContent(
       STALE_META.stale_label,
@@ -173,13 +173,13 @@ describe('LiveOverview meta banner', () => {
 
   it('does not render a stale label when the snapshot is fresh', () => {
     const freshMeta = { ...STALE_META, stale: false, stale_label: '', partial_errors: [] };
-    mockUseOverview.mockReturnValue({ overview: OVERVIEW, meta: freshMeta, loading: false, error: null });
-    render(<LiveOverview />);
+    state = { overview: OVERVIEW, meta: freshMeta, loading: false, error: null };
+    renderOverview();
 
     expect(screen.queryByTestId('overview-stale-label')).not.toBeInTheDocument();
     expect(screen.queryByTestId('overview-partial-errors')).not.toBeInTheDocument();
-    expect(screen.getByTestId('overview-last-updated')).toHaveTextContent(
-      freshMeta.last_updated_label,
-    );
+    // Replaces the final `overview-last-updated` assertion: a fresh snapshot
+    // has nothing to report, so no banner renders at all.
+    expect(screen.queryByTestId('overview-meta-banner')).not.toBeInTheDocument();
   });
 });

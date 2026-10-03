@@ -87,12 +87,12 @@ beforeEach(() => {
 
 describe('the public homepage publishes product activity, never website traffic', () => {
   it('renders the whole live overview without an audience or growth figure', () => {
-    const { container } = render(<LiveOverview />);
+    const { container } = render(<LiveOverview overview={OVERVIEW} meta={null} loading={false} error={null} />);
     expectNoAudienceVocabulary('the rendered overview', container.innerHTML);
   });
 
   it('states the proposition without claiming an audience', () => {
-    const { container } = render(<HeroSection />);
+    const { container } = render(<HeroSection heroNumbers={OVERVIEW.hero_numbers} />);
     expectNoAudienceVocabulary('the hero', container.innerHTML);
   });
 
@@ -104,7 +104,7 @@ describe('the public homepage publishes product activity, never website traffic'
   });
 
   it('labels the registration totals as product accounts, not active users', () => {
-    const { container } = render(<LiveOverview />);
+    const { container } = render(<LiveOverview overview={OVERVIEW} meta={null} loading={false} error={null} />);
     const section = container.querySelector('[data-testid="overview-section-community"]');
     expect(section).not.toBeNull();
 

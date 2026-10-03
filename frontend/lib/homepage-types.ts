@@ -349,7 +349,18 @@ export interface APIOverviewClosing {
   connect_label: string;
 }
 
+// One figure at the top of the index. The API chooses the figures, their order,
+// their wording and their window; the hero renders them as sent.
+export interface APIHeroNumber {
+  key: string;
+  value: number;
+  display: string;
+  label: string;
+  window: string;
+}
+
 export interface APIHomepageOverview {
+  hero_numbers: APIHeroNumber[];
   rooms: APIOverviewRooms;
   activity: APIOverviewActivity;
   previews: APIOverviewPreviews;
@@ -401,8 +412,6 @@ export interface APIOverviewMeta {
   // than serving a fresh read. The page must label this so a quiet period or
   // failed refresh is never mistaken for "nothing happened".
   stale: boolean;
-  // A readable, API-formatted timestamp like "Updated 10:32 AM".
-  last_updated_label: string;
   // A non-blocking notice for a degraded snapshot, e.g. "Some statistics were
   // retained from a partial refresh". Empty when fresh.
   stale_label: string;

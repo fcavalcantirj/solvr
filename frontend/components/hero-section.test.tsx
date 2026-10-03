@@ -3,17 +3,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { HeroSection } from './hero-section';
+import { OVERVIEW } from './homepage/overview-fixture';
 
 // The hero owns the product proposition. Every string it publishes is pinned
 // here so a copy edit is a deliberate act, not a drift.
 const HEADLINE = 'Connect your agents. Let them work together.';
 const SUPPORTING =
   'Two agents or a whole team. Paste a prompt into each. They share a Solvr room to plan, build, and review. No human signup or installation needed.';
-const WORKFLOW = [
-  '1. Give your planner a prompt.',
-  '2. Paste its invite into your executor.',
-  '3. Watch them work.',
-];
+// The hero's right column: the numbers GET /v1/overview chose, rendered as sent.
+const HERO_NUMBERS = OVERVIEW.hero_numbers;
 const EXAMPLE_ROOM = '/rooms/tictactoe-human-vs-computer-20260920';
 
 // The hero must not be gated on the auth state: task 2 shipped a header whose
@@ -142,22 +140,37 @@ describe('HeroSection calls to action', () => {
   });
 });
 
-describe('HeroSection workflow', () => {
-  it('lists the three steps in order, beside the connection control', () => {
-    render(<HeroSection />);
-    const list = screen.getByRole('list', { name: /how it starts/i });
+describe('HeroSection numbers', () => {
+  // Replaces 'lists the three steps in order, beside the connection control':
+  // the "HOW IT STARTS" steps gave way to the API's hero numbers (v1.3.4).
+  it('renders the hero numbers as the API sends them: display, label, window, in order', () => {
+    render(<HeroSection heroNumbers={HERO_NUMBERS} />);
+    const list = screen.getByRole('list', { name: /solvr in numbers/i });
     const items = within(list)
       .getAllByRole('listitem')
       .map((li) => squish(li.textContent));
-    expect(items).toEqual(WORKFLOW);
+    expect(items).toEqual(HERO_NUMBERS.map((n) => `${n.display} ${n.label} ${n.window}`));
   });
 
-  it('puts the workflow after the connection control', () => {
-    render(<HeroSection />);
+  // Replaces 'puts the workflow after the connection control'.
+  it('puts the numbers after the connection control', () => {
+    render(<HeroSection heroNumbers={HERO_NUMBERS} />);
     const cta = screen.getByRole('button', { name: /Connect agents now/i });
-    const list = screen.getByRole('list', { name: /how it starts/i });
+    const list = screen.getByRole('list', { name: /solvr in numbers/i });
     // DOCUMENT_POSITION_FOLLOWING = 4
     expect(cta.compareDocumentPosition(list) & 4).toBeTruthy();
+  });
+
+  it('no longer carries the "HOW IT STARTS" steps', () => {
+    render(<HeroSection heroNumbers={HERO_NUMBERS} />);
+    expect(screen.queryByText(/how it starts/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('3. Watch them work.')).not.toBeInTheDocument();
+  });
+
+  it('computes nothing: no formatting, sorting or filtering of its own', () => {
+    const source = read('components/hero-section.tsx');
+    expect(source).not.toMatch(/\.(toFixed|sort|filter|toLocaleString)\(/);
+    expect(source).not.toContain('Intl.');
   });
 });
 
@@ -165,9 +178,16 @@ describe('HeroSection no longer carries the four-counter strip', () => {
   // The strip showed four bare totals with no window and no definition. The
   // live overview below the hero replaces it with room, search and community
   // statistics that each state what they count and over what period.
-  it('renders no statistics strip at all', () => {
-    const { container } = render(<HeroSection />);
+  // Replaces 'renders no statistics strip at all': the hero now shows the
+  // numbers the API chose (hero_numbers), and nothing of its own without them.
+  it('renders no numbers of its own: without hero_numbers the column is absent', () => {
+    const { container, unmount } = render(<HeroSection />);
     expect(container.querySelector('[data-testid="hero-stats"]')).toBeNull();
+    expect(screen.queryByRole('list', { name: /solvr in numbers/i })).not.toBeInTheDocument();
+    unmount();
+
+    render(<HeroSection heroNumbers={[]} />);
+    expect(screen.queryByRole('list', { name: /solvr in numbers/i })).not.toBeInTheDocument();
   });
 
   it('publishes none of the old counter labels', () => {

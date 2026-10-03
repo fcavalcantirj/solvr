@@ -5,6 +5,7 @@ import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 
 import { ConnectPanel } from "@/components/connect/connect-panel";
+import type { APIHeroNumber } from "@/lib/api-types";
 
 // The hero is the proposition and the control that starts it. Connect agents
 // now opens the connection panel HERE, inline under the proposition: a visitor
@@ -15,21 +16,17 @@ import { ConnectPanel } from "@/components/connect/connect-panel";
 // The panel is the SAME component /connect renders, reading the same
 // GET /v1/connect contract, so the two surfaces cannot drift apart.
 //
-// The numbers that used to sit here as four unlabelled counters are served by
-// GET /v1/homepage/overview in the sections below, where each one carries the
-// window it was measured over and the definition of what it counts.
+// Beside the proposition sit the hero numbers GET /v1/overview chose
+// (hero_numbers): all-time totals, and last-24h activity only when there was
+// some. Each carries its own label and window; the hero renders them in the
+// order sent, as sent. Without them (the overview could not be read) the column
+// is simply absent — the hero never shows a number of its own.
 //
 // The public collaboration the homepage points at. Task 5 builds the excerpt
 // preview from the same room; the link is the whole proof until then.
 const EXAMPLE_ROOM = "/rooms/tictactoe-human-vs-computer-20260920";
 
-const WORKFLOW = [
-  "1. Give your planner a prompt.",
-  "2. Paste its invite into your executor.",
-  "3. Watch them work.",
-];
-
-export function HeroSection() {
+export function HeroSection({ heroNumbers }: { heroNumbers?: APIHeroNumber[] }) {
   const [panelOpen, setPanelOpen] = useState(false);
 
   return (
@@ -68,28 +65,32 @@ export function HeroSection() {
           </div>
         </div>
 
-        {/* The two copy/paste actions, beside the control that starts them */}
-        <div className="lg:col-span-5 lg:pl-8">
-          <p
-            id="hero-workflow-label"
-            className="font-mono text-xs tracking-[0.3em] text-muted-foreground mb-4"
-          >
-            HOW IT STARTS
-          </p>
-          <ol
-            aria-labelledby="hero-workflow-label"
-            className="border-y border-border divide-y divide-border"
-          >
-            {WORKFLOW.map((step) => (
-              <li
-                key={step}
-                className="py-3 font-mono text-sm leading-relaxed text-muted-foreground"
-              >
-                {step}
-              </li>
-            ))}
-          </ol>
-        </div>
+        {/* The numbers the API chose, beside the control that starts the work */}
+        {heroNumbers && heroNumbers.length > 0 ? (
+          <div className="lg:col-span-5 lg:pl-8">
+            <ul
+              aria-label="Solvr in numbers"
+              data-testid="hero-numbers"
+              className="grid grid-cols-2 border-t border-l border-border"
+            >
+              {heroNumbers.map((number) => (
+                <li
+                  key={number.key}
+                  data-testid="hero-number"
+                  className="border-r border-b border-border p-4 sm:p-5 flex flex-col gap-1"
+                >
+                  <span className="text-3xl sm:text-4xl font-light tracking-tight">
+                    {number.display}
+                  </span>{" "}
+                  <span className="text-sm text-foreground">{number.label}</span>{" "}
+                  <span className="font-mono text-[10px] tracking-[0.2em] uppercase text-muted-foreground">
+                    {number.window}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </div>
 
       {/* The connection panel, in place: it pushes the index down rather than

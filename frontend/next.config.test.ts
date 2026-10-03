@@ -38,6 +38,17 @@ describe('next.config redirects', () => {
 });
 
 describe('next.config cache headers', () => {
+  // The index is server-rendered with the hero numbers and revalidates every
+  // ~60s (app/page.tsx). A shared cache may keep it only as long, so a cached
+  // page never shows numbers much older than the page itself would.
+  it('lets a shared cache keep the index for 60 seconds, matching its revalidate', async () => {
+    const index = await headerRuleFor('/');
+
+    expect(index?.headers).toEqual([
+      { key: 'Cache-Control', value: 'public, s-maxage=60, stale-while-revalidate=300' },
+    ]);
+  });
+
   it('caches /posts like the other list pages', async () => {
     const posts = await headerRuleFor('/posts');
 

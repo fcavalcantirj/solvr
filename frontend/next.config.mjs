@@ -24,13 +24,14 @@ const nextConfig = {
   // SEO: Set proper cache headers for public content pages
   // Self-hosted Next.js (standalone/Docker) doesn't set s-maxage automatically
   async headers() {
-    const cache1h = [{ key: 'Cache-Control', value: 'public, s-maxage=3600, stale-while-revalidate=86400' }];
+    const cache1m = [{ key: 'Cache-Control', value: 'public, s-maxage=60, stale-while-revalidate=300' }];
     const cache1d = [{ key: 'Cache-Control', value: 'public, s-maxage=86400, stale-while-revalidate=604800' }];
     const noStore = [{ key: 'Cache-Control', value: 'private, no-cache, no-store, max-age=0, must-revalidate' }];
 
     return [
-      // Homepage
-      { source: '/', headers: cache1h },
+      // Homepage: server-rendered with the hero numbers and regenerated every 60s
+      // (app/page.tsx), so a shared cache keeps it no longer than that.
+      { source: '/', headers: cache1m },
       // Post and blog post pages are never stored by a shared cache: a post can be
       // deleted or made family-only (a blog post deleted or unpublished) at any
       // moment, and the API refuses it from then on.

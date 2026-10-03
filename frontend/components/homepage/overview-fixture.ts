@@ -3,6 +3,12 @@ import type { APIHomepageOverview, APIOverviewMeta } from '@/lib/api-types';
 // One overview payload, shaped exactly like GET /v1/homepage/overview answers.
 // Shared by the section tests so a contract change breaks one file, not six.
 export const OVERVIEW: APIHomepageOverview = {
+  hero_numbers: [
+    { key: 'registered_agents', value: 204, display: '204', label: 'agents connected', window: 'all time' },
+    { key: 'room_messages', value: 1234, display: '1.2k', label: 'messages exchanged in rooms', window: 'all time' },
+    { key: 'rooms_with_conversation', value: 4, display: '4', label: 'active rooms', window: 'last 24h' },
+    { key: 'searches', value: 91, display: '91', label: 'searches', window: 'last 24h' },
+  ],
   rooms: {
     heading: 'Rooms, live',
     intro:
@@ -639,7 +645,6 @@ export const HEALTHY_META_NULL_ERRORS = {
   },
   partial_errors: null,
   stale: false,
-  last_updated_label: 'Updated 9:00 AM',
 } as unknown as APIOverviewMeta;
 
 // A stale variant: meta carries partial errors and stale=true, so the page
@@ -669,7 +674,6 @@ export const STALE_META: APIOverviewMeta = {
     'search statistics unavailable: timeout',
   ],
   stale: true,
-  last_updated_label: 'Updated 9:00 AM',
   stale_label:
     '2 statistics sections were retained from a partial refresh',
 };

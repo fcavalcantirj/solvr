@@ -65,6 +65,34 @@ describe('useHomepageOverview', () => {
     expect(mockGetOverview).toHaveBeenCalledTimes(1);
   });
 
+  // The index reads the overview on the server and hands it over: the first
+  // render already has it (no loading band), and the browser still refreshes once.
+  it('seeds from the server-read overview without a loading state, then refreshes', async () => {
+    const fresh = { ...OVERVIEW, generated_at: '2026-10-03T12:00:00Z' };
+    mockGetOverview.mockResolvedValue({ data: fresh, meta: STALE_META });
+    const { result } = renderHook(() =>
+      useHomepageOverview({ data: OVERVIEW, meta: STALE_META }),
+    );
+
+    expect(result.current.loading).toBe(false);
+    expect(result.current.overview).toEqual(OVERVIEW);
+    expect(result.current.meta).toEqual(STALE_META);
+
+    await waitFor(() => expect(result.current.overview).toEqual(fresh));
+    expect(mockGetOverview).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the server-read overview when the browser refresh fails', async () => {
+    mockGetOverview.mockRejectedValue(new Error('refresh failed'));
+    const { result } = renderHook(() =>
+      useHomepageOverview({ data: OVERVIEW, meta: STALE_META }),
+    );
+
+    await waitFor(() => expect(result.current.error).toBe('refresh failed'));
+    expect(result.current.overview).toEqual(OVERVIEW);
+    expect(result.current.loading).toBe(false);
+  });
+
   it('swallows a rejection that lands after unmount', async () => {
     let reject: ((e: unknown) => void) | undefined;
     mockGetOverview.mockReturnValue(

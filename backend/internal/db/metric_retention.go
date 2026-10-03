@@ -1,6 +1,10 @@
 package db
 
-import "time"
+import (
+	"time"
+
+	"github.com/fcavalcantirj/solvr/internal/growth"
+)
 
 // How long raw events are kept, and which metrics read them (spec.json idx 77 step 4).
 //
@@ -22,6 +26,10 @@ import "time"
 //
 // The one table pruned by age, idempotency_keys (IdempotencyRetention, CleanupJob), is not listed:
 // no metric reads it.
+
+// ParticipantWindow is the rolling window of the monthly-active-participant counter; it reads
+// that window and the one before it, for returning identities.
+const ParticipantWindow = time.Duration(growth.ParticipantWindowDays) * 24 * time.Hour
 
 // KeptIndefinitely is the Retention of a table that nothing prunes by age.
 const KeptIndefinitely time.Duration = 0
@@ -78,6 +86,8 @@ var RawEventSources = []RawEventSource{
 				"GET /v1/stats/search over 7 days, and the operator summary over any days the caller asks", AllHistory},
 			{"SearchAnalyticsRepository.GetTrending",
 				"operator trending and zero-result terms over any days the caller asks", AllHistory},
+			{"ParticipantActivityRepository.Measure",
+				"operator monthly active participants: searches by identity, anonymous and monitoring searches", 2 * ParticipantWindow},
 		},
 	},
 	{
@@ -87,6 +97,8 @@ var RawEventSources = []RawEventSource{
 				"homepage API calls, distinct operations and chart", longestRoomStatsWindow()},
 			{"HomepageRepository.GetAPIUsagePulse/InstrumentedSince",
 				"the earliest recorded call, stated as when measurement began", AllHistory},
+			{"ParticipantActivityRepository.Measure",
+				"operator participant report traffic: API requests by actor type and operation kind", 2 * ParticipantWindow},
 		},
 	},
 	{
@@ -98,6 +110,8 @@ var RawEventSources = []RawEventSource{
 				"post-launch 7- and 28-day cohorts; a creator is new by its first step ever", AllHistory},
 			{"FunnelEventRepository.RecordParticipantJoined",
 				"a joiner's ordinal and the room's flow id, read as the step is written", AllHistory},
+			{"ParticipantActivityRepository.Measure",
+				"operator monthly active participants: room creators, anonymous flows and activations", 2 * ParticipantWindow},
 		},
 	},
 	{
@@ -106,6 +120,8 @@ var RawEventSources = []RawEventSource{
 		Readers: []MetricReader{
 			{"posts.view_count", "a post's view count, kept by the post_views_count_* triggers", AllHistory},
 			{"CanonicalPlatformBriefingRepository.GetTrendingNow", "briefing trending, views in the last 7 days", 7 * 24 * time.Hour},
+			{"ParticipantActivityRepository.Measure",
+				"operator monthly active participants: readers by identity and anonymous post views", 2 * ParticipantWindow},
 		},
 	},
 	{
@@ -121,6 +137,8 @@ var RawEventSources = []RawEventSource{
 			{"ActivationAnalyticsRepository.Measure", "the historical multi-author room count", AllHistory},
 			{"CohortComparisonRepository.Compare", "the historical multi-author room count", AllHistory},
 			{"RoomRepository", "a room's unique participant count", AllHistory},
+			{"ParticipantActivityRepository.Measure",
+				"operator monthly active participants: room message and event authors, active rooms", 2 * ParticipantWindow},
 		},
 	},
 	{

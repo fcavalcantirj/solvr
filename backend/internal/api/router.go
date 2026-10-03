@@ -151,6 +151,7 @@ func NewRouter(pool *db.Pool, hubMgr *hub.HubManager, registry *hub.PresenceRegi
 	r.With(operatorOnly).Post("/admin/email/broadcast", adminHandler.BroadcastEmail)
 	mountAbuseAdminRoutes(r, pool, operatorOnly, ipfsAPIURL)
 	mountGrowthReportRoutes(r, pool, operatorOnly)
+	mountGrowthPlanningRoutes(r, pool, operatorOnly)
 	r.With(operatorOnly).Get("/admin/email/history", adminHandler.ListBroadcasts)
 
 	// Admin search analytics endpoints

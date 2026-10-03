@@ -58,6 +58,8 @@ const OPERATOR_REPORT_PATHS = [
   '/admin/users/deleted',
   '/admin/agents/deleted',
   '/admin/query',
+  // Every growth report (participants, stage gates, acquisition planning) lives under one prefix.
+  '/admin/growth/',
 ];
 
 /** shippedSources lists every source file a build turns into browser code. */

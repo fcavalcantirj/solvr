@@ -178,6 +178,7 @@ var privateAnalyticsConcepts = []privateAnalyticsConcept{
 	{"daily, weekly or monthly active users", []*regexp.Regexp{
 		regexp.MustCompile(`(?i)\b(dau|wau|mau)\b`),
 		regexp.MustCompile(`(?i)\b(daily|weekly|monthly) active (users|people|accounts|audience)\b`),
+		regexp.MustCompile(`(?i)\b(daily|weekly|monthly) active (participants?|identities)\b`),
 	}},
 	{"bounce", []*regexp.Regexp{regexp.MustCompile(`(?i)\bbounce\b`)}},
 	{"acquisition", []*regexp.Regexp{regexp.MustCompile(`(?i)\bacquisitions?\b`)}},
@@ -199,7 +200,11 @@ var privateAnalyticsConcepts = []privateAnalyticsConcept{
 		regexp.MustCompile(`(?i)\breturning (visitors|users|people)\b`),
 	}},
 	{"campaign", []*regexp.Regexp{regexp.MustCompile(`(?i)\bcampaigns?\b`)}},
-	{"growth target", []*regexp.Regexp{regexp.MustCompile(`(?i)\bgrowth (target|targets|goal|goals)\b`)}},
+	{"growth target", []*regexp.Regexp{
+		regexp.MustCompile(`(?i)\bgrowth (target|targets|goal|goals)\b`),
+		regexp.MustCompile(`(?i)\bparticipant (target|targets|goal|goals)\b`),
+		regexp.MustCompile(`(?i)\bstage gates?\b`),
+	}},
 	{"impressions", []*regexp.Regexp{
 		regexp.MustCompile(`(?i)\bimpressions?\b`),
 		regexp.MustCompile(`(?i)\bclick[ _-]?throughs?\b`),

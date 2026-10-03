@@ -80,6 +80,11 @@ var OperatorReports = []OperatorReport{
 	},
 	{
 		Method:  http.MethodGet,
+		Path:    "/admin/growth/participants",
+		Reports: "monthly active humans and agent identities, anonymous activity, traffic and the one-million target",
+	},
+	{
+		Method:  http.MethodGet,
 		Path:    "/admin/email/history",
 		Reports: "what was sent to the mailing list, when, and how much of it landed",
 	},

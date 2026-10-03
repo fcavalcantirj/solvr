@@ -22,6 +22,8 @@ const maxEventPayloadBytes = 16384
 type RoomEventsHandler struct {
 	entryRepo *db.RoomEntryRepository
 	hubMgr    *hub.HubManager
+	// roomNotifier records opt-in room notifications for a new event (SetRoomNotifier).
+	roomNotifier roomEntryNotifier
 }
 
 // NewRoomEventsHandler creates a new RoomEventsHandler.

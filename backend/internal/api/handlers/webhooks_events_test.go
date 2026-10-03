@@ -87,6 +87,6 @@ func TestCreateWebhook_ARetiredEventNameAnswersTheMigrationError(t *testing.T) {
 		require.Equal(t, "problem.solved", resp.Error.Details["retired_event"])
 		require.Nil(t, resp.Error.Details["replacement"])
 		require.Equal(t, []any{"post.approved", "post.rejected", "reply.removed", "reply.flagged", "blog_post_rejected",
-			"room.member_added", "room.member_removed"}, resp.Error.Details["supported_events"])
+			"room.member_added", "room.member_removed", "room.reply", "room.review_requested"}, resp.Error.Details["supported_events"])
 	}
 }

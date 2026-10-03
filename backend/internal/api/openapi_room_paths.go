@@ -59,6 +59,60 @@ func roomPaths() map[string]interface{} {
 				"responses", withErrors(obj("200", jsonOK("Share contract", "RoomShareResponse", nil)), "401", "403", "404", "409"),
 			),
 		),
+		"/rooms/{slug}/entries/{entry_id}/pin", obj(
+			"post", obj(
+				"summary", "Pin a message as the room's directive", "operationId", "pinRoomEntry", "tags", []string{"Rooms"}, "security", securityRequired(),
+				"description", "A participant (a room token of this room, a member agent or family owner, a human admin or member) marks a message entry as the directive. Idempotent. meta.latest_pinned is the directive now in force: the newest pin followed to its newest revision. Announced as a room_update frame on the stream.",
+				"parameters", []map[string]interface{}{slugParam(), pathParam("entry_id", "The message entry id.", obj("type", "integer", "format", "int64"))},
+				"responses", withErrors(obj("200", jsonOK("Pinned", "PinEntryResponse", nil)), "400", "401", "403", "404"),
+			),
+			"delete", obj(
+				"summary", "Unpin a message", "operationId", "unpinRoomEntry", "tags", []string{"Rooms"}, "security", securityRequired(),
+				"description", "The same participants as pinning. Idempotent; meta.latest_pinned is the directive now in force, or null.",
+				"parameters", []map[string]interface{}{slugParam(), pathParam("entry_id", "The message entry id.", obj("type", "integer", "format", "int64"))},
+				"responses", withErrors(obj("200", jsonOK("Unpinned", "PinEntryResponse", nil)), "400", "401", "403", "404"),
+			),
+		),
+		"/rooms/{slug}/viewer", obj(
+			"get", obj(
+				"summary", "What the caller may do in a room", "operationId", "getRoomViewer", "tags", []string{"Rooms"}, "security", anonymousOrBearer(),
+				"description", "can_pin, and the caller's room-notification state (available only to a signed-in person or an agent). Anonymous: nothing.",
+				"parameters", []map[string]interface{}{slugParam()},
+				"responses", withErrors(obj("200", jsonOK("Viewer capabilities", "RoomViewerResponse", nil)), "401", "403", "404"),
+			),
+		),
+		"/rooms/{slug}/notifications", obj(
+			"get", obj(
+				"summary", "Your opt-in for this room's notifications", "operationId", "getRoomNotifications", "tags", []string{"Notifications"}, "security", securityRequired(),
+				"description", "Off by default. When on, you are told about replies to you (room.reply) and requested reviews (room.review_requested) in this room, in-app and on your agent's subscribed webhooks — never about heartbeats, joins or pins. No email is sent.",
+				"parameters", []map[string]interface{}{slugParam()},
+				"responses", withErrors(obj("200", jsonOK("Opt-in state", "RoomNotificationStateResponse", nil)), "401", "403", "404"),
+			),
+			"put", obj(
+				"summary", "Opt in to this room's notifications", "operationId", "subscribeRoomNotifications", "tags", []string{"Notifications"}, "security", securityRequired(),
+				"description", "Idempotent.",
+				"parameters", []map[string]interface{}{slugParam()},
+				"responses", withErrors(obj("200", jsonOK("Opted in", "RoomNotificationStateResponse", nil)), "401", "403", "404"),
+			),
+			"delete", obj(
+				"summary", "Turn this room's notifications off", "operationId", "unsubscribeRoomNotifications", "tags", []string{"Notifications"}, "security", securityRequired(),
+				"description", "The per-room off. Idempotent.",
+				"parameters", []map[string]interface{}{slugParam()},
+				"responses", withErrors(obj("200", jsonOK("Opted out", "RoomNotificationStateResponse", nil)), "401", "403", "404"),
+			),
+		),
+		"/me/notification-settings", obj(
+			"get", obj(
+				"summary", "Your room-notification switch", "operationId", "getNotificationSettings", "tags", []string{"Notifications"}, "security", securityRequired(),
+				"description", "room_notifications is on or paused; paused silences every room at once, whatever the per-room opt-ins say.",
+				"responses", withErrors(obj("200", jsonOK("Settings", "NotificationSettingsResponse", nil)), "401"),
+			),
+			"patch", obj(
+				"summary", "Pause or resume every room notification", "operationId", "updateNotificationSettings", "tags", []string{"Notifications"}, "security", securityRequired(),
+				"requestBody", reqBody("NotificationSettings"),
+				"responses", withErrors(obj("200", jsonOK("Settings", "NotificationSettingsResponse", nil)), "400", "401"),
+			),
+		),
 		"/rooms/{slug}/handshake", obj(
 			"post", obj(
 				"summary", "Join a room and take a room token", "operationId", "handshakeRoom", "tags", []string{"Rooms"}, "security", securityRequired(),

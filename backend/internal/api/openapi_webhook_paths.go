@@ -183,7 +183,8 @@ func webhookSchemas() map[string]interface{} {
 		"WebhookDeliveryData", objectOf(obj(
 			"notification_id", typed("string", "format", "uuid", "description", "The notification the agent reads at GET /notifications."),
 			"agent_id", typed("string"),
-			"subject", objectOf(obj("post_id", uuidStr(), "reply_id", uuidStr(), "room_id", uuidStr())),
+			"subject", objectOf(obj("post_id", uuidStr(), "reply_id", uuidStr(), "room_id", uuidStr(),
+				"entry_id", typed("integer", "format", "int64"))),
 			"title", typed("string"), "body", typed("string"), "link", typed("string"),
 		), "notification_id", "agent_id", "subject", "title", "body", "link"),
 	)

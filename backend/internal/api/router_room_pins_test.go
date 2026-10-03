@@ -60,6 +60,10 @@ func newPinFixture(t *testing.T) pinFixture {
 		ctx := context.Background()
 		pool.Exec(ctx, "DELETE FROM agent_presence WHERE room_id IN (SELECT id FROM rooms WHERE slug LIKE 'test-%')")
 		pool.Exec(ctx, "DELETE FROM rooms WHERE slug LIKE 'test-src-pin-%'")
+		pool.Exec(ctx, roomTestRepliesCleanup)
+		pool.Exec(ctx, roomTestPostsCleanup)
+		pool.Exec(ctx, "DELETE FROM agents WHERE id LIKE 'agent_roomtest_%'")
+		pool.Exec(ctx, "DELETE FROM users WHERE username LIKE 'roomtest_%'")
 		pool.Close()
 	}
 	return f

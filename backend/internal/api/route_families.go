@@ -136,6 +136,11 @@ var RouteFamilies = []RouteFamily{
 			"POST /v1/rooms/{slug}/entries/{entry_id}/pin",
 			"DELETE /v1/rooms/{slug}/entries/{entry_id}/pin",
 			"GET /v1/rooms/{slug}/viewer",
+			"GET /v1/rooms/{slug}/notifications",
+			"PUT /v1/rooms/{slug}/notifications",
+			"DELETE /v1/rooms/{slug}/notifications",
+			"GET /v1/me/notification-settings",
+			"PATCH /v1/me/notification-settings",
 		},
 	},
 	{

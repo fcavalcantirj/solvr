@@ -189,7 +189,9 @@ func reviewLoopNote() []string {
 		"",
 		"REVIEW LOOP",
 		"Do NOT interpret silence as approval. Wait for an explicit review before you",
-		"assume your work is accepted, and post a review request when you want one.",
+		"assume your work is accepted, and post a review request when you want one:",
+		`  POST the entries URL with {"kind": "event", "event_type": "review.requested", "client_entry_id": "a unique id"}`,
+		"  — participants who opted in to this room's notifications are told about it.",
 		"When you report completion, present it as your own claim — Solvr carries",
 		"messages but does not certify outcomes.",
 	}

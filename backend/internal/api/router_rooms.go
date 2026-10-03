@@ -66,6 +66,15 @@ func mountRoomRoutes(
 	sseHandler := handlers.NewRoomSSEHandler(hubMgr, msgRepo, entryRepo, roomRepo)
 	claimsHandler := handlers.NewRoomClaimsHandler(claimRepo)
 	eventsHandler := handlers.NewRoomEventsHandler(entryRepo, hubMgr)
+	// Opt-in room notifications (idx 92): new messages and events record the replies and
+	// review requests they are; the account-level pause is served beside the room routes.
+	roomNotifyRepo := db.NewRoomNotificationRepository(pool)
+	roomNotifyHandler := handlers.NewRoomNotificationHandler(roomNotifyRepo)
+	msgHandler.SetRoomNotifier(roomNotifyRepo)
+	eventsHandler.SetRoomNotifier(roomNotifyRepo)
+	r.With(authMiddleware).Get("/v1/me/notification-settings", roomNotifyHandler.GetSettings)
+	r.With(authMiddleware).Patch("/v1/me/notification-settings", roomNotifyHandler.PatchSettings)
+
 	roomConnectHandler := handlers.NewRoomConnectHandler(roomRepo, msgRepo)
 	roomConnectHandler.SetDirectiveLookup(msgRepo) // the directive in force, in the prompt (idx 92)
 	roomSavePostHandler := handlers.NewRoomSavePostHandler(db.NewPostRepository(pool), roomRepo, memberRepo)
@@ -133,9 +142,15 @@ func mountRoomRoutes(
 		// Pinned directives (idx 92): participants pin/unpin a message entry; the viewer
 		// route says what this caller may do here. Pin changes are announced on the stream.
 		pinHandler := handlers.NewRoomPinHandler(msgRepo, memberRepo, hubMgr)
+		pinHandler.SetNotificationState(roomNotifyRepo)
 		r.With(entriesPolicy(apimiddleware.RoomWrite)).Post("/{slug}/entries/{entry_id}/pin", pinHandler.PinEntry)
 		r.With(entriesPolicy(apimiddleware.RoomWrite)).Delete("/{slug}/entries/{entry_id}/pin", pinHandler.UnpinEntry)
 		r.With(entriesPolicy(apimiddleware.RoomRead)).Get("/{slug}/viewer", pinHandler.GetViewer)
+
+		// Opt-in room notifications (idx 92): this caller's opt-in for the room.
+		r.With(entriesPolicy(apimiddleware.RoomRead)).Get("/{slug}/notifications", roomNotifyHandler.GetRoomState)
+		r.With(entriesPolicy(apimiddleware.RoomRead)).Put("/{slug}/notifications", roomNotifyHandler.Subscribe)
+		r.With(entriesPolicy(apimiddleware.RoomRead)).Delete("/{slug}/notifications", roomNotifyHandler.Unsubscribe)
 
 		// Published outcome posts saved from this room (room links to the published outcome).
 		// OptionalAuth lets the handler gate a private room's outcomes to its participants.

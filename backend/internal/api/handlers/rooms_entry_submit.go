@@ -157,6 +157,9 @@ func (h *RoomMessagesHandler) afterMessageCreated(ctx context.Context, room *mod
 	if h.hubMgr != nil {
 		h.hubMgr.Publish(hub.NewRoomID(room.ID), messageHubEvent(msg))
 	}
+
+	// Opt-in room notifications for the replies this message is (idx 92).
+	notifyRoomEntry(ctx, h.roomNotifier, messageNotice(room, msg))
 }
 
 // messageHubEvent is the stream frame for a message, shared by the live broadcast and the

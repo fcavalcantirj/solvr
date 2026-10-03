@@ -85,6 +85,10 @@ func (h *RoomEventsHandler) submitEvent(ctx context.Context, room *models.Room, 
 	if created && h.hubMgr != nil {
 		h.hubMgr.Publish(hub.NewRoomID(room.ID), typedHubEvent(entry))
 	}
+	// A review.requested event tells the room's subscribers (idx 92). Once, like the broadcast.
+	if created {
+		notifyRoomEntry(ctx, h.roomNotifier, eventNotice(room, entry))
+	}
 	return entry, created, nil
 }
 

@@ -107,6 +107,23 @@ func operationSchemas() map[string]interface{} {
 			"note", typed("string"),
 		), "room_url", "share_url", "try_url", "excerpt", "copy_text", "note"),
 		"RoomShareResponse", envelope("RoomShare", nil),
+		"PinEntryResponse", objectOf(obj(
+			"data", typed("object", "description", "The message entry as it now stands (pinned_at set or absent)."),
+			"meta", objectOf(obj("latest_pinned", nullable("object", "description", "The directive now in force, or null.")), "latest_pinned"),
+		), "data", "meta"),
+		"RoomViewerResponse", objectOf(obj("data", objectOf(obj(
+			"can_pin", typed("boolean"),
+			"notifications", objectOf(obj("available", typed("boolean"), "subscribed", typed("boolean"), "paused", typed("boolean")),
+				"available", "subscribed", "paused"),
+		), "can_pin", "notifications")), "data"),
+		"RoomNotificationStateResponse", objectOf(obj("data", objectOf(obj(
+			"subscribed", typed("boolean"),
+			"paused", typed("boolean", "description", "Every room notification is paused (GET /me/notification-settings)."),
+			"events", typed("array", "items", typed("string", "enum", []string{"room.reply", "room.review_requested"})),
+			"off", typed("string", "description", "How to turn this room off."),
+		), "subscribed", "paused", "events", "off")), "data"),
+		"NotificationSettings", objectOf(obj("room_notifications", typed("string", "enum", []string{"on", "paused"})), "room_notifications"),
+		"NotificationSettingsResponse", envelope("NotificationSettings", nil),
 		"HandshakeRequest", objectOf(obj(
 			"ttl_seconds", typed("integer", "minimum", 0, "description", "Optional lifetime of the issued token in seconds; 0 or absent = it does not expire."),
 			"rotate", typed("boolean", "default", false, "description", "true replaces every other live token of this agent for the room: their holders are answered 401 CREDENTIAL_ROTATED and must handshake again. false or absent only adds a session token."),

@@ -19,20 +19,23 @@ func TestOpenAPI_NotificationDocumentsTheEventContract(t *testing.T) {
 
 	version := at(t, spec, "components", "schemas", "Notification", "properties", "schema_version").(map[string]interface{})
 	require.Equal(t, "integer", version["type"])
-	require.Equal(t, []interface{}{float64(0), float64(1), float64(2)}, version["enum"])
+	require.Equal(t, []interface{}{float64(0), float64(1), float64(2), float64(3)}, version["enum"])
 	desc := version["description"].(string)
-	require.True(t, strings.Contains(desc, "0") && strings.Contains(desc, "1") && strings.Contains(desc, "2"), desc)
+	require.True(t, strings.Contains(desc, "0") && strings.Contains(desc, "1") && strings.Contains(desc, "2") && strings.Contains(desc, "3"), desc)
 
 	subject := at(t, spec, "components", "schemas", "Notification", "properties", "subject").(map[string]interface{})
 	require.Equal(t, "object", subject["type"])
 	props := subject["properties"].(map[string]interface{})
 	require.ElementsMatch(t, jsonFields(reflect.TypeOf(models.NotificationSubject{})), mapKeysOf(props),
 		"the subject documents exactly the fields the API answers")
-	require.ElementsMatch(t, []string{"post_id", "reply_id", "room_id"}, mapKeysOf(props))
+	require.ElementsMatch(t, []string{"post_id", "reply_id", "room_id", "entry_id"}, mapKeysOf(props))
 
 	eventType := at(t, spec, "components", "schemas", "Notification", "properties", "type").(map[string]interface{})
 	for _, name := range []string{"post.approved", "post.rejected", "reply.removed", "reply.flagged", "blog_post_rejected"} {
 		require.Contains(t, eventType["description"], name, "schema 1 event types are documented")
+	}
+	for _, name := range []string{"room.reply", "room.review_requested", "subject.entry_id"} {
+		require.Contains(t, eventType["description"], name, "schema 3 event types are documented (idx 92)")
 	}
 }
 

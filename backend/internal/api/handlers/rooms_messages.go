@@ -39,6 +39,9 @@ type RoomMessagesHandler struct {
 	// nil when the funnel is not wired, in which case posting records nothing extra.
 	funnel *db.FunnelEventRepository
 
+	// roomNotifier records opt-in room notifications for a new message (SetRoomNotifier).
+	roomNotifier roomEntryNotifier
+
 	// testRoomLookup overrides room-by-slug lookup in unit tests (nil in production).
 	testRoomLookup func(ctx context.Context, slug string) (*models.Room, error)
 	// testMsgCreate overrides message creation in unit tests (nil in production).

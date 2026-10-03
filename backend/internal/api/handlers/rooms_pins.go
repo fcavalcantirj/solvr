@@ -32,7 +32,12 @@ type RoomPinHandler struct {
 	msgRepo    *db.MessageRepository
 	memberRepo *db.RoomMemberRepository
 	hubMgr     *hub.HubManager
+	// notifications adds the caller's room-notification state to the viewer (optional).
+	notifications *db.RoomNotificationRepository
 }
+
+// SetNotificationState makes the viewer report the caller's opt-in and pause (idx 92).
+func (h *RoomPinHandler) SetNotificationState(n *db.RoomNotificationRepository) { h.notifications = n }
 
 // NewRoomPinHandler wires the pin routes.
 func NewRoomPinHandler(msgRepo *db.MessageRepository, memberRepo *db.RoomMemberRepository, hubMgr *hub.HubManager) *RoomPinHandler {
@@ -99,8 +104,9 @@ func (h *RoomPinHandler) GetViewer(w http.ResponseWriter, r *http.Request) {
 		roomWriteError(w, http.StatusNotFound, "NOT_FOUND", "room not found")
 		return
 	}
+	actor := apimiddleware.RoomActorFromContext(r.Context())
 	canPin := false
-	if actor := apimiddleware.RoomActorFromContext(r.Context()); actor != nil {
+	if actor != nil {
 		ok, err := canPinRoom(r.Context(), room, actor, h.memberRepo)
 		if err != nil {
 			roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to check membership")
@@ -108,7 +114,26 @@ func (h *RoomPinHandler) GetViewer(w http.ResponseWriter, r *http.Request) {
 		}
 		canPin = ok
 	}
-	roomWriteJSON(w, http.StatusOK, map[string]interface{}{"data": map[string]interface{}{"can_pin": canPin}})
+	// Room notifications: available to a signed-in person or an agent; an anonymous
+	// reader has nothing to opt in with.
+	notifications := map[string]bool{"available": false, "subscribed": false, "paused": false}
+	if sub, ok := subscriberFromActor(actor); ok && h.notifications != nil {
+		subscribed, err := h.notifications.IsSubscribed(r.Context(), room.ID, sub)
+		if err != nil {
+			roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to read room notifications")
+			return
+		}
+		paused, err := h.notifications.IsPaused(r.Context(), sub)
+		if err != nil {
+			roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to read room notifications")
+			return
+		}
+		notifications = map[string]bool{"available": true, "subscribed": subscribed, "paused": paused}
+	}
+	roomWriteJSON(w, http.StatusOK, map[string]interface{}{"data": map[string]interface{}{
+		"can_pin":       canPin,
+		"notifications": notifications,
+	}})
 }
 
 // canPinRoom: a room token of this room, a member agent or family owner, a human admin, or

@@ -90,6 +90,8 @@ var RawEventSources = []RawEventSource{
 				"operator monthly active participants: searches by identity, anonymous and monitoring searches", 2 * ParticipantWindow},
 			{"AcquisitionModelRepository.MonthlyFlows",
 				"operator acquisition model: monthly retained/new/reactivated searchers and cohorts over all history", AllHistory},
+			{"ReturnUsageRepository.Measure",
+				"operator language demand by query script for the last 24h, 7d or 30d", longestRoomStatsWindow()},
 		},
 	},
 	{
@@ -120,6 +122,10 @@ var RawEventSources = []RawEventSource{
 				"operator acquisition model: monthly room creators and cohorts over all history", AllHistory},
 			{"AcquisitionLoopRepository.Measure",
 				"operator acquisition loop: example-room evidence, owners' first rooms ever, participants per owner", AllHistory},
+			{"ShareAttributionRepository.Measure",
+				"operator share loop; a new agent or human is new by its first step ever", AllHistory},
+			{"ReturnUsageRepository.Measure",
+				"operator return usage; gaps reach back to an identity's previous collaboration", AllHistory},
 		},
 	},
 	{
@@ -151,6 +157,8 @@ var RawEventSources = []RawEventSource{
 				"operator monthly active participants: room message and event authors, active rooms", 2 * ParticipantWindow},
 			{"AcquisitionModelRepository.MonthlyFlows",
 				"operator acquisition model: monthly retained/new/reactivated room authors and cohorts over all history", AllHistory},
+			{"ReturnUsageRepository.Measure",
+				"resumed rooms (the previous message of a room) and resumes after a notification", AllHistory},
 		},
 	},
 	{

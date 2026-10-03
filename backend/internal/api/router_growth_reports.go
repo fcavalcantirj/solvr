@@ -17,4 +17,7 @@ func mountGrowthReportRoutes(r chi.Router, pool *db.Pool, operatorOnly func(http
 	}
 	shareHandler := handlers.NewShareAttributionHandler(db.NewShareAttributionRepository(pool))
 	r.With(operatorOnly).Get("/admin/share-attribution", shareHandler.GetReport)
+
+	returnHandler := handlers.NewReturnUsageHandler(db.NewReturnUsageRepository(pool))
+	r.With(operatorOnly).Get("/admin/return-usage", returnHandler.GetReport)
 }

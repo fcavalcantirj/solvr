@@ -518,6 +518,7 @@ var RouteFamilies = []RouteFamily{
 			"POST /admin/ipfs/unpin",
 			"POST /admin/ipfs/gc",
 			"GET /admin/share-attribution",
+			"GET /admin/return-usage",
 		},
 	},
 }

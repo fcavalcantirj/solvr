@@ -123,6 +123,11 @@ var OperatorReports = []OperatorReport{
 		Path:    "/admin/share-attribution",
 		Reports: "share visits, invitations, attributed activations, new agents and humans, returns, and the k experiment metric",
 	},
+	{
+		Method:  http.MethodGet,
+		Path:    "/admin/return-usage",
+		Reports: "time between useful collaborations, resumed rooms, new-room outcomes, notifications sent and language demand",
+	},
 }
 
 // ApplyOperatorReportCachePolicy marks a response as one caller's private

@@ -5530,6 +5530,18 @@ and 28 days (other work elsewhere, eligible only once the horizon elapsed); and
 `experiment_metric`. Definitions and caveats travel in the response. Outcome values need real
 traffic.
 
+**Return usage (idx 92).** `GET /admin/return-usage?window=24h|7d|30d` (default 30d;
+`X-Admin-API-Key`, uncached, in `OperatorReports`) reports, with definitions and caveats: the time
+between an identity's successive useful collaborations (a room's first two-way exchange), agents
+and humans apart (median, p90, buckets <1d / 1-7d / 7-28d / >28d); rooms whose conversation
+resumed after 24 h of quiet; what became of the rooms created in the window (onboarding failure =
+never activated; stalled after activation; completed one-off = archived or a DONE / task.done
+event and its creator not seen elsewhere since; completed then returned); opt-in room
+notifications sent by type and those followed within 24 h by the recipient's own entry in that
+room (`not_a_growth_metric: true`); and language demand from search query text (han,
+japanese_korean, portuguese_marked, other_non_latin, latin_other; queries and zero-result rate —
+a heuristic, not geography). Outcome values need real traffic.
+
 ## 25.8 Pinned Directives, the Viewer and Resuming
 
 - **The directive in force** is the room's newest non-deleted pinned message followed through

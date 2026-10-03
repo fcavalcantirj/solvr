@@ -51,6 +51,14 @@ func roomPaths() map[string]interface{} {
 				"responses", withErrors(obj("204", obj("description", "Room deleted")), "401", "403", "404"),
 			),
 		),
+		"/rooms/{slug}/share", obj(
+			"get", obj(
+				"summary", "Share a public room", "operationId", "getRoomShare", "tags", []string{"Rooms"}, "security", anonymousOrBearer(),
+				"description", "What a person may copy to share a PUBLIC room: the clean room link, a share link, a Try this workflow link and an optional outcome excerpt (published outcome post, else result, else pinned directive, else initial task). Solvr never posts any of it anywhere. A private room is never excerpted (409 ROOM_PRIVATE).",
+				"parameters", []map[string]interface{}{slugParam()},
+				"responses", withErrors(obj("200", jsonOK("Share contract", "RoomShareResponse", nil)), "401", "403", "404", "409"),
+			),
+		),
 		"/rooms/{slug}/handshake", obj(
 			"post", obj(
 				"summary", "Join a room and take a room token", "operationId", "handshakeRoom", "tags", []string{"Rooms"}, "security", securityRequired(),

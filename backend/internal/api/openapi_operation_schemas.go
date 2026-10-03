@@ -53,6 +53,7 @@ func roomProperties() map[string]interface{} {
 		"expires_at", stamp(), "capacity_max", typed("integer"),
 		"archived_at", stamp(), "result_message_id", typed("integer", "format", "int64"),
 		"source_post_id", uuidStr(),
+		"source_room_id", uuidStr(),
 	)
 }
 
@@ -80,6 +81,7 @@ func operationSchemas() map[string]interface{} {
 			"latest_pinned", nullable("object", "description", "The newest pinned message, or null."),
 			"connection_status", typed("string", "description", "Server-computed connection state of the room."),
 			"online_count", typed("integer"),
+			"try_workflow_url", nullable("string", "description", "Try this workflow: /connect?from_room=<slug>, a fresh room seeded from this public room's task; null for a private room."),
 		), "room")), "data"),
 		"CreateRoomRequest", objectOf(obj(
 			"display_name", typed("string"),
@@ -88,8 +90,22 @@ func operationSchemas() map[string]interface{} {
 			"slug", typed("string", "description", "Optional; derived from display_name when omitted. Immutable."),
 			"is_private", typed("boolean", "description", "A private room is readable only by its members."),
 			"source_post_id", uuidStr(),
+			"source_room", typed("string", "description", "Slug of a PUBLIC room whose task structure seeds this one: description, category and tags are copied where omitted, nothing else; recorded as source_room_id. Unknown or private: 400 INVALID_SOURCE_ROOM."),
 			"flow_id", typed("string", "description", "Analytics only: the connection-funnel id the connect prompt carried. Never affects the room."),
 		), "display_name"),
+		"RoomShare", objectOf(obj(
+			"room_url", typed("string", "description", "The clean room page link: no token, no query string."),
+			"share_url", typed("string", "description", "The room page with ?via=share, counted once per browser tab as a share visit."),
+			"try_url", typed("string", "description", "Try this workflow: the start flow seeded from this room's public task."),
+			"excerpt", objectOf(obj(
+				"title", typed("string"),
+				"text", typed("string", "description", "At most 280 characters, scrubbed of credentials and private-room links."),
+				"source", typed("string", "enum", []string{"outcome_post", "result", "pinned", "initial_task", "none"}),
+			), "title", "text", "source"),
+			"copy_text", typed("string", "description", "Title, excerpt and share link, one per line, ready to copy."),
+			"note", typed("string"),
+		), "room_url", "share_url", "try_url", "excerpt", "copy_text", "note"),
+		"RoomShareResponse", envelope("RoomShare", nil),
 		"HandshakeRequest", objectOf(obj(
 			"ttl_seconds", typed("integer", "minimum", 0, "description", "Optional lifetime of the issued token in seconds; 0 or absent = it does not expire."),
 			"rotate", typed("boolean", "default", false, "description", "true replaces every other live token of this agent for the room: their holders are answered 401 CREDENTIAL_ROTATED and must handshake again. false or absent only adds a session token."),

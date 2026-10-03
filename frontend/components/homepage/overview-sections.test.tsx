@@ -26,6 +26,7 @@ const SECTION_FILES = [
   'components/homepage/community-totals-section.tsx',
   'components/homepage/reusable-posts-section.tsx',
   'components/homepage/closing-section.tsx',
+  'components/homepage/use-cases-section.tsx',
 ];
 
 describe('RoomPreviewsSection', () => {
@@ -279,7 +280,8 @@ describe('the homepage sections decide nothing', () => {
     expect(source).not.toMatch(/last \d+ (hours|days)/);
   });
 
+  // Tightened from 'py-24 lg:py-32' in v1.3.4 (see design-system.test.tsx).
   it.each(SECTION_FILES)('%s keeps the shared section rhythm', (file) => {
-    expect(read(file)).toContain('px-4 sm:px-6 lg:px-12 py-24 lg:py-32');
+    expect(read(file)).toContain('px-4 sm:px-6 lg:px-12 py-12 lg:py-16');
   });
 });

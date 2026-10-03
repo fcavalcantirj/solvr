@@ -4,24 +4,19 @@ import Link from 'next/link';
 import { CollaborationExample } from '@/components/collaboration-example';
 import type { APIHomepageOverview, APIOverviewMeta } from '@/lib/api-types';
 import { OverviewMetaBanner } from './overview-meta-banner';
-import { RoomStatsSection } from './room-stats-section';
 import { RoomActivitySection } from './room-activity-section';
 import { RoomPreviewsSection } from './room-previews-section';
-import { ApiUsageSection } from './api-usage-section';
-import { SearchStatsSection } from './search-stats-section';
-import { CommunityTotalsSection } from './community-totals-section';
 import { ReusablePostsSection } from './reusable-posts-section';
 import { ClosingSection } from './closing-section';
 
-// The live index, in the order it reads: live room statistics, the public
-// activity stream, the rooms selected for a full read, what agents call,
-// what is being searched for, the all-time totals, the real planner/executor
-// example, the Posts that survive a room, and the connection control.
+// The live index below the hero and the use cases, in the order it reads: the
+// public activity stream, the rooms selected for a full read, the real
+// planner/executor example, the Posts that survive a room, and the connection
+// control. The deep statistics — rooms, API usage, searches and the all-time
+// totals — live on /data (components/data/platform-statistics.tsx).
 //
 // One read of GET /v1/overview serves all of it: HomeOverview owns that read
-// (seeded on the server, refreshed once in the browser) and hands its state
-// here. Because the page carries the search breakdown itself, a visitor never
-// has to go to /data to see the public statistics.
+// (seeded on the server, refreshed once in the browser) and hands its state here.
 
 export interface LiveOverviewProps {
   overview: APIHomepageOverview | null;
@@ -34,7 +29,7 @@ export function LiveOverview({ overview, meta, loading, error }: LiveOverviewPro
 
   if (loading && !overview) {
     return (
-      <section className="px-4 sm:px-6 lg:px-12 py-24 lg:py-32 border-t border-border">
+      <section className="px-4 sm:px-6 lg:px-12 py-12 lg:py-16 border-t border-border">
         <p
           data-testid="overview-loading"
           className="max-w-7xl mx-auto font-mono text-xs tracking-[0.3em] text-muted-foreground"
@@ -47,7 +42,7 @@ export function LiveOverview({ overview, meta, loading, error }: LiveOverviewPro
 
   if (!overview) {
     return (
-      <section className="px-4 sm:px-6 lg:px-12 py-24 lg:py-32 border-t border-border">
+      <section className="px-4 sm:px-6 lg:px-12 py-12 lg:py-16 border-t border-border">
         <div className="max-w-3xl mx-auto">
           <p className="font-mono text-xs tracking-[0.3em] text-muted-foreground mb-4">
             OVERVIEW UNAVAILABLE
@@ -76,12 +71,8 @@ export function LiveOverview({ overview, meta, loading, error }: LiveOverviewPro
       {meta ? (
         <OverviewMetaBanner meta={meta} />
       ) : null}
-      <RoomStatsSection initial={overview.rooms} />
       <RoomActivitySection initial={overview.activity} />
       <RoomPreviewsSection data={overview.previews} />
-      <ApiUsageSection initial={overview.api_usage} />
-      <SearchStatsSection initial={overview.search} />
-      <CommunityTotalsSection data={overview.community} />
       <CollaborationExample />
       <ReusablePostsSection data={overview.posts} />
       <ClosingSection data={overview.closing} />

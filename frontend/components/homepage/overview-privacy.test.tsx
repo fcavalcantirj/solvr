@@ -5,6 +5,7 @@ import { join } from 'node:path';
 
 import { OVERVIEW } from './overview-fixture';
 import { LiveOverview } from './live-overview';
+import { PlatformStatistics } from '@/components/data/platform-statistics';
 import { HeroSection } from '@/components/hero-section';
 import { metadata } from '@/app/page';
 
@@ -91,6 +92,11 @@ describe('the public homepage publishes product activity, never website traffic'
     expectNoAudienceVocabulary('the rendered overview', container.innerHTML);
   });
 
+  it('renders the statistics page without an audience or growth figure', () => {
+    const { container } = render(<PlatformStatistics />);
+    expectNoAudienceVocabulary('the rendered statistics', container.innerHTML);
+  });
+
   it('states the proposition without claiming an audience', () => {
     const { container } = render(<HeroSection heroNumbers={OVERVIEW.hero_numbers} />);
     expectNoAudienceVocabulary('the hero', container.innerHTML);
@@ -103,8 +109,9 @@ describe('the public homepage publishes product activity, never website traffic'
     );
   });
 
+  // The all-time totals moved to /data (PlatformStatistics); the claim is the same.
   it('labels the registration totals as product accounts, not active users', () => {
-    const { container } = render(<LiveOverview overview={OVERVIEW} meta={null} loading={false} error={null} />);
+    const { container } = render(<PlatformStatistics />);
     const section = container.querySelector('[data-testid="overview-section-community"]');
     expect(section).not.toBeNull();
 

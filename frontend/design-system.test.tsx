@@ -330,9 +330,11 @@ describe('sharp geometry', () => {
 describe('generous spacing', () => {
   // The homepage sections share one rhythm. Keeping it identical is what makes
   // the page read as a single system rather than a stack of separate widgets.
-  const RHYTHM = 'px-4 sm:px-6 lg:px-12 py-24 lg:py-32'
+  // Tightened from py-24 lg:py-32 in v1.3.4: the index had become one very long page.
+  const RHYTHM = 'px-4 sm:px-6 lg:px-12 py-12 lg:py-16'
   const SECTIONS = [
     'components/collaboration-example.tsx',
+    'components/homepage/use-cases-section.tsx',
     'components/homepage/room-stats-section.tsx',
     'components/homepage/room-activity-section.tsx',
     'components/homepage/room-previews-section.tsx',

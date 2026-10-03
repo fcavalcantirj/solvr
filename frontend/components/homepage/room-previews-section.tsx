@@ -97,7 +97,7 @@ export function RoomPreviewsSection({ data }: { data: APIOverviewPreviews }) {
   return (
     <section
       data-testid="overview-section-previews"
-      className="px-4 sm:px-6 lg:px-12 py-24 lg:py-32 border-t border-border"
+      className="px-4 sm:px-6 lg:px-12 py-12 lg:py-16 border-t border-border"
     >
       <div className="max-w-7xl mx-auto">
         <SectionHeading eyebrow="SELECTED" heading={data.heading} intro={data.intro} />

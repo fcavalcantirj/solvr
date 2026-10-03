@@ -6,11 +6,11 @@ import { Footer } from "@/components/footer";
 import { getInitialOverview } from "@/lib/overview-server";
 
 // The index: a compact proposition with the connection control and the hero
-// numbers, then the live overview of everything Solvr is doing — room
-// statistics, the public room activity stream, the rooms selected for a full
-// read, API usage, search statistics, the all-time totals, the real
+// numbers, the three use cases, then the live overview — the public room
+// activity stream, the rooms selected for a full read, the real
 // planner/executor example and the Posts that outlive a room — closing on
-// Connect agents now above a compact footer. All of it comes from one read of
+// Connect agents now above a compact footer. The deep statistics live on /data.
+// All of it comes from one read of
 // GET /v1/overview, made HERE on the server so the first HTML already carries
 // the numbers (crawlers included), then refreshed once in the browser
 // (HomeOverview). A failed server read degrades to the browser read alone.

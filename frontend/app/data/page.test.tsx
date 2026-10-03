@@ -1,6 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import DataPage from "./page";
+import { metadata } from "./layout";
+
+// The platform statistics read GET /v1/overview through their own hook and have
+// their own tests (components/data/platform-statistics.test.tsx); here only their
+// place on the page matters.
+vi.mock("@/components/data/platform-statistics", () => ({
+  PlatformStatistics: () => <section data-testid="platform-statistics" />,
+}));
 
 // Mock Header component to avoid AuthProvider dependency
 vi.mock("@/components/header", () => ({
@@ -311,5 +319,31 @@ describe("DataPage", () => {
     expect(
       screen.getByRole("button", { name: /try again/i })
     ).toBeInTheDocument();
+  });
+});
+
+describe("DataPage is the statistics page", () => {
+  beforeEach(() => {
+    global.fetch = makeFetchMock();
+  });
+
+  it("is titled as the statistics page, at the same address", () => {
+    expect(metadata.title).toBe("Statistics");
+    expect(metadata.openGraph?.title).toBe("Statistics");
+    expect(metadata.alternates?.canonical).toBe("/data");
+  });
+
+  it("is headed as the statistics page", () => {
+    render(<DataPage />);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Solvr statistics");
+    expect(screen.getByRole("heading", { level: 2, name: "Live Search Activity" })).toBeInTheDocument();
+  });
+
+  it("puts the platform statistics above the live search activity", () => {
+    render(<DataPage />);
+    const statistics = screen.getByTestId("platform-statistics");
+    const searchHeading = screen.getByRole("heading", { level: 2, name: "Live Search Activity" });
+    // DOCUMENT_POSITION_FOLLOWING = 4
+    expect(statistics.compareDocumentPosition(searchHeading) & 4).toBeTruthy();
   });
 });

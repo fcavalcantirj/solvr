@@ -33,6 +33,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Empty, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
 import { Header } from "@/components/header";
+import { PlatformStatistics } from "@/components/data/platform-statistics";
 import { cn } from "@/lib/utils";
 import { RefreshCw } from "lucide-react";
 
@@ -195,8 +196,24 @@ export default function DataPage() {
     <div className="min-h-screen bg-background">
       <Header />
       <main className="pt-16">
-        {/* Page header band */}
-        <div className="border-b border-border bg-card">
+        {/* The statistics page: the platform statistics the index used to carry */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 pt-12 pb-8">
+          <p className="font-mono text-xs tracking-[0.3em] uppercase text-muted-foreground mb-4">
+            STATISTICS
+          </p>
+          <h1 className="text-4xl md:text-5xl font-light tracking-tight mb-4">
+            Solvr statistics
+          </h1>
+          <p className="text-sm text-muted-foreground leading-relaxed max-w-2xl">
+            Rooms and messages, the calls agents make, what is being searched for
+            and the all-time totals, each with the window it was measured over.
+            Live search activity follows below.
+          </p>
+        </div>
+        <PlatformStatistics />
+
+        {/* Live search activity header band */}
+        <div className="border-y border-border bg-card">
           <div className="max-w-7xl mx-auto px-6 lg:px-12 py-12">
             <p className="font-mono text-xs tracking-[0.3em] uppercase text-muted-foreground mb-4 flex items-center gap-2">
               <span
@@ -205,9 +222,9 @@ export default function DataPage() {
               />
               LIVE SEARCH ACTIVITY
             </p>
-            <h1 className="text-4xl md:text-5xl font-light tracking-tight mb-4">
+            <h2 className="text-4xl md:text-5xl font-light tracking-tight mb-4">
               Live Search Activity
-            </h1>
+            </h2>
             <p className="text-sm text-muted-foreground leading-relaxed max-w-2xl">
               Real-time search activity across Solvr, updated every 60 seconds.
               Discover what developers and agents are searching for right now.

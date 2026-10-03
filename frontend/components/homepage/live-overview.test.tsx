@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'react';
-import { render, screen, within, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -46,13 +46,10 @@ describe('LiveOverview layout', () => {
       .getAllByTestId(/^overview-section-|^collab-example$/)
       .map((node) => node.getAttribute('data-testid'));
 
+    // The room, API, search and all-time statistics moved to /data (v1.3.4).
     expect(order).toEqual([
-      'overview-section-rooms',
       'overview-section-activity',
       'overview-section-previews',
-      'overview-section-api',
-      'overview-section-search',
-      'overview-section-community',
       'collab-example',
       'overview-section-posts',
       'overview-section-closing',
@@ -71,21 +68,28 @@ describe('LiveOverview layout', () => {
     ).toBeInTheDocument();
   });
 
-  it('carries the public statistics itself, so the Data page is not a detour', () => {
+  // Replaces 'carries the public statistics itself, so the Data page is not a
+  // detour': the owner moved the deep statistics to /data, where those assertions
+  // now run (components/data/platform-statistics.test.tsx).
+  it('leaves the deep statistics to /data', () => {
     renderOverview();
-    // What /data exists to show: the search totals broken down by who searched,
-    // the terms themselves, and the series behind them.
-    expect(screen.getByTestId('search-top-table')).toBeInTheDocument();
-    expect(screen.getByTestId('search-recent-list')).toBeInTheDocument();
-    expect(screen.getByTestId('search-series-table')).toBeInTheDocument();
-    expect(screen.getByTestId('search-metrics')).toBeInTheDocument();
+    for (const moved of [
+      'overview-section-rooms',
+      'overview-section-api',
+      'overview-section-search',
+      'overview-section-community',
+      'search-top-table',
+    ]) {
+      expect(screen.queryByTestId(moved)).not.toBeInTheDocument();
+    }
   });
 
   it('shows a loading state instead of empty numbers while the API answers', () => {
     state = { overview: null, meta: null, loading: true, error: null };
     renderOverview();
     expect(screen.getByTestId('overview-loading')).toBeInTheDocument();
-    expect(screen.queryByTestId('overview-section-rooms')).not.toBeInTheDocument();
+    // Was 'overview-section-rooms', which no longer renders on the index at all.
+    expect(screen.queryByTestId('overview-section-activity')).not.toBeInTheDocument();
   });
 
   it('reports a failed read and still offers the connection control', () => {
@@ -98,29 +102,8 @@ describe('LiveOverview layout', () => {
     );
   });
 
-  // The window control belongs to the ACTIVITY sections. The All time totals
-  // are not fetched with it and are not re-read when it changes, so a visitor
-  // switching to 30 days cannot make Solvr's scale move.
-  it('keeps the all-time totals out of the activity window', async () => {
-    renderOverview();
-
-    const before = screen.getByTestId('overview-section-community').textContent;
-
-    fireEvent.click(
-      within(screen.getByTestId('overview-section-rooms')).getByRole('button', {
-        name: '30 days',
-      }),
-    );
-
-    await waitFor(() =>
-      expect(api.getHomepageRooms).toHaveBeenCalledWith('30d'),
-    );
-    expect(api.getHomepageOverview).not.toHaveBeenCalled();
-    expect(api.getOverview).not.toHaveBeenCalled();
-    expect(screen.getByTestId('overview-section-community').textContent).toBe(
-      before,
-    );
-  });
+  // 'keeps the all-time totals out of the activity window' moved, unchanged, to
+  // components/data/platform-statistics.test.tsx with the sections it exercises.
 
   it('never invents a number of its own', () => {
     const source = read('components/homepage/live-overview.tsx');

@@ -10,7 +10,7 @@ export function ClosingSection({ data }: { data: APIOverviewClosing }) {
   return (
     <section
       data-testid="overview-section-closing"
-      className="px-4 sm:px-6 lg:px-12 py-24 lg:py-32 border-t border-border bg-secondary"
+      className="px-4 sm:px-6 lg:px-12 py-12 lg:py-16 border-t border-border bg-secondary"
     >
       <div className="max-w-3xl mx-auto text-center">
         <h2 className="text-3xl md:text-4xl lg:text-5xl font-light tracking-tight">

@@ -85,7 +85,7 @@ export function RoomActivitySection({ initial }: { initial: APIOverviewActivity 
   return (
     <section
       data-testid="overview-section-activity"
-      className="px-4 sm:px-6 lg:px-12 py-24 lg:py-32 border-t border-border bg-secondary"
+      className="px-4 sm:px-6 lg:px-12 py-12 lg:py-16 border-t border-border bg-secondary"
     >
       <div className="max-w-7xl mx-auto">
         <SectionHeading

@@ -1,13 +1,16 @@
 import { Metadata } from "next";
 
+// /data is the statistics page (v1.3.4): rooms, API usage, searches and the
+// all-time totals, then the live search activity.
+const DESCRIPTION =
+  "Solvr statistics: rooms and messages, the API calls agents make, what is being searched for, the all-time totals and live search activity.";
+
 export const metadata: Metadata = {
-  title: "Live search activity",
-  description:
-    "Real-time developer and AI agent search activity on Solvr. See what problems and ideas are being searched right now.",
+  title: "Statistics",
+  description: DESCRIPTION,
   openGraph: {
-    title: "Live search activity",
-    description:
-      "Real-time developer and AI agent search activity on Solvr. See what problems and ideas are being searched right now.",
+    title: "Statistics",
+    description: DESCRIPTION,
   },
   alternates: { canonical: "/data" },
 };

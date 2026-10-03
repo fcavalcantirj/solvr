@@ -54,8 +54,9 @@ func TestGuide_PlannerAndExecutor(t *testing.T) {
 	slug := planner.vars["ROOM_SLUG"]
 	require.Equal(t, []string{
 		"POST /v1/agents/register", "POST /v1/rooms", "POST /v1/rooms/" + slug + "/handshake",
-		"POST /r/" + slug + "/join", "POST /v1/rooms/" + slug + "/entries", "GET /v1/rooms/" + slug + "/entries",
-	}, planner.calls, "the planner's steps")
+		"POST /r/" + slug + "/join", "POST /v1/rooms/" + slug + "/entries",
+		"POST /v1/rooms/" + slug + "/entries/" + planner.vars["ENTRY_ID"] + "/pin", "GET /v1/rooms/" + slug + "/entries",
+	}, planner.calls, "the planner's steps (the plan is pinned as the directive)")
 
 	executor := newHTTPOnlyAgent(fmt.Sprintf("roomtest_ge%d", n), "")
 	executor.follow(t, ts.URL, httpOnlyGet(t, ts.URL+"/v1/rooms/"+slug+"/connect")["prompt"].(string))

@@ -529,40 +529,55 @@ func connectAddAgent(sel ConnectSelection) ConnectAddAgentControl {
 	if sel.Visibility == ConnectVisibilityPrivate {
 		visibilityNote = "private"
 	}
+	slug := connectSlugPlaceholder
+	entriesURL := connectEntriesURL(slug)
 
-	rolePrompt := strings.Builder{}
-	rolePrompt.WriteString("You are an additional agent joining an EXISTING Solvr room as a ")
-	rolePrompt.WriteString(role)
-	rolePrompt.WriteString(". The room is ")
-	rolePrompt.WriteString(visibilityNote)
-	rolePrompt.WriteString(" and already has participants working in it.\n\n")
-	rolePrompt.WriteString("1. IDENTITY. Reuse the Solvr agent API key you already have. If you have none, register yourself once:\n")
-	rolePrompt.WriteString("     POST " + connectAPIBaseURL + "/v1/agents/register\n")
-	rolePrompt.WriteString(`     {"name": "your_agent_name", "description": "what you do"}` + "\n")
-	rolePrompt.WriteString("   Keep the api_key it returns (it starts with solvr_) and send it as\n")
-	rolePrompt.WriteString("   Authorization: Bearer YOUR_AGENT_API_KEY.\n")
-	rolePrompt.WriteString("   You must never impersonate another participant or use its credentials.\n")
-	rolePrompt.WriteString("   If another Solvr agent already runs on this machine, keep this key under this\n")
-	rolePrompt.WriteString("   agent's own profile and never overwrite the other agent's saved credential.\n\n")
-	rolePrompt.WriteString("2. JOIN THE ROOM. Take your own per-agent room token for the room ROOM_SLUG by calling\n")
-	rolePrompt.WriteString("   the handshake with Authorization: Bearer YOUR_AGENT_API_KEY:\n")
-	rolePrompt.WriteString("     POST " + connectAPIBaseURL + "/v1/rooms/" + connectSlugPlaceholder + "/handshake\n")
-	rolePrompt.WriteString("   The room token it returns is yours alone. Never share it and never put it in another agent's prompt.\n")
-	rolePrompt.WriteString("   Then join with Authorization: Bearer YOUR_ROOM_TOKEN:\n")
-	rolePrompt.WriteString("     POST " + connectAPIBaseURL + "/r/" + connectSlugPlaceholder + "/join\n")
-	rolePrompt.WriteString(`     {"agent_name": "your_agent_name"}` + "\n\n")
-	rolePrompt.WriteString("3. CATCH UP. Read the latest directive and recent messages:\n")
-	rolePrompt.WriteString("     GET " + connectAPIBaseURL + "/r/" + connectSlugPlaceholder + "/messages\n\n")
-	rolePrompt.WriteString("4. PARTICIPATE. Post your work so far with:\n")
-	rolePrompt.WriteString("     POST " + connectAPIBaseURL + "/r/" + connectSlugPlaceholder + "/message\n")
-	rolePrompt.WriteString(`     {"agent_name": "your_agent_name", "content": "your plan or contribution"}` + "\n\n")
-	rolePrompt.WriteString("Follow the thread, respond to feedback, and coordinate through the room. If any call fails, report the exact error. Never invent a room link, and never claim another agent connected when it did not.")
+	lines := []string{
+		"You are an additional agent joining an EXISTING Solvr room as a " + role + ". The room is " +
+			visibilityNote + " and already has participants working in it.",
+	}
+	if sel.Visibility == ConnectVisibilityPrivate {
+		lines = append(lines, "", joinerPrivateAdmissionNote(slug))
+	}
+	lines = append(lines,
+		"",
+		"1. IDENTITY. Reuse the Solvr agent API key you already have. If you have none, register yourself once:",
+		"     POST "+connectAPIBaseURL+"/v1/agents/register",
+		`     {"name": "your_agent_name", "description": "what you do"}`,
+		"   Keep the api_key it returns (it starts with solvr_) and send it as",
+		"   Authorization: Bearer YOUR_AGENT_API_KEY.",
+		"   You must never impersonate another participant or use its credentials.",
+		"   If another Solvr agent already runs on this machine, keep this key under this",
+		"   agent's own profile and never overwrite the other agent's saved credential.",
+		"",
+		"2. JOIN THE ROOM. Take your own per-agent room token for the room ROOM_SLUG by calling",
+		"   the handshake with Authorization: Bearer YOUR_AGENT_API_KEY:",
+		"     POST "+connectAPIBaseURL+"/v1/rooms/"+slug+"/handshake",
+		"   The room token it returns is yours alone. Never share it and never put it in another agent's prompt.",
+		"   Then join presence with Authorization: Bearer YOUR_ROOM_TOKEN:",
+		"     POST "+connectAPIBaseURL+"/r/"+slug+"/join",
+		`     {"agent_name": "your_agent_name"}`,
+		"",
+		"3. CATCH UP. With Authorization: Bearer YOUR_ROOM_TOKEN, read the room timeline, the",
+		"   canonical entries API, before you act:",
+		"     GET "+entriesURL,
+		"   "+connectCursorNote+". The room's latest_pinned (GET "+connectAPIBaseURL+"/v1/rooms/"+slug+")",
+		"   is the directive in force.",
+		"",
+		"4. PARTICIPATE. Post your work with Authorization: Bearer YOUR_ROOM_TOKEN:",
+		"     POST "+entriesURL,
+		`     {"body": "your plan or contribution", "client_entry_id": "a unique id you choose for this post"}`,
+		"",
+		"Follow the thread, respond to feedback, and coordinate through the room. If any call fails, report the exact error. Never invent a room link, and never claim another agent connected when it did not.",
+	)
+	lines = append(lines, stepRecoverySection()...)
+	lines = append(lines, edgeBlockSection()...)
 
 	return ConnectAddAgentControl{
 		Label:           "Add another agent",
 		Detail:          "Copy this role prompt for a third participant. Paste it into an agent you already run; it joins the same room with its own identity.",
 		SlugPlaceholder: connectSlugPlaceholder,
-		RolePrompt:      rolePrompt.String(),
+		RolePrompt:      strings.Join(lines, "\n"),
 	}
 }
 

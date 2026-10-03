@@ -123,32 +123,44 @@ func promptVisibilitySection(visibility string) (isPrivate string, note string) 
 }
 
 // joinerPrivateAdmissionNote is the visibility line for an agent JOINING a private room.
-// It replaces the old shared-token wording (task 371): the joiner gives the owner its
-// PUBLIC agent id, the owner admits it through the members API, and it still takes its
-// OWN per-agent room token by handshake — the owner never shares its token.
+// It replaces the old shared-token wording (task 371): the joiner gives its PUBLIC agent id,
+// the owner admits it through the members API, and it still takes its OWN per-agent room
+// token by handshake — the owner never shares its token. A joiner cannot post before it is
+// admitted, so the id travels through the human who handed it the prompt, never the room
+// (v1.3.1 live acceptance F3).
 func joinerPrivateAdmissionNote(slug string) string {
-	return "This room is private: send the room owner your PUBLIC agent id so it can admit you " +
+	return "This room is private. Give your PUBLIC agent id (the id your registration returned) to me, " +
+		"the human who handed you this prompt; I relay it to the room owner, which admits you " +
 		"(POST " + connectAPIBaseURL + "/v1/rooms/" + slug + "/members). " +
+		"Never post your id in the room: you cannot post before you are admitted, and until then the " +
+		"handshake answers 403, so wait and retry it. " +
 		"You still take your OWN room token by handshake below; the owner never shares its token with you."
 }
 
 // ownerPrivateAdmissionStep is the extra instruction a room OWNER needs to admit joining
 // agents into a private room (task 371). Public rooms need no admission — any registered
 // agent may handshake — so it returns nil. Admission uses the joiner's PUBLIC agent id
-// via the members API, never the owner's own key or a shared room token.
+// via the members API, never the owner's own key or a shared room token. The ids reach the
+// owner through the human, because a joiner cannot post before admission (F3), and the
+// owner can revoke an agent by removing its membership, which ends its room tokens (F4).
 func ownerPrivateAdmissionStep(sel ConnectSelection, slug string) []string {
 	if sel.Visibility != ConnectVisibilityPrivate {
 		return nil
 	}
 	return []string{
 		"",
-		"   ADMIT PRIVATE-ROOM AGENTS. Because this room is private, each joining agent will",
-		"   send you its PUBLIC agent id. Admit each one so it can take part, with",
+		"   ADMIT PRIVATE-ROOM AGENTS. Because this room is private, a joining agent cannot post",
+		"   in the room until you admit it, so it cannot tell you its id there. It gives its PUBLIC",
+		"   agent id to me, and I relay those ids to you here. The prompt you write for it",
+		"   must tell it to give its id to me, never to post it in the room. Admit each one with",
 		"   Authorization: Bearer YOUR_AGENT_API_KEY (your agent key, not your room token):",
 		"     POST " + connectAPIBaseURL + "/v1/rooms/" + slug + "/members",
 		`     {"agent_id": "THEIR_PUBLIC_AGENT_ID"}`,
 		"   Admission uses their id, not your key or a shared token; each admitted agent then",
 		"   takes its own room token by handshake.",
+		"   To revoke an agent, remove its membership with the same agent key. That ends its room tokens,",
+		"   so it can neither read nor post here until you admit it again:",
+		"     DELETE " + connectAPIBaseURL + "/v1/rooms/" + slug + "/members/THEIR_PUBLIC_AGENT_ID",
 	}
 }
 
@@ -225,8 +237,8 @@ func stepRecoverySection() []string {
 		"- If the join fails, retry the join with your room token; it only marks you present.",
 		"- If a post fails or times out, resend the same body with the same client_entry_id:",
 		"  Solvr stores it once and answers the resend with meta.idempotent_replay true.",
-		"- A 403 means you are not admitted to this room: ask the room owner, and never borrow",
-		"  another agent's credential.",
+		"- A JSON 403 from Solvr means you are not admitted to this room: ask the room owner, and",
+		"  never borrow another agent's credential. A 403 that is not JSON is the network edge (below).",
 	}
 }
 
@@ -266,11 +278,14 @@ func plannerPromptText(sel ConnectSelection) string {
 		"   Then post to the room timeline, the canonical entries API:",
 		"     POST " + connectEntriesURL(slug),
 		`     {"body": "the task and your first directive", "client_entry_id": "a unique id you choose for this post"}`,
-		"   Read the replies with GET " + connectEntriesURL(slug),
-		"   " + connectCursorNote,
+	}
+	lines = append(lines, pinDirectiveStep(slug)...)
+	lines = append(lines,
+		"   Read the replies with GET "+connectEntriesURL(slug),
+		"   "+connectCursorNote,
 		"",
 		"4. HAND ME THE SECOND PROMPT. Reply to me with:",
-		"   - the room link " + connectAppBaseURL + "/rooms/" + slug + " using the REAL slug,",
+		"   - the room link "+connectAppBaseURL+"/rooms/"+slug+" using the REAL slug,",
 		"   - and a complete EXECUTOR PROMPT I can paste into my second agent. It must name",
 		"     the room, the executor role, you as the planner and the task, and it must tell",
 		"     that agent to use ITS OWN identity: reuse its key or register, run its own",
@@ -279,11 +294,12 @@ func plannerPromptText(sel ConnectSelection) string {
 		"",
 		"5. THEN WORK. Direct the executor in the room, review what it reports, and keep the",
 		"   decisions in the room rather than in this chat.",
-	}
+	)
 	lines = append(lines, completionReportSection(connectAppBaseURL+"/rooms/"+slug)...)
 	lines = append(lines, ownerPrivateAdmissionStep(sel, slug)...)
 	lines = append(lines, waitingRecoverySection(connectAppBaseURL+"/rooms/"+slug, connectEntriesURL(slug))...)
 	lines = append(lines, stepRecoverySection()...)
+	lines = append(lines, edgeBlockSection()...)
 	lines = append(lines,
 		"",
 		"If any call fails, tell me the exact error. Never invent a room link, and never say",
@@ -329,11 +345,14 @@ func starterPromptText(sel ConnectSelection) string {
 		"   Then post to the room timeline, the canonical entries API:",
 		"     POST " + connectEntriesURL(slug),
 		`     {"body": "the task and how you propose to split it", "client_entry_id": "a unique id you choose for this post"}`,
-		"   Read the replies with GET " + connectEntriesURL(slug),
-		"   " + connectCursorNote,
+	}
+	lines = append(lines, pinDirectiveStep(slug)...)
+	lines = append(lines,
+		"   Read the replies with GET "+connectEntriesURL(slug),
+		"   "+connectCursorNote,
 		"",
 		"4. HAND ME THE SECOND PROMPT. Reply to me with:",
-		"   - the room link " + connectAppBaseURL + "/rooms/" + slug + " using the REAL slug,",
+		"   - the room link "+connectAppBaseURL+"/rooms/"+slug+" using the REAL slug,",
 		"   - and a complete PARTNER PROMPT I can paste into my other agent. It must name the",
 		"     room and the task, say the two of you are peers, and tell that agent to use ITS",
 		"     OWN identity: reuse its key or register, run its own handshake for its own room",
@@ -342,11 +361,12 @@ func starterPromptText(sel ConnectSelection) string {
 		"",
 		"5. THEN WORK. Agree the split in the room, do your half, and keep the decisions in",
 		"   the room rather than in this chat.",
-	}
+	)
 	lines = append(lines, completionReportSection(connectAppBaseURL+"/rooms/"+slug)...)
 	lines = append(lines, ownerPrivateAdmissionStep(sel, slug)...)
 	lines = append(lines, waitingRecoverySection(connectAppBaseURL+"/rooms/"+slug, connectEntriesURL(slug))...)
 	lines = append(lines, stepRecoverySection()...)
+	lines = append(lines, edgeBlockSection()...)
 	lines = append(lines,
 		"",
 		"If any call fails, tell me the exact error. Never invent a room link, and never say",
@@ -393,11 +413,14 @@ func builderPromptText(sel ConnectSelection) string {
 		"   Then post to the room timeline, the canonical entries API:",
 		"     POST " + connectEntriesURL(slug),
 		`     {"body": "the task and your implementation plan", "client_entry_id": "a unique id you choose for this post"}`,
-		"   Read the replies with GET " + connectEntriesURL(slug),
-		"   " + connectCursorNote,
+	}
+	lines = append(lines, pinDirectiveStep(slug)...)
+	lines = append(lines,
+		"   Read the replies with GET "+connectEntriesURL(slug),
+		"   "+connectCursorNote,
 		"",
 		"4. HAND ME THE SECOND PROMPT. Reply to me with:",
-		"   - the room link " + connectAppBaseURL + "/rooms/" + slug + " using the REAL slug,",
+		"   - the room link "+connectAppBaseURL+"/rooms/"+slug+" using the REAL slug,",
 		"   - and a complete REVIEWER PROMPT I can paste into my other agent. It must name",
 		"     the room, the reviewer role, you as the builder and the task, and it must tell",
 		"     that agent to use ITS OWN identity: reuse its key or register, run its own",
@@ -406,11 +429,12 @@ func builderPromptText(sel ConnectSelection) string {
 		"",
 		"5. THEN WORK. Build in the room and keep the decisions in the room rather than in",
 		"   this chat. The reviewer reads your plan and reports issues.",
-	}
+	)
 	lines = append(lines, completionReportSection(connectAppBaseURL+"/rooms/"+slug)...)
 	lines = append(lines, ownerPrivateAdmissionStep(sel, slug)...)
 	lines = append(lines, waitingRecoverySection(connectAppBaseURL+"/rooms/"+slug, connectEntriesURL(slug))...)
 	lines = append(lines, stepRecoverySection()...)
+	lines = append(lines, edgeBlockSection()...)
 	lines = append(lines,
 		"",
 		"If any call fails, tell me the exact error. Never invent a room link, and never say",
@@ -507,6 +531,7 @@ func executorPromptText(room *models.Room, firstMsg *models.Message) string {
 	lines = append(lines, completionReportSection(roomURL)...)
 	lines = append(lines, waitingRecoverySection(roomURL, entriesURL)...)
 	lines = append(lines, stepRecoverySection()...)
+	lines = append(lines, edgeBlockSection()...)
 	return strings.Join(lines, "\n")
 }
 
@@ -592,5 +617,6 @@ func roleSpecificPromptText(room *models.Room, firstMsg *models.Message, role st
 	lines = append(lines, completionReportSection(roomURL)...)
 	lines = append(lines, waitingRecoverySection(roomURL, entriesURL)...)
 	lines = append(lines, stepRecoverySection()...)
+	lines = append(lines, edgeBlockSection()...)
 	return strings.Join(lines, "\n")
 }

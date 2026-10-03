@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -128,6 +129,11 @@ func (a *httpOnlyAgent) call(t *testing.T, client *http.Client, base, line, meth
 	case strings.HasSuffix(path, "/handshake"):
 		tok, _ := data["room_token"].(string)
 		a.vars["YOUR_ROOM_TOKEN"], a.vars["YOUR_ROOM_CREDENTIAL"] = tok, tok
+	case method == http.MethodPost && strings.HasSuffix(path, "/entries"):
+		// The pin step names the entry the agent just posted (data.id).
+		if id, ok := data["id"].(float64); ok {
+			a.vars["ENTRY_ID"] = strconv.FormatInt(int64(id), 10)
+		}
 	}
 }
 
@@ -177,10 +183,16 @@ func TestConnectPrompts_DefaultFlowRunsOverPlainHTTP(t *testing.T) {
 	planner := newHTTPOnlyAgent(fmt.Sprintf("roomtest_hp%d", n), fmt.Sprintf("test http only %d", n))
 	planner.follow(t, ts.URL, text)
 	slug := planner.vars["ROOM_SLUG"]
+	entryID := planner.vars["ENTRY_ID"]
 	require.Equal(t, []string{
 		"POST /v1/agents/register", "POST /v1/rooms", "POST /v1/rooms/" + slug + "/handshake",
-		"POST /r/" + slug + "/join", "POST /v1/rooms/" + slug + "/entries", "GET /v1/rooms/" + slug + "/entries",
+		"POST /r/" + slug + "/join", "POST /v1/rooms/" + slug + "/entries",
+		"POST /v1/rooms/" + slug + "/entries/" + entryID + "/pin", "GET /v1/rooms/" + slug + "/entries",
 	}, planner.calls, "the planner prompt's calls")
+	// The pin set the directive in force: the room's latest_pinned is the planner's first post.
+	pinned, _ := httpOnlyGet(t, ts.URL+"/v1/rooms/"+slug)["latest_pinned"].(map[string]any)
+	require.NotNil(t, pinned, "the planner prompt leaves latest_pinned unset")
+	require.Equal(t, planner.message, pinned["content"], "latest_pinned is the planner's directive: %v", pinned)
 
 	// The second paste: the executor prompt for the real room, then a reviewer by role.
 	executor := newHTTPOnlyAgent(fmt.Sprintf("roomtest_he%d", n), "")
@@ -214,7 +226,8 @@ func TestConnectPrompts_EveryPresetsFirstPromptRunsOverPlainHTTP(t *testing.T) {
 		prompt, _ := start["prompt"].(map[string]any)
 		first := newHTTPOnlyAgent(fmt.Sprintf("roomtest_hf%d_%d", i, n), fmt.Sprintf("test http first %d %d", i, n))
 		first.follow(t, ts.URL, prompt["text"].(string))
-		require.Len(t, first.calls, 6, "%s: the first prompt's calls: %v", preset, first.calls)
+		require.Len(t, first.calls, 7, "%s: the first prompt's calls (with the directive pin): %v", preset, first.calls)
+		require.Contains(t, first.calls, "POST /v1/rooms/"+first.vars["ROOM_SLUG"]+"/entries/"+first.vars["ENTRY_ID"]+"/pin", preset)
 		requireAuthoredEntries(t, ts.URL, first.vars["ROOM_SLUG"], first)
 	}
 }

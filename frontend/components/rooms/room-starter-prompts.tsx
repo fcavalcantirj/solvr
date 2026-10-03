@@ -88,9 +88,10 @@ export function RoomStarterPrompts({ room, justCreated }: RoomStarterPromptsProp
         <h3 className="font-mono text-xs tracking-[0.2em]">YOUR ROOM IS READY</h3>
       </div>
       <div className="p-4 space-y-4">
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          Paste each prompt into one of your two agents. They will join this room and
-          start collaborating — you do not relay their messages.
+        <p data-testid="starter-instructions" className="text-xs text-muted-foreground leading-relaxed">
+          Paste the planner prompt into one agent and the executor prompt into every other agent
+          you want in this room. They will join it and start collaborating — you do not relay
+          their messages.
         </p>
 
         {roomUrl && (

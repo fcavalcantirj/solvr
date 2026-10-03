@@ -207,6 +207,7 @@ func TestConnectEndpoint_BuildAndReviewPresetServesBuilderReviewerContract(t *te
 	for _, m := range promptEndpointRE.FindAllStringSubmatch(contract.Prompt.Text, -1) {
 		method, path := m[1], m[2]
 		path = strings.ReplaceAll(path, "ROOM_SLUG", "{slug}")
+		path = strings.ReplaceAll(path, "ENTRY_ID", "{entry_id}") // the pin step names the posted entry
 		require.True(t, served[method+" "+strings.TrimSuffix(path, "/")],
 			"build-and-review prompt tells the agent to call %s, which this API does not serve", method+" "+path)
 	}
@@ -679,6 +680,8 @@ func TestConnectEndpoint_PromptsOnlyNameRoutesThisAPIActuallyServes(t *testing.T
 			method, path := m[1], m[2]
 			// The prompt's ROOM_SLUG placeholder maps to the router's {slug} parameter.
 			path = strings.ReplaceAll(path, "ROOM_SLUG", "{slug}")
+			// ENTRY_ID, the id the prompt's own post returned, maps to {entry_id} (the pin step).
+			path = strings.ReplaceAll(path, "ENTRY_ID", "{entry_id}")
 			key := method + " " + strings.TrimSuffix(path, "/")
 			require.True(t, served[key],
 				"prompt (query %q) tells the agent to call %s, which this API does not serve", query, key)

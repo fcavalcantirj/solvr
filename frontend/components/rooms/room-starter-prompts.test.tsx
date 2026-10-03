@@ -56,6 +56,19 @@ describe('RoomStarterPrompts', () => {
     expect(api.getRoomConnect).not.toHaveBeenCalled();
   });
 
+  it('tells the human the executor prompt goes into every other agent, not into a fixed pair', async () => {
+    vi.mocked(api.getRoomConnect).mockImplementation(async (_slug: string, role = 'collaborator') =>
+      envelope(role as 'planner' | 'executor'),
+    );
+
+    render(<RoomStarterPrompts room={room} justCreated={true} />);
+
+    const instructions = await screen.findByTestId('starter-instructions');
+    expect(instructions).toHaveTextContent('Paste the planner prompt into one agent');
+    expect(instructions).toHaveTextContent('the executor prompt into every other agent you want in this room');
+    expect(instructions.textContent).not.toMatch(/two agents/);
+  });
+
   it('shows copyable planner and executor prompts tied to the room after creation', async () => {
     vi.mocked(api.getRoomConnect).mockImplementation(async (_slug: string, role = 'collaborator') =>
       envelope(role as 'planner' | 'executor'),

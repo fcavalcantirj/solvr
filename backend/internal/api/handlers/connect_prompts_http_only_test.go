@@ -79,6 +79,10 @@ func credentialFor(method, url string) (string, bool) {
 		return needsAgentKey, true
 	case strings.HasPrefix(path, "/v1/rooms/") && strings.HasSuffix(path, "/entries"):
 		return needsRoomToken, true
+	case method == "POST" && strings.HasPrefix(path, "/v1/rooms/") && strings.Contains(path, "/entries/") && strings.HasSuffix(path, "/pin"):
+		return needsRoomToken, true // the room-write policy: a participant's room token may pin
+	case method == "DELETE" && strings.HasPrefix(path, "/v1/rooms/") && strings.Contains(path, "/members/"):
+		return needsAgentKey, true // membership is managed with the owner's agent key
 	case strings.HasPrefix(path, "/r/") && (strings.HasSuffix(path, "/join") ||
 		strings.HasSuffix(path, "/message") || strings.HasSuffix(path, "/messages")):
 		return needsRoomToken, true

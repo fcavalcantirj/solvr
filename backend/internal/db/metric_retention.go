@@ -112,6 +112,8 @@ var RawEventSources = []RawEventSource{
 				"a joiner's ordinal and the room's flow id, read as the step is written", AllHistory},
 			{"ParticipantActivityRepository.Measure",
 				"operator monthly active participants: room creators, anonymous flows and activations", 2 * ParticipantWindow},
+			{"GrowthStageRepository.Measure",
+				"operator stage gates: weekly activated rooms, owners, workflows, 24h conversion, creator returns (an owner's first room ever)", AllHistory},
 		},
 	},
 	{
@@ -147,6 +149,8 @@ var RawEventSources = []RawEventSource{
 		Readers: []MetricReader{
 			{"StatusHandler.GetStatus",
 				"GET /v1/status uptime, average response time and daily history over 30 days", 30 * 24 * time.Hour},
+			{"GrowthStageRepository.Measure/Reliability",
+				"operator stage 3 reliability gate: operational share of the core services over 30 days", ParticipantWindow},
 		},
 	},
 }

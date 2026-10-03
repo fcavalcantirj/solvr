@@ -95,3 +95,59 @@ func TestGrowthParticipants_AReadFailureIsAServerError(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	assert.NotContains(t, rec.Body.String(), "boom")
 }
+
+// fakeStageReader returns canned stage measures for the window ending at end.
+type fakeStageReader struct {
+	gotEnd   time.Time
+	measures growth.StageMeasures
+	err      error
+}
+
+func (f *fakeStageReader) Measure(_ context.Context, end time.Time) (growth.StageMeasures, error) {
+	f.gotEnd = end
+	return f.measures, f.err
+}
+
+func TestGrowthStages_ServesTheSequencedStagesWithParticipantGates(t *testing.T) {
+	t.Setenv("ADMIN_API_KEY", "op-key")
+	participants := &fakeParticipantReader{measures: growth.ParticipantMeasures{
+		Humans: 6000, Agents: 5000, PreviousHumans: 5500, PreviousAgents: 4800,
+	}}
+	stages := &fakeStageReader{measures: growth.StageMeasures{WeeklyActivatedRooms: 12, WeeklyOwners: 4}}
+	h := NewGrowthReportsHandler(GrowthReaders{Participants: participants, Stages: stages})
+
+	rec := growthRequest(t, h.GetStages, "/admin/growth/stages?end=2026-10-01T00:00:00Z",
+		map[string]string{OperatorAccessHeader: "op-key"})
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Contains(t, rec.Header().Get("Cache-Control"), "no-store")
+	want := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	assert.Equal(t, want, participants.gotEnd)
+	assert.Equal(t, want, stages.gotEnd)
+
+	var body struct {
+		Data growth.StageReport `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Len(t, body.Data.Stages, 4)
+	assert.Equal(t, growth.StatusUnmet, body.Data.Stages[0].Status, "12 weekly activated rooms is short of 100")
+	for _, g := range body.Data.Stages[1].Gates {
+		if g.Key == "monthly_active_participants" {
+			require.NotNil(t, g.Measured)
+			assert.InDelta(t, 11000, *g.Measured, 1e-9)
+			assert.Equal(t, growth.StatusMet, g.Status, "10,000 reached in two consecutive windows")
+		}
+	}
+	assert.Equal(t, growth.StatusBlockedByPreviousStage, body.Data.Stages[1].Status)
+}
+
+func TestGrowthStages_RefusesWithoutTheOperatorKeyAndHidesFailures(t *testing.T) {
+	t.Setenv("ADMIN_API_KEY", "op-key")
+	h := NewGrowthReportsHandler(GrowthReaders{
+		Participants: &fakeParticipantReader{},
+		Stages:       &fakeStageReader{err: errors.New("stage boom")},
+	})
+	assert.Equal(t, http.StatusUnauthorized, growthRequest(t, h.GetStages, "/admin/growth/stages", nil).Code)
+	rec := growthRequest(t, h.GetStages, "/admin/growth/stages", map[string]string{OperatorAccessHeader: "op-key"})
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.NotContains(t, rec.Body.String(), "stage boom")
+}

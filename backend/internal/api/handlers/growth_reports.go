@@ -12,6 +12,7 @@ import (
 // The operator growth reports.
 //
 //	GET /admin/growth/participants?end=<RFC3339>  monthly active participants (spec.json idx 86)
+//	GET /admin/growth/stages?end=<RFC3339>        staged growth gates (spec.json idx 89)
 //
 // Each report is Solvr reporting about ITSELF — participant counts, traffic, the one-million
 // target — so it is operator analytics: the router gates it with RequireOperatorAccess, this
@@ -24,9 +25,15 @@ type ParticipantReader interface {
 	Measure(ctx context.Context, end time.Time) (growth.ParticipantMeasures, error)
 }
 
+// StageReader measures the stage gates for the window ending at end.
+type StageReader interface {
+	Measure(ctx context.Context, end time.Time) (growth.StageMeasures, error)
+}
+
 // GrowthReaders are the measurements the growth reports read.
 type GrowthReaders struct {
 	Participants ParticipantReader
+	Stages       StageReader
 }
 
 // GrowthReportsHandler serves the operator growth reports.
@@ -55,6 +62,40 @@ func (h *GrowthReportsHandler) GetParticipants(w http.ResponseWriter, r *http.Re
 	writeActivationJSON(w, http.StatusOK, map[string]any{
 		"data": growth.BuildParticipantReport(m, growth.MonthlyActiveParticipantGoal),
 	})
+}
+
+// GetStages handles GET /admin/growth/stages: the four stages and their separately verifiable
+// gates for the window ending at end (default now). The participant gates read the same counter
+// as GetParticipants.
+func (h *GrowthReportsHandler) GetStages(w http.ResponseWriter, r *http.Request) {
+	end, ok := h.authorizeAndReadEnd(w, r)
+	if !ok {
+		return
+	}
+	p, err := h.readers.Participants.Measure(r.Context(), end)
+	if err != nil {
+		slog.Error("growth stages report failed: participants", "error", err)
+		writeOperatorError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to compute the stage report")
+		return
+	}
+	m, err := h.readers.Stages.Measure(r.Context(), end)
+	if err != nil {
+		slog.Error("growth stages report failed: stages", "error", err)
+		writeOperatorError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to compute the stage report")
+		return
+	}
+	writeActivationJSON(w, http.StatusOK, map[string]any{
+		"data": growth.EvaluateStages(m, participantTargetInputs(p)),
+	})
+}
+
+// participantTargetInputs reduces participant measures to the identity sums a target reads.
+func participantTargetInputs(p growth.ParticipantMeasures) growth.TargetInputs {
+	return growth.TargetInputs{
+		Current:   p.Humans + p.Agents,
+		Previous:  p.PreviousHumans + p.PreviousAgents,
+		Returning: p.ReturningHumans + p.ReturningAgents,
+	}
 }
 
 // authorizeAndReadEnd applies the private cache policy, checks the operator key and reads the

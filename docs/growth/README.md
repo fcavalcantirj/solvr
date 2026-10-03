@@ -11,6 +11,7 @@ Reviewable planning artifacts for spec.json idx 86–91. This repository is publ
 | File | Task | What it is |
 |---|---|---|
 | [participants.md](participants.md) | idx 86 | What a monthly active participant is, what is excluded, how to read the report |
+| [stage-plan.md](stage-plan.md) | idx 89 | The four stages, each gate's threshold and sample, statuses, how to record an unmet target |
 
 Every outcome these files describe (one million participants, stage gates, cohort retention) is a future outcome.
 Shipping the website or these reports does not meet any of them.

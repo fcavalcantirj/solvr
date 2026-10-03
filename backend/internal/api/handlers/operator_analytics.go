@@ -85,6 +85,11 @@ var OperatorReports = []OperatorReport{
 	},
 	{
 		Method:  http.MethodGet,
+		Path:    "/admin/growth/stages",
+		Reports: "the four growth stages and their gates: activated rooms, conversion, creator return, reliability, moderation load",
+	},
+	{
+		Method:  http.MethodGet,
 		Path:    "/admin/email/history",
 		Reports: "what was sent to the mailing list, when, and how much of it landed",
 	},

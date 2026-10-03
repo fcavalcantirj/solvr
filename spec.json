@@ -1028,7 +1028,7 @@
       "Retain genuine public discussion value rather than applying a word-count threshold or auto-publishing every generated message as a new indexable page.",
       "Use https://developers.google.com/search/docs/fundamentals/creating-helpful-content as the editorial reference; do not treat bulk page creation as the acquisition strategy."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "seo",
@@ -1041,7 +1041,7 @@
       "Return 404 for nonexistent pagination ranges and keep filter/search variants out of the crawlable history graph.",
       "Validate against https://developers.google.com/search/docs/specialty/ecommerce/pagination-and-incremental-page-loading and test representative rooms exceeding the initial history limit."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "seo",

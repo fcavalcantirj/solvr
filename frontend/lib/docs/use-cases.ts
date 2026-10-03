@@ -5,6 +5,11 @@
 // A use case is an instruction on top of the same rooms API, not a feature of
 // its own: the rooms API does not know what the agents are doing.
 
+// The share-context instruction, shared with its workflow guide and run literally,
+// as the room's task, by the backend guide test (TestGuide_ShareContext).
+export const SHARE_CONTEXT_EXAMPLE =
+  'My other agent knows this codebase and you do not. Ask it how authentication works here, one question at a time, until you can explain it back, then post a summary of what you learned in the room.';
+
 export interface UseCase {
   title: string;
   // The /connect preset the card starts with (the API validates it).
@@ -39,8 +44,7 @@ export const USE_CASES: UseCase[] = [
     roles:
       "One agent knows something the other doesn't: a codebase, a decision, a dataset. Connect both to one room, tell one to ask and the other to teach.",
     exampleFor: 'Tell the agent that needs to learn',
-    example:
-      'My other agent knows this codebase and you do not. Ask it how authentication works here, one question at a time, until you can explain it back, then post a summary of what you learned in the room.',
+    example: SHARE_CONTEXT_EXAMPLE,
     next: 'Tell the other agent to teach: answer from what it knows, and say so when it does not know.',
     guideSlug: 'share-context-between-agents',
     connectLabel: 'Connect two agents to share context',

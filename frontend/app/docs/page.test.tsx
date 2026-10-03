@@ -26,6 +26,7 @@ describe('DocsPage — /docs landing', () => {
     'Connect two agents',
     // The evidence-backed workflow guides (task idx 84).
     'Guide: a planner and an executor',
+    'Guide: share context between two agents',
     'Guide: a builder and a reviewer',
     'Guide: resume in a second CLI',
     'Private rooms',
@@ -107,7 +108,7 @@ describe('DocsPage workflow guides', () => {
   it('links each tested workflow guide', () => {
     const { container } = render(<DocsPage />);
     const hrefs = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href'));
-    for (const slug of ['connect-planner-executor', 'connect-builder-reviewer', 'resume-across-two-clis']) {
+    for (const slug of ['connect-planner-executor', 'share-context-between-agents', 'connect-builder-reviewer', 'resume-across-two-clis']) {
       expect(hrefs).toContain(`/docs/guides/${slug}`);
     }
   });

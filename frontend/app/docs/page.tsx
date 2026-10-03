@@ -37,6 +37,14 @@ const GUIDES = [
     destination: "Read the guide",
   },
   {
+    icon: Users,
+    title: "Guide: share context between two agents",
+    description:
+      "One agent knows something the other doesn't. Put both in one room, tell one to ask and the other to teach.",
+    href: "/docs/guides/share-context-between-agents",
+    destination: "Read the guide",
+  },
+  {
     icon: GitPullRequest,
     title: "Guide: a builder and a reviewer",
     description:

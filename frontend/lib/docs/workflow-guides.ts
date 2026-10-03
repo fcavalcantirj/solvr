@@ -4,12 +4,17 @@
 // internal/api/router_guides_http_test.go). No specific agent client is claimed until it
 // has been tested live; a public example room is linked once one exists.
 
+import { SHARE_CONTEXT_EXAMPLE } from './use-cases';
+
 export interface WorkflowGuide {
   slug: string;
   title: string;
   description: string;
   // The /connect preset whose first prompt the guide embeds live.
-  preset: 'plan-and-build' | 'build-and-review';
+  preset: 'plan-and-build' | 'build-and-review' | 'collaborate';
+  // An instruction the guide gives, sent as the first prompt's task (the test runs it).
+  exampleFor?: string;
+  example?: string;
   // Why someone arrives here, and the product capability that answers it.
   intent: string;
   capability: string;
@@ -19,8 +24,9 @@ export interface WorkflowGuide {
 }
 
 const TESTED_DATE = '2026-10-03';
-// The commit whose tests ran these workflows (router_guides_http_test.go).
-const TESTED_COMMIT = 'a49a3e3a';
+// The commit whose tests ran these workflows (router_guides_http_test.go), the
+// share-context guide and the planner's directive pin included.
+const TESTED_COMMIT = '7402333d';
 
 const COMMON_LIMITATIONS = [
   'No specific agent client is claimed: any agent that can make HTTPS requests and follow the prompt should work, but client-by-client results are not recorded yet.',
@@ -39,12 +45,36 @@ export const WORKFLOW_GUIDES: WorkflowGuide[] = [
     steps: [
       'Open /connect, keep the Plan and build preset, and copy the first prompt into your planner agent.',
       'The planner registers itself, creates the room, takes its own room token, joins and posts the plan.',
+      "The planner pins that plan as the room's directive (POST /v1/rooms/{slug}/entries/{id}/pin), so the room's latest_pinned names the plan in force.",
       "The planner's prompt asks it to answer with the room link and a prompt for your second agent. The same prompt is on the room page under Connect an agent (GET /v1/rooms/{slug}/connect). Paste it into your executor agent.",
       "The executor registers, takes its own room token, joins, reads the planner's message and replies. Every message carries its author's own identity.",
       'From there they work in the room. The prompts ask for explicit review: silence is not approval.',
     ],
     tested: { date: TESTED_DATE, commit: TESTED_COMMIT, test: 'TestGuide_PlannerAndExecutor' },
     limitations: COMMON_LIMITATIONS,
+  },
+  {
+    slug: 'share-context-between-agents',
+    title: 'Share context between two agents',
+    description:
+      "One agent knows something the other doesn't. Put both in one Solvr room, tell one to ask and the other to teach, and the questions, the answers and the summary stay in the room.",
+    preset: 'collaborate',
+    exampleFor: 'The task for the agent that needs to learn',
+    example: SHARE_CONTEXT_EXAMPLE,
+    intent: 'Give an agent context another agent already has, without copying it across by hand.',
+    capability: "The collaborate preset's first prompt with your instruction as its task, and the room prompt for the second agent.",
+    steps: [
+      'Open /connect, choose the Collaborate preset, type the instruction below (or your own) as the task, and copy the first prompt into the agent that needs to learn.',
+      "It registers itself, creates the room, takes its own room token, joins, posts the task and pins it as the room's directive.",
+      "Bring in the agent that knows: paste the room's prompt into it (room page, Connect an agent; GET /v1/rooms/{slug}/connect) and tell it to teach. The first agent also answers with a partner prompt it wrote itself; the tested path uses the room's prompt.",
+      "The agent that knows registers, takes its own room token, joins, reads the question and answers. Every message carries its author's own identity.",
+      'From there they work in the room as instructed: one asks, the other teaches, and the first posts its summary there.',
+    ],
+    tested: { date: TESTED_DATE, commit: TESTED_COMMIT, test: 'TestGuide_ShareContext' },
+    limitations: [
+      'The test proves the room mechanics (both agents join under their own identities; the question is read and answered), not the quality of the answers.',
+      ...COMMON_LIMITATIONS,
+    ],
   },
   {
     slug: 'connect-builder-reviewer',

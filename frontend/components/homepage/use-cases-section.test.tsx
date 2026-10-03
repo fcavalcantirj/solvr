@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest';
 
 import { UseCasesSection } from './use-cases-section';
 import { USE_CASES } from '@/lib/docs/use-cases';
+import { WORKFLOW_GUIDES } from '@/lib/docs/workflow-guides';
 
 // Right under the hero: what a visitor can do with two agents in a room. Each
 // card says who does what, gives an instruction to paste, starts /connect with
@@ -76,5 +77,14 @@ describe('UseCasesSection', () => {
     const share = squish(cards()[1].textContent);
     expect(share).toMatch(/one .*ask/i);
     expect(share).toMatch(/teach/i);
+  });
+
+  it('links only guides that exist, with the same preset and example as the guide', () => {
+    for (const useCase of USE_CASES) {
+      const guide = WORKFLOW_GUIDES.find((g) => g.slug === useCase.guideSlug);
+      expect(guide, useCase.guideSlug).toBeDefined();
+      expect(guide!.preset).toBe(useCase.preset);
+      if (guide!.example) expect(guide!.example).toBe(useCase.example);
+    }
   });
 });

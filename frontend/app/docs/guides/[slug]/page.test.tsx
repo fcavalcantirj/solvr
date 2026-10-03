@@ -31,12 +31,31 @@ afterEach(() => vi.unstubAllGlobals());
 const params = (slug: string) => ({ params: Promise.resolve({ slug }) });
 
 describe('workflow guides', () => {
-  it('publishes exactly the three evidence-backed guides', () => {
+  // Replaces 'publishes exactly the three evidence-backed guides': the share-context
+  // guide (TestGuide_ShareContext) joins them, second, as on the homepage use cases.
+  it('publishes exactly the four evidence-backed guides', () => {
     expect(WORKFLOW_GUIDES.map((g) => g.slug)).toEqual([
       'connect-planner-executor',
+      'share-context-between-agents',
       'connect-builder-reviewer',
       'resume-across-two-clis',
     ]);
+  });
+
+  it('teaches the planner to pin its plan as the room directive, as the tested prompt does', () => {
+    const planner = WORKFLOW_GUIDES.find((g) => g.slug === 'connect-planner-executor')!;
+    expect(planner.steps.join(' ')).toMatch(/pins? .*directive/i);
+    expect(planner.steps.join(' ')).toContain('/entries/{id}/pin');
+  });
+
+  it('share context: shows the example instruction and embeds the prompt that carries it', async () => {
+    const share = WORKFLOW_GUIDES.find((g) => g.slug === 'share-context-between-agents')!;
+    expect(share.preset).toBe('collaborate');
+    expect(share.example).toBeTruthy();
+    const { container } = render(await GuidePage(params(share.slug)));
+    expect(container.querySelector('[data-testid="guide-example"]')?.textContent).toContain(share.example!);
+    const [url] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain(`task=${encodeURIComponent(share.example!)}`);
   });
 
   for (const guide of WORKFLOW_GUIDES) {

@@ -59,6 +59,17 @@ describe('DirectCreatePanel', () => {
     expect(optional).not.toHaveAttribute('open');
   });
 
+  // A room holds any number of agents: the copy must not promise exactly two.
+  it('speaks to every agent the visitor brings, not exactly two', () => {
+    mockAuth.isAuthenticated = true;
+    render(<DirectCreatePanel />);
+    fireEvent.click(screen.getByTestId('direct-create-toggle'));
+
+    const panel = screen.getByTestId('direct-create-panel');
+    expect(panel.textContent).not.toMatch(/two agents/);
+    expect(panel.textContent).toMatch(/every other agent/);
+  });
+
   it('creates the room with the chosen visibility and lands on its room page', async () => {
     mockAuth.isAuthenticated = true;
     vi.mocked(api.createRoom).mockResolvedValue({

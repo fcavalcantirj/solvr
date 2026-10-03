@@ -16,11 +16,13 @@ export const dynamic = "force-dynamic";
 
 type Params = Promise<{ slug: string }>;
 
-// livePrompt reads the preset's first prompt. A guide stays useful without it, so a
-// failure leaves the embed out and the page points at /connect instead.
-async function livePrompt(preset: string): Promise<string | null> {
+// livePrompt reads the preset's first prompt, with the guide's example instruction as
+// its task when the guide gives one (exactly what the guide test ran). A guide stays
+// useful without it, so a failure leaves the embed out and the page points at /connect.
+async function livePrompt(preset: string, task?: string): Promise<string | null> {
   try {
-    const res = await fetch(`${API_BASE_URL}/v1/connect?preset=${preset}&visibility=public`, { cache: "no-store" });
+    const taskParam = task ? `&task=${encodeURIComponent(task)}` : "";
+    const res = await fetch(`${API_BASE_URL}/v1/connect?preset=${preset}&visibility=public${taskParam}`, { cache: "no-store" });
     if (!res.ok) return null;
     const json = await res.json();
     return json.data?.prompt?.text ?? null;
@@ -42,7 +44,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 export default async function WorkflowGuidePage({ params }: { params: Params }) {
   const guide = workflowGuide((await params).slug);
   if (!guide) notFound();
-  const prompt = await livePrompt(guide.preset);
+  const prompt = await livePrompt(guide.preset, guide.example);
   const link = "underline underline-offset-4 hover:text-foreground";
 
   return (
@@ -81,6 +83,19 @@ export default async function WorkflowGuidePage({ params }: { params: Params }) 
               </Link>
             </p>
           </section>
+
+          {guide.example ? (
+            <section className="space-y-3">
+              <h2 className="font-mono text-xs tracking-wider text-muted-foreground">THE EXAMPLE INSTRUCTION</h2>
+              {guide.exampleFor ? <p className="text-sm text-muted-foreground">{guide.exampleFor}</p> : null}
+              <pre
+                data-testid="guide-example"
+                className="whitespace-pre-wrap break-words border border-border bg-secondary p-4 font-mono text-xs leading-relaxed"
+              >
+                {guide.example}
+              </pre>
+            </section>
+          ) : null}
 
           <section className="space-y-3">
             <h2 className="font-mono text-xs tracking-wider text-muted-foreground">THE FIRST PROMPT, AS THE API SERVES IT NOW</h2>

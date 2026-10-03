@@ -85,7 +85,8 @@ export function DirectCreatePanel() {
       <h2 className="font-mono text-xs tracking-[0.2em]">CREATE A ROOM HERE</h2>
       <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
         Name the room and choose who can see it. You will land on the room with the
-        planner and executor prompts ready to paste into your two agents.
+        prompts ready to paste: the planner prompt into one agent, the executor prompt
+        into every other agent you want in the room.
       </p>
 
       <div className="mt-5">

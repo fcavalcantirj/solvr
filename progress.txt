@@ -12829,3 +12829,85 @@ UAT (for when idx 78 closes, not now): as slice 21 (push + deploy so the served 
 
 git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged (idx 78
   passes stays false).
+
+2026-10-02 23:18 — Task idx 78 (spec.json, category functional) — IN PROGRESS, passes STAYS false
+"Keep SDKs, CLI, MCP, skills, and webhooks consistent with the redesigned product"
+SLICE 33 (the fixable findings of REMAINING item "33.."): the shared 409 Conflict row names LAST_OWNER, and
+cli/config_test.go is gofmt-clean. (Wall clock at journal time read 23:18 by `date`, earlier than the slice 32
+header's 23:20; this entry is after it.)
+================================================================================
+
+TASK SELECTION [REAL, spec.json + progress.txt read this session]: false tasks 24, 67, 68, 78-92, 94, 95. OWNER NOTE
+  2026-10-02 22:00: the loop works ONLY idx 78, then idx 79; skip 68, 80-92 (lanes) and 24, 67, 93, 94, 95.
+  Continued from slice 32 (HEAD c3389f63). Tree clean at start.
+
+DESIGN (code read this session: openapi_conventions.go conventionResponses, openapi_members_test.go, handlers
+  rooms_members.go writeLastOwnerError, openapi_handshake_test.go's TOKEN_LIMIT_REACHED check,
+  openapi_examples_errors_test.go):
+  - The API answers 409 LAST_OWNER on addRoomMember (demoting the only owner) and removeRoomMember (removing it);
+    both declare 409 as the shared Conflict response, whose text named CONFLICT, IDEMPOTENCY_*,
+    PUBLICATION_STATE_CONFLICT and TOKEN_LIMIT_REACHED only. The text now also names "on a room member write,
+    LAST_OWNER (the write would leave the room without an owner)". grep: the sentence exists only in
+    openapi_conventions.go (no SPEC/frontend/fixture copy); the only test reading the Conflict text is the handshake
+    test's Contains "TOKEN_LIMIT_REACHED" (still true).
+  - No LAST_OWNER x-solvr-example was recorded: the finding is the shared row text, and a second addRoomMember
+    error example would widen every client harness (the skill indexes errors[0] explicitly). Left as is.
+
+WHAT CHANGED [REAL, git status --porcelain: 3 files M, none new; git diff --stat: 14+/3-]:
+  PRODUCTION:
+  M backend/internal/api/openapi_conventions.go (+1/-1): the shared Conflict description names LAST_OWNER.
+  TESTS:
+  M backend/internal/api/openapi_members_test.go (+11):
+    TestOpenAPIMembers_MembershipOperationsArePublished: each member operation that declares 409 must have that
+      row name LAST_OWNER (static, no DB).
+    TestOpenAPIMembers_AThirdAndFourthAgentJoinAndWorkInTheSameRoom: one new documented failure, "the only owner is
+      demoted" (POST members {agent_id: planner, role: member} -> 409 LAST_OWNER), and every failure's declared row
+      (deref'd) must name the code the API answered. Existing assertions unchanged (added, none loosened).
+  M cli/config_test.go (+2/-2): gofmt -w; whitespace-only comment alignment in TestMaskAPIKey's table.
+
+TESTS FIRST [logs /tmp/solvr_idx78_s33/; DB: fresh local database solvr_loop_s33 created and migrated to 135 this
+  session on the docker solvr-postgres (5435), dropped at the end]:
+  [TEST] BASELINE (tdd/baseline.log, -run 'TestOpenAPIMembers|TestOpenAPIExamples|TestOpenAPIHandshake|
+    TestOpenAPIConventions'): 22 PASS, 0 FAIL/SKIP.
+  [TEST] RED (tdd/red.log): both TestOpenAPIMembers tests FAIL with exactly 4 Error lines, each '"409. The request
+    conflicts with current state: ... TOKEN_LIMIT_REACHED." does not contain "LAST_OWNER"': post members and delete
+    members/{agent_id} (static), "the only owner is demoted" and "the only owner removes itself" (live). The API
+    already answered 409 LAST_OWNER for the new demotion case; FORBIDDEN/INVALID_AGENT/VALIDATION_ERROR/NOT_FOUND
+    rows already named their codes.
+  [TEST] GREEN (tdd/green.log, -v -run 'TestOpenAPI|TestPublished|TestSpec' ./internal/api/): 72 PASS, 0 FAIL/SKIP,
+    incl. both TestOpenAPIMembers tests and TestOpenAPIExamples_TheClientFixtureIsThePublishedExamples (the fixture
+    carries no shared response text: not regenerated, unchanged).
+  [TEST] cli/: gofmt -l clean, go vet ./... exit 0, go test ./... ok.
+
+OTHER CHECKS [this session]:
+  [TEST] FULL BACKEND once (be_full.log, `go test -count=1 -p 1 ./...`, solvr_loop_s33) -> exit 1, FAIL in
+    internal/api, api/handlers, db; 17 packages ok. 49 failing names (all_fail.names): the 44 referral_code baseline
+    names exactly (TestBriefing 13, TestCrystallization 4, GetHardcoreUnsolved 5, GetPlatformPulse 1,
+    GetRecentVictories 5, GetRisingIdeas 5, GetTrendingNow 5, GetYouMightLike 5, UserRepository 1),
+    TestIPFSHealthEndpoint (baseline), and 4 whose failure lines are "FATAL: sorry, too many clients already
+    (SQLSTATE 53300)" at connect: TestPostMessageHandler_RejectsForeignReferences,
+    TestSearchIntegration_{ExactTitleMatch,MultiWordQuery,PartialWordMatch} (all in slice 32's 53300 list). Run
+    alone (alone_handlers.log, alone_search.log, -v): 4 PASS, 0 FAIL/SKIP. None of the failing names is a test this
+    slice touched.
+  [REAL] gofmt -l clean on the 3 touched files; go vet ./internal/api/ exit 0. ./scripts/check-file-size.sh: "Found
+    32 file(s) exceeding 800 lines" (same as slices 17-32), none of this slice's (openapi_members_test.go 305).
+  Not run: frontend suite (no frontend file changed; grep: no frontend or client test reads the touched files);
+    golangci-lint.
+
+FINDINGS, NOT FIXED:
+  - Slices 6-32 findings stand, minus the two fixed here (LAST_OWNER in the shared Conflict text; cli/config_test.go
+    gofmt): members list owner-only (owner call); host backstop commit message; the owner's participant row answers
+    added_by "system"; MCP versions not bumped (owner call); the skill's dashed adapter commands
+    `room-members`/`room-add-member` beside the canonical ones (owner call); solvr.sh over 800 lines (not CI-scanned);
+    packages/sdk-python/.venv lacks types-requests; the shared Postgres (max_connections 100) is exhausted when the
+    loop's full backend run overlaps the lanes' suites.
+
+REMAINING FOR idx 78 (next slice):
+  34. re-check every step of idx 78 against what slices 1-33 verified, list what is the owner's (version numbers,
+    adapter-command retirement, members list visibility, publishing/deploys) and decide whether idx 78 can close
+    with UAT lines.
+
+UAT (for when idx 78 closes, not now): unchanged from slice 32.
+
+git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged (idx 78
+  passes stays false).

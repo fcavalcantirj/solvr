@@ -386,8 +386,8 @@ func TestMaskAPIKey(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"short", "****"},                           // Short keys are fully masked
-		{"solvr_abc123xyz", "solvr_****3xyz"},       // Normal keys show first 6 and last 4
+		{"short", "****"},                          // Short keys are fully masked
+		{"solvr_abc123xyz", "solvr_****3xyz"},      // Normal keys show first 6 and last 4
 		{"solvr_verylongapikey", "solvr_****ikey"}, // Longer keys
 	}
 

@@ -58,6 +58,12 @@ func TestOpenAPIMembers_MembershipOperationsArePublished(t *testing.T) {
 		for _, status := range rows[o.id] {
 			assert.Equal(t, "#/components/responses/"+names[status], refName(at(t, op, "responses", status)), "%s: %s", key, status)
 		}
+		// Demoting or removing the last owner is the conflict these writes answer; their shared
+		// 409 row names it, as it names the handshake's TOKEN_LIMIT_REACHED.
+		if conflict, ok := op["responses"].(map[string]interface{})["409"]; ok {
+			assert.Contains(t, deref(t, spec, conflict).(map[string]interface{})["description"], "LAST_OWNER",
+				"%s: the 409 row names LAST_OWNER", key)
+		}
 		declared := map[string]bool{}
 		for _, raw := range op["parameters"].([]interface{}) {
 			p := deref(t, spec, raw).(map[string]interface{})
@@ -228,6 +234,7 @@ func TestOpenAPIMembers_AThirdAndFourthAgentJoinAndWorkInTheSameRoom(t *testing.
 		{"a participant who does not own the room admits an agent", "addRoomMember", "POST", base + "/members", keys["reviewer"], map[string]interface{}{"agent_id": ids["executor"]}, 403, "FORBIDDEN"},
 		{"the agent does not exist", "addRoomMember", "POST", base + "/members", keys["planner"], map[string]interface{}{"agent_id": "agent_no_such_agent_" + fmt.Sprint(run)}, 400, "INVALID_AGENT"},
 		{"the role is neither owner nor member", "addRoomMember", "POST", base + "/members", keys["planner"], map[string]interface{}{"agent_id": ids["tester"], "role": "admin"}, 400, "VALIDATION_ERROR"},
+		{"the only owner is demoted", "addRoomMember", "POST", base + "/members", keys["planner"], map[string]interface{}{"agent_id": ids["planner"], "role": "member"}, 409, "LAST_OWNER"},
 		{"the only owner removes itself", "removeRoomMember", "DELETE", base + "/members/" + ids["planner"], keys["planner"], nil, 409, "LAST_OWNER"},
 		{"the agent is not a member", "removeRoomMember", "DELETE", base + "/members/agent_not_here", keys["planner"], nil, 404, "NOT_FOUND"},
 		{"the agent is not a member", "revokeRoomMemberToken", "DELETE", base + "/members/agent_not_here/token", keys["planner"], nil, 404, "NOT_FOUND"},
@@ -242,6 +249,10 @@ func TestOpenAPIMembers_AThirdAndFourthAgentJoinAndWorkInTheSameRoom(t *testing.
 		require.Equal(t, f.status, status, "%s: %v", f.what, answer)
 		assert.Equal(t, f.code, errorCode(answer), f.what)
 		assert.Contains(t, documented[f.op], fmt.Sprint(f.status), "%s: %d is a documented row of %s", f.what, f.status, f.op)
+		if row, ok := documented[f.op][fmt.Sprint(f.status)]; ok {
+			assert.Contains(t, deref(t, spec, row).(map[string]interface{})["description"], f.code,
+				"%s: the %d row of %s names %s", f.what, f.status, f.op, f.code)
+		}
 		assert.Empty(t, schemaProblems(spec, answer, ref("schemas", "Error"), f.what), f.what)
 	}
 

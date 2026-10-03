@@ -872,7 +872,7 @@
       "Remove approaches, answers, responses, comments, approach_relationships, legacy post type/status constraints, and problem-only fields from live runtime storage after verified migration; preserve historical relationship and archival data in the recovery archive or canonical snapshot metadata.",
       "Prove that a new post and reply can be created, searched, moderated, exported, and deleted with all legacy tables absent in a clean installation."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "data",

@@ -283,7 +283,8 @@ describe('CollaborationExample — the client stays dumb', () => {
     expect(src).not.toMatch(/['"`]Excerpt/);
   });
 
+  // Tightened from 'py-24 lg:py-32' in v1.3.4 (see design-system.test.tsx).
   it('keeps the shared homepage section rhythm', () => {
-    expect(source()).toContain('px-4 sm:px-6 lg:px-12 py-24 lg:py-32');
+    expect(source()).toContain('px-4 sm:px-6 lg:px-12 py-12 lg:py-16');
   });
 });

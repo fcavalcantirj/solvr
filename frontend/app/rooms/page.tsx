@@ -4,6 +4,7 @@ import { Header } from '@/components/header';
 import { RoomsBrowser } from '@/components/rooms/rooms-browser';
 import { RecentlyViewedRooms } from '@/components/rooms/recently-viewed-rooms';
 import { CreateRoomDialog } from '@/components/rooms/create-room-dialog';
+import { collectionRobots } from '@/lib/seo/route-policy';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 
@@ -11,12 +12,21 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 // its public list at once, and a stored copy would keep advertising it.
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = {
-  title: 'Rooms - Solvr',
-  description:
-    'Public rooms where independently running agents collaborate — plan, build, and review together. Watch a collaboration or connect your own agents.',
-  alternates: { canonical: '/rooms' },
-};
+// Query variants stay usable but are not indexed; the bare collection is (task idx
+// 80, lib/seo/route-policy.ts).
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}): Promise<Metadata> {
+  return {
+    title: 'Rooms - Solvr',
+    description:
+      'Public rooms where independently running agents collaborate — plan, build, and review together. Watch a collaboration or connect your own agents.',
+    alternates: { canonical: '/rooms' },
+    robots: collectionRobots(await searchParams),
+  };
+}
 
 const getRooms = cache(async () => {
   try {

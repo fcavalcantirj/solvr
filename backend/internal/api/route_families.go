@@ -469,6 +469,8 @@ var RouteFamilies = []RouteFamily{
 		Routes: []string{
 			"GET /v1/sitemap/urls",
 			"GET /v1/sitemap/counts",
+			"GET /v1/posts/{id}/seo",
+			"GET /v1/rooms/{slug}/seo",
 		},
 	},
 	{

@@ -18,21 +18,16 @@ describe('robots', () => {
     expect(allRule!.allow).toBe('/');
   });
 
-  it('disallows settings, auth, login, join, new, admin, and dashboard paths', () => {
+  // Task idx 80: settings, auth, login, join, admin and dashboard pages are kept out
+  // of search by their own noindex (lib/seo/route-policy.ts), which a crawler can
+  // only obey if robots.txt lets it fetch them.
+  it('disallows no site path for regular crawlers, so noindex pages can be read', () => {
     const result = robots();
 
     const rules = Array.isArray(result.rules) ? result.rules : [result.rules];
     const allRule = rules.find((r) => r.userAgent === '*');
     expect(allRule).toBeDefined();
-
-    const disallowed = allRule!.disallow as string[];
-    expect(disallowed).toContain('/settings/');
-    expect(disallowed).toContain('/auth/');
-    expect(disallowed).toContain('/login');
-    expect(disallowed).toContain('/join');
-    expect(disallowed).toContain('/new');
-    expect(disallowed).toContain('/admin/');
-    expect(disallowed).toContain('/dashboard/');
+    expect(allRule!.disallow).toBeUndefined();
   });
 
   it('blocks SEO crawler bots to save crawl budget', () => {

@@ -6,6 +6,9 @@ import { RoomDetailClient } from "@/components/rooms/room-detail-client";
 import { PrivateRoomView } from "@/components/rooms/private-room-view";
 import { JsonLd, roomJsonLd } from "@/components/seo/json-ld";
 import type { APIRoomDetailResponse } from "@/lib/api-types";
+import { NOINDEX } from "@/lib/seo/route-policy";
+import { fetchSEO } from "@/lib/seo/fetch-seo";
+import type { APIRoomSEO } from "@/lib/api-types";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "https://api.solvr.dev";
@@ -33,6 +36,11 @@ const getRoom = cache(async (slug: string): Promise<{ status: number; data: unkn
   }
 });
 
+// The page's search verdict (task idx 80): the API decides it at its own endpoint.
+const getRoomSEO = cache((slug: string) =>
+  fetchSEO<APIRoomSEO>(`/v1/rooms/${encodeURIComponent(slug)}/seo`)
+);
+
 export async function generateMetadata({
   params,
 }: {
@@ -40,15 +48,21 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug } = await params;
   const { data } = await getRoom(slug);
-  const payload = data as { data?: { room?: { display_name: string; description?: string } } } | null;
-  if (!payload?.data?.room) return {};
-  const { room } = payload.data;
-  const description = room.description?.slice(0, 160) ?? "A2A room on Solvr";
+  const payload = data as APIRoomDetailResponse | null;
+  // A private room (403 to the server), or one the server could not read, is never
+  // indexed; no private detail goes into its metadata.
+  if (!payload?.data?.room) return { robots: NOINDEX };
+  const seo = await getRoomSEO(slug);
+  // The API decides whether the page may be indexed, its title and its description
+  // (task idx 80); the page only renders that.
+  const title = seo?.title ?? payload.data.room.display_name;
+  const description = seo?.description;
   return {
-    title: `${room.display_name} - Solvr`,
+    title,
     description,
-    openGraph: { title: room.display_name, description, type: "website" },
+    openGraph: { title, description, type: "website" },
     alternates: { canonical: `/rooms/${slug}` },
+    robots: seo?.indexable ? undefined : NOINDEX,
   };
 }
 

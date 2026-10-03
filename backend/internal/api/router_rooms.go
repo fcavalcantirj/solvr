@@ -105,6 +105,8 @@ func mountRoomRoutes(
 		// public rooms, members-only (403 otherwise) for closed rooms, and a presented room
 		// token must be valid (401) and for THIS room (403).
 		r.With(entriesPolicy(apimiddleware.RoomRead)).Get("/{slug}", roomHandler.GetRoom)
+		// The room page's search verdict (task idx 80), behind the room read's policy.
+		r.With(entriesPolicy(apimiddleware.RoomRead)).Get("/{slug}/seo", roomHandler.GetRoomSEO)
 		r.With(entriesPolicy(apimiddleware.RoomRead)).Get("/{slug}/agents", presenceHandler.ListPresence)
 		r.With(entriesPolicy(apimiddleware.RoomRead)).Get("/{slug}/connect", roomConnectHandler.GetRoomConnect)
 		// Share a public room (idx 88): clean links + an optional excerpt; never posted anywhere.

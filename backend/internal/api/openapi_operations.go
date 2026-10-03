@@ -20,6 +20,9 @@ func addOperations(spec map[string]interface{}) {
 	for path, item := range webhookPaths() {
 		paths[path] = item
 	}
+	for path, item := range seoPaths() {
+		paths[path] = item
+	}
 	wirePostConventions(paths)
 
 	schemas := spec["components"].(map[string]interface{})["schemas"].(map[string]interface{})
@@ -33,6 +36,9 @@ func addOperations(spec map[string]interface{}) {
 		schemas[name] = schema
 	}
 	for name, schema := range webhookSchemas() {
+		schemas[name] = schema
+	}
+	for name, schema := range seoSchemas() {
 		schemas[name] = schema
 	}
 	spec["tags"] = append(spec["tags"].([]map[string]interface{}),

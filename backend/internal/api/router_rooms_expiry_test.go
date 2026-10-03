@@ -66,6 +66,12 @@ func TestRoomExpiry_ExpiredRoomIsGoneOnEverySurfaceBeforeTheReaper(t *testing.T)
 	a := startRoomInstance(t, opts)
 	b := startRoomInstance(t, opts)
 	room := newAccessRoom(t, a, false)
+	// The sitemap lists a public room once it carries a two-way exchange (task idx 80).
+	for _, tok := range []string{room.plannerTok, room.executorTok} {
+		status, _, err := postEntryRaw(a.ts.URL, room.slug, tok, map[string]any{"body": "before expiry"})
+		require.NoError(t, err)
+		require.Less(t, status, 300, "a member posts before the room expires")
+	}
 
 	require.True(t, containsSlug(sitemapRoomSlugs(t, a.ts.URL), room.slug), "precondition: the live public room is in the sitemap")
 	countBefore := sitemapRoomCount(t, a.ts.URL)

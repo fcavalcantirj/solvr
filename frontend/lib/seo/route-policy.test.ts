@@ -1,0 +1,80 @@
+import { describe, it, expect } from 'vitest';
+import robots from '@/app/robots';
+import { GET as sitemapCore } from '@/app/sitemap-core.xml/route';
+import {
+  INDEXABLE_ROUTES,
+  NOINDEX_ROUTES,
+  NOINDEX,
+  collectionRobots,
+} from './route-policy';
+
+// Task idx 80: one table decides which static routes may be indexed; robots.txt and
+// the core sitemap are derived from it and must agree with it.
+
+function disallowedFor(agent: string): string[] {
+  const result = robots();
+  const rules = Array.isArray(result.rules) ? result.rules : [result.rules];
+  const rule = rules.find((r) => r.userAgent === agent);
+  if (!rule?.disallow) return [];
+  return Array.isArray(rule.disallow) ? rule.disallow : [rule.disallow];
+}
+
+describe('route policy', () => {
+  it('lets crawlers fetch every noindex page, or they could never read its noindex', () => {
+    const disallowed = disallowedFor('*');
+    for (const route of NOINDEX_ROUTES) {
+      for (const url of [route, `${route}/x`]) {
+        const blockedBy = disallowed.filter((d) => url.startsWith(d));
+        expect(blockedBy, `${url} is disallowed by robots.txt`).toEqual([]);
+      }
+    }
+  });
+
+  it('never blocks an indexable route in robots.txt', () => {
+    const disallowed = disallowedFor('*');
+    for (const { path } of INDEXABLE_ROUTES) {
+      expect(disallowed.filter((d) => path.startsWith(d)), path).toEqual([]);
+    }
+  });
+
+  it('keeps indexable and noindex routes apart', () => {
+    for (const { path } of INDEXABLE_ROUTES) {
+      expect(NOINDEX_ROUTES.some((n) => path === n || path.startsWith(`${n}/`)), path).toBe(false);
+    }
+  });
+
+  it('lists exactly the sitemap routes in the core sitemap, as absolute URLs', async () => {
+    const xml = await (await sitemapCore()).text();
+    const locs = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]).sort();
+    const want = INDEXABLE_ROUTES.filter((r) => r.sitemap)
+      .map((r) => (r.path === '/' ? 'https://solvr.dev/' : `https://solvr.dev${r.path}`))
+      .sort();
+    expect(locs).toEqual(want);
+    for (const route of NOINDEX_ROUTES) {
+      expect(xml).not.toContain(`<loc>https://solvr.dev${route}</loc>`);
+    }
+  });
+
+  it('lists the docs, the protocol and the connect page', async () => {
+    const xml = await (await sitemapCore()).text();
+    expect(xml).toContain('<loc>https://solvr.dev/docs</loc>');
+    expect(xml).toContain('<loc>https://solvr.dev/docs/protocol</loc>');
+    expect(xml).toContain('<loc>https://solvr.dev/connect</loc>');
+  });
+});
+
+describe('collectionRobots', () => {
+  it('indexes the bare collection', () => {
+    expect(collectionRobots({})).toBeUndefined();
+    expect(collectionRobots(undefined)).toBeUndefined();
+  });
+
+  it('noindexes internal search results and uncurated filters', () => {
+    expect(collectionRobots({ q: 'planner' })).toEqual(NOINDEX);
+    expect(collectionRobots({ sort: 'top', tag: 'go' })).toEqual(NOINDEX);
+  });
+
+  it('treats a tracking-only query as the canonical page', () => {
+    expect(collectionRobots({ utm_source: 'news', utm_campaign: 'x', ref: 'abc' })).toBeUndefined();
+  });
+});

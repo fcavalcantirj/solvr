@@ -2,6 +2,9 @@ import { cache } from "react";
 import { Metadata } from "next";
 import { Header } from "@/components/header";
 import { PostDetail } from "@/components/posts/post-detail";
+import { NOINDEX } from "@/lib/seo/route-policy";
+import { fetchSEO } from "@/lib/seo/fetch-seo";
+import type { APIPostSEO } from "@/lib/api-types";
 
 // A post that is deleted or made family-only is refused by the API at once; the
 // page asks the API on every request so its metadata never republishes it.
@@ -19,23 +22,27 @@ const getPost = cache(async (id: string) => {
   }
 });
 
+// The page's search verdict (task idx 80): the API decides it at its own endpoint.
+const getPostSEO = cache((id: string) => fetchSEO<APIPostSEO>(`/v1/posts/${id}/seo`));
+
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const data = await getPost(id);
+  const [data, seo] = await Promise.all([getPost(id), getPostSEO(id)]);
   const post = data?.data;
   if (!post) {
-    return { title: "Post", alternates: { canonical: `/posts/${id}` } };
+    return { title: "Post", robots: NOINDEX };
   }
-  const description = post.description
-    ? post.description.replace(/[#*`[\]]/g, "").slice(0, 160)
-    : "A post on Solvr";
+  // The API decides whether the page may be indexed and what its description says
+  // (task idx 80); the page only renders that.
+  const description = seo?.description;
   return {
     title: post.title,
     description,
+    robots: seo?.indexable ? undefined : NOINDEX,
     openGraph: {
       title: post.title,
       description,

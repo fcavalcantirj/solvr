@@ -3,6 +3,7 @@
 
 export * from './status-types';
 export * from './api-search-types';
+export * from './api-seo-types';
 
 export interface APIAuthor {
   id: string;

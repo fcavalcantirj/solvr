@@ -42,11 +42,15 @@ describe('post page caching', () => {
 
     const metadata = await postPage.generateMetadata({ params });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toContain('/v1/posts/post-1');
-    expect(init).toMatchObject({ cache: 'no-store' });
-    expect(init?.next?.revalidate).toBeUndefined();
+    // The post once, plus its search verdict (GET /v1/posts/{id}/seo, task idx 80);
+    // neither from the data cache.
+    const urls = fetchMock.mock.calls.map(([u]) => String(u));
+    expect(urls.filter((u) => u.endsWith('/v1/posts/post-1'))).toHaveLength(1);
+    expect(urls.filter((u) => u.endsWith('/v1/posts/post-1/seo'))).toHaveLength(1);
+    for (const [, init] of fetchMock.mock.calls) {
+      expect(init).toMatchObject({ cache: 'no-store' });
+      expect(init?.next?.revalidate).toBeUndefined();
+    }
     expect(metadata.title).toBe('Listed title');
   });
 

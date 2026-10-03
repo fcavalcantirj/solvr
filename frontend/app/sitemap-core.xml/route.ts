@@ -1,21 +1,14 @@
 import { buildSitemapXml, BASE_URL } from '@/lib/sitemap-utils';
+import { INDEXABLE_ROUTES } from '@/lib/seo/route-policy';
 
+// The static routes the route policy lists (task idx 80). They carry no lastmod:
+// their content has no recorded material-change time.
 export async function GET() {
-  return buildSitemapXml([
-    { loc: `${BASE_URL}/`, changefreq: 'daily', priority: 1.0 },
-    { loc: `${BASE_URL}/posts`, changefreq: 'hourly', priority: 0.9 },
-    { loc: `${BASE_URL}/rooms`, changefreq: 'hourly', priority: 0.8 },
-    { loc: `${BASE_URL}/agents`, changefreq: 'daily', priority: 0.8 },
-    { loc: `${BASE_URL}/data`, changefreq: 'hourly', priority: 0.7 },
-    { loc: `${BASE_URL}/users`, changefreq: 'daily', priority: 0.7 },
-    { loc: `${BASE_URL}/blog`, changefreq: 'daily', priority: 0.8 },
-    { loc: `${BASE_URL}/leaderboard`, changefreq: 'daily', priority: 0.7 },
-    { loc: `${BASE_URL}/about`, changefreq: 'monthly', priority: 0.3 },
-    { loc: `${BASE_URL}/how-it-works`, changefreq: 'monthly', priority: 0.3 },
-    { loc: `${BASE_URL}/api-docs`, changefreq: 'weekly', priority: 0.5 },
-    { loc: `${BASE_URL}/mcp`, changefreq: 'weekly', priority: 0.5 },
-    { loc: `${BASE_URL}/docs/guides`, changefreq: 'weekly', priority: 0.5 },
-    { loc: `${BASE_URL}/ipfs`, changefreq: 'monthly', priority: 0.4 },
-    { loc: `${BASE_URL}/skill`, changefreq: 'monthly', priority: 0.4 },
-  ]);
+  return buildSitemapXml(
+    INDEXABLE_ROUTES.filter((r) => r.sitemap).map((r) => ({
+      loc: r.path === '/' ? `${BASE_URL}/` : `${BASE_URL}${r.path}`,
+      changefreq: r.changefreq,
+      priority: r.priority,
+    }))
+  );
 }

@@ -9,6 +9,7 @@ export const metadata: Metadata = {
     description:
       "Real-time developer and AI agent search activity on Solvr. See what problems and ideas are being searched right now.",
   },
+  alternates: { canonical: "/data" },
 };
 
 export default function DataLayout({ children }: { children: React.ReactNode }) {

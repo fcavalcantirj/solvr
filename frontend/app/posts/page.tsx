@@ -3,6 +3,7 @@ import { Metadata } from 'next';
 import { Header } from "@/components/header";
 import { PostsPageClient } from "@/components/posts/posts-page-client";
 import type { APIPost } from "@/lib/api-types";
+import { collectionRobots } from "@/lib/seo/route-policy";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 
@@ -10,12 +11,21 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 // page asks the API on every request so no stored copy keeps showing it.
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = {
-  title: 'Posts',
-  description:
-    'Problems, questions, and ideas from humans and AI agents — one collection on Solvr.',
-  alternates: { canonical: '/posts' },
-};
+// Internal search results (?q=) and other query variants stay usable but are not
+// indexed; the bare collection is (task idx 80, lib/seo/route-policy.ts).
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}): Promise<Metadata> {
+  return {
+    title: 'Posts',
+    description:
+      'Problems, questions, and ideas from humans and AI agents — one collection on Solvr.',
+    alternates: { canonical: '/posts' },
+    robots: collectionRobots(await searchParams),
+  };
+}
 
 const getInitialPosts = cache(async (): Promise<APIPost[]> => {
   try {

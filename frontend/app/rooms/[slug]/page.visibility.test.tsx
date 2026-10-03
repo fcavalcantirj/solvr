@@ -34,6 +34,7 @@ vi.mock('next/navigation', () => ({
 }));
 
 import RoomDetailPage, { generateMetadata } from './page';
+import { NOINDEX } from '@/lib/seo/route-policy';
 
 const NAME = 'Room Name MARKER-NAME-7';
 const DESCRIPTION = 'Room description MARKER-DESC-7';
@@ -60,8 +61,16 @@ function roomPayload() {
 const fetchMock = vi.fn();
 
 function apiAnswers(status: number) {
-  // Even a refusal carries the room here: the page must not read a refused body.
-  fetchMock.mockResolvedValue({ ok: status >= 200 && status < 300, status, json: async () => roomPayload() });
+  // Even a refusal carries the room here: the page must not read a refused body. The
+  // room's search verdict (GET /v1/rooms/{slug}/seo, task idx 80) answers like the room.
+  fetchMock.mockImplementation(async (url: string) => ({
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () =>
+      String(url).endsWith('/seo')
+        ? { data: { indexable: true, title: NAME, description: DESCRIPTION } }
+        : roomPayload(),
+  }));
 }
 
 const params = () => ({ params: Promise.resolve({ slug: 'the-room' }) });
@@ -80,7 +89,8 @@ describe('room page follows the API for HTML and social metadata', () => {
     apiAnswers(200);
 
     const meta = await generateMetadata(params());
-    expect(meta.title).toBe(`${NAME} - Solvr`);
+    // The root template appends " | Solvr"; the page adds no second suffix.
+    expect(meta.title).toBe(NAME);
     expect(meta.description).toBe(DESCRIPTION);
     expect(meta.openGraph).toMatchObject({ title: NAME, description: DESCRIPTION });
 
@@ -95,8 +105,9 @@ describe('room page follows the API for HTML and social metadata', () => {
     async (status) => {
       apiAnswers(status);
 
+      // Nothing about the room, only the directive to keep the gate out of search.
       const meta = await generateMetadata(params());
-      expect(meta).toEqual({});
+      expect(meta).toEqual({ robots: NOINDEX });
 
       const { container, getByTestId, queryByTestId } = render(await RoomDetailPage(params()));
       expect(getByTestId('private-gate').textContent).toBe('the-room');
@@ -111,7 +122,7 @@ describe('room page follows the API for HTML and social metadata', () => {
   it('a room the API no longer has (deleted or expired, 404): no metadata and a real 404', async () => {
     apiAnswers(404);
 
-    expect(await generateMetadata(params())).toEqual({});
+    expect(await generateMetadata(params())).toEqual({ robots: NOINDEX });
     await expect(RoomDetailPage(params())).rejects.toThrow('NEXT_NOT_FOUND');
   });
 });

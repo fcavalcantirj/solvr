@@ -237,6 +237,20 @@ func (p *Post) PublicEligible() bool {
 		(p.Visibility == "" || p.Visibility == VisibilityPublic)
 }
 
+// Indexable reports whether search engines may index the post's page: exactly the
+// posts the sitemap lists (db.sitemapPostEligible), publicly eligible and not in a
+// legacy hidden status.
+func (p *Post) Indexable() bool {
+	if !p.PublicEligible() {
+		return false
+	}
+	switch p.Status {
+	case PostStatusDraft, PostStatusPendingReview, PostStatusRejected:
+		return false
+	}
+	return true
+}
+
 // PostAuthor contains author information for display.
 type PostAuthor struct {
 	Type        AuthorType `json:"type"`

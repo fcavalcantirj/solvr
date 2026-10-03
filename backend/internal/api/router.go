@@ -664,6 +664,8 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			r.Get("/posts", postsHandler.List)
 			// Per SPEC.md Part 5.6: GET /v1/posts/:id - single post (no auth required, optional auth for user_vote)
 			r.Get("/posts/{id}", postsHandler.Get)
+			// The post page's search verdict (task idx 80): 404 exactly when the post read is.
+			r.Get("/posts/{id}/seo", postsHandler.GetSEO)
 			// Canonical Reply model (BART-585): public reads of a post's replies and a single reply.
 			r.Get("/posts/{id}/replies", repliesHandler.List)
 			r.Get("/replies/{id}", repliesHandler.Get)

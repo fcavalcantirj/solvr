@@ -137,8 +137,9 @@ func replyPaths() map[string]interface{} {
 		"/posts/{id}/replies", obj(
 			"get", obj(
 				"summary", "List a post's replies", "operationId", "listReplies", "tags", []string{"Replies"}, "security", anonymousOrBearer(),
-				"description", "Replies oldest first. Page forward with meta.next_cursor until meta.has_more is false; a reply committed while paging is never skipped or repeated. A post the caller may not read answers 404.",
-				"parameters", []map[string]interface{}{idParam("Post ID"), cursorParam("replies"), limitParam("replies")},
+				"description", "Replies oldest first. Page forward with meta.next_cursor until meta.has_more is false; a reply committed while paging is never skipped or repeated. A post the caller may not read answers 404. ?page=N instead answers numbered pages of 100 (meta.page, per_page, total_pages): the stable segments the web renders as /posts/{id}/replies/{n}; page cannot be combined with cursor or limit (400), and a page past the last is 404.",
+				"parameters", []map[string]interface{}{idParam("Post ID"), cursorParam("replies"), limitParam("replies"),
+					queryParam("page", "Numbered page of 100 replies, written without leading zeros (task idx 81).", obj("type", "integer", "minimum", 1))},
 				"responses", withErrors(obj("200", jsonOK("One page of replies", "ReplyPage", nil)), "400", "404"),
 			),
 			"post", obj(

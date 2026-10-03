@@ -55,6 +55,10 @@ func mountRoomRoutes(
 	presenceHandler.SetFunnelRecorder(funnelRepo)
 	msgHandler.SetFunnelRecorder(funnelRepo)
 	entryRepo := db.NewRoomEntryRepository(pool)
+	// Crawlable transcript archive (task idx 81): the room read carries its size, and
+	// GET /{slug}/history/{page} serves its fixed sequence-range pages.
+	roomHandler.SetHistoryReader(entryRepo)
+	historyHandler := handlers.NewRoomHistoryHandler(entryRepo, msgRepo)
 	if hubMgr != nil {
 		// Live delivery reads committed entries back from the timeline (see StartRoomRelay).
 		hubMgr.EnableRelay(handlers.NewTimelineFrameSource(entryRepo))
@@ -107,6 +111,8 @@ func mountRoomRoutes(
 		r.With(entriesPolicy(apimiddleware.RoomRead)).Get("/{slug}", roomHandler.GetRoom)
 		// The room page's search verdict (task idx 80), behind the room read's policy.
 		r.With(entriesPolicy(apimiddleware.RoomRead)).Get("/{slug}/seo", roomHandler.GetRoomSEO)
+		// The crawlable transcript archive (task idx 81): fixed sequence-range pages.
+		r.With(entriesPolicy(apimiddleware.RoomRead)).Get("/{slug}/history/{page}", historyHandler.GetPage)
 		r.With(entriesPolicy(apimiddleware.RoomRead)).Get("/{slug}/agents", presenceHandler.ListPresence)
 		r.With(entriesPolicy(apimiddleware.RoomRead)).Get("/{slug}/connect", roomConnectHandler.GetRoomConnect)
 		// Share a public room (idx 88): clean links + an optional excerpt; never posted anywhere.

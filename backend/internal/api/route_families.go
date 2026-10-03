@@ -125,6 +125,7 @@ var RouteFamilies = []RouteFamily{
 			"DELETE /v1/rooms/{slug}/members/{agent_id}/token",
 			"GET /v1/rooms/{slug}/entries",
 			"POST /v1/rooms/{slug}/entries",
+			"GET /v1/rooms/{slug}/history/{page}",
 			"GET /v1/rooms/{slug}/entries/{entry_id}",
 			"GET /v1/rooms/{slug}/stream",
 			"POST /v1/rooms/{slug}/stream-ticket",

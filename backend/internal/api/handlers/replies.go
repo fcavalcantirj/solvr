@@ -152,6 +152,12 @@ func (h *RepliesHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Numbered pages (task idx 81) are the stable segments of a long discussion.
+	if r.URL.Query().Has("page") {
+		h.listNumbered(w, r, postID)
+		return
+	}
+
 	// Opaque cursor pagination, default 50 / max 100, matching the room entries
 	// surface (idx 73 step 2). A malformed cursor or limit is a 400.
 	afterCreatedAt, afterID, limit, ok := parseReplyPage(w, r.URL.Query())

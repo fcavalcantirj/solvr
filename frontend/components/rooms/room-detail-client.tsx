@@ -36,6 +36,9 @@ interface RoomDetailClientProps {
   // The API's "Try this workflow" link (GET /v1/rooms/{slug} try_workflow_url): a fresh
   // room seeded from this public room's task. null for a private room (idx 88).
   tryWorkflowUrl?: string | null;
+  // Server-rendered links to the transcript archive and outcome posts (task idx 81),
+  // shown in the sidebar so crawlers and readers reach every earlier message.
+  archive?: React.ReactNode;
 }
 
 const OLDER_PAGE_SIZE = 50;
@@ -50,7 +53,7 @@ function readMessageParam(): number | undefined {
   return Number.isFinite(id) && id > 0 ? id : undefined;
 }
 
-export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDisplayName, connectionStatus, initialTask, latestPinned, highlightMessageId, tryWorkflowUrl }: RoomDetailClientProps) {
+export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDisplayName, connectionStatus, initialTask, latestPinned, highlightMessageId, tryWorkflowUrl, archive }: RoomDetailClientProps) {
   // The transcript reads oldest -> newest (top -> bottom). All batches (initial
   // window, older-history pages, SSE pushes, deep-link fetches, local echoes) go
   // through mergeMessages, so the list is always ordered by server id and free
@@ -372,6 +375,7 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
             <ConnectAgentPanel room={displayedRoom} tryWorkflowUrl={tryWorkflowUrl} />
           </div>
           <PresenceSidebar agents={agents} room={displayedRoom} layout="desktop" />
+          {archive}
         </aside>
       </div>
 

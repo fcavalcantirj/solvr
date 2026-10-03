@@ -36,6 +36,9 @@ type RoomHandler struct {
 	memberNotify ContributionNotifier
 	// outcomePosts lets the share excerpt prefer a published outcome (SetOutcomePosts).
 	outcomePosts roomOutcomePosts
+	// history sizes the transcript archive for GET /{slug} (SetHistoryReader, task idx
+	// 81). Optional: nil leaves data.history null.
+	history roomSequenceReader
 }
 
 // SetOverviewChangeNotifier wires the announcement of public overview changes (see
@@ -314,6 +317,13 @@ func (h *RoomHandler) GetRoom(w http.ResponseWriter, r *http.Request) {
 		latestPinned = &pins[0]
 	}
 
+	history, err := h.historyInfo(r.Context(), room.ID)
+	if err != nil {
+		slog.Error("failed to size room history", "error", err, "room_id", room.ID)
+		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get room")
+		return
+	}
+
 	response := map[string]interface{}{
 		"data": map[string]interface{}{
 			"room":              room,
@@ -324,6 +334,7 @@ func (h *RoomHandler) GetRoom(w http.ResponseWriter, r *http.Request) {
 			"try_workflow_url":  roomTryWorkflowURL(room),
 			"connection_status": ComputeConnectionStatus(activated, onlineCount),
 			"online_count":      onlineCount,
+			"history":           history,
 		},
 	}
 	// Expose the version validator for a later If-Match edit (idx 73 step 5).

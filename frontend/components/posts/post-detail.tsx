@@ -8,14 +8,26 @@ import type { APIPost, APIReply, APIRoom } from "@/lib/api-types";
 import { MarkdownContent } from "@/components/shared/markdown-content";
 import { resolveLegacyAnchor } from "@/lib/legacy-anchor";
 
+// What the server already read for the page (task idx 81): with it the post, its
+// first replies page and its rooms are in the server HTML, and nothing is refetched.
+export interface PostDetailInitial {
+  post: APIPost;
+  replies: APIReply[];
+  rooms: APIRoom[];
+  // How many reply pages the API counts; page 2 onward live at /posts/{id}/replies/{n}.
+  replyPages: number;
+}
+
 // One detail layout for every post, whatever its historical origin. Everything
 // shown is server-owned data; the client only renders it.
-export function PostDetail({ postId }: { postId: string }) {
-  const [post, setPost] = useState<APIPost | null>(null);
-  const [replies, setReplies] = useState<APIReply[]>([]);
-  const [relatedRooms, setRelatedRooms] = useState<APIRoom[]>([]);
-  const [loading, setLoading] = useState(true);
+export function PostDetail({ postId, initial }: { postId: string; initial?: PostDetailInitial }) {
+  const [post, setPost] = useState<APIPost | null>(initial?.post ?? null);
+  const [replies, setReplies] = useState<APIReply[]>(initial?.replies ?? []);
+  const [relatedRooms, setRelatedRooms] = useState<APIRoom[]>(initial?.rooms ?? []);
+  const [replyPages] = useState(initial?.replyPages ?? 1);
+  const [loading, setLoading] = useState(!initial);
   const [error, setError] = useState(false);
+  const [hasInitial] = useState(initial !== undefined);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -37,8 +49,8 @@ export function PostDetail({ postId }: { postId: string }) {
   }, [postId]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    if (!hasInitial) load();
+  }, [load, hasInitial]);
 
   // Legacy contribution deep links (#approach-<id>, #answer-<id>, …) arrive here
   // after a legacy detail URL is redirected to this canonical post. Resolve the
@@ -94,7 +106,7 @@ export function PostDetail({ postId }: { postId: string }) {
             <User size={12} />
             {post.author.display_name}
           </Link>
-          <time dateTime={post.created_at} className="font-mono text-xs text-muted-foreground">
+          <time dateTime={post.created_at} className="font-mono text-xs text-muted-foreground" suppressHydrationWarning>
             {formatRelativeTime(post.created_at)}
           </time>
           <span className="inline-flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
@@ -191,7 +203,7 @@ export function PostDetail({ postId }: { postId: string }) {
                   >
                     {r.author.display_name}
                   </Link>
-                  <time dateTime={r.created_at} className="font-mono text-xs text-muted-foreground">
+                  <time dateTime={r.created_at} className="font-mono text-xs text-muted-foreground" suppressHydrationWarning>
                     {formatRelativeTime(r.created_at)}
                   </time>
                 </div>
@@ -199,6 +211,15 @@ export function PostDetail({ postId }: { postId: string }) {
               </li>
             ))}
           </ul>
+        )}
+        {replyPages > 1 && (
+          <Link
+            href={`/posts/${post.id}/replies/2`}
+            rel="next"
+            className="inline-block font-mono text-xs underline underline-offset-4 hover:text-foreground"
+          >
+            {`Later replies (page 2 of ${replyPages})`}
+          </Link>
         )}
       </section>
     </article>

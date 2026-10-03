@@ -4,6 +4,8 @@
 export * from './status-types';
 export * from './api-search-types';
 export * from './api-seo-types';
+export * from './api-history-types';
+import type { APIRoomHistoryInfo } from './api-history-types';
 
 export interface APIAuthor {
   id: string;
@@ -64,7 +66,16 @@ export interface APIReply {
 
 export interface APIRepliesResponse {
   data: APIReply[];
-  meta: { total: number; page: number };
+  // Cursor pages carry has_more/next_cursor; numbered pages (?page=, task idx 81)
+  // carry page/per_page/total_pages.
+  meta: {
+    total: number;
+    page?: number;
+    per_page?: number;
+    total_pages?: number;
+    has_more?: boolean;
+    next_cursor?: string;
+  };
 }
 
 // GET /v1/replies?author_type=&author_id=: one author's replies, newest first, each with its post.
@@ -1555,6 +1566,8 @@ export interface APIRoomDetailResponse {
     latest_pinned?: APIRoomMessage | null;
     // "Try this workflow" (idx 88): a fresh room seeded from this public room's task.
     try_workflow_url?: string | null;
+    // The transcript archive's size (task idx 81): fixed sequence-range pages.
+    history?: APIRoomHistoryInfo;
   };
 }
 

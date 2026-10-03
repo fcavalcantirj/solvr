@@ -5,6 +5,7 @@
 //
 //   node scripts/seo-verify.mjs check --base http://127.0.0.1:3400 \
 //        --index /,/posts --noindex /login,/posts?q=x
+//   node scripts/seo-verify.mjs crawl --base http://127.0.0.1:3400 --room <slug> [--expect-messages N]
 //
 // --site is the canonical origin pages declare (default https://solvr.dev).
 
@@ -78,13 +79,85 @@ export function checkPage(path, expect, page, site) {
   return problems;
 }
 
+// relLink returns the href of the page's first anchor with the given rel (prev/next).
+export function relLink(html, rel) {
+  const body = html.replace(/<script[\s\S]*?<\/script>/gi, '');
+  for (const m of body.matchAll(/<a\b[^>]*>/gi)) {
+    const tag = m[0];
+    if (new RegExp(`\\brel="${rel}"`, 'i').test(tag)) return decode(tag.match(/href="([^"]+)"/i)?.[1] ?? '');
+  }
+  return undefined;
+}
+
+// messageAnchors counts the transcript messages a page renders (id="message-<seq>").
+export function messageAnchors(html) {
+  return [...html.matchAll(/\bid="message-(\d+)"/g)].map((m) => Number(m[1]));
+}
+
+// runCrawl walks what a crawler without JavaScript can reach for one room: the rooms
+// list links the room; the room links its transcript pages and outcome posts; the
+// transcript pages chain by rel=prev/next, link back to the room and to agent authors;
+// every live message is reached; out-of-range and non-canonical pages are 404.
+async function runCrawl(opts) {
+  const problems = [];
+  const rows = [];
+  const slug = opts.room;
+  const roomPath = `/rooms/${slug}`;
+  const get = async (path) => {
+    const page = await fetchPage(opts.base + path);
+    rows.push({ path, status: page.status, location: page.location ?? null });
+    return page;
+  };
+  const rooms = await get('/rooms');
+  if (!extractLinks(rooms.html).includes(roomPath)) problems.push(`/rooms does not link ${roomPath}`);
+  const room = await get(roomPath);
+  const roomLinks = extractLinks(room.html);
+  const historyLinks = roomLinks.filter((l) => l.startsWith(`${roomPath}/history/`));
+  if (!historyLinks.includes(`${roomPath}/history/1`)) problems.push(`${roomPath} does not link its first transcript page`);
+  const outcomes = roomLinks.filter((l) => /^\/posts\/[0-9a-f-]{36}$/.test(l));
+
+  let path = `${roomPath}/history/1`;
+  const seen = new Set();
+  const authors = new Set();
+  let messages = 0;
+  let pages = 0;
+  while (path && !seen.has(path)) {
+    seen.add(path);
+    const page = await get(path);
+    pages++;
+    const head = parseHead(page.html);
+    if (page.status !== 200) problems.push(`${path}: status ${page.status}`);
+    if (head.canonical !== `${opts.site}${path}`) problems.push(`${path}: canonical ${head.canonical}`);
+    const links = extractLinks(page.html);
+    if (!links.includes(roomPath)) problems.push(`${path}: no link back to ${roomPath}`);
+    links.filter((l) => l.startsWith('/agents/')).forEach((l) => authors.add(l));
+    messages += messageAnchors(page.html).length;
+    path = relLink(page.html, 'next');
+  }
+  const lastPage = pages;
+  for (const bad of [`${roomPath}/history/${lastPage + 1}`, `${roomPath}/history/01`, `${roomPath}/history/0`]) {
+    const page = await get(bad);
+    if (page.status !== 404) problems.push(`${bad}: status ${page.status}, want 404`);
+  }
+  for (const link of [...authors].slice(0, 3).concat(outcomes)) {
+    const page = await get(link);
+    if (page.status !== 200) problems.push(`${link}: status ${page.status}`);
+  }
+  if (opts.expectMessages && messages !== Number(opts.expectMessages)) {
+    problems.push(`reached ${messages} messages, want ${opts.expectMessages}`);
+  }
+  rows.push({ summary: { room: slug, transcriptPages: pages, messages, authors: authors.size, outcomes: outcomes.length } });
+  return { rows, problems };
+}
+
 function parseArgs(argv) {
   const [mode, ...rest] = argv;
   const opts = { mode, base: 'http://127.0.0.1:3400', site: 'https://solvr.dev', index: [], noindex: [] };
   for (let i = 0; i < rest.length; i += 2) {
     const key = rest[i].replace(/^--/, '');
     const value = rest[i + 1] ?? '';
-    opts[key] = key === 'index' || key === 'noindex' ? value.split(',').filter(Boolean) : value;
+    opts[key.replace(/-([a-z])/g, (_, c) => c.toUpperCase())] =
+      key === 'index' || key === 'noindex' ? value.split(',').filter(Boolean) : value;
   }
   return opts;
 }
@@ -108,7 +181,7 @@ async function runCheck(opts) {
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
-  const modes = { check: runCheck };
+  const modes = { check: runCheck, crawl: runCrawl };
   const run = modes[opts.mode];
   if (!run) {
     console.error(`usage: seo-verify.mjs <${Object.keys(modes).join('|')}> [--base URL] ...`);

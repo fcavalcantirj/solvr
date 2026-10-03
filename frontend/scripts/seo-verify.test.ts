@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseHead, extractLinks, isNoindex, checkPage } from './seo-verify.mjs';
+import { parseHead, extractLinks, isNoindex, checkPage, relLink, messageAnchors } from './seo-verify.mjs';
 
 const page = `<!DOCTYPE html><html><head>
 <title>Kestrel build | Solvr</title>
@@ -46,5 +46,20 @@ describe('seo-verify', () => {
     expect(checkPage('/login', 'noindex', { status: 200, html: '<title>x</title>' }, 'https://solvr.dev')).toEqual([
       '/login: robots "(none)", want noindex',
     ]);
+  });
+});
+
+describe('seo-verify crawl helpers', () => {
+  const page = `<a href="/rooms/x/history/1" rel="prev">Earlier</a><a rel="next" href="/rooms/x/history/3">Later</a>
+<li id="message-101"></li><li id="message-102"></li><div id="messages-103"></div>`;
+
+  it('finds the prev and next links', () => {
+    expect(relLink(page, 'prev')).toBe('/rooms/x/history/1');
+    expect(relLink(page, 'next')).toBe('/rooms/x/history/3');
+    expect(relLink('<a href="/x">x</a>', 'next')).toBeUndefined();
+  });
+
+  it('counts rendered transcript messages', () => {
+    expect(messageAnchors(page)).toEqual([101, 102]);
   });
 });

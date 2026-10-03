@@ -82,6 +82,7 @@ func operationSchemas() map[string]interface{} {
 			"connection_status", typed("string", "description", "Server-computed connection state of the room."),
 			"online_count", typed("integer"),
 			"try_workflow_url", nullable("string", "description", "Try this workflow: /connect?from_room=<slug>, a fresh room seeded from this public room's task; null for a private room."),
+			"history", nullable("object", "description", "The transcript archive's size: page_size (100) and total_pages; GET /rooms/{slug}/history/{page} serves the pages."),
 		), "room")), "data"),
 		"CreateRoomRequest", objectOf(obj(
 			"display_name", typed("string"),

@@ -1,8 +1,9 @@
 package api
 
-// Search-visibility operations of the OpenAPI contract (task idx 80, SPEC.md Part 27):
-// what a post or room page tells search engines. Served apart from the post and room
-// reads, so the canonical read operations and their consumers are unchanged.
+// Search-visibility operations of the OpenAPI contract (tasks idx 80-81, SPEC.md Part 27):
+// what a post or room page tells search engines, and the crawlable transcript archive.
+// Served apart from the post and room reads, so the canonical read operations and their
+// consumers are unchanged.
 
 func seoPaths() map[string]interface{} {
 	return obj(
@@ -13,6 +14,15 @@ func seoPaths() map[string]interface{} {
 				"description", "Whether search engines may index the post's page (exactly the posts the sitemap lists) and its search description. Answers 404 exactly when GET /posts/{id} does for the same caller.",
 				"parameters", []map[string]interface{}{idParam("Post ID")},
 				"responses", withErrors(obj("200", jsonOK("Search verdict", "PostSEOResponse", nil)), "401", "404"),
+			),
+		),
+		"/rooms/{slug}/history/{page}", obj(
+			"get", obj(
+				"summary", "One page of a room's transcript archive", "operationId", "getRoomHistoryPage", "tags", []string{"Rooms"},
+				"security", anonymousOrBearer(),
+				"description", "Page N holds the room's live messages with sequence numbers (N-1)*100+1 through N*100, in sequence order. Ranges are immutable: new messages never move an earlier page; a deleted message leaves a gap. A page number not written as a positive integer without leading zeros, or beyond the last page, is 404. Same read policy as GET /rooms/{slug}.",
+				"parameters", []map[string]interface{}{slugParam(), pathParam("page", "Page number, from 1.", obj("type", "integer", "minimum", 1))},
+				"responses", withErrors(obj("200", jsonOK("Transcript page", "RoomHistoryResponse", nil)), "401", "403", "404"),
 			),
 		),
 		"/rooms/{slug}/seo", obj(
@@ -34,6 +44,13 @@ func seoSchemas() map[string]interface{} {
 		"PostSEOResponse", objectOf(obj("data", objectOf(obj(
 			"indexable", indexable, "description", description,
 		), "indexable", "description")), "data"),
+		"RoomHistoryResponse", objectOf(obj("data", objectOf(obj(
+			"page", typed("integer"), "page_size", typed("integer"),
+			"from_sequence", typed("integer"), "to_sequence", typed("integer"),
+			"total_pages", typed("integer"),
+			"prev_page", nullable("integer"), "next_page", nullable("integer"),
+			"messages", typed("array", "items", typed("object"), "description", "The range's live message entries, in sequence order."),
+		), "page", "page_size", "from_sequence", "to_sequence", "total_pages", "prev_page", "next_page", "messages")), "data"),
 		"RoomSEOResponse", objectOf(obj("data", objectOf(obj(
 			"indexable", indexable,
 			"title", typed("string", "description", "The page title: the room's name."),

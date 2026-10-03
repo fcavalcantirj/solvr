@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Header } from "@/components/header";
 import { RoomDetailClient } from "@/components/rooms/room-detail-client";
 import { PrivateRoomView } from "@/components/rooms/private-room-view";
+import { RoomArchiveNav } from "@/components/rooms/room-archive-nav";
 import { JsonLd, roomJsonLd } from "@/components/seo/json-ld";
 import type { APIRoomDetailResponse } from "@/lib/api-types";
 import { NOINDEX } from "@/lib/seo/route-policy";
@@ -40,6 +41,21 @@ const getRoom = cache(async (slug: string): Promise<{ status: number; data: unkn
 const getRoomSEO = cache((slug: string) =>
   fetchSEO<APIRoomSEO>(`/v1/rooms/${encodeURIComponent(slug)}/seo`)
 );
+
+// The room's published outcome posts, for the archive links. A failure leaves the
+// links out; it never takes the live room down.
+const getOutcomes = cache(async (slug: string): Promise<{ id: string; title: string }[]> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/v1/rooms/${encodeURIComponent(slug)}/posts`, {
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    const json = await res.json();
+    return (json.data ?? []).map((p: { id: string; title: string }) => ({ id: p.id, title: p.title }));
+  } catch {
+    return [];
+  }
+});
 
 export async function generateMetadata({
   params,
@@ -95,7 +111,8 @@ export default async function RoomDetailPage({
     );
   }
 
-  const { room, agents, recent_messages, owner_display_name, connection_status, initial_task, latest_pinned, try_workflow_url } = payload.data;
+  const { room, agents, recent_messages, owner_display_name, connection_status, initial_task, latest_pinned, try_workflow_url, history } = payload.data;
+  const outcomes = await getOutcomes(slug);
 
   // API returns the recent window newest-first; RoomDetailClient re-orders it
   // oldest -> newest for conventional top-to-bottom reading and de-duplicates.
@@ -118,6 +135,7 @@ export default async function RoomDetailPage({
             initialTask={initial_task}
             latestPinned={latest_pinned}
             tryWorkflowUrl={try_workflow_url}
+            archive={<RoomArchiveNav slug={slug} history={history} outcomes={outcomes} />}
           />
         </div>
       </main>

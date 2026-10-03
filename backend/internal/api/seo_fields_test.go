@@ -54,7 +54,8 @@ func TestPostSEO_IndexableAndDescriptionComeFromTheAPI(t *testing.T) {
 
 	status, seo := seoGet(t, ts.URL+"/v1/posts/"+approved+"/seo")
 	require.Equal(t, http.StatusOK, status)
-	assert.Equal(t, map[string]any{"indexable": true, "description": "Steps Connect a planner and an executor " + marker}, seo)
+	assert.Equal(t, map[string]any{"indexable": true, "title": "SEO open " + marker,
+		"description": "Steps Connect a planner and an executor " + marker}, seo)
 
 	status, seo = seoGet(t, ts.URL+"/v1/posts/"+rejected+"/seo")
 	require.Equal(t, http.StatusOK, status)

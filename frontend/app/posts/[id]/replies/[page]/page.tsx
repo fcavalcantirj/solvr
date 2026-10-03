@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { Header } from "@/components/header";
 import { MarkdownContent } from "@/components/shared/markdown-content";
+import { JsonLd, breadcrumbJsonLd } from "@/components/seo/json-ld";
 import { NOINDEX } from "@/lib/seo/route-policy";
 import { fetchSEO } from "@/lib/seo/fetch-seo";
 import type { APIPostSEO, APIReply, APIRepliesResponse } from "@/lib/api-types";
@@ -92,6 +93,13 @@ export default async function PostRepliesPage({ params }: { params: Params }) {
 
   return (
     <div className="min-h-screen bg-background">
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: "Posts", path: "/posts" },
+          { name: post.title, path: postHref },
+          { name: `Replies page ${current}`, path: pageHref(current) },
+        ])}
+      />
       <Header />
       <main className="pt-20">
         <article className="max-w-3xl mx-auto px-6 py-12 space-y-8">

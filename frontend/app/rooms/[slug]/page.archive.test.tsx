@@ -14,7 +14,7 @@ vi.mock('@/components/rooms/room-detail-client', () => ({
   RoomDetailClient: ({ archive }: { archive?: ReactNode }) => <div data-testid="room-detail">{archive}</div>,
 }));
 vi.mock('@/components/rooms/private-room-view', () => ({ PrivateRoomView: () => null }));
-vi.mock('@/components/seo/json-ld', () => ({ JsonLd: () => null, roomJsonLd: () => ({}) }));
+vi.mock('@/components/seo/json-ld', () => ({ JsonLd: () => null, roomJsonLd: () => ({}), breadcrumbJsonLd: () => ({}) }));
 vi.mock('next/navigation', () => ({
   notFound: () => {
     throw new Error('NEXT_NOT_FOUND');

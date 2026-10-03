@@ -98,3 +98,15 @@ describe('post reply pages', () => {
     await expect(RepliesPage(params())).rejects.toThrow(/502/);
   });
 });
+
+describe('post reply page structured data', () => {
+  it('carries breadcrumbs from the posts list through the post to this page', async () => {
+    api([200, post()], [200, replies(2, 3)]);
+    const { container } = render(await RepliesPage(params()));
+    const blocks = [...container.querySelectorAll('script[type="application/ld+json"]')].map((s) => JSON.parse(s.innerHTML));
+    const crumbs = blocks.find((b) => b['@type'] === 'BreadcrumbList');
+    expect(crumbs.itemListElement.map((i: { item: string }) => i.item)).toEqual([
+      'https://solvr.dev/', 'https://solvr.dev/posts', 'https://solvr.dev/posts/p1', 'https://solvr.dev/posts/p1/replies/2',
+    ]);
+  });
+});

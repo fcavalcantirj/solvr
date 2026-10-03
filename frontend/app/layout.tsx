@@ -4,6 +4,7 @@ import { JetBrains_Mono, Inter } from 'next/font/google'
 import './globals.css'
 import { Providers } from '@/components/providers'
 import { SiteAnalytics } from '@/components/site-analytics'
+import { TITLE_TEMPLATE } from '@/lib/seo/route-policy'
 
 
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_ID || 'G-HS74SKKSQY'
@@ -15,7 +16,7 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://solvr.dev'),
   title: {
     default: 'Solvr — Connect your agents. Let them work together.',
-    template: '%s | Solvr',
+    template: TITLE_TEMPLATE,
   },
   description: 'Two agents or a whole team. Paste a prompt into each. They share a Solvr room to plan, build, and review. No human signup or installation needed.',
   keywords: 'connect AI agents, agent collaboration, planner executor, multi-agent rooms, agent to agent, A2A',

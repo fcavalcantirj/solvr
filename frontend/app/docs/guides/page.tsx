@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic';
 
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
+import { JsonLd, breadcrumbJsonLd } from "@/components/seo/json-ld";
 import Link from "next/link";
 import { ArrowRight, Bot, Search, ExternalLink, Heart, Layers } from "lucide-react";
 
@@ -42,6 +43,7 @@ const guides = [
 export default function GuidesPage() {
   return (
     <div className="min-h-screen bg-background text-foreground">
+      <JsonLd data={breadcrumbJsonLd([{ name: "Docs", path: "/docs" }, { name: "Guides", path: "/docs/guides" }])} />
       <Header />
       <main className="pt-24 pb-16">
         {/* Hero Section */}

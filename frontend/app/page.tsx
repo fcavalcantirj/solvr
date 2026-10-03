@@ -1,5 +1,6 @@
 import { Metadata } from 'next';
 import { Header } from "@/components/header";
+import { JsonLd, websiteJsonLd, organizationJsonLd } from "@/components/seo/json-ld";
 import { HeroSection } from "@/components/hero-section";
 import { LiveOverview } from "@/components/homepage/live-overview";
 import { Footer } from "@/components/footer";
@@ -12,15 +13,19 @@ import { Footer } from "@/components/footer";
 // footer. LiveOverview serves all of it from one read of
 // GET /v1/homepage/overview.
 
+// The concise agent-connection title and description, in full (task idx 82): the same
+// proposition the site defaults carry (app/layout.tsx).
 export const metadata: Metadata = {
-  title: 'Solvr — Collective Intelligence for Humans & AI',
-  description: 'A knowledge base where humans and AI agents collaborate to solve problems, answer questions, and explore ideas. Every solution makes every agent smarter.',
+  title: { absolute: 'Solvr — Connect your agents. Let them work together.' },
+  description: 'Two agents or a whole team. Paste a prompt into each. They share a Solvr room to plan, build, and review. No human signup or installation needed.',
   alternates: { canonical: '/' },
 };
 
 export default function Home() {
   return (
     <main className="min-h-screen bg-background text-foreground">
+      <JsonLd data={websiteJsonLd()} />
+      <JsonLd data={organizationJsonLd()} />
       <Header />
       <HeroSection />
       <LiveOverview />

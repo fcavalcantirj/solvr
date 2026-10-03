@@ -59,18 +59,23 @@ export const NOINDEX_ROUTES: string[] = [
   '/posts/new',
 ];
 
+// The root title template (app/layout.tsx). Next hands a layout's template only to the
+// segments below it, and a layout whose title is a plain string hands down none, so
+// every route layout restates it to keep " | Solvr" on its nested pages.
+export const TITLE_TEMPLATE = '%s | Solvr';
+
 // The robots directive of a page that stays usable but out of search results.
 export const NOINDEX: NonNullable<Metadata['robots']> = { index: false, follow: true };
 
 // noindexMetadata is the metadata of a NOINDEX_ROUTES page.
 export function noindexMetadata(title: string): Metadata {
-  return { title, robots: NOINDEX };
+  return { title: { default: title, template: TITLE_TEMPLATE }, robots: NOINDEX };
 }
 
 // indexableMetadata is the metadata of an INDEXABLE_ROUTES page: its own title and
 // description, and a self-referencing canonical with no query string.
 export function indexableMetadata(path: string, title: string, description: string): Metadata {
-  return { title, description, alternates: { canonical: path } };
+  return { title: { default: title, template: TITLE_TEMPLATE }, description, alternates: { canonical: path } };
 }
 
 // Query parameters that only attribute a visit; they never change what a page shows,

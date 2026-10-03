@@ -7,6 +7,7 @@ export * from './api-types';
 
 // Import types for internal use
 import type {
+  APIPostSourceRoom,
   APIPostsResponse,
   APISearchResponse,
   APIAnswersResponse,
@@ -217,7 +218,7 @@ export class SolvrAPIBase {
   async getPostReplies(id: string): Promise<APIRepliesResponse> {
     return this.fetch<APIRepliesResponse>(`/v1/posts/${id}/replies`);
   }
-  async getRelatedRooms(id: string): Promise<{ data: APIRoom[] }> {
+  async getRelatedRooms(id: string): Promise<{ data: APIRoom[]; source_room?: APIPostSourceRoom | null }> {
     return this.fetch<{ data: APIRoom[] }>(`/v1/posts/${id}/rooms`);
   }
 

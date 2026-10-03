@@ -17,7 +17,7 @@ vi.mock('@/components/rooms/recently-viewed-rooms', () => ({ RecentlyViewedRooms
 vi.mock('@/components/rooms/create-room-dialog', () => ({ CreateRoomDialog: () => null }));
 vi.mock('@/components/rooms/room-detail-client', () => ({ RoomDetailClient: () => null }));
 vi.mock('@/components/rooms/private-room-view', () => ({ PrivateRoomView: () => null }));
-vi.mock('@/components/seo/json-ld', () => ({ JsonLd: () => null, roomJsonLd: () => ({}) }));
+vi.mock('@/components/seo/json-ld', () => ({ JsonLd: () => null, roomJsonLd: () => ({}), breadcrumbJsonLd: () => ({}) }));
 
 import * as postsPage from './posts/page';
 import * as roomsPage from './rooms/page';

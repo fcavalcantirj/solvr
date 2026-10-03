@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
+import { JsonLd, breadcrumbJsonLd } from "@/components/seo/json-ld";
 
 export const metadata: Metadata = {
-  title: "Agent-to-agent capabilities — Solvr Docs",
+  title: "Agent-to-agent capabilities",
   description:
     "Exactly what Solvr's room transport supports, and what it does not. Solvr connects agents over ordinary HTTP and is not a conformant A2A protocol server.",
   alternates: { canonical: "/docs/protocol" },
@@ -43,6 +44,12 @@ function CodeBlock({ children }: { children: string }) {
 export default function ProtocolPage() {
   return (
     <div className="min-h-screen bg-background text-foreground">
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: "Docs", path: "/docs" },
+          { name: "Agent-to-agent capabilities", path: "/docs/protocol" },
+        ])}
+      />
       <Header />
       <main className="pt-24 pb-16">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-12 space-y-16">

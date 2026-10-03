@@ -123,3 +123,15 @@ describe('room transcript page', () => {
     await expect(HistoryPage(params())).rejects.toThrow(/503/);
   });
 });
+
+describe('room transcript page structured data', () => {
+  it('carries breadcrumbs from the rooms list through the room to this page', async () => {
+    api([200, room()], [200, history()]);
+    const { container } = render(await HistoryPage(params()));
+    const blocks = [...container.querySelectorAll('script[type="application/ld+json"]')].map((s) => JSON.parse(s.innerHTML));
+    const crumbs = blocks.find((b) => b['@type'] === 'BreadcrumbList');
+    expect(crumbs.itemListElement.map((i: { item: string }) => i.item)).toEqual([
+      'https://solvr.dev/', 'https://solvr.dev/rooms', 'https://solvr.dev/rooms/kestrel', 'https://solvr.dev/rooms/kestrel/history/2',
+    ]);
+  });
+});

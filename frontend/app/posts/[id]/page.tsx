@@ -2,7 +2,8 @@ import { cache } from "react";
 import { Metadata } from "next";
 import { Header } from "@/components/header";
 import { PostDetail, type PostDetailInitial } from "@/components/posts/post-detail";
-import type { APIReply, APIRoom } from "@/lib/api-types";
+import { JsonLd, postPageJsonLd, breadcrumbJsonLd } from "@/components/seo/json-ld";
+import type { APIPostSourceRoom, APIReply, APIRoom } from "@/lib/api-types";
 import { NOINDEX } from "@/lib/seo/route-policy";
 import { fetchSEO } from "@/lib/seo/fetch-seo";
 import type { APIPostSEO } from "@/lib/api-types";
@@ -39,11 +40,13 @@ const getFirstReplies = cache(async (id: string): Promise<{ replies: APIReply[];
   }
 });
 
-const getRooms = cache(async (id: string): Promise<APIRoom[] | null> => {
+// The rooms started from the post, and the public room it was saved from (task idx 82).
+const getRooms = cache(async (id: string): Promise<{ rooms: APIRoom[]; sourceRoom: APIPostSourceRoom | null } | null> => {
   try {
     const res = await fetch(`${API_BASE_URL}/v1/posts/${id}/rooms`, { cache: "no-store" });
     if (!res.ok) return null;
-    return (await res.json()).data ?? [];
+    const json = await res.json();
+    return { rooms: json.data ?? [], sourceRoom: json.source_room ?? null };
   } catch {
     return null;
   }
@@ -63,12 +66,14 @@ export async function generateMetadata({
   // The API decides whether the page may be indexed and what its description says
   // (task idx 80); the page only renders that.
   const description = seo?.description;
+  // The API's title is unique among indexable posts (task idx 82).
+  const title = seo?.title ?? post.title;
   return {
-    title: post.title,
+    title,
     description,
     robots: seo?.indexable ? undefined : NOINDEX,
     openGraph: {
-      title: post.title,
+      title,
       description,
       type: "article",
       publishedTime: post.created_at,
@@ -86,14 +91,23 @@ export default async function PostDetailPage({
 }) {
   const { id } = await params;
   const data = await getPost(id);
-  const [first, rooms] = await Promise.all([getFirstReplies(id), getRooms(id)]);
+  const [first, rooms, seo] = await Promise.all([getFirstReplies(id), getRooms(id), getPostSEO(id)]);
+  const post = data?.data;
   const initial: PostDetailInitial | undefined =
-    data?.data && first && rooms
-      ? { post: data.data, replies: first.replies, rooms, replyPages: first.pages }
+    post && first && rooms
+      ? { post, replies: first.replies, rooms: rooms.rooms, replyPages: first.pages, sourceRoom: rooms.sourceRoom }
       : undefined;
+  const url = `https://solvr.dev/posts/${id}`;
+  const headline = seo?.title ?? post?.title;
 
   return (
     <div className="min-h-screen bg-background">
+      {post && headline && (
+        <>
+          <JsonLd data={postPageJsonLd({ post, url, headline })} />
+          <JsonLd data={breadcrumbJsonLd([{ name: "Posts", path: "/posts" }, { name: headline, path: `/posts/${id}` }])} />
+        </>
+      )}
       <Header />
       <main className="pt-20">
         <div className="px-6 py-12">

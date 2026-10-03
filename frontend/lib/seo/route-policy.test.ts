@@ -6,6 +6,9 @@ import {
   NOINDEX_ROUTES,
   NOINDEX,
   collectionRobots,
+  indexableMetadata,
+  noindexMetadata,
+  TITLE_TEMPLATE,
 } from './route-policy';
 
 // Task idx 80: one table decides which static routes may be indexed; robots.txt and
@@ -76,5 +79,15 @@ describe('collectionRobots', () => {
 
   it('treats a tracking-only query as the canonical page', () => {
     expect(collectionRobots({ utm_source: 'news', utm_campaign: 'x', ref: 'abc' })).toBeUndefined();
+  });
+});
+
+// Next passes a layout's title.template only to segments below it, and a layout whose
+// title is a plain string passes none, so /docs/guides lost " | Solvr" under /docs.
+describe('route layout titles', () => {
+  it('keep the root title template for the pages nested below them', () => {
+    expect(TITLE_TEMPLATE).toBe('%s | Solvr');
+    expect(indexableMetadata('/docs', 'Docs', 'x'.repeat(50)).title).toEqual({ default: 'Docs', template: TITLE_TEMPLATE });
+    expect(noindexMetadata('Settings').title).toEqual({ default: 'Settings', template: TITLE_TEMPLATE });
   });
 });

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Header } from "@/components/header";
 import { MarkdownContent } from "@/components/shared/markdown-content";
+import { JsonLd, breadcrumbJsonLd } from "@/components/seo/json-ld";
 import { NOINDEX } from "@/lib/seo/route-policy";
 import { fetchSEO } from "@/lib/seo/fetch-seo";
 import type { APIRoomDetailResponse, APIRoomHistoryPage, APIRoomMessage, APIRoomSEO } from "@/lib/api-types";
@@ -102,6 +103,13 @@ export default async function RoomHistoryPage({ params }: { params: Params }) {
 
   return (
     <div className="min-h-screen bg-background">
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: "Rooms", path: "/rooms" },
+          { name, path: roomHref },
+          { name: `Transcript page ${history.page}`, path: pageHref(history.page) },
+        ])}
+      />
       <Header />
       <main className="pt-20">
         <article className="max-w-3xl mx-auto px-6 py-12 space-y-8">

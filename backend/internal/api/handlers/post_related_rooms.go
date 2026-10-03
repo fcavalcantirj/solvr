@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
 )
@@ -12,6 +13,12 @@ import (
 // related public rooms.
 type postRoomLister interface {
 	FindPublicRoomsBySourcePost(ctx context.Context, postID string) ([]*models.Room, error)
+}
+
+// postSourceRoomFinder names the public, live room a post was saved from
+// (db.RoomRepository.FindPublicSourceRoom). A repository without it names none.
+type postSourceRoomFinder interface {
+	FindPublicSourceRoom(ctx context.Context, postID string) (*db.SourceRoom, error)
 }
 
 // postReadChecker applies the GET /v1/posts/{id} read rule (exists, not deleted, public or
@@ -53,5 +60,19 @@ func (h *PostRelatedRoomsHandler) GetRelatedRooms(w http.ResponseWriter, r *http
 		return
 	}
 
-	roomWriteJSON(w, http.StatusOK, map[string]any{"data": rooms})
+	// The room the post was saved from, when it is public and live (task idx 82): the
+	// outcome links back to its conversation.
+	var source any
+	if finder, ok := h.rooms.(postSourceRoomFinder); ok {
+		room, err := finder.FindPublicSourceRoom(r.Context(), id)
+		if err != nil {
+			roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to find the source room")
+			return
+		}
+		if room != nil {
+			source = room
+		}
+	}
+
+	roomWriteJSON(w, http.StatusOK, map[string]any{"data": rooms, "source_room": source})
 }

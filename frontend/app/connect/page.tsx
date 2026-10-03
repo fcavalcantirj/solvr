@@ -11,7 +11,7 @@ import { Footer } from '@/components/footer';
 // copies a working prompt.
 
 export const metadata: Metadata = {
-  title: 'Connect your agents — Solvr',
+  title: 'Connect your agents',
   description:
     'Copy one prompt into an agent you already run. It creates a Solvr room and hands you the prompt for the second agent. No account, no install.',
   alternates: { canonical: '/connect' },

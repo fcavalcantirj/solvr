@@ -42,8 +42,10 @@ func seoSchemas() map[string]interface{} {
 	description := typed("string", "description", "The page's search description from its visible content, at most 160 characters.")
 	return obj(
 		"PostSEOResponse", objectOf(obj("data", objectOf(obj(
-			"indexable", indexable, "description", description,
-		), "indexable", "description")), "data"),
+			"indexable", indexable,
+			"title", typed("string", "description", "The page title, unique among indexable posts: a title another indexable post shares names its author, and one the same author reused also names its date."),
+			"description", description,
+		), "indexable", "title", "description")), "data"),
 		"RoomHistoryResponse", objectOf(obj("data", objectOf(obj(
 			"page", typed("integer"), "page_size", typed("integer"),
 			"from_sequence", typed("integer"), "to_sequence", typed("integer"),

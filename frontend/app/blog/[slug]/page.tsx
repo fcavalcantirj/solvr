@@ -105,7 +105,7 @@ export default async function BlogPostPage({
           updated_at: raw.updated_at,
           published_at: raw.published_at,
           tags: raw.tags,
-          author: raw.author ? { display_name: raw.author.display_name } : undefined,
+          author: raw.author ? { display_name: raw.author.display_name, type: raw.author.type } : undefined,
         },
         url: `https://solvr.dev/blog/${slug}`,
       })} />

@@ -5,7 +5,7 @@ import { Header } from "@/components/header";
 import { RoomDetailClient } from "@/components/rooms/room-detail-client";
 import { PrivateRoomView } from "@/components/rooms/private-room-view";
 import { RoomArchiveNav } from "@/components/rooms/room-archive-nav";
-import { JsonLd, roomJsonLd } from "@/components/seo/json-ld";
+import { JsonLd, roomJsonLd, breadcrumbJsonLd } from "@/components/seo/json-ld";
 import type { APIRoomDetailResponse } from "@/lib/api-types";
 import { NOINDEX } from "@/lib/seo/route-policy";
 import { fetchSEO } from "@/lib/seo/fetch-seo";
@@ -112,7 +112,8 @@ export default async function RoomDetailPage({
   }
 
   const { room, agents, recent_messages, owner_display_name, connection_status, initial_task, latest_pinned, try_workflow_url, history } = payload.data;
-  const outcomes = await getOutcomes(slug);
+  const [outcomes, seo] = await Promise.all([getOutcomes(slug), getRoomSEO(slug)]);
+  const url = `https://solvr.dev/rooms/${slug}`;
 
   // API returns the recent window newest-first; RoomDetailClient re-orders it
   // oldest -> newest for conventional top-to-bottom reading and de-duplicates.
@@ -120,9 +121,12 @@ export default async function RoomDetailPage({
 
   return (
     <div className="min-h-screen lg:h-screen flex flex-col bg-background lg:overflow-hidden">
+      {/* Structured data from what the page shows (task idx 82): the API's description,
+          and the opening message decides whether a Person led the discussion. */}
       <JsonLd
-        data={roomJsonLd({ room, url: `https://solvr.dev/rooms/${slug}` })}
+        data={roomJsonLd({ room, url, description: seo?.description, firstMessage: initial_task })}
       />
+      <JsonLd data={breadcrumbJsonLd([{ name: "Rooms", path: "/rooms" }, { name: room.display_name, path: `/rooms/${slug}` }])} />
       <Header />
       <main className="flex-1 flex flex-col min-h-0 pt-16">
         <div className="flex-1 min-h-0 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-12 py-4">

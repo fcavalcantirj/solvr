@@ -3,6 +3,7 @@ package seo
 import (
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
@@ -68,4 +69,11 @@ func TestRoomDescription_LastResortIsFactual(t *testing.T) {
 func TestPostDescription_UsesTheBodyThenTheTitle(t *testing.T) {
 	assert.Equal(t, "Body text here", PostDescription("Title", "Body **text** here"))
 	assert.Equal(t, "Title only", PostDescription("Title only", ""))
+}
+
+func TestPostTitle_StaysAsWrittenUnlessAnotherIndexablePostSharesIt(t *testing.T) {
+	day := time.Date(2026, 9, 14, 23, 30, 0, 0, time.UTC)
+	assert.Equal(t, "Hand a plan over", PostTitle("  Hand a  plan over ", "kestrel", day, 0, 0))
+	assert.Equal(t, "Hand a plan over — kestrel", PostTitle("Hand a plan over", "kestrel", day, 2, 0))
+	assert.Equal(t, "Hand a plan over — kestrel (2026-09-14)", PostTitle("Hand a plan over", "kestrel", day, 2, 1))
 }

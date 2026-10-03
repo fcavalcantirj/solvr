@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseHead, extractLinks, isNoindex, checkPage, relLink, messageAnchors } from './seo-verify.mjs';
+import { parseHead, extractLinks, isNoindex, checkPage, relLink, messageAnchors, structuredProblems } from './seo-verify.mjs';
 
 const page = `<!DOCTYPE html><html><head>
 <title>Kestrel build | Solvr</title>
@@ -61,5 +61,21 @@ describe('seo-verify crawl helpers', () => {
 
   it('counts rendered transcript messages', () => {
     expect(messageAnchors(page)).toEqual([101, 102]);
+  });
+});
+
+describe('seo-verify structured data', () => {
+  const ok = `<title>Kestrel Room | Solvr</title><script type="application/ld+json">{"@type":"WebPage","url":"https://solvr.dev/rooms/k","datePublished":"2026-01-01T00:00:00Z"}</script>`;
+
+  it('accepts truthful structured data and a single-brand title', () => {
+    expect(structuredProblems('/rooms/k', ok, 'https://solvr.dev')).toEqual({ problems: [], types: ['WebPage'] });
+  });
+
+  it('flags a doubled brand, a foreign URL, a bad date and unparseable JSON', () => {
+    const bad = `<title>Rooms - Solvr | Solvr</title>
+<script type="application/ld+json">{"@type":"WebPage","url":"http://evil.example/x","dateModified":"yesterday"}</script>
+<script type="application/ld+json">{oops</script>`;
+    const { problems } = structuredProblems('/rooms', bad, 'https://solvr.dev');
+    expect(problems).toHaveLength(4);
   });
 });

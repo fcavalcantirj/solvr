@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -79,4 +80,19 @@ func RoomDescription(displayName string, description *string, initialTask string
 		noun = "message"
 	}
 	return fmt.Sprintf("%s: a public Solvr room with %d %s.", displayName, messageCount, noun)
+}
+
+// PostTitle is a post page's unique search title (task idx 82). A title shared with
+// other indexable posts (twins) names its author; one the same author also used
+// (sameAuthorTwins) also names the post's date, so no two indexable pages share one.
+func PostTitle(title, author string, created time.Time, twins, sameAuthorTwins int) string {
+	t := strings.Join(strings.Fields(title), " ")
+	if twins == 0 {
+		return t
+	}
+	t += " — " + author
+	if sameAuthorTwins > 0 {
+		t += " (" + created.UTC().Format("2006-01-02") + ")"
+	}
+	return t
 }

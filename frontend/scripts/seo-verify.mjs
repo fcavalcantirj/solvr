@@ -6,6 +6,7 @@
 //   node scripts/seo-verify.mjs check --base http://127.0.0.1:3400 \
 //        --index /,/posts --noindex /login,/posts?q=x
 //   node scripts/seo-verify.mjs crawl --base http://127.0.0.1:3400 --room <slug> [--expect-messages N]
+//   node scripts/seo-verify.mjs structured --base http://127.0.0.1:3400 --index /,/posts/<id>
 //
 // --site is the canonical origin pages declare (default https://solvr.dev).
 
@@ -150,6 +151,38 @@ async function runCrawl(opts) {
   return { rows, problems };
 }
 
+// structuredProblems checks what a page's structured data and title tell a crawler
+// (task idx 82): every JSON-LD block parses, every URL it names is absolute on the
+// site, every date is a real timestamp, and the title names the brand once.
+export function structuredProblems(path, html, site) {
+  const head = parseHead(html);
+  const problems = [];
+  const types = [];
+  const brand = (head.title.match(/solvr/gi) ?? []).length;
+  if (brand !== 1) problems.push(`${path}: title "${head.title}" names Solvr ${brand} times`);
+  for (const raw of head.jsonLd) {
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      problems.push(`${path}: a JSON-LD block does not parse`);
+      continue;
+    }
+    types.push(data['@type']);
+    const walk = (node, key) => {
+      if (Array.isArray(node)) return node.forEach((n) => walk(n, key));
+      if (node && typeof node === 'object') return Object.entries(node).forEach(([k, v]) => walk(v, k));
+      if (typeof node !== 'string') return;
+      if (['url', 'item', '@id', 'mainEntityOfPage', 'logo'].includes(key) && !node.startsWith(site)) {
+        problems.push(`${path}: ${key} ${node} is not on ${site}`);
+      }
+      if (/^date/.test(key) && Number.isNaN(Date.parse(node))) problems.push(`${path}: ${key} "${node}" is not a date`);
+    };
+    walk(data, '');
+  }
+  return { problems, types };
+}
+
 function parseArgs(argv) {
   const [mode, ...rest] = argv;
   const opts = { mode, base: 'http://127.0.0.1:3400', site: 'https://solvr.dev', index: [], noindex: [] };
@@ -179,9 +212,23 @@ async function runCheck(opts) {
   return { rows, problems };
 }
 
+async function runStructured(opts) {
+  const rows = [];
+  const problems = [];
+  for (const path of opts.index) {
+    const page = await fetchPage(opts.base + path);
+    const head = parseHead(page.html);
+    const result = structuredProblems(path, page.html, opts.site);
+    rows.push({ path, status: page.status, title: head.title, types: result.types, canonical: head.canonical ?? null });
+    if (page.status !== 200) problems.push(`${path}: status ${page.status}`);
+    problems.push(...result.problems);
+  }
+  return { rows, problems };
+}
+
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
-  const modes = { check: runCheck, crawl: runCrawl };
+  const modes = { check: runCheck, crawl: runCrawl, structured: runStructured };
   const run = modes[opts.mode];
   if (!run) {
     console.error(`usage: seo-verify.mjs <${Object.keys(modes).join('|')}> [--base URL] ...`);

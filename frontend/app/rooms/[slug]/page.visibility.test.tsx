@@ -94,9 +94,13 @@ describe('room page follows the API for HTML and social metadata', () => {
     expect(meta.description).toBe(DESCRIPTION);
     expect(meta.openGraph).toMatchObject({ title: NAME, description: DESCRIPTION });
 
-    const { getByTestId, queryByTestId } = render(await RoomDetailPage(params()));
+    const { getByTestId, getAllByTestId, queryByTestId } = render(await RoomDetailPage(params()));
     expect(getByTestId('room-detail').textContent).toContain(MESSAGE);
-    expect(getByTestId('jsonld').textContent).toContain(NAME);
+    // Two structured-data blocks (task idx 82): the room and its breadcrumbs.
+    const blocks = getAllByTestId('jsonld').map((el) => el.textContent ?? '');
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0]).toContain(NAME);
+    expect(blocks[1]).toContain('BreadcrumbList');
     expect(queryByTestId('private-gate')).toBeNull();
   });
 

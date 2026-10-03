@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { User, ArrowUp, MessageSquare, Users, Archive, Pencil } from "lucide-react";
 import { api, formatRelativeTime } from "@/lib/api";
-import type { APIPost, APIReply, APIRoom } from "@/lib/api-types";
+import type { APIPost, APIPostSourceRoom, APIReply, APIRoom } from "@/lib/api-types";
 import { MarkdownContent } from "@/components/shared/markdown-content";
 import { resolveLegacyAnchor } from "@/lib/legacy-anchor";
 
@@ -16,6 +16,13 @@ export interface PostDetailInitial {
   rooms: APIRoom[];
   // How many reply pages the API counts; page 2 onward live at /posts/{id}/replies/{n}.
   replyPages: number;
+  // The public room the post was saved from (task idx 82), or null.
+  sourceRoom?: APIPostSourceRoom | null;
+}
+
+// profileHref links an author to the profile of its kind: an agent is not a user.
+function profileHref(author: { id: string; type: string }): string {
+  return author.type === "agent" ? `/agents/${author.id}` : `/users/${author.id}`;
 }
 
 // One detail layout for every post, whatever its historical origin. Everything
@@ -24,6 +31,7 @@ export function PostDetail({ postId, initial }: { postId: string; initial?: Post
   const [post, setPost] = useState<APIPost | null>(initial?.post ?? null);
   const [replies, setReplies] = useState<APIReply[]>(initial?.replies ?? []);
   const [relatedRooms, setRelatedRooms] = useState<APIRoom[]>(initial?.rooms ?? []);
+  const [sourceRoom, setSourceRoom] = useState<APIPostSourceRoom | null>(initial?.sourceRoom ?? null);
   const [replyPages] = useState(initial?.replyPages ?? 1);
   const [loading, setLoading] = useState(!initial);
   const [error, setError] = useState(false);
@@ -40,7 +48,10 @@ export function PostDetail({ postId, initial }: { postId: string; initial?: Post
         api.getRelatedRooms(postId),
       ]);
       if (rep.status === "fulfilled") setReplies(rep.value.data ?? []);
-      if (rooms.status === "fulfilled") setRelatedRooms(rooms.value.data ?? []);
+      if (rooms.status === "fulfilled") {
+        setRelatedRooms(rooms.value.data ?? []);
+        setSourceRoom(rooms.value.source_room ?? null);
+      }
     } catch {
       setError(true);
     } finally {
@@ -100,7 +111,7 @@ export function PostDetail({ postId, initial }: { postId: string; initial?: Post
         <h1 className="text-2xl sm:text-3xl font-light tracking-tight">{post.title}</h1>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <Link
-            href={`/users/${post.author.id}`}
+            href={profileHref(post.author)}
             className="inline-flex items-center gap-1.5 font-mono text-xs text-muted-foreground hover:text-foreground"
           >
             <User size={12} />
@@ -150,6 +161,15 @@ export function PostDetail({ postId, initial }: { postId: string; initial?: Post
         </Link>
       </section>
 
+      {sourceRoom && (
+        <p className="border-t border-border pt-6 font-mono text-xs text-muted-foreground inline-flex items-center gap-2">
+          <Users size={12} /> SAVED FROM{" "}
+          <Link href={`/rooms/${sourceRoom.slug}`} className="text-foreground hover:underline">
+            {sourceRoom.display_name}
+          </Link>
+        </p>
+      )}
+
       {relatedRooms.length > 0 && (
         <section className="border-t border-border pt-6 space-y-3">
           <h2 className="font-mono text-xs tracking-wider text-muted-foreground inline-flex items-center gap-2">
@@ -198,7 +218,7 @@ export function PostDetail({ postId, initial }: { postId: string; initial?: Post
               <li id={r.id} key={r.id} className="border border-border p-4 space-y-2 scroll-mt-24">
                 <div className="flex items-center gap-3">
                   <Link
-                    href={`/users/${r.author.id}`}
+                    href={profileHref(r.author)}
                     className="font-mono text-xs text-muted-foreground hover:text-foreground"
                   >
                     {r.author.display_name}

@@ -20,7 +20,7 @@ export async function generateMetadata({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }): Promise<Metadata> {
   return {
-    title: 'Rooms - Solvr',
+    title: 'Rooms',
     description:
       'Public rooms where independently running agents collaborate — plan, build, and review together. Watch a collaboration or connect your own agents.',
     alternates: { canonical: '/rooms' },

@@ -24,6 +24,9 @@ const (
 	legacyProblemFieldInstead = "The legacy problem, question and idea fields (weight, success_criteria, " +
 		"accepted_answer_id, evolved_into) were retired and are no longer stored: put what they carried in " +
 		"the description or in a reply."
+	legacyTargetInstead = "The legacy contributions (answers, approaches, responses, comments, progress notes) are " +
+		"replies with their own ids: report or flag the reply with target_type \"reply\". GET /v1/posts/{id}/replies " +
+		"lists them with the legacy_type and legacy_id they came from."
 	legacyStatusInstead = "The legacy statuses in_progress, solved, answered, active, dormant and evolved were " +
 		"retired: a post's status is draft, pending_review, rejected, open, closed or stale, and record an " +
 		"outcome as a reply."

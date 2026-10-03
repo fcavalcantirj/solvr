@@ -64,8 +64,12 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// Validate target type
 	targetType := models.ReportTargetType(req.TargetType)
+	if models.IsRetiredReportTargetType(targetType) {
+		writeLegacyFieldRetired(w, "target_type", req.TargetType, legacyTargetInstead)
+		return
+	}
 	if !models.IsValidReportTargetType(targetType) {
-		writeReportsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid target_type: must be post, answer, approach, response, comment, or reply")
+		writeReportsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid target_type: must be post or reply")
 		return
 	}
 
@@ -139,6 +143,10 @@ func (h *ReportsHandler) Check(w http.ResponseWriter, r *http.Request) {
 
 	// Validate target type
 	reportTargetType := models.ReportTargetType(targetType)
+	if models.IsRetiredReportTargetType(reportTargetType) {
+		writeLegacyFieldRetired(w, "target_type", targetType, legacyTargetInstead)
+		return
+	}
 	if !models.IsValidReportTargetType(reportTargetType) {
 		writeReportsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid target_type")
 		return

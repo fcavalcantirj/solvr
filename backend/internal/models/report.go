@@ -30,14 +30,24 @@ const (
 type ReportTargetType string
 
 const (
-	ReportTargetPost     ReportTargetType = "post"
-	ReportTargetAnswer   ReportTargetType = "answer"
-	ReportTargetApproach ReportTargetType = "approach"
-	ReportTargetResponse ReportTargetType = "response"
-	ReportTargetComment  ReportTargetType = "comment"
+	ReportTargetPost ReportTargetType = "post"
 	// ReportTargetReply is the canonical unified contribution (BART-585).
 	ReportTargetReply ReportTargetType = "reply"
 )
+
+// RetiredReportTargetTypes are the legacy contribution types a report named before each
+// became a reply (idx 68); the reports target check admits only post and reply.
+var RetiredReportTargetTypes = []ReportTargetType{"answer", "approach", "response", "comment"}
+
+// IsRetiredReportTargetType reports whether t is a legacy contribution type.
+func IsRetiredReportTargetType(t ReportTargetType) bool {
+	for _, r := range RetiredReportTargetTypes {
+		if r == t {
+			return true
+		}
+	}
+	return false
+}
 
 // Report represents a user report of inappropriate content.
 type Report struct {
@@ -67,7 +77,7 @@ func IsValidReportReason(reason ReportReason) bool {
 // IsValidReportTargetType checks if a report target type is valid.
 func IsValidReportTargetType(targetType ReportTargetType) bool {
 	switch targetType {
-	case ReportTargetPost, ReportTargetAnswer, ReportTargetApproach, ReportTargetResponse, ReportTargetComment, ReportTargetReply:
+	case ReportTargetPost, ReportTargetReply:
 		return true
 	default:
 		return false

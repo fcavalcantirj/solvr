@@ -645,7 +645,7 @@ func reportsCheckPath() map[string]interface{} {
 		"get": map[string]interface{}{
 			"summary": "Check if reported", "operationId": "checkReport", "tags": []string{"Reports"}, "security": securityRequired(),
 			"parameters": []map[string]interface{}{
-				{"name": "target_type", "in": "query", "required": true, "schema": map[string]interface{}{"type": "string"}},
+				{"name": "target_type", "in": "query", "required": true, "schema": reportTargetTypeSchema()},
 				{"name": "target_id", "in": "query", "required": true, "schema": map[string]interface{}{"type": "string"}},
 			},
 			"responses": map[string]interface{}{"200": ref200("ReportCheckResponse"), "401": ref401()},

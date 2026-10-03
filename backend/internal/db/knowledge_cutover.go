@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -10,6 +11,10 @@ import (
 
 	"github.com/google/uuid"
 )
+
+// ErrLegacyTablesArchived refuses a cutover once the legacy archive migration has moved the
+// legacy tables out of public (idx 68): there is nothing live left to convert.
+var ErrLegacyTablesArchived = errors.New("the legacy tables are archived in legacy_archive: the cutover runs only below the legacy archive migration")
 
 // KnowledgeCutoverOptions configures RunKnowledgeCutover.
 type KnowledgeCutoverOptions struct {
@@ -169,12 +174,21 @@ type cutoverStep struct {
 // interrupted anywhere is finished by running again, and each step is recorded in
 // cutover_ledger under the run's id. It stops before converting anything when a post fails
 // verification, and fails when a rebuilt projection still drifts or the sampled search lost a
-// result public search still reads. The schema must already be
-// at the version that has replies (the caller checks it with SchemaVersion).
+// result public search still reads. The schema must already be at the version that has
+// replies and below the legacy archive migration (the caller checks it with SchemaVersion);
+// once the legacy tables are archived it refuses with ErrLegacyTablesArchived.
 func RunKnowledgeCutover(ctx context.Context, pool *Pool, opts KnowledgeCutoverOptions) (*KnowledgeCutoverReport, error) {
 	run := &knowledgeCutoverRun{pool: pool, dryRun: opts.DryRun, rep: &KnowledgeCutoverReport{
 		RunID: uuid.NewString(), DryRun: opts.DryRun,
 	}}
+	var archived bool
+	if err := pool.QueryRow(ctx, `SELECT to_regclass('legacy_archive.manifest') IS NOT NULL
+		OR to_regclass('public.approaches') IS NULL`).Scan(&archived); err != nil {
+		return run.rep, fmt.Errorf("knowledge cutover: read the legacy tables: %w", err)
+	}
+	if archived {
+		return run.rep, fmt.Errorf("knowledge cutover: %w", ErrLegacyTablesArchived)
+	}
 	if !opts.DryRun {
 		if _, err := pool.Exec(ctx, cutoverLedgerDDL); err != nil {
 			return run.rep, fmt.Errorf("knowledge cutover: ledger: %w", err)

@@ -6,6 +6,10 @@
 // one lost a result public search still reads (--search-sample). Run it only after
 // `migrate up` has brought the schema to --expect-version and with the API stopped.
 //
+// It is the pre-archive operator and rehearsal tool (idx 68): --expect-version defaults to the
+// last migration before 000138_legacy_archive, the last schema where the legacy tables are
+// live, and the run refuses once they are archived.
+//
 //	cutover --database-url <url> --dry-run            # read-only: what would change
 //	cutover --database-url <url> --confirm-prod       # apply
 //
@@ -42,7 +46,7 @@ func parseOptions(args []string) (options, error) {
 	fs.StringVar(&o.databaseURL, "database-url", "", "database to convert (required; DATABASE_URL is ignored)")
 	fs.BoolVar(&o.dryRun, "dry-run", false, "only read: report what the cutover would change")
 	fs.BoolVar(&o.confirmProd, "confirm-prod", false, "required to apply (not needed with --dry-run)")
-	fs.Int64Var(&o.expectVersion, "expect-version", 137, "schema_migrations version the database must be at, clean")
+	fs.Int64Var(&o.expectVersion, "expect-version", 137, "schema_migrations version the database must be at, clean (the last migration before the legacy archive)")
 	fs.StringVar(&o.reportPath, "report", "", "write the JSON report to this file (default: stdout)")
 	fs.IntVar(&o.searchSample, "search-sample", 200, "most frequent recorded search queries to compare before and after (0: none)")
 	if err := fs.Parse(args); err != nil {

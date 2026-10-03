@@ -103,8 +103,8 @@ erDiagram
 | 3 | Unresolved legacy authors are labeled history, not invented accounts | `historical_author` + `posts_resolve_author` (`000117:52-81`) and `replies_resolve_author` (`000116:50-79`, historical only with `legacy_id` set); system replies name no account (`000089:20`) |
 | 4 | Typed columns for body, visibility, publication and moderation state, timestamps, ownership | `visibility` CHECK + `owner_human_id` FK (`000080`); state CHECKs (`000088:11-19`); `created_at`/`updated_at` NOT NULL (`000118_knowledge_typed_columns.up.sql:21-23`) |
 | 4 | JSON only for bounded provenance | `replies_legacy_pair` and `replies_provenance_bounded`, a per-`legacy_type` key whitelist (`000118:26-42`) |
-| 5 | Legacy tables, legacy type/target-type constraints and problem-only fields leave live storage; historical data is preserved | the legacy archive migration (lane X, slice X3): the six tables MOVE into `legacy_archive` with a manifest; posts' original `type`/`status`/`success_criteria`/`weight`/`accepted_answer_id`/`evolved_into` are kept per post in `legacy_archive.post_fields`; votes/reports/flags rows with legacy targets move to `legacy_archive`; `posts_type_check` admits only `'post'`; `posts_status_check` admits only draft/open/closed/stale/pending_review/rejected; target-type checks admit only post/blog_post/reply (votes) and post/reply (reports, flags) |
-| 6 | A clean installation creates, searches, moderates, exports and deletes a post and reply with every legacy table absent | the clean-install test (lane X, slice X3) |
+| 5 | Legacy tables, legacy type/target-type constraints and problem-only fields leave live storage; historical data is preserved | `migrations/000138_legacy_archive.up.sql`: refuses while a legacy contribution has no reply (run `cmd/cutover` below it first); the six tables MOVE into `legacy_archive` (`ALTER TABLE … SET SCHEMA`) with a row-count + sha256 `manifest`; the functions typed by their rows and their foreign keys to posts are recorded in `legacy_archive.dropped_objects` and dropped; posts' original `type`/`status`/`success_criteria`/`weight`/`accepted_answer_id`/`evolved_into` are kept per post in `legacy_archive.post_fields`, then `posts_type_check` admits only `'post'` (default `'post'`), `posts_status_check` only draft/open/closed/stale/pending_review/rejected (retired statuses became `open`) and the four columns are dropped; votes/reports/flags rows with legacy targets move to `legacy_archive`, and the target-type checks admit only post/blog_post/reply (votes) and post/reply (reports, flags). The API refuses a legacy type, status, field or report/flag target with `400 LEGACY_FIELD_RETIRED`. Tested by `internal/db/legacy_archive_migration_test.go` (up/down exactness, hard-deleted-post rollback, the refusal) |
+| 6 | A clean installation creates, searches, moderates, exports and deletes a post and reply with every legacy table absent | `internal/api/clean_install_knowledge_test.go` (`TestCleanInstall_PostAndReplyLifecycleWithoutLegacyTables`): every migration on an empty database, the moderator approving and rejecting, search anchoring the reply in its post, the crystallization snapshot (PostSnapshot v2.0) carrying the reply, then both deleted |
 
 ### Recovery archive (`legacy_archive`)
 
@@ -123,10 +123,15 @@ erDiagram
   3. Re-adds the recorded FKs and functions. A legacy row whose post was hard-deleted after the archive goes to
      `rollback_archive`, the convention of `000088`/`000089`/`000109`/`000114` down files.
   4. Drops the emptied schema.
-- **Off-database copy.** `cmd/legacy-archive` (read-only) prints the manifest against a recomputed digest and exports
-  a checksummed JSON Lines file for the production gate.
+- **Off-database copy.** `cmd/legacy-archive --database-url <url> [--export <file>]` (read-only: one `REPEATABLE READ
+  READ ONLY` transaction) prints each manifest row beside the count and digest recomputed with
+  `legacy_archive.digest`, exits non-zero on a mismatch, and exports a deterministic JSON Lines file (a header with the
+  manifest, then one `{"table","row"}` line per archived row) beside `<file>.sha256` in `sha256sum` format.
+- **The cutover tool after the archive.** `cmd/cutover` stays the pre-archive operator and rehearsal tool: its
+  `--expect-version` defaults to the last migration before the archive (137 today) and `RunKnowledgeCutover` refuses with
+  `ErrLegacyTablesArchived` once the archive exists.
 
-## idx 68 audit (state at 135, before lane X)
+## idx 68 audit (state at 135, before lane X; steps 5 and 6 are closed by 000138 and the clean-install test above)
 
 | Step | Already satisfied | Remained |
 |---|---|---|

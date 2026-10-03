@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/fcavalcantirj/solvr/internal/auth"
@@ -62,6 +63,10 @@ func (h *FlagsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	targetType := strings.TrimSpace(req.TargetType)
 	if targetType == "" {
 		writeFlagsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "target_type is required")
+		return
+	}
+	if slices.Contains(models.RetiredFlagTargetTypes, targetType) {
+		writeLegacyFieldRetired(w, "target_type", targetType, legacyTargetInstead)
 		return
 	}
 	if !isValidFlagTargetType(targetType) {

@@ -32,6 +32,7 @@ var (
 	dropFunctionRe    = regexp.MustCompile(`(?is)\bDROP\s+FUNCTION\s+(?:IF\s+EXISTS\s+)?(.+)`)
 	alterTableRe      = regexp.MustCompile(`(?is)\bALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?([\w."]+)\s+(.+)`)
 	renameTableRe     = regexp.MustCompile(`(?i)^RENAME\s+TO\b`)
+	setSchemaRe       = regexp.MustCompile(`(?i)^SET\s+SCHEMA\s+"?(\w+)"?`)
 	dropColumnRe      = regexp.MustCompile(`(?i)\bDROP\s+(?:COLUMN\s+)?(?:IF\s+EXISTS\s+)?"?(\w+)"?`)
 	checkDefinitionRe = regexp.MustCompile(`(?i)\bCONSTRAINT\s+"?(\w+)"?\s+CHECK\s*\(`)
 	dropBehaviorRe    = regexp.MustCompile(`(?i)\s+(CASCADE|RESTRICT)\s*$`)
@@ -133,10 +134,11 @@ func legacyLiterals(s string) map[string]bool {
 }
 
 // ScanLegacySchemaCleanup reads the up migrations under dir in order and returns every
-// statement that removes legacy runtime storage: a legacy table dropped or renamed away, a
-// column dropped from a legacy table or carrying a legacy identity, a function whose name
-// carries a legacy table or is in legacyFunctions dropped, and a named check constraint
-// redefined so it no longer admits a legacy type its previous definition admitted.
+// statement that removes legacy runtime storage: a legacy table dropped, renamed away or moved
+// out of public (ALTER TABLE ... SET SCHEMA), a column dropped from a legacy table or carrying
+// a legacy identity, a function whose name carries a legacy table or is in legacyFunctions
+// dropped, and a named check constraint redefined so it no longer admits a legacy type its
+// previous definition admitted.
 func ScanLegacySchemaCleanup(dir string, legacyFunctions []string) ([]LegacySchemaCleanup, error) {
 	files, err := filepath.Glob(filepath.Join(dir, "*.up.sql"))
 	if err != nil {
@@ -181,6 +183,9 @@ func ScanLegacySchemaCleanup(dir string, legacyFunctions []string) ([]LegacySche
 				table, actions := sqlName(m[1]), strings.TrimSpace(m[2])
 				if isLegacyTable[table] && renameTableRe.MatchString(actions) {
 					add("renames table %s", table)
+				}
+				if m := setSchemaRe.FindStringSubmatch(actions); m != nil && isLegacyTable[table] && !strings.EqualFold(m[1], "public") {
+					add("moves table %s out of public", table)
 				}
 				for _, c := range dropColumnRe.FindAllStringSubmatch(actions, -1) {
 					col := strings.ToLower(c[1])

@@ -10,7 +10,7 @@ import (
 // Flag represents a content flag/report per SPEC.md Part 8.4
 type Flag struct {
 	ID           uuid.UUID  `json:"id"`
-	TargetType   string     `json:"target_type"`   // post, reply, comment, answer, approach, response
+	TargetType   string     `json:"target_type"`   // post or reply (ValidFlagTargetTypes)
 	TargetID     uuid.UUID  `json:"target_id"`
 	ReporterType string     `json:"reporter_type"` // human, agent, system
 	ReporterID   string     `json:"reporter_id"`
@@ -37,10 +37,12 @@ var ValidFlagStatuses = []string{"pending", "reviewed", "dismissed", "actioned"}
 var ValidFlagReasons = []string{"spam", "offensive", "duplicate", "incorrect", "low_quality", "other"}
 
 // ValidFlagTargetTypes defines the valid flag target types. It mirrors the database's
-// flags_target_type_check (pinned by a db test): reply is the canonical contribution; the
-// legacy contribution types (and progress_note, flagged by contribution moderation since
-// 000114) stay until that check is narrowed at legacy cleanup.
-var ValidFlagTargetTypes = []string{"post", "reply", "comment", "answer", "approach", "response", "progress_note"}
+// flags_target_type_check (pinned by a db test): reply is the canonical contribution.
+var ValidFlagTargetTypes = []string{"post", "reply"}
+
+// RetiredFlagTargetTypes are the legacy contribution types a flag named before each became a
+// reply; the legacy archive migration narrowed flags_target_type_check to post and reply (idx 68).
+var RetiredFlagTargetTypes = []string{"comment", "answer", "approach", "response", "progress_note"}
 
 // IsValidFlagStatus checks if a status is valid
 func IsValidFlagStatus(status string) bool {

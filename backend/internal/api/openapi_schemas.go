@@ -583,9 +583,18 @@ func createReportRequestSchema() map[string]interface{} {
 	return map[string]interface{}{
 		"type": "object", "required": []string{"target_type", "target_id", "reason"},
 		"properties": map[string]interface{}{
-			"target_type": map[string]interface{}{"type": "string"}, "target_id": map[string]interface{}{"type": "string"},
+			"target_type": reportTargetTypeSchema(), "target_id": map[string]interface{}{"type": "string"},
 			"reason": map[string]interface{}{"type": "string"}, "details": map[string]interface{}{"type": "string"},
 		},
+	}
+}
+
+// reportTargetTypeSchema: a report names a post or a reply; the legacy contribution types
+// answer 400 LEGACY_FIELD_RETIRED (idx 68).
+func reportTargetTypeSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type": "string", "enum": []string{"post", "reply"},
+		"description": "post or reply. The legacy answer, approach, response and comment types answer 400 LEGACY_FIELD_RETIRED: report the reply they became.",
 	}
 }
 

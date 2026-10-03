@@ -18,26 +18,14 @@ func keep(note string) LegacyDependencyDisposition {
 // dependency without an entry fails, and so does an entry for one that is gone. Flip Done
 // only in the change that implements and verifies the replacement or the retirement.
 var LegacyDependencyDispositions = map[string]LegacyDependencyDisposition{
-	// Legacy tables: dropped after the verified contribution migration (MigrateContributions).
-	"table:approaches":             pending(LegacyActionRetire, "rows become replies (legacy_type approach); drop after verified migration"),
-	"table:answers":                pending(LegacyActionRetire, "rows become replies (legacy_type answer); drop after verified migration"),
-	"table:responses":              pending(LegacyActionRetire, "rows become replies (legacy_type response); drop after verified migration"),
-	"table:comments":               pending(LegacyActionRetire, "rows become top-level or child replies; drop after verified migration"),
-	"table:approach_relationships": pending(LegacyActionRetire, "drop once relation:approach-relationships is remapped onto replies"),
-	"table:progress_notes":         pending(LegacyActionRetire, "drop once relation:progress-notes is remapped onto replies"),
-
-	// Catalog objects outside the legacy tables' own indexes and constraints.
-	"function:hybrid_search_approaches":         done(LegacyActionRefactor, "replaced by hybrid_search_replies (000110); no Go code calls it; drops with its table"),
-	"function:hybrid_search_answers":            done(LegacyActionRefactor, "replaced by hybrid_search_replies (000110); no Go code calls it; drops with its table"),
-	"index:approaches.idx_approaches_embedding": done(LegacyActionRefactor, "replies.embedding + HNSW idx_replies_embedding (000110); the cutover copies the vectors"),
-	"index:answers.idx_answers_embedding":       done(LegacyActionRefactor, "replies.embedding + HNSW idx_replies_embedding (000110); the cutover copies the vectors"),
-	"check:posts.posts_type_check":              pending(LegacyActionRefactor, "legacy post types stay readable in transition; narrow to 'post' at cleanup"),
-	"check:votes.votes_target_type_check":       pending(LegacyActionRemap, "votes retarget to 'reply'; drop approach/answer/response after remap"),
-	"check:reports.reports_target_type_check":   pending(LegacyActionRemap, "reports retarget to 'reply'; drop legacy target types after remap"),
-	"check:flags.flags_target_type_check":       pending(LegacyActionRemap, "RemapLegacyRelations retargets flags to 'reply' (000109); drop legacy target types at cleanup"),
-	"check:replies.replies_legacy_type_check":   keep("provenance of migrated replies; the compact legacy mapping outlives cleanup"),
-	"check:replies.replies_provenance_bounded":  keep("bounds migrated replies' provenance to the keys each legacy type's migration writes (000118); outlives cleanup with that provenance"),
-	"column:posts.accepted_answer_id":           done(LegacyActionRemap, "RemapAcceptedAnswerReferences points it at the reply migrated from the answer"),
+	// Catalog objects. The legacy tables (with their indexes and foreign keys), the functions
+	// typed by their rows (hybrid_search_answers/approaches), posts.accepted_answer_id and the
+	// legacy type and target-type checks on posts, votes, reports and flags left the public
+	// schema in 000138_legacy_archive (idx 68): their rows are kept in legacy_archive and the
+	// down migration restores them. What the live catalog still ties to a legacy type is
+	// replies' provenance.
+	"check:replies.replies_legacy_type_check":  keep("provenance of migrated replies; the compact legacy mapping outlives cleanup"),
+	"check:replies.replies_provenance_bounded": keep("bounds migrated replies' provenance to the keys each legacy type's migration writes (000118); outlives cleanup with that provenance"),
 
 	// Declared relationships (task step 2).
 	"relation:votes":                      done(LegacyActionRemap, "RemapContributionVotesAndReports retargets contribution votes to replies"),

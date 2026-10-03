@@ -1184,7 +1184,7 @@
       "If localized public pages are introduced, provide complete useful translations, correct language metadata and reciprocal hreflang, and avoid indexing partial placeholder translations.",
       "Keep active-user growth tied to completed or resumed useful work rather than notifications sent or idle sessions left open."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "data",

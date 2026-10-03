@@ -15,21 +15,17 @@ import (
 // Task idx 76 steps 3-4 (feature:reputation): the router serves agent and user reputation
 // (profiles, /v1/me, the agents and users lists) from the canonical repositories, which score
 // it like the served leaderboard. The legacy formulas (the inline agent SQL and
-// reputation.BuildReputationSQL) stay unwired until the legacy tables go.
+// reputation.BuildReputationSQL) were deleted with the legacy tables (idx 68).
 func TestLegacyReputation_ServedByTheCanonicalRepositories(t *testing.T) {
 	assert.Contains(t, productionSourcesContaining(t, "NewCanonicalReputationAgentRepository("), "internal/api/router.go")
 	assert.Contains(t, productionSourcesContaining(t, "NewCanonicalReputationUserRepository("), "internal/api/router.go")
-	assert.ElementsMatch(t, []string{"internal/db/leaderboard.go", "internal/db/users.go"},
-		productionSourcesContaining(t, "reputation.BuildReputationSQL("),
-		"only the unwired legacy leaderboard and legacy users list build the legacy formula")
+	assert.Empty(t, productionSourcesContaining(t, "reputation.BuildReputationSQL("),
+		"the legacy formula was deleted with the legacy tables (idx 68)")
 
 	d := LegacyDependencyDispositions["feature:reputation"]
 	assert.Equal(t, LegacyActionRefactor, d.Action)
 	assert.True(t, d.Done, "feature:reputation is refactored and verified")
-	b, ok := LegacyDependencyDispositions["code:internal/reputation/sql_builder.go"]
-	require.True(t, ok)
-	assert.Equal(t, LegacyActionRetire, b.Action)
-	assert.False(t, b.Done, "sql_builder reads the legacy tables until they are dropped")
+	assertLegacyDependencyGone(t, "code:internal/reputation/sql_builder.go")
 
 	assert.Equal(t, fmt.Sprintf("CASE WHEN v.direction = 'up' THEN %d ELSE %d END",
 		reputation.PointsUpvoteReceived, reputation.PointsDownvoteReceived), canonicalVotePoints,
@@ -128,18 +124,16 @@ func TestCanonicalReputation_ProfilesAndListsAgreeWithTheServedLeaderboard(t *te
 		}
 		return out
 	}
-	legacyBoard := NewLeaderboardRepository(pool)
-	before := boardOf(func(o models.LeaderboardOptions) ([]models.LeaderboardEntry, int, error) {
-		return legacyBoard.GetLeaderboard(ctx, o)
-	})
-	// Scored by the legacy leaderboard: holder = 7 (bonus) + 125 (solved) + 15 (idea) + 60
-	// (accepted answer) + 5 (response) + 2 (comment) + votes (+2 +2 -1) = 217; the user = 125
-	// + 10 (answer) + 2 (comment) + 2 (vote) = 139; the newcomer's approach and the vote on it
-	// score nothing.
-	require.Equal(t, map[string]int{holder: 217, user.ID: 139, newcomer: 0, rich: 0}, before)
-	legacyStats, err := legacyAgents.GetAgentStats(ctx, holder)
-	require.NoError(t, err)
-	t.Logf("legacy GetAgentStats(holder).Reputation before the cutover = %d (the legacy agent formula scores no comment)", legacyStats.Reputation)
+	// The legacy leaderboard (deleted, idx 68) scored this fixture: holder = 7 (bonus) + 125
+	// (solved) + 15 (idea) + 60 (accepted answer) + 5 (response) + 2 (comment) + votes (+2 +2
+	// -1) = 217; the user = 125 + 10 (answer) + 2 (comment) + 2 (vote) = 139; the newcomer's
+	// approach and the vote on it score nothing. The surfaces below must show exactly that.
+
+	// What the legacy AgentRepository.GetAgentStats (deleted, idx 68) returned for holder before
+	// the cutover, measured on e726cb7f by running this test against it (the legacy agent
+	// formula scored no comment, hence 215).
+	legacyStats := &models.AgentStats{ProblemsSolved: 1, ProblemsContributed: 1, QuestionsAsked: 0, QuestionsAnswered: 1,
+		AnswersAccepted: 1, IdeasPosted: 1, ResponsesGiven: 1, UpvotesReceived: 2, Reputation: 215}
 
 	_, err = MigrateContributions(ctx, pool)
 	require.NoError(t, err)

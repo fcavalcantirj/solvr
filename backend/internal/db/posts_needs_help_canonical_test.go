@@ -24,13 +24,9 @@ func TestLegacyNeedsHelpAndVisibility_ServedCanonically(t *testing.T) {
 		_, ok := LegacyDependencyDispositions[key]
 		assert.False(t, ok, "%s no longer depends on a legacy table, so it carries no disposition", key)
 	}
-	assert.Equal(t, []string{"internal/db/approaches.go"},
-		productionSourcesContaining(t, "func (r *ApproachesRepository) ApproachVisibleTo("),
-		"the legacy approach routes' visibility check drops with the legacy approach repository")
-	d, ok := LegacyDependencyDispositions["code:internal/db/approaches.go"]
-	require.True(t, ok)
-	assert.Equal(t, LegacyActionRetire, d.Action)
-	assert.False(t, d.Done)
+	assert.Empty(t, productionSourcesContaining(t, "func (r *ApproachesRepository) ApproachVisibleTo("),
+		"the legacy approach routes' visibility check was deleted with the legacy approach repository (idx 68)")
+	assertLegacyDependencyGone(t, "code:internal/db/approaches.go")
 }
 
 // Task idx 76 steps 3 and 5: a post needs help when it is in progress or carries a live stuck

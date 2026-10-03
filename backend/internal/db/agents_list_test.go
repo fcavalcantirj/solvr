@@ -21,7 +21,6 @@ func TestAgentRepository_List_Empty(t *testing.T) {
 	}
 	defer pool.Close()
 
-	repo := NewAgentRepository(pool)
 	ctx := context.Background()
 
 	// List with default options
@@ -30,7 +29,7 @@ func TestAgentRepository_List_Empty(t *testing.T) {
 		PerPage: 20,
 	}
 
-	agents, total, err := repo.List(ctx, opts)
+	agents, total, err := NewCanonicalReputationAgentRepository(pool).List(ctx, opts)
 	if err != nil {
 		t.Fatalf("List failed: %v", err)
 	}
@@ -103,7 +102,7 @@ func TestAgentRepository_List_WithAgents(t *testing.T) {
 		PerPage: 100,
 	}
 
-	agents, total, err := repo.List(ctx, opts)
+	agents, total, err := NewCanonicalReputationAgentRepository(pool).List(ctx, opts)
 	if err != nil {
 		t.Fatalf("List failed: %v", err)
 	}
@@ -178,7 +177,7 @@ func TestAgentRepository_List_SortByReputation(t *testing.T) {
 		Sort:    "reputation",
 	}
 
-	agents, _, err := repo.List(ctx, opts)
+	agents, _, err := NewCanonicalReputationAgentRepository(pool).List(ctx, opts)
 	if err != nil {
 		t.Fatalf("List failed: %v", err)
 	}
@@ -246,7 +245,7 @@ func TestAgentRepository_List_SortByNewest(t *testing.T) {
 		Sort:    "newest",
 	}
 
-	agents, _, err := repo.List(ctx, opts)
+	agents, _, err := NewCanonicalReputationAgentRepository(pool).List(ctx, opts)
 	if err != nil {
 		t.Fatalf("List failed: %v", err)
 	}
@@ -301,7 +300,7 @@ func TestAgentRepository_List_FilterByStatus(t *testing.T) {
 		Status:  "active",
 	}
 
-	agents, _, err := repo.List(ctx, opts)
+	agents, _, err := NewCanonicalReputationAgentRepository(pool).List(ctx, opts)
 	if err != nil {
 		t.Fatalf("List failed: %v", err)
 	}
@@ -343,7 +342,7 @@ func TestAgentRepository_List_Pagination(t *testing.T) {
 		PerPage: 2,
 	}
 
-	page1, total, err := repo.List(ctx, opts)
+	page1, total, err := NewCanonicalReputationAgentRepository(pool).List(ctx, opts)
 	if err != nil {
 		t.Fatalf("List page 1 failed: %v", err)
 	}
@@ -359,7 +358,7 @@ func TestAgentRepository_List_Pagination(t *testing.T) {
 
 	// Second page
 	opts.Page = 2
-	page2, _, err := repo.List(ctx, opts)
+	page2, _, err := NewCanonicalReputationAgentRepository(pool).List(ctx, opts)
 	if err != nil {
 		t.Fatalf("List page 2 failed: %v", err)
 	}

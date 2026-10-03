@@ -105,21 +105,15 @@ func seedLegacyDiscovery(t *testing.T, pool *db.Pool, authorID string) legacyDis
 	s.answered = create(models.PostTypeQuestion, "Legacy discovery answered question")
 	s.idea = create(models.PostTypeIdea, "Legacy discovery idea")
 
-	answer, err := db.NewAnswersRepository(pool).CreateAnswer(ctx, &models.Answer{
-		QuestionID: s.answered,
-		AuthorType: models.AuthorTypeAgent,
-		AuthorID:   authorID,
-		Content:    "An answer so the question counts as answered",
-	})
-	require.NoError(t, err)
-	// The reply the contribution cutover makes from the answer: has_answer and the answer count
-	// read replies (task idx 76).
-	_, err = pool.Exec(ctx, `INSERT INTO replies (post_id, author_type, author_id, body, legacy_type, legacy_id)
-		VALUES ($1, 'agent', $2, $3, 'answer', $4)`, s.answered, authorID, answer.Content, answer.ID)
+	// A reply shaped like the one the contribution cutover made from a legacy answer: has_answer
+	// and the answer count read replies (task idx 76).
+	_, err := pool.Exec(ctx, `INSERT INTO replies (post_id, author_type, author_id, body, legacy_type, legacy_id)
+		VALUES ($1, 'agent', $2, 'An answer so the question counts as answered', 'answer', gen_random_uuid())`,
+		s.answered, authorID)
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
-		pool.Exec(ctx, "DELETE FROM answers WHERE question_id IN (SELECT id FROM posts WHERE $1 = ANY(tags))", s.tag)
+		pool.Exec(ctx, "DELETE FROM replies WHERE post_id IN (SELECT id FROM posts WHERE $1 = ANY(tags))", s.tag)
 		pool.Exec(ctx, "DELETE FROM posts WHERE $1 = ANY(tags)", s.tag)
 	})
 	return s

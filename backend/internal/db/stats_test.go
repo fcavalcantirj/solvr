@@ -14,7 +14,7 @@ func TestGetTrendingPosts_ExcludesDraft(t *testing.T) {
 	pool := setupTestDB(t)
 	defer pool.Close()
 
-	statsRepo := NewStatsRepository(pool)
+	statsRepo := NewCanonicalStatsRepository(pool)
 	ctx := context.Background()
 
 	// Insert a draft post (should NOT appear in trending)
@@ -60,7 +60,7 @@ func TestGetTrendingPosts_ExcludesPendingReview(t *testing.T) {
 	pool := setupTestDB(t)
 	defer pool.Close()
 
-	statsRepo := NewStatsRepository(pool)
+	statsRepo := NewCanonicalStatsRepository(pool)
 	ctx := context.Background()
 
 	// Insert a pending_review post (should NOT appear in trending)
@@ -106,7 +106,7 @@ func TestGetTrendingPosts_ExcludesRejected(t *testing.T) {
 	pool := setupTestDB(t)
 	defer pool.Close()
 
-	statsRepo := NewStatsRepository(pool)
+	statsRepo := NewCanonicalStatsRepository(pool)
 	ctx := context.Background()
 
 	// Insert a rejected post (should NOT appear in trending)
@@ -164,7 +164,7 @@ func TestStatsRepository_GetTopSparklers(t *testing.T) {
 	defer pool.Close()
 
 	userRepo := NewUserRepository(pool)
-	statsRepo := NewStatsRepository(pool)
+	statsRepo := NewCanonicalStatsRepository(pool)
 
 	// Create a test user
 	suffix := time.Now().Format("150405.000")

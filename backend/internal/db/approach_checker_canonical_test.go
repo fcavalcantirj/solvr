@@ -11,8 +11,8 @@ import (
 // Task idx 76 steps 3 and 5: PATCH /v1/posts/{id} lets an owner mark a problem solved only
 // when it has a succeeded approach. The router checks that with
 // CanonicalApproachCheckerRepository, which reads the replies migrated from succeeded
-// approaches; the legacy ApproachesRepository.HasSucceededApproach reads the approaches table
-// and stays only on the legacy approach routes until the tables go.
+// approaches; the legacy ApproachesRepository.HasSucceededApproach, which read the approaches
+// table, was deleted with the legacy tables (idx 68).
 func TestLegacyApproachChecker_ServedCanonically(t *testing.T) {
 	assert.ElementsMatch(t, []string{"internal/api/router.go"},
 		productionSourcesContaining(t, "db.NewCanonicalApproachCheckerRepository("),
@@ -25,11 +25,7 @@ func TestLegacyApproachChecker_ServedCanonically(t *testing.T) {
 	for _, dep := range src {
 		assert.NotEqual(t, "code:internal/db/approach_checker_canonical.go", dep.Key, "the canonical checker names no legacy table or type")
 	}
-	d, ok := LegacyDependencyDispositions["code:internal/db/approaches.go"]
-	require.True(t, ok)
-	assert.Equal(t, LegacyActionRetire, d.Action)
-	assert.False(t, d.Done, "approaches.go still serves the legacy approach routes")
-	assert.Contains(t, d.Note, "approach_checker_canonical.go", "the note names the served solved-status check")
+	assertLegacyDependencyGone(t, "code:internal/db/approaches.go") // deleted with the legacy approach routes (idx 68)
 }
 
 // Task idx 76 steps 3 and 5: in a database holding only this fixture, the canonical checker
@@ -80,7 +76,6 @@ func TestCanonicalApproachChecker_KeepsTheLegacyAnswerAcrossTheCutover(t *testin
 	}
 
 	want := map[string]bool{pSucceeded: true, pMixed: true, pDeleted: false, pWorking: false, pFailed: false, pNone: false}
-	require.Equal(t, want, answers(NewApproachesRepository(pool)), "legacy: a live succeeded approach")
 
 	checker := NewCanonicalApproachCheckerRepository(pool)
 	assert.Equal(t, map[string]bool{pSucceeded: false, pMixed: false, pDeleted: false, pWorking: false, pFailed: false, pNone: false},

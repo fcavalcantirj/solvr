@@ -27,7 +27,8 @@ func TestReputation_CrossEndpointConsistency(t *testing.T) {
 	// Setup: Create test user with activity
 	userRepo := NewUserRepository(pool)
 	postRepo := NewPostRepository(pool)
-	leaderboardRepo := NewLeaderboardRepository(pool)
+	leaderboardRepo := NewCanonicalLeaderboardRepository(pool)
+	served := NewCanonicalReputationUserRepository(pool)
 
 	suffix := time.Now().Format("150405.000")
 	user := &models.User{
@@ -66,14 +67,14 @@ func TestReputation_CrossEndpointConsistency(t *testing.T) {
 	}
 
 	// 1. Get reputation from GetUserStats
-	stats, err := userRepo.GetUserStats(ctx, created.ID)
+	stats, err := served.GetUserStats(ctx, created.ID)
 	if err != nil {
 		t.Fatalf("GetUserStats error = %v", err)
 	}
 	reputationFromStats := stats.Reputation
 
 	// 2. Get reputation from List
-	users, _, err := userRepo.List(ctx, models.PublicUserListOptions{Limit: 100})
+	users, _, err := served.List(ctx, models.PublicUserListOptions{Limit: 100})
 	if err != nil {
 		t.Fatalf("List error = %v", err)
 	}
@@ -172,7 +173,7 @@ func TestUsersPage_AgentsCount(t *testing.T) {
 	}
 
 	// 3. Call UserRepository.List() and find our user
-	users, _, err := userRepo.List(ctx, models.PublicUserListOptions{Limit: 200})
+	users, _, err := NewCanonicalReputationUserRepository(pool).List(ctx, models.PublicUserListOptions{Limit: 200})
 	if err != nil {
 		t.Fatalf("List error = %v", err)
 	}

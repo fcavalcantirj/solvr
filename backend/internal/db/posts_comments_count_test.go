@@ -16,26 +16,12 @@ func TestPostList_CountsSystemComments(t *testing.T) {
 
 	ctx := context.Background()
 	postRepo := NewPostRepository(pool)
-	commentRepo := NewCommentsRepository(pool)
 
 	user := createCommentTestUser(t, pool)
 	post := createCommentTestPost(t, pool, user.ID)
 
 	// Insert one system comment (moderation notice)
-	_, err := commentRepo.Create(ctx, &models.Comment{
-		TargetType: models.CommentTargetPost,
-		TargetID:   post.ID,
-		AuthorType: models.AuthorTypeSystem,
-		AuthorID:   "system",
-		Content:    "Post approved by moderation system",
-	})
-	if err != nil {
-		t.Fatalf("failed to create system comment: %v", err)
-	}
-
-	// The replies the contribution cutover makes from these legacy rows (task idx 76): post
-	// counts are read from replies.
-	cutoverRepliesFor(t, pool, ctx, post.ID)
+	seedMigratedReply(t, pool, ctx, post.ID, "comment", string(models.AuthorTypeSystem), "system", "Post approved by moderation system")
 
 	// List() should count the system comment
 	posts, _, err := postRepo.List(ctx, models.PostListOptions{
@@ -71,26 +57,12 @@ func TestPostGet_CountsSystemComments(t *testing.T) {
 
 	ctx := context.Background()
 	postRepo := NewPostRepository(pool)
-	commentRepo := NewCommentsRepository(pool)
 
 	user := createCommentTestUser(t, pool)
 	post := createCommentTestPost(t, pool, user.ID)
 
 	// Insert one system comment
-	_, err := commentRepo.Create(ctx, &models.Comment{
-		TargetType: models.CommentTargetPost,
-		TargetID:   post.ID,
-		AuthorType: models.AuthorTypeSystem,
-		AuthorID:   "system",
-		Content:    "Post approved by moderation system",
-	})
-	if err != nil {
-		t.Fatalf("failed to create system comment: %v", err)
-	}
-
-	// The replies the contribution cutover makes from these legacy rows (task idx 76): post
-	// counts are read from replies.
-	cutoverRepliesFor(t, pool, ctx, post.ID)
+	seedMigratedReply(t, pool, ctx, post.ID, "comment", string(models.AuthorTypeSystem), "system", "Post approved by moderation system")
 
 	result, err := postRepo.FindByID(ctx, post.ID)
 	if err != nil {
@@ -110,37 +82,14 @@ func TestPostList_CountMatchesFeedCount(t *testing.T) {
 
 	ctx := context.Background()
 	postRepo := NewPostRepository(pool)
-	commentRepo := NewCommentsRepository(pool)
 
 	user := createCommentTestUser(t, pool)
 	post := createCommentTestPost(t, pool, user.ID)
 
 	// Insert one system comment + one human comment = 2 total
-	_, err := commentRepo.Create(ctx, &models.Comment{
-		TargetType: models.CommentTargetPost,
-		TargetID:   post.ID,
-		AuthorType: models.AuthorTypeSystem,
-		AuthorID:   "system",
-		Content:    "Moderation notice",
-	})
-	if err != nil {
-		t.Fatalf("failed to create system comment: %v", err)
-	}
+	seedMigratedReply(t, pool, ctx, post.ID, "comment", string(models.AuthorTypeSystem), "system", "Moderation notice")
 
-	_, err = commentRepo.Create(ctx, &models.Comment{
-		TargetType: models.CommentTargetPost,
-		TargetID:   post.ID,
-		AuthorType: models.AuthorTypeHuman,
-		AuthorID:   user.ID,
-		Content:    "Human reply",
-	})
-	if err != nil {
-		t.Fatalf("failed to create human comment: %v", err)
-	}
-
-	// The replies the contribution cutover makes from these legacy rows (task idx 76): post
-	// counts are read from replies.
-	cutoverRepliesFor(t, pool, ctx, post.ID)
+	seedMigratedReply(t, pool, ctx, post.ID, "comment", string(models.AuthorTypeHuman), user.ID, "Human reply")
 
 	// List() should return 2 (matches what feed counts)
 	posts, _, err := postRepo.List(ctx, models.PostListOptions{

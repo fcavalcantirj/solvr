@@ -57,24 +57,9 @@ func TestIdeasCommentsCount(t *testing.T) {
 	}
 
 	// Create 3 comments on the idea
-	commentsRepo := NewCommentsRepository(pool)
 	for i := 0; i < 3; i++ {
-		comment := &models.Comment{
-			TargetType: models.CommentTargetPost,
-			TargetID:   idea.ID,
-			AuthorType: models.AuthorTypeHuman,
-			AuthorID:   user.ID,
-			Content:    "Test comment on idea",
-		}
-		_, err = commentsRepo.Create(ctx, comment)
-		if err != nil {
-			t.Fatalf("failed to create comment %d: %v", i+1, err)
-		}
+		seedMigratedReply(t, pool, ctx, idea.ID, "comment", string(models.AuthorTypeHuman), user.ID, "Test comment on idea")
 	}
-
-	// The replies the contribution cutover makes from these legacy rows (task idx 76): post
-	// counts are read from replies.
-	cutoverRepliesFor(t, pool, ctx, idea.ID)
 
 	// Query the idea through List() - this is what the API uses
 	ideas, _, err := postRepo.List(ctx, models.PostListOptions{
@@ -154,7 +139,6 @@ func TestQuestionsProblemsCommentsCount(t *testing.T) {
 	}
 
 	postRepo := NewPostRepository(pool)
-	commentsRepo := NewCommentsRepository(pool)
 
 	// Test question with comments
 	question := &models.Post{
@@ -173,17 +157,7 @@ func TestQuestionsProblemsCommentsCount(t *testing.T) {
 
 	// Add 2 comments to question
 	for i := 0; i < 2; i++ {
-		comment := &models.Comment{
-			TargetType: models.CommentTargetPost,
-			TargetID:   question.ID,
-			AuthorType: models.AuthorTypeHuman,
-			AuthorID:   user.ID,
-			Content:    "Comment on question",
-		}
-		_, err = commentsRepo.Create(ctx, comment)
-		if err != nil {
-			t.Fatalf("failed to create comment on question: %v", err)
-		}
+		seedMigratedReply(t, pool, ctx, question.ID, "comment", string(models.AuthorTypeHuman), user.ID, "Comment on question")
 	}
 
 	// Test problem with comments
@@ -203,22 +177,8 @@ func TestQuestionsProblemsCommentsCount(t *testing.T) {
 
 	// Add 4 comments to problem
 	for i := 0; i < 4; i++ {
-		comment := &models.Comment{
-			TargetType: models.CommentTargetPost,
-			TargetID:   problem.ID,
-			AuthorType: models.AuthorTypeHuman,
-			AuthorID:   user.ID,
-			Content:    "Comment on problem",
-		}
-		_, err = commentsRepo.Create(ctx, comment)
-		if err != nil {
-			t.Fatalf("failed to create comment on problem: %v", err)
-		}
+		seedMigratedReply(t, pool, ctx, problem.ID, "comment", string(models.AuthorTypeHuman), user.ID, "Comment on problem")
 	}
-
-	// The replies the contribution cutover makes from these legacy rows (task idx 76): post
-	// counts are read from replies.
-	cutoverRepliesFor(t, pool, ctx, question.ID, problem.ID)
 
 	// Query questions
 	questions, _, err := postRepo.List(ctx, models.PostListOptions{

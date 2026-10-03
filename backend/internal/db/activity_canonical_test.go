@@ -13,8 +13,8 @@ import (
 )
 
 // Task idx 76 step 3: GET /v1/agents/{id}/activity is served from canonical posts and
-// replies. The legacy AgentRepository.GetActivity, which reads answers, approaches and
-// responses, stays unwired until the tables go.
+// replies. The legacy AgentRepository.GetActivity, which read answers, approaches and
+// responses, was deleted with the legacy tables (idx 68).
 func TestLegacyAgentActivity_ServedCanonically(t *testing.T) {
 	assert.Empty(t, productionSourcesContaining(t, "AgentRepository.GetActivity("),
 		"no production code calls the legacy agent activity")
@@ -24,12 +24,7 @@ func TestLegacyAgentActivity_ServedCanonically(t *testing.T) {
 	for _, dep := range src {
 		assert.NotEqual(t, "code:internal/db/activity_canonical.go", dep.Key, "the canonical activity names no legacy table or type")
 	}
-	d, ok := LegacyDependencyDispositions["code:internal/db/agents.go"]
-	require.True(t, ok)
-	assert.Equal(t, LegacyActionRefactor, d.Action)
-	assert.False(t, d.Done, "agents.go still holds the unwired legacy activity and stats and must lose them when the tables go")
-	assert.Contains(t, d.Note, "activity_canonical.go", "the note names the served activity")
-	assert.Contains(t, d.Note, "profile_stats_canonical.go", "the note names the served stats")
+	assertLegacyDependencyGone(t, "code:internal/db/agents.go") // its legacy activity and stats were deleted (idx 68)
 }
 
 // Task idx 76 steps 3 and 5: in a database holding only this fixture, every item the legacy
@@ -107,7 +102,7 @@ func TestCanonicalAgentActivity_ListsPostsAndRepliesAcrossTheCutover(t *testing.
 		return items, total
 	}
 
-	legacy, legacyTotal := activity(NewAgentRepository(pool), 1, 50)
+	legacy, legacyTotal := activity(legacyActivityOracle{NewAgentRepository(pool)}, 1, 50)
 	var legacyTypes []string
 	for _, it := range legacy {
 		legacyTypes = append(legacyTypes, it.Type)

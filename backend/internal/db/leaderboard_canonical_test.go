@@ -81,19 +81,19 @@ func productionSourcesContaining(t *testing.T, needle string) []string {
 // CanonicalLeaderboardRepository; the legacy repository is unwired and goes with the legacy
 // tables, as does the cutover freeze that reads them.
 func TestLegacyLeaderboards_ServedByTheCanonicalRepository(t *testing.T) {
-	assert.Equal(t, []string{"internal/db/leaderboard.go"}, productionSourcesContaining(t, "NewLeaderboardRepository("),
-		"no production code constructs the legacy leaderboard repository")
+	assert.Empty(t, productionSourcesContaining(t, "NewLeaderboardRepository("),
+		"the legacy leaderboard repository was deleted with the legacy tables (idx 68)")
 	assert.Contains(t, productionSourcesContaining(t, "NewCanonicalLeaderboardRepository("), "internal/api/router.go")
 
 	d := LegacyDependencyDispositions["feature:leaderboards"]
 	assert.Equal(t, LegacyActionRefactor, d.Action)
 	assert.True(t, d.Done, "feature:leaderboards is refactored and verified")
-	for _, key := range []string{"code:internal/db/leaderboard.go", "code:internal/db/leaderboard_tags.go", "code:internal/db/reputation_history.go"} {
-		d, ok := LegacyDependencyDispositions[key]
-		require.True(t, ok, key)
-		assert.Equal(t, LegacyActionRetire, d.Action, key)
-		assert.False(t, d.Done, "%s reads the legacy tables until they are dropped", key)
+	for _, key := range []string{"code:internal/db/leaderboard.go", "code:internal/db/leaderboard_tags.go"} {
+		assertLegacyDependencyGone(t, key)
 	}
+	d, ok := LegacyDependencyDispositions["code:internal/db/reputation_history.go"]
+	require.True(t, ok)
+	assert.Equal(t, LegacyActionKeep, d.Action, "the cutover's reputation freeze stays with the pre-archive cutover tool")
 }
 
 // Task idx 76 steps 3-4 (feature:leaderboards): the contribution cutover keeps earned
@@ -223,10 +223,58 @@ func TestCanonicalLeaderboard_KeepsEarnedReputationAcrossTheCutover(t *testing.T
 		return out
 	}
 
-	legacy := NewLeaderboardRepository(pool)
-	before := fetchAll(legacy.GetLeaderboard, func(c context.Context, o models.LeaderboardOptions) ([]models.LeaderboardEntry, int, error) {
-		return legacy.GetLeaderboardByTag(c, tag, o)
-	})
+	// What the legacy LeaderboardRepository (deleted, idx 68) served for this fixture in every
+	// view, ranks aside: measured on e726cb7f by running this test against it.
+	before := map[string]map[string]models.LeaderboardEntry{
+		"all_time/agents": {
+			holder:   {ID: holder, Type: "agent", DisplayName: holder, AvatarURL: "", Reputation: 265, KeyStats: models.LeaderboardStats{ProblemsSolved: 1, AnswersAccepted: 1, UpvotesReceived: 4, TotalContributions: 6}},
+			newcomer: {ID: newcomer, Type: "agent", DisplayName: newcomer, AvatarURL: "", Reputation: 0, KeyStats: models.LeaderboardStats{ProblemsSolved: 0, AnswersAccepted: 0, UpvotesReceived: 0, TotalContributions: 0}},
+		},
+		"all_time/all": {
+			holder:   {ID: holder, Type: "agent", DisplayName: holder, AvatarURL: "", Reputation: 265, KeyStats: models.LeaderboardStats{ProblemsSolved: 1, AnswersAccepted: 1, UpvotesReceived: 4, TotalContributions: 6}},
+			newcomer: {ID: newcomer, Type: "agent", DisplayName: newcomer, AvatarURL: "", Reputation: 0, KeyStats: models.LeaderboardStats{ProblemsSolved: 0, AnswersAccepted: 0, UpvotesReceived: 0, TotalContributions: 0}},
+			user.ID:  {ID: user.ID, Type: "user", DisplayName: "Leaderboard Cutover User", AvatarURL: "", Reputation: 141, KeyStats: models.LeaderboardStats{ProblemsSolved: 1, AnswersAccepted: 0, UpvotesReceived: 2, TotalContributions: 3}},
+		},
+		"all_time/users": {
+			user.ID: {ID: user.ID, Type: "user", DisplayName: "Leaderboard Cutover User", AvatarURL: "", Reputation: 141, KeyStats: models.LeaderboardStats{ProblemsSolved: 1, AnswersAccepted: 0, UpvotesReceived: 2, TotalContributions: 3}},
+		},
+		"monthly/agents": {
+			holder:   {ID: holder, Type: "agent", DisplayName: holder, AvatarURL: "", Reputation: 248, KeyStats: models.LeaderboardStats{ProblemsSolved: 1, AnswersAccepted: 1, UpvotesReceived: 3, TotalContributions: 5}},
+			newcomer: {ID: newcomer, Type: "agent", DisplayName: newcomer, AvatarURL: "", Reputation: 0, KeyStats: models.LeaderboardStats{ProblemsSolved: 0, AnswersAccepted: 0, UpvotesReceived: 0, TotalContributions: 0}},
+		},
+		"monthly/all": {
+			holder:   {ID: holder, Type: "agent", DisplayName: holder, AvatarURL: "", Reputation: 248, KeyStats: models.LeaderboardStats{ProblemsSolved: 1, AnswersAccepted: 1, UpvotesReceived: 3, TotalContributions: 5}},
+			newcomer: {ID: newcomer, Type: "agent", DisplayName: newcomer, AvatarURL: "", Reputation: 0, KeyStats: models.LeaderboardStats{ProblemsSolved: 0, AnswersAccepted: 0, UpvotesReceived: 0, TotalContributions: 0}},
+			user.ID:  {ID: user.ID, Type: "user", DisplayName: "Leaderboard Cutover User", AvatarURL: "", Reputation: 141, KeyStats: models.LeaderboardStats{ProblemsSolved: 1, AnswersAccepted: 0, UpvotesReceived: 2, TotalContributions: 3}},
+		},
+		"monthly/users": {
+			user.ID: {ID: user.ID, Type: "user", DisplayName: "Leaderboard Cutover User", AvatarURL: "", Reputation: 141, KeyStats: models.LeaderboardStats{ProblemsSolved: 1, AnswersAccepted: 0, UpvotesReceived: 2, TotalContributions: 3}},
+		},
+		"tag/all_time": {
+			holder:  {ID: holder, Type: "agent", DisplayName: holder, AvatarURL: "", Reputation: 154, KeyStats: models.LeaderboardStats{ProblemsSolved: 1, AnswersAccepted: 1, UpvotesReceived: 3, TotalContributions: 5}},
+			user.ID: {ID: user.ID, Type: "user", DisplayName: "Leaderboard Cutover User", AvatarURL: "", Reputation: 104, KeyStats: models.LeaderboardStats{ProblemsSolved: 1, AnswersAccepted: 0, UpvotesReceived: 2, TotalContributions: 3}},
+		},
+		"tag/monthly": {
+			holder:  {ID: holder, Type: "agent", DisplayName: holder, AvatarURL: "", Reputation: 152, KeyStats: models.LeaderboardStats{ProblemsSolved: 1, AnswersAccepted: 1, UpvotesReceived: 2, TotalContributions: 4}},
+			user.ID: {ID: user.ID, Type: "user", DisplayName: "Leaderboard Cutover User", AvatarURL: "", Reputation: 104, KeyStats: models.LeaderboardStats{ProblemsSolved: 1, AnswersAccepted: 0, UpvotesReceived: 2, TotalContributions: 3}},
+		},
+		"tag/weekly": {
+			holder:  {ID: holder, Type: "agent", DisplayName: holder, AvatarURL: "", Reputation: 152, KeyStats: models.LeaderboardStats{ProblemsSolved: 1, AnswersAccepted: 1, UpvotesReceived: 2, TotalContributions: 4}},
+			user.ID: {ID: user.ID, Type: "user", DisplayName: "Leaderboard Cutover User", AvatarURL: "", Reputation: 104, KeyStats: models.LeaderboardStats{ProblemsSolved: 1, AnswersAccepted: 0, UpvotesReceived: 2, TotalContributions: 3}},
+		},
+		"weekly/agents": {
+			holder:   {ID: holder, Type: "agent", DisplayName: holder, AvatarURL: "", Reputation: 248, KeyStats: models.LeaderboardStats{ProblemsSolved: 1, AnswersAccepted: 1, UpvotesReceived: 3, TotalContributions: 5}},
+			newcomer: {ID: newcomer, Type: "agent", DisplayName: newcomer, AvatarURL: "", Reputation: 0, KeyStats: models.LeaderboardStats{ProblemsSolved: 0, AnswersAccepted: 0, UpvotesReceived: 0, TotalContributions: 0}},
+		},
+		"weekly/all": {
+			holder:   {ID: holder, Type: "agent", DisplayName: holder, AvatarURL: "", Reputation: 248, KeyStats: models.LeaderboardStats{ProblemsSolved: 1, AnswersAccepted: 1, UpvotesReceived: 3, TotalContributions: 5}},
+			newcomer: {ID: newcomer, Type: "agent", DisplayName: newcomer, AvatarURL: "", Reputation: 0, KeyStats: models.LeaderboardStats{ProblemsSolved: 0, AnswersAccepted: 0, UpvotesReceived: 0, TotalContributions: 0}},
+			user.ID:  {ID: user.ID, Type: "user", DisplayName: "Leaderboard Cutover User", AvatarURL: "", Reputation: 141, KeyStats: models.LeaderboardStats{ProblemsSolved: 1, AnswersAccepted: 0, UpvotesReceived: 2, TotalContributions: 3}},
+		},
+		"weekly/users": {
+			user.ID: {ID: user.ID, Type: "user", DisplayName: "Leaderboard Cutover User", AvatarURL: "", Reputation: 141, KeyStats: models.LeaderboardStats{ProblemsSolved: 1, AnswersAccepted: 0, UpvotesReceived: 2, TotalContributions: 3}},
+		},
+	}
 	// The fixture, scored by the legacy rules: holder = 125 (solved) + 25 (open) + 15 + 15
 	// (ideas) + 60 (accepted answer) + 10 (answer) + 5 (response) + 2 (comment) + votes
 	// (+2 -1 +2 +2 -1 +2, and +2 on the untagged post) = 265; the user = 125 + 10 + 2 + 2 + 2

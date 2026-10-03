@@ -206,32 +206,6 @@ func TestCrystallizationJob_AllFail(t *testing.T) {
 	}
 }
 
-// TestCrystallizationJob_SkipsNoVerifiedApproach tests that RunOnce skips
-// problems with ErrNoVerifiedApproach instead of counting them as failures.
-func TestCrystallizationJob_SkipsNoVerifiedApproach(t *testing.T) {
-	lister := &mockCandidateLister{
-		candidateIDs: []string{"problem-no-approach", "problem-ok"},
-	}
-	crystallizer := &mockCrystallizer{
-		errMap: map[string]error{
-			"problem-no-approach": services.ErrNoVerifiedApproach,
-		},
-	}
-
-	job := NewCrystallizationJob(lister, crystallizer, DefaultCrystallizationStabilityPeriod)
-	result := job.RunOnce(context.Background())
-
-	if result.Crystallized != 1 {
-		t.Errorf("RunOnce() crystallized = %d, want 1", result.Crystallized)
-	}
-	if result.Failed != 0 {
-		t.Errorf("RunOnce() failed = %d, want 0 (no-approach should be skipped, not failed)", result.Failed)
-	}
-	if result.Skipped != 1 {
-		t.Errorf("RunOnce() skipped = %d, want 1", result.Skipped)
-	}
-}
-
 // TestCrystallizationJob_SkipsPostWithNothingToCrystallize tests that RunOnce skips a
 // canonical post whose replies vanished between listing and crystallizing, instead of
 // counting it as a failure (idx 76, feature:crystallization).

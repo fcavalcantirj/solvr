@@ -125,57 +125,14 @@ func (r *ContentDuplicateRepository) FindAuthorCounterTitle(ctx context.Context,
 		ORDER BY created_at, id LIMIT 1`, authorType, authorID, pattern)
 }
 
-// FindAuthorContribution returns the author's earliest live reply, answer, approach, response
-// or comment, on any post, whose normalized text equals body's. An approach's text is its
-// method, or its angle when it has no method. The legacy tables are read while their create
-// routes stay mounted (they are not mirrored into replies).
+// FindAuthorContribution returns the author's earliest live reply, on any post, whose
+// normalized text equals body's.
 func (r *ContentDuplicateRepository) FindAuthorContribution(ctx context.Context, authorType, authorID, body string) (*models.ContentDuplicate, error) {
-	legacy, err := legacyContributionTablesPresent(ctx, r.pool)
-	if err != nil {
-		return nil, err
-	}
-	branches := `
-		    SELECT 'reply' AS t, x.id::text AS id, x.post_id::text AS post_id, x.created_at FROM replies x, n
-		    WHERE x.author_type = $1 AND x.author_id = $2 AND x.deleted_at IS NULL AND ` + normBody("x.body") + ` = n.b`
-	if legacy {
-		branches += legacyContributionBranches
-	}
 	return r.findOne(ctx, "FindAuthorContribution", `
 		WITH n AS (SELECT `+normBody("$3::text")+` AS b)
-		SELECT t, id, post_id, created_at FROM (`+branches+`
-		) found
-		ORDER BY created_at, id LIMIT 1`, authorType, authorID, body)
-}
-
-// legacyContributionBranches extend FindAuthorContribution to the legacy contribution tables
-// while they exist.
-var legacyContributionBranches = `
-		  UNION ALL
-		    SELECT 'answer', x.id::text, x.question_id::text, x.created_at FROM answers x, n
-		    WHERE x.author_type = $1 AND x.author_id = $2 AND x.deleted_at IS NULL AND ` + normBody("x.content") + ` = n.b
-		  UNION ALL
-		    SELECT 'approach', x.id::text, x.problem_id::text, x.created_at FROM approaches x, n
-		    WHERE x.author_type = $1 AND x.author_id = $2 AND x.deleted_at IS NULL
-		      AND ` + normBody("COALESCE(NULLIF(btrim(x.method), ''), x.angle)") + ` = n.b
-		  UNION ALL
-		    SELECT 'response', x.id::text, x.idea_id::text, x.created_at FROM responses x, n
-		    WHERE x.author_type = $1 AND x.author_id = $2 AND ` + normBody("x.content") + ` = n.b
-		  UNION ALL
-		    SELECT 'comment', x.id::text, '', x.created_at FROM comments x, n
-		    WHERE x.author_type = $1 AND x.author_id = $2 AND x.deleted_at IS NULL AND ` + normBody("x.content") + ` = n.b`
-
-// FindAuthorProgressNote returns the earliest progress note, on any of the author's
-// approaches, whose normalized content equals body's (notes carry no author of their own).
-func (r *ContentDuplicateRepository) FindAuthorProgressNote(ctx context.Context, authorType, authorID, body string) (*models.ContentDuplicate, error) {
-	if legacy, err := legacyContributionTablesPresent(ctx, r.pool); err != nil || !legacy {
-		return nil, err
-	}
-	return r.findOne(ctx, "FindAuthorProgressNote", `
-		SELECT 'progress_note', pn.id::text, ap.problem_id::text, pn.created_at
-		FROM progress_notes pn JOIN approaches ap ON ap.id = pn.approach_id
-		WHERE ap.author_type = $1 AND ap.author_id = $2 AND ap.deleted_at IS NULL
-		  AND `+normBody("pn.content")+` = `+normBody("$3::text")+`
-		ORDER BY pn.created_at, pn.id LIMIT 1`, authorType, authorID, body)
+		SELECT 'reply', x.id::text, x.post_id::text, x.created_at FROM replies x, n
+		WHERE x.author_type = $1 AND x.author_id = $2 AND x.deleted_at IS NULL AND `+normBody("x.body")+` = n.b
+		ORDER BY x.created_at, x.id LIMIT 1`, authorType, authorID, body)
 }
 
 // RecentTitlesByAuthor returns up to limit of the author's live post titles other than

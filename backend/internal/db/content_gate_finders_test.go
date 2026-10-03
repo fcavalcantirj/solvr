@@ -50,11 +50,8 @@ func TestContentDuplicates_AuthorFinders(t *testing.T) {
 		VALUES ('question', 'How to cap retries in Go 1.22', 'body', 'agent', 'agent_a', 'rejected') RETURNING id::text`)
 	q2 := id(`INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
 		VALUES ('question', 'Monitoring: 47-Day Verification', 'body', 'agent', 'agent_a', 'open') RETURNING id::text`)
-	answer := id(`INSERT INTO answers (question_id, author_type, author_id, content)
+	reply := id(`INSERT INTO replies (post_id, author_type, author_id, body)
 		VALUES ($1, 'agent', 'agent_a', 'Use a  context deadline.') RETURNING id::text`, q2)
-	approach := id(`INSERT INTO approaches (problem_id, author_type, author_id, angle, method)
-		VALUES ($1, 'agent', 'agent_a', 'Angle only', '') RETURNING id::text`, q1)
-	note := id(`INSERT INTO progress_notes (approach_id, content) VALUES ($1, 'Tried it twice') RETURNING id::text`, approach)
 
 	// Title repeats: digits normalized, case and spacing ignored, same author only, any state.
 	m, err := repo.FindAuthorPostByTitle(ctx, "agent", "agent_a", "how to cap  retries in go 1.23")
@@ -74,29 +71,23 @@ func TestContentDuplicates_AuthorFinders(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, m)
 
-	// Contribution repeats on any post, across tables; an approach compares by its angle when
-	// it has no method.
+	// Contribution repeats: the author's replies on any post, text normalized.
 	m, err = repo.FindAuthorContribution(ctx, "agent", "agent_a", "use a context   deadline.")
 	require.NoError(t, err)
 	require.NotNil(t, m)
-	require.Equal(t, "answer", m.TargetType)
-	require.Equal(t, answer, m.TargetID)
-	m, err = repo.FindAuthorContribution(ctx, "agent", "agent_a", "Angle only")
+	require.Equal(t, "reply", m.TargetType)
+	require.Equal(t, reply, m.TargetID)
+	require.Equal(t, q2, m.PostID)
+	m, err = repo.FindAuthorContribution(ctx, "agent", "agent_b", "Use a context deadline.")
 	require.NoError(t, err)
-	require.NotNil(t, m)
-	require.Equal(t, "approach", m.TargetType)
+	require.Nil(t, m, "another author's reply is not a repeat")
 	m, err = repo.FindAuthorContribution(ctx, "agent", "agent_a", "Use a context deadline, version 2.")
 	require.NoError(t, err)
 	require.Nil(t, m)
 
-	m, err = repo.FindAuthorProgressNote(ctx, "agent", "agent_a", "tried it twice")
-	require.NoError(t, err)
-	require.NotNil(t, m)
-	require.Equal(t, note, m.TargetID)
-
-	_, err = pool.Exec(ctx, `UPDATE answers SET deleted_at = NOW() WHERE id = $1`, answer)
+	_, err = pool.Exec(ctx, `UPDATE replies SET deleted_at = NOW() WHERE id = $1`, reply)
 	require.NoError(t, err)
 	m, err = repo.FindAuthorContribution(ctx, "agent", "agent_a", "Use a context deadline.")
 	require.NoError(t, err)
-	require.Nil(t, m, "a deleted answer is not repeated")
+	require.Nil(t, m, "a deleted reply is not repeated")
 }

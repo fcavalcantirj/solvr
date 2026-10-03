@@ -229,7 +229,7 @@ func TestAgentRepository_GetAgentStats(t *testing.T) {
 		t.Fatalf("failed to create agent: %v", err)
 	}
 
-	stats, err := repo.GetAgentStats(ctx, agent.ID)
+	stats, err := NewCanonicalReputationAgentRepository(pool).GetAgentStats(ctx, agent.ID)
 	if err != nil {
 		t.Fatalf("failed to get agent stats: %v", err)
 	}

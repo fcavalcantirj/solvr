@@ -70,7 +70,7 @@ func TestUserProfile_GetUserStats_Integration(t *testing.T) {
 	}
 
 	// Get user stats
-	stats, err := userRepo.GetUserStats(ctx, createdUser.ID)
+	stats, err := NewCanonicalReputationUserRepository(pool).GetUserStats(ctx, createdUser.ID)
 	if err != nil {
 		t.Fatalf("GetUserStats failed: %v", err)
 	}

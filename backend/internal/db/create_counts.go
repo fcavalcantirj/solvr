@@ -28,16 +28,6 @@ var createCountSources = map[string]string{
 		SELECT created_at FROM replies WHERE author_type = $1 AND author_id = $2 AND created_at > $3`,
 }
 
-// legacyContributionCountSources extend the contributions count to the legacy contribution
-// tables while they exist (their create routes are still mounted until legacy cleanup).
-var legacyContributionCountSources = `
-		UNION ALL SELECT created_at FROM answers WHERE author_type = $1 AND author_id = $2 AND created_at > $3
-		UNION ALL SELECT created_at FROM approaches WHERE author_type = $1 AND author_id = $2 AND created_at > $3
-		UNION ALL SELECT created_at FROM responses WHERE author_type = $1 AND author_id = $2 AND created_at > $3
-		UNION ALL SELECT created_at FROM comments WHERE author_type = $1 AND author_id = $2 AND created_at > $3
-		UNION ALL SELECT pn.created_at FROM progress_notes pn JOIN approaches ap ON ap.id = pn.approach_id
-		          WHERE ap.author_type = $1 AND ap.author_id = $2 AND pn.created_at > $3`
-
 // CountRecentCreates returns how many op creates ("posts" or "contributions") the author made
 // after since, the oldest of them (zero when none), and when the account was created (zero
 // when unknown).
@@ -45,15 +35,6 @@ func (r *CreateCountRepository) CountRecentCreates(ctx context.Context, op, auth
 	source, ok := createCountSources[op]
 	if !ok {
 		return 0, time.Time{}, time.Time{}, fmt.Errorf("CountRecentCreates: unknown operation %q", op)
-	}
-	if op == "contributions" {
-		legacy, err := legacyContributionTablesPresent(ctx, r.pool)
-		if err != nil {
-			return 0, time.Time{}, time.Time{}, err
-		}
-		if legacy {
-			source += legacyContributionCountSources
-		}
 	}
 	var oldestPtr, createdPtr *time.Time
 	err = r.pool.QueryRow(ctx, `

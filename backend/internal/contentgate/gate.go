@@ -90,7 +90,6 @@ type Store interface {
 	FindAuthorBlogByTitle(ctx context.Context, authorType, authorID, title string) (*models.ContentDuplicate, error)
 	FindAuthorCounterTitle(ctx context.Context, table, authorType, authorID, pattern string) (*models.ContentDuplicate, error)
 	FindAuthorContribution(ctx context.Context, authorType, authorID, body string) (*models.ContentDuplicate, error)
-	FindAuthorProgressNote(ctx context.Context, authorType, authorID, body string) (*models.ContentDuplicate, error)
 }
 
 // Gate runs the checks. A nil *Gate admits everything.
@@ -103,8 +102,7 @@ func New(store Store) *Gate {
 	return &Gate{store: store}
 }
 
-// CheckPost vets a new post title (the canonical and the legacy typed creates, and a room's
-// save-as-post).
+// CheckPost vets a new post title (POST /v1/posts and a room's save-as-post).
 func (g *Gate) CheckPost(ctx context.Context, authorType, authorID, title string) error {
 	if g == nil {
 		return nil
@@ -120,20 +118,12 @@ func (g *Gate) CheckBlog(ctx context.Context, authorType, authorID, title string
 	return g.checkTitle(ctx, "blog_posts", authorType, authorID, title, g.store.FindAuthorBlogByTitle)
 }
 
-// CheckContribution vets a reply, answer, approach, response or comment body.
+// CheckContribution vets a reply body.
 func (g *Gate) CheckContribution(ctx context.Context, authorType, authorID, body string) error {
 	if g == nil {
 		return nil
 	}
 	return duplicate(g.store.FindAuthorContribution(ctx, authorType, authorID, body))
-}
-
-// CheckProgressNote vets a progress note against the notes on the author's approaches.
-func (g *Gate) CheckProgressNote(ctx context.Context, authorType, authorID, body string) error {
-	if g == nil {
-		return nil
-	}
-	return duplicate(g.store.FindAuthorProgressNote(ctx, authorType, authorID, body))
 }
 
 func (g *Gate) checkTitle(ctx context.Context, table, authorType, authorID, title string,

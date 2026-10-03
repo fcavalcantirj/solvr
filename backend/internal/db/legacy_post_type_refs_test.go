@@ -64,11 +64,11 @@ func TestLegacyDependencyRegistry_CoversThePostTypeReferences(t *testing.T) {
 	require.NoError(t, err)
 	keys := depKeys(deps)
 	// Known references (the scan is not vacuous): a canonical counter passing the type as a
-	// parameter, a canonical route branching on it, and a legacy route family.
+	// parameter, a canonical route branching on it, and an unmounted per-type statistics handler.
 	for _, k := range []string{
 		"typeref:internal/db/profile_stats_canonical.go",
 		"typeref:internal/api/handlers/posts.go",
-		"typeref:internal/api/handlers/problems.go",
+		"typeref:internal/api/handlers/stats.go",
 		"typeref:internal/models/post.go",
 	} {
 		assert.Contains(t, keys, k)

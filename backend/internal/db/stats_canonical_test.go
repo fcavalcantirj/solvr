@@ -14,7 +14,7 @@ import (
 // Task idx 76 step 3: the public statistics that read the legacy contribution tables (GET
 // /v1/stats, /v1/stats/trending, /v1/stats/problems, /v1/stats/questions and the overview's
 // community totals) are served by CanonicalStatsRepository. The legacy StatsRepository methods
-// that read answers, approaches and responses stay unwired until the tables go.
+// that read answers, approaches and responses were deleted with the legacy tables (idx 68).
 func TestLegacyStats_ServedByTheCanonicalRepository(t *testing.T) {
 	assert.ElementsMatch(t, []string{"internal/api/router.go", "internal/api/router_homepage.go"},
 		productionSourcesContaining(t, "db.NewCanonicalStatsRepository("),
@@ -28,14 +28,11 @@ func TestLegacyStats_ServedByTheCanonicalRepository(t *testing.T) {
 	for _, dep := range src {
 		assert.NotEqual(t, "code:internal/db/stats_canonical.go", dep.Key, "the canonical statistics name no legacy table or type")
 	}
-	q, ok := LegacyDependencyDispositions["code:internal/db/stats_questions.go"]
-	require.True(t, ok)
-	assert.Equal(t, LegacyActionRetire, q.Action, "every question statistic it holds is unwired")
-	assert.False(t, q.Done, "it reads answers until the legacy tables are dropped")
+	assertLegacyDependencyGone(t, "code:internal/db/stats_questions.go") // deleted with the legacy tables (idx 68)
 	s, ok := LegacyDependencyDispositions["code:internal/db/stats.go"]
 	require.True(t, ok)
 	assert.Equal(t, LegacyActionRefactor, s.Action)
-	assert.False(t, s.Done, "its unwired legacy methods and the idea sidebar still name legacy tables and types")
+	assert.False(t, s.Done, "its solved and answered counters and the idea sidebar still name legacy types")
 }
 
 // statsReader is what the served stats routes read that the legacy tables fed.
@@ -232,47 +229,33 @@ func TestCanonicalStats_KeepsLegacyFiguresAcrossTheCutover(t *testing.T) {
 	exec(`INSERT INTO responses (idea_id, author_type, author_id, content, response_type)
 		VALUES ($1, 'agent', $2, 'stats response', 'support')`, i1, sa)
 
-	legacy := takeStatsSnapshot(t, ctx, NewStatsRepository(pool))
-	// Legacy contributions: live answers (2), live approaches (7, the one on the deleted post
-	// included) and responses (1) on public posts. Comments and progress notes never counted.
-	require.Equal(t, 10, legacy.All.TotalContributions)
-	require.Equal(t, 10, legacy.Contributions)
-	require.Equal(t, 3, legacy.All.ProblemsSolved)
-	require.Equal(t, 1, legacy.All.QuestionsAnswered)
-	require.Equal(t, map[string]trendingStat{
-		p1: {"problem", 0, 4}, p2: {"problem", 0, 1}, p3: {"problem", 0, 0}, p4: {"problem", 0, 1},
-		q1: {"question", 0, 2}, q2: {"question", 0, 0}, i1: {"idea", 0, 0},
-	}, legacy.Trending, "legacy response counts: answers plus approaches")
-	require.Equal(t, map[string]any{
-		"total_problems": 4, "solved_count": 3, "active_approaches": 2, "avg_solve_time_days": 3,
-	}, legacy.Problems)
+	canonical := NewCanonicalStatsRepository(pool)
+	// The legacy StatsRepository (deleted, idx 68) counted live answers (2), live approaches (7,
+	// the one on the deleted post included) and responses (1) on public posts as contributions;
+	// comments and progress notes never counted. The other platform figures come from posts, which
+	// the canonical repository reads the same way before the cutover.
+	pre := takeStatsSnapshot(t, ctx, canonical)
+	require.Equal(t, 3, pre.All.ProblemsSolved)
+	require.Equal(t, 1, pre.All.QuestionsAnswered)
 	wantSolved := []map[string]any{
 		{"id": p1, "title": "stats problem solved", "solver_name": sc, "solver_type": "agent", "time_to_solve_days": 5},
 		{"id": p2, "title": "stats problem solved", "solver_name": sa, "solver_type": "agent", "time_to_solve_days": 2},
 		{"id": p3, "title": "stats problem solved", "solver_name": "unknown", "solver_type": "unknown", "time_to_solve_days": 0},
 	}
-	require.Equal(t, wantSolved, legacy.RecentlySolved)
-	require.Equal(t, map[string]int{sa: 2, sc: 1}, legacy.TopSolvers)
-	require.Equal(t, map[string]any{
-		"total_questions": 2, "answered_count": 1, "response_rate": 50.0, "avg_response_time_hours": 2.0,
-	}, legacy.Questions)
 	wantAnswered := []map[string]any{
 		{"id": q1, "title": "stats question open", "answerer_name": "Stats Human", "answerer_type": "human", "time_to_answer_hours": 4.0},
 	}
-	require.Equal(t, wantAnswered, legacy.RecentlyAnswered)
-	require.Equal(t, map[string]answererStat{h: {"Stats Human", 1, 100}, sa: {sa, 1, 0}}, legacy.TopAnswerers)
 
 	_, err = MigrateContributions(ctx, pool)
 	require.NoError(t, err)
 	_, err = RemapLegacyRelations(ctx, pool)
 	require.NoError(t, err)
 
-	canonical := NewCanonicalStatsRepository(pool)
 	after := takeStatsSnapshot(t, ctx, canonical)
 	// Canonical contributions: p1's 4 live approaches + the progress note, p2 1, p4 1, q1's 2 live
 	// answers + both comments, i1's response. Not the system verdict, not the deleted rows, not
 	// the family posts, not the approach on the deleted post.
-	wantAll := legacy.All
+	wantAll := pre.All
 	wantAll.TotalContributions = 12
 	assert.Equal(t, wantAll, after.All, "only the contribution total changes")
 	assert.Equal(t, 12, after.Contributions)
@@ -285,7 +268,7 @@ func TestCanonicalStats_KeepsLegacyFiguresAcrossTheCutover(t *testing.T) {
 		"total_problems": 4, "solved_count": 3, "active_approaches": 0, "avg_solve_time_days": 3,
 	}, after.Problems, "the approach status workflow is retired")
 	assert.Equal(t, wantSolved, after.RecentlySolved, "the solver is kept across the cutover")
-	assert.Equal(t, legacy.TopSolvers, after.TopSolvers, "solvers are kept across the cutover")
+	assert.Equal(t, map[string]int{sa: 2, sc: 1}, after.TopSolvers, "solvers are kept across the cutover")
 	assert.Equal(t, map[string]any{
 		"total_questions": 2, "answered_count": 1, "response_rate": 50.0, "avg_response_time_hours": 1.0,
 	}, after.Questions, "the first reply to q1 is the comment, 1h after it")

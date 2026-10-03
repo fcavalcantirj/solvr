@@ -276,12 +276,9 @@ func TestCrystallizePost_Failures(t *testing.T) {
 	}
 }
 
-// The legacy no-succeeded-approach refusal is one case of nothing to crystallize, so the
-// job skips either the same way.
-func TestErrNoVerifiedApproach_IsNothingToCrystallize(t *testing.T) {
-	if !errors.Is(ErrNoVerifiedApproach, ErrNothingToCrystallize) {
-		t.Fatal("ErrNoVerifiedApproach must match ErrNothingToCrystallize")
-	}
+// An ineligible post is refused, not skipped: the job counts ErrNotPubliclyEligible as a
+// failure and only ErrNothingToCrystallize as a skip.
+func TestErrNotPubliclyEligible_IsNotNothingToCrystallize(t *testing.T) {
 	if errors.Is(ErrNotPubliclyEligible, ErrNothingToCrystallize) {
 		t.Fatal("an ineligible post is not a skip-worthy empty post")
 	}

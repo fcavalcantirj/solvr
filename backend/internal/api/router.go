@@ -236,10 +236,6 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	var postsRepo handlers.PostsRepositoryInterface
 	var searchRepo handlers.SearchRepositoryInterface
 	var userRepo handlers.MeUserRepositoryInterface
-	var problemsRepo handlers.ProblemsRepositoryInterface
-	var questionsRepo handlers.QuestionsRepositoryInterface
-	var ideasRepo handlers.IdeasRepositoryInterface
-	var commentsRepo handlers.CommentsRepositoryInterface
 	var notificationsRepo handlers.NotificationsRepositoryInterface
 	var userAPIKeysRepo handlers.UserAPIKeyRepositoryInterface
 	var bookmarksRepo handlers.BookmarksRepositoryInterface
@@ -267,10 +263,6 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	bookmarksRepo = db.NewBookmarkRepository(pool)
 	viewsRepo = db.NewViewsRepository(pool)
 	reportsRepo = db.NewReportsRepository(pool)
-	problemsRepo = db.NewProblemsRepository(pool)
-	questionsRepo = db.NewQuestionsRepository(pool)
-	ideasRepo = db.NewIdeasRepository(pool)
-	commentsRepo = db.NewCommentsRepository(pool)
 	notificationsRepoConcrete := db.NewNotificationsRepository(pool)
 	notificationsRepo = notificationsRepoConcrete
 	pinsRepoConcrete := db.NewPinRepository(pool)
@@ -359,27 +351,6 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	searchAnalyticsRepo := db.NewSearchAnalyticsRepository(pool)
 	searchHandler.SetAnalyticsRepo(searchAnalyticsRepo)
 
-	// Create content handlers (API-CRITICAL per PRD-v2)
-	problemsHandler := handlers.NewProblemsHandler(problemsRepo)
-	if embeddingService != nil {
-		problemsHandler.SetEmbeddingService(embeddingService)
-	}
-	questionsHandler := handlers.NewQuestionsHandler(questionsRepo)
-	if embeddingService != nil {
-		questionsHandler.SetEmbeddingService(embeddingService)
-	}
-	ideasHandler := handlers.NewIdeasHandler(ideasRepo)
-	commentsHandler := handlers.NewCommentsHandler(commentsRepo)
-	commentsHandler.SetAgentRepository(agentRepo)
-
-	// Per FIX-020: Set posts repository on content handlers so type-specific list endpoints
-	// (GET /v1/problems, /v1/questions, /v1/ideas) return data consistent with /v1/posts
-	problemsHandler.SetPostsRepository(postsRepo)
-	approachRelRepo := db.NewApproachRelationshipsRepository(pool)
-	problemsHandler.SetApproachRelationshipsRepository(approachRelRepo)
-	questionsHandler.SetPostsRepository(postsRepo)
-	ideasHandler.SetPostsRepository(postsRepo)
-
 	// Create user-related handlers (API-CRITICAL per PRD-v2)
 	notificationsHandler := handlers.NewNotificationsHandler(notificationsRepo)
 	userAPIKeysHandler := handlers.NewUserAPIKeysHandler(userAPIKeysRepo)
@@ -410,12 +381,6 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	usersHandler.SetAgentRepository(agentRepo)
 	// Per prd-v4: Set user list repository for GET /v1/users endpoint
 	usersHandler.SetUserListRepository(usersListRepo)
-	// idx 76 contribution listings (db/contributions_canonical.go): unmounted since idx 73 retired them.
-	usersHandler.SetContributionRepositories(
-		db.NewCanonicalAnswerContributionsRepository(pool),
-		db.NewCanonicalApproachContributionsRepository(pool),
-		db.NewCanonicalResponseContributionsRepository(pool),
-	)
 
 	// Create IPFS pinning handler (uses ipfsAPIURL passed from NewRouter)
 	ipfsService := services.NewKuboIPFSService(ipfsAPIURL)
@@ -453,9 +418,9 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 
 	// Create blog handler
 	blogHandler := handlers.NewBlogHandler(db.NewBlogPostRepository(pool))
-	wireContentGate(pool, postsHandler, repliesHandler, problemsHandler, questionsHandler, ideasHandler, commentsHandler, blogHandler)
-	wireAntiAbuseModeration(pool, moderationTargets{posts: postsHandler, blog: blogHandler, problems: problemsHandler,
-		questions: questionsHandler, ideas: ideasHandler, replies: repliesHandler, comments: commentsHandler, notify: notificationsRepoConcrete.Create})
+	wireContentGate(pool, postsHandler, repliesHandler, blogHandler)
+	wireAntiAbuseModeration(pool, moderationTargets{posts: postsHandler, blog: blogHandler, replies: repliesHandler,
+		notify: notificationsRepoConcrete.Create})
 	if groqAPIKey := os.Getenv("GROQ_API_KEY"); groqAPIKey != "" {
 		modSvc := services.NewContentModerationService(groqAPIKey)
 		blogHandler.SetContentModerationService(wrapContentModerator(modSvc))
@@ -643,7 +608,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		if pool != nil {
 			badgeRepo := db.NewBadgeRepository(pool)
 			// The owner lookups make an absent owner a 404, as on GET /v1/{agents,users}/{id}.
-			badgesHandler := handlers.NewMeHandler(oauthConfig, accounts, nil, nil, nil)
+			badgesHandler := handlers.NewMeHandler(oauthConfig, db.NewCanonicalReputationUserRepository(pool), nil, nil, nil)
 			badgesHandler.SetAgentFinderRepo(agentRepoConcrete)
 			badgesHandler.SetBadgeRepo(badgeRepo)
 			r.Get("/agents/{id}/badges", func(w http.ResponseWriter, req *http.Request) {

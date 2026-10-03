@@ -748,12 +748,12 @@ func TestPostRepository_FindByID_InvalidUUID(t *testing.T) {
 
 	// Test various invalid UUID formats
 	invalidIDs := []string{
-		"test-123",           // Not a UUID
-		"invalid",            // Plain string
-		"123",                // Just numbers
-		"not-a-valid-uuid",   // Looks like UUID but isn't
-		"",                   // Empty string
-		"abc",                // Short string
+		"test-123",         // Not a UUID
+		"invalid",          // Plain string
+		"123",              // Just numbers
+		"not-a-valid-uuid", // Looks like UUID but isn't
+		"",                 // Empty string
+		"abc",              // Short string
 	}
 
 	for _, invalidID := range invalidIDs {
@@ -811,7 +811,6 @@ func TestPostRepository_FindByID_IncludesCommentCount(t *testing.T) {
 	defer pool.Close()
 
 	repo := NewPostRepository(pool)
-	commentsRepo := NewCommentsRepository(pool)
 	ctx := context.Background()
 	authorAgent(ctx, t, pool, "test_agent")
 
@@ -830,26 +829,13 @@ func TestPostRepository_FindByID_IncludesCommentCount(t *testing.T) {
 
 	// Add 2 comments to the post
 	for i := 1; i <= 2; i++ {
-		_, err = commentsRepo.Create(ctx, &models.Comment{
-			TargetType: "post",
-			TargetID:   post.ID,
-			AuthorType: models.AuthorTypeAgent,
-			AuthorID:   "test_agent",
-			Content:    fmt.Sprintf("Comment %d", i),
-		})
-		if err != nil {
-			t.Fatalf("failed to create comment %d: %v", i, err)
-		}
+		seedMigratedReply(t, pool, ctx, post.ID, "comment", string(models.AuthorTypeAgent), "test_agent", fmt.Sprintf("Comment %d", i))
 	}
 
 	defer func() {
-		_, _ = pool.Exec(ctx, "DELETE FROM comments WHERE target_id = $1", post.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM replies WHERE post_id = $1", post.ID)
 		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id = $1", post.ID)
 	}()
-
-	// The replies the contribution cutover makes from these legacy rows (task idx 76): post
-	// counts are read from replies.
-	cutoverRepliesFor(t, pool, ctx, post.ID)
 
 	// Act: FindByID
 	found, err := repo.FindByID(ctx, post.ID)
@@ -2447,27 +2433,15 @@ func TestPostRepository_List_SortByAnswers(t *testing.T) {
 	}
 
 	defer func() {
-		_, _ = pool.Exec(ctx, "DELETE FROM answers WHERE question_id IN ($1, $2)", q1.ID, q2.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM replies WHERE post_id IN ($1, $2)", q1.ID, q2.ID)
 		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id IN ($1, $2)", q1.ID, q2.ID)
 	}()
 
 	// Add 3 answers to q1, 1 answer to q2
 	for i := 0; i < 3; i++ {
-		_, err := pool.Exec(ctx, `INSERT INTO answers (question_id, author_type, author_id, content)
-			VALUES ($1, 'agent', 'sort_test_agent', $2)`, q1.ID, "Answer for q1")
-		if err != nil {
-			t.Fatalf("failed to insert answer for q1: %v", err)
-		}
+		seedMigratedReply(t, pool, ctx, q1.ID, "answer", "agent", "sort_test_agent", "Answer for q1")
 	}
-	_, err = pool.Exec(ctx, `INSERT INTO answers (question_id, author_type, author_id, content)
-		VALUES ($1, 'agent', 'sort_test_agent', 'Answer for q2')`, q2.ID)
-	if err != nil {
-		t.Fatalf("failed to insert answer for q2: %v", err)
-	}
-
-	// The replies the contribution cutover makes from these legacy rows (task idx 76): post
-	// counts are read from replies.
-	cutoverRepliesFor(t, pool, ctx, q1.ID, q2.ID)
+	seedMigratedReply(t, pool, ctx, q2.ID, "answer", "agent", "sort_test_agent", "Answer for q2")
 
 	// List with sort=answers, filtered by tag to isolate our test data
 	posts, _, err := repo.List(ctx, models.PostListOptions{
@@ -2555,21 +2529,9 @@ func TestPostRepository_List_SortByApproaches(t *testing.T) {
 
 	// Add 3 approaches to p1, 1 approach to p2
 	for i := 0; i < 3; i++ {
-		_, err := pool.Exec(ctx, `INSERT INTO approaches (problem_id, author_type, author_id, angle)
-			VALUES ($1, 'agent', 'sort_test_agent', $2)`, p1.ID, "Approach for p1")
-		if err != nil {
-			t.Fatalf("failed to insert approach for p1: %v", err)
-		}
+		seedMigratedReply(t, pool, ctx, p1.ID, "approach", "agent", "sort_test_agent", "Approach for p1")
 	}
-	_, err = pool.Exec(ctx, `INSERT INTO approaches (problem_id, author_type, author_id, angle)
-		VALUES ($1, 'agent', 'sort_test_agent', 'Approach for p2')`, p2.ID)
-	if err != nil {
-		t.Fatalf("failed to insert approach for p2: %v", err)
-	}
-
-	// The replies the contribution cutover makes from these legacy rows (task idx 76): post
-	// counts are read from replies.
-	cutoverRepliesFor(t, pool, ctx, p1.ID, p2.ID)
+	seedMigratedReply(t, pool, ctx, p2.ID, "approach", "agent", "sort_test_agent", "Approach for p2")
 
 	posts, _, err := repo.List(ctx, models.PostListOptions{
 		Type: models.PostTypeProblem, Sort: "approaches",
@@ -2638,29 +2600,21 @@ func TestPostRepository_List_CountsExcludeSoftDeleted(t *testing.T) {
 	}
 
 	defer func() {
-		_, _ = pool.Exec(ctx, "DELETE FROM answers WHERE question_id = $1", q.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM replies WHERE post_id = $1", q.ID)
 		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id = $1", q.ID)
 	}()
 
 	// Insert 3 answers
+	var answers []string
 	for i := 0; i < 3; i++ {
-		_, err := pool.Exec(ctx, `INSERT INTO answers (question_id, author_type, author_id, content)
-			VALUES ($1, 'agent', 'count_test_agent', $2)`, q.ID, "Answer")
-		if err != nil {
-			t.Fatalf("failed to insert answer: %v", err)
-		}
+		answers = append(answers, seedMigratedReply(t, pool, ctx, q.ID, "answer", "agent", "count_test_agent", "Answer"))
 	}
 
 	// Soft-delete one answer
-	_, err = pool.Exec(ctx, `UPDATE answers SET deleted_at = NOW()
-		WHERE question_id = $1 AND ctid = (SELECT ctid FROM answers WHERE question_id = $1 AND deleted_at IS NULL LIMIT 1)`, q.ID)
+	_, err = pool.Exec(ctx, `UPDATE replies SET deleted_at = NOW() WHERE id = $1`, answers[0])
 	if err != nil {
 		t.Fatalf("failed to soft-delete answer: %v", err)
 	}
-
-	// The replies the contribution cutover makes from these legacy rows (task idx 76): post
-	// counts are read from replies.
-	cutoverRepliesFor(t, pool, ctx, q.ID)
 
 	// List and verify count is 2 (not 3)
 	posts, _, err := repo.List(ctx, models.PostListOptions{
@@ -3027,7 +2981,6 @@ func TestPostRepository_List_HasAnswerFalse(t *testing.T) {
 	defer pool.Close()
 
 	repo := NewPostRepository(pool)
-	answerRepo := NewAnswersRepository(pool)
 	ctx := context.Background()
 	authorAgent(ctx, t, pool, "test_agent")
 
@@ -3058,15 +3011,7 @@ func TestPostRepository_List_HasAnswerFalse(t *testing.T) {
 		t.Fatalf("failed to create q2: %v", err)
 	}
 
-	_, err = answerRepo.CreateAnswer(ctx, &models.Answer{
-		QuestionID: q2.ID,
-		Content:    "Answer 1",
-		AuthorType: models.AuthorTypeAgent,
-		AuthorID:   "test_agent",
-	})
-	if err != nil {
-		t.Fatalf("failed to create answer for q2: %v", err)
-	}
+	seedMigratedReply(t, pool, ctx, q2.ID, "answer", string(models.AuthorTypeAgent), "test_agent", "Answer 1")
 
 	// q3: 3 answers
 	q3, err := repo.Create(ctx, &models.Post{
@@ -3082,19 +3027,11 @@ func TestPostRepository_List_HasAnswerFalse(t *testing.T) {
 	}
 
 	for i := 1; i <= 3; i++ {
-		_, err = answerRepo.CreateAnswer(ctx, &models.Answer{
-			QuestionID: q3.ID,
-			Content:    "Answer " + string(rune('0'+i)),
-			AuthorType: models.AuthorTypeAgent,
-			AuthorID:   "test_agent",
-		})
-		if err != nil {
-			t.Fatalf("failed to create answer %d for q3: %v", i, err)
-		}
+		seedMigratedReply(t, pool, ctx, q3.ID, "answer", string(models.AuthorTypeAgent), "test_agent", "Answer "+string(rune('0'+i)))
 	}
 
 	defer func() {
-		_, _ = pool.Exec(ctx, "DELETE FROM answers WHERE question_id IN ($1, $2, $3)", q1.ID, q2.ID, q3.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM replies WHERE post_id IN ($1, $2, $3)", q1.ID, q2.ID, q3.ID)
 		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id IN ($1, $2, $3)", q1.ID, q2.ID, q3.ID)
 	}()
 
@@ -3145,7 +3082,6 @@ func TestPostRepository_List_HasAnswerTrue(t *testing.T) {
 	defer pool.Close()
 
 	repo := NewPostRepository(pool)
-	answerRepo := NewAnswersRepository(pool)
 	ctx := context.Background()
 	authorAgent(ctx, t, pool, "test_agent")
 
@@ -3176,15 +3112,7 @@ func TestPostRepository_List_HasAnswerTrue(t *testing.T) {
 		t.Fatalf("failed to create q2: %v", err)
 	}
 
-	_, err = answerRepo.CreateAnswer(ctx, &models.Answer{
-		QuestionID: q2.ID,
-		Content:    "Answer 1",
-		AuthorType: models.AuthorTypeAgent,
-		AuthorID:   "test_agent",
-	})
-	if err != nil {
-		t.Fatalf("failed to create answer for q2: %v", err)
-	}
+	seedMigratedReply(t, pool, ctx, q2.ID, "answer", string(models.AuthorTypeAgent), "test_agent", "Answer 1")
 
 	// q3: 3 answers
 	q3, err := repo.Create(ctx, &models.Post{
@@ -3200,19 +3128,11 @@ func TestPostRepository_List_HasAnswerTrue(t *testing.T) {
 	}
 
 	for i := 1; i <= 3; i++ {
-		_, err = answerRepo.CreateAnswer(ctx, &models.Answer{
-			QuestionID: q3.ID,
-			Content:    "Answer " + string(rune('0'+i)),
-			AuthorType: models.AuthorTypeAgent,
-			AuthorID:   "test_agent",
-		})
-		if err != nil {
-			t.Fatalf("failed to create answer %d for q3: %v", i, err)
-		}
+		seedMigratedReply(t, pool, ctx, q3.ID, "answer", string(models.AuthorTypeAgent), "test_agent", "Answer "+string(rune('0'+i)))
 	}
 
 	defer func() {
-		_, _ = pool.Exec(ctx, "DELETE FROM answers WHERE question_id IN ($1, $2, $3)", q1.ID, q2.ID, q3.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM replies WHERE post_id IN ($1, $2, $3)", q1.ID, q2.ID, q3.ID)
 		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id IN ($1, $2, $3)", q1.ID, q2.ID, q3.ID)
 	}()
 
@@ -3258,7 +3178,6 @@ func TestPostRepository_List_NoHasAnswerFilter(t *testing.T) {
 	defer pool.Close()
 
 	repo := NewPostRepository(pool)
-	answerRepo := NewAnswersRepository(pool)
 	ctx := context.Background()
 	authorAgent(ctx, t, pool, "test_agent")
 
@@ -3289,15 +3208,7 @@ func TestPostRepository_List_NoHasAnswerFilter(t *testing.T) {
 		t.Fatalf("failed to create q2: %v", err)
 	}
 
-	_, err = answerRepo.CreateAnswer(ctx, &models.Answer{
-		QuestionID: q2.ID,
-		Content:    "Answer 1",
-		AuthorType: models.AuthorTypeAgent,
-		AuthorID:   "test_agent",
-	})
-	if err != nil {
-		t.Fatalf("failed to create answer for q2: %v", err)
-	}
+	seedMigratedReply(t, pool, ctx, q2.ID, "answer", string(models.AuthorTypeAgent), "test_agent", "Answer 1")
 
 	// q3: 3 answers
 	q3, err := repo.Create(ctx, &models.Post{
@@ -3313,19 +3224,11 @@ func TestPostRepository_List_NoHasAnswerFilter(t *testing.T) {
 	}
 
 	for i := 1; i <= 3; i++ {
-		_, err = answerRepo.CreateAnswer(ctx, &models.Answer{
-			QuestionID: q3.ID,
-			Content:    "Answer " + string(rune('0'+i)),
-			AuthorType: models.AuthorTypeAgent,
-			AuthorID:   "test_agent",
-		})
-		if err != nil {
-			t.Fatalf("failed to create answer %d for q3: %v", i, err)
-		}
+		seedMigratedReply(t, pool, ctx, q3.ID, "answer", string(models.AuthorTypeAgent), "test_agent", "Answer "+string(rune('0'+i)))
 	}
 
 	defer func() {
-		_, _ = pool.Exec(ctx, "DELETE FROM answers WHERE question_id IN ($1, $2, $3)", q1.ID, q2.ID, q3.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM replies WHERE post_id IN ($1, $2, $3)", q1.ID, q2.ID, q3.ID)
 		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id IN ($1, $2, $3)", q1.ID, q2.ID, q3.ID)
 	}()
 
@@ -3371,7 +3274,6 @@ func TestPostRepository_List_IncludesCommentCount(t *testing.T) {
 	defer pool.Close()
 
 	repo := NewPostRepository(pool)
-	commentsRepo := NewCommentsRepository(pool)
 	ctx := context.Background()
 	authorAgent(ctx, t, pool, "test_agent")
 
@@ -3390,26 +3292,13 @@ func TestPostRepository_List_IncludesCommentCount(t *testing.T) {
 
 	// Add 3 comments to the post
 	for i := 1; i <= 3; i++ {
-		_, err = commentsRepo.Create(ctx, &models.Comment{
-			TargetType: "post",
-			TargetID:   post.ID,
-			AuthorType: models.AuthorTypeAgent,
-			AuthorID:   "test_agent",
-			Content:    fmt.Sprintf("Comment %d", i),
-		})
-		if err != nil {
-			t.Fatalf("failed to create comment %d: %v", i, err)
-		}
+		seedMigratedReply(t, pool, ctx, post.ID, "comment", string(models.AuthorTypeAgent), "test_agent", fmt.Sprintf("Comment %d", i))
 	}
 
 	defer func() {
-		_, _ = pool.Exec(ctx, "DELETE FROM comments WHERE target_id = $1", post.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM replies WHERE post_id = $1", post.ID)
 		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id = $1", post.ID)
 	}()
-
-	// The replies the contribution cutover makes from these legacy rows (task idx 76): post
-	// counts are read from replies.
-	cutoverRepliesFor(t, pool, ctx, post.ID)
 
 	// Act: List posts
 	posts, _, err := repo.List(ctx, models.PostListOptions{
@@ -3450,7 +3339,6 @@ func TestPostRepository_List_CommentsCountAllTypes(t *testing.T) {
 	defer pool.Close()
 
 	repo := NewPostRepository(pool)
-	commentsRepo := NewCommentsRepository(pool)
 	ctx := context.Background()
 	authorAgent(ctx, t, pool, "test_agent")
 
@@ -3492,48 +3380,17 @@ func TestPostRepository_List_CommentsCountAllTypes(t *testing.T) {
 	}
 
 	// Add 1 comment to each post
-	_, err = commentsRepo.Create(ctx, &models.Comment{
-		TargetType: "post",
-		TargetID:   question.ID,
-		AuthorType: models.AuthorTypeAgent,
-		AuthorID:   "test_agent",
-		Content:    "Comment on question",
-	})
-	if err != nil {
-		t.Fatalf("failed to create comment on question: %v", err)
-	}
+	seedMigratedReply(t, pool, ctx, question.ID, "comment", string(models.AuthorTypeAgent), "test_agent", "Comment on question")
 
-	_, err = commentsRepo.Create(ctx, &models.Comment{
-		TargetType: "post",
-		TargetID:   problem.ID,
-		AuthorType: models.AuthorTypeAgent,
-		AuthorID:   "test_agent",
-		Content:    "Comment on problem",
-	})
-	if err != nil {
-		t.Fatalf("failed to create comment on problem: %v", err)
-	}
+	seedMigratedReply(t, pool, ctx, problem.ID, "comment", string(models.AuthorTypeAgent), "test_agent", "Comment on problem")
 
-	_, err = commentsRepo.Create(ctx, &models.Comment{
-		TargetType: "post",
-		TargetID:   idea.ID,
-		AuthorType: models.AuthorTypeAgent,
-		AuthorID:   "test_agent",
-		Content:    "Comment on idea",
-	})
-	if err != nil {
-		t.Fatalf("failed to create comment on idea: %v", err)
-	}
+	seedMigratedReply(t, pool, ctx, idea.ID, "comment", string(models.AuthorTypeAgent), "test_agent", "Comment on idea")
 
 	// Cleanup
 	defer func() {
-		_, _ = pool.Exec(ctx, "DELETE FROM comments WHERE target_id IN ($1, $2, $3)", question.ID, problem.ID, idea.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM replies WHERE post_id IN ($1, $2, $3)", question.ID, problem.ID, idea.ID)
 		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id IN ($1, $2, $3)", question.ID, problem.ID, idea.ID)
 	}()
-
-	// The replies the contribution cutover makes from these legacy rows (task idx 76): post
-	// counts are read from replies.
-	cutoverRepliesFor(t, pool, ctx, question.ID, problem.ID, idea.ID)
 
 	// Test Questions - Should return comments_count = 1
 	questions, _, err := repo.List(ctx, models.PostListOptions{

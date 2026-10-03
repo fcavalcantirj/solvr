@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"strings"
 
 	"github.com/fcavalcantirj/solvr/internal/api/response"
 	"github.com/fcavalcantirj/solvr/internal/contentgate"
@@ -30,32 +29,11 @@ func refuseContent(w http.ResponseWriter, err error) bool {
 	return true
 }
 
-// approachText is the text an approach is compared by: its method, or its angle when it has
-// no method (db.FindAuthorContribution uses the same rule).
-func approachText(angle, method string) string {
-	if strings.TrimSpace(method) != "" {
-		return method
-	}
-	return angle
-}
-
 // SetContentGate runs the anti-abuse content checks on POST /v1/posts.
 func (h *PostsHandler) SetContentGate(g *contentgate.Gate) { h.contentGate = g }
 
 // SetContentGate runs the anti-abuse content checks on POST /v1/posts/{id}/replies.
 func (h *RepliesHandler) SetContentGate(g *contentgate.Gate) { h.contentGate = g }
-
-// SetContentGate runs the anti-abuse content checks on problem, approach and progress creates.
-func (h *ProblemsHandler) SetContentGate(g *contentgate.Gate) { h.contentGate = g }
-
-// SetContentGate runs the anti-abuse content checks on question and answer creates.
-func (h *QuestionsHandler) SetContentGate(g *contentgate.Gate) { h.contentGate = g }
-
-// SetContentGate runs the anti-abuse content checks on idea and response creates.
-func (h *IdeasHandler) SetContentGate(g *contentgate.Gate) { h.contentGate = g }
-
-// SetContentGate runs the anti-abuse content checks on comment creates.
-func (h *CommentsHandler) SetContentGate(g *contentgate.Gate) { h.contentGate = g }
 
 // SetContentGate runs the anti-abuse content checks on blog post creates.
 func (h *BlogHandler) SetContentGate(g *contentgate.Gate) { h.contentGate = g }
@@ -67,8 +45,8 @@ func (h *RoomSavePostHandler) SetContentGate(g *contentgate.Gate) { h.contentGat
 // (PostsHandler.StartModeration).
 type PostModerator func(postID, title, description string, tags []string, postType, authorType, authorID string)
 
-// StartModeration moderates a post created or submitted elsewhere (legacy typed creates, room
-// publication) exactly like POST /v1/posts: in the background, when moderation is configured.
+// StartModeration moderates a post created or submitted elsewhere (room publication) exactly
+// like POST /v1/posts: in the background, when moderation is configured.
 func (h *PostsHandler) StartModeration(postID, title, description string, tags []string, postType, authorType, authorID string) {
 	if h.contentModService == nil {
 		return
@@ -82,15 +60,6 @@ func startPostModeration(m PostModerator, p *models.Post) {
 	}
 	m(p.ID, p.Title, p.Description, p.Tags, string(p.Type), string(p.PostedByType), p.PostedByID)
 }
-
-// SetPostModerator moderates problems created through POST /v1/problems.
-func (h *ProblemsHandler) SetPostModerator(m PostModerator) { h.postModerator = m }
-
-// SetPostModerator moderates questions created through POST /v1/questions.
-func (h *QuestionsHandler) SetPostModerator(m PostModerator) { h.postModerator = m }
-
-// SetPostModerator moderates ideas created through POST /v1/ideas.
-func (h *IdeasHandler) SetPostModerator(m PostModerator) { h.postModerator = m }
 
 // SetPostModerator moderates room outcomes the owner approves for publication.
 func (h *RoomSavePostHandler) SetPostModerator(m PostModerator) { h.postModerator = m }

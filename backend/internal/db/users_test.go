@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -412,7 +413,7 @@ func TestUserRepository_List(t *testing.T) {
 	}()
 
 	// List users — this triggers the query with reputation/agents_count subqueries
-	users, total, err := repo.List(ctx, models.PublicUserListOptions{
+	users, total, err := NewCanonicalReputationUserRepository(pool).List(ctx, models.PublicUserListOptions{
 		Limit: 100,
 		Sort:  models.PublicUserSortNewest,
 	})
@@ -1115,11 +1116,12 @@ func TestUserRepository_ListDeleted(t *testing.T) {
 	}
 }
 
-// TestUserRepository_List_ReputationCalculation tests that reputation is calculated correctly
-// according to SPEC.md Part 10.3:
-// reputation = problems_solved * 100 + problems_contributed * 25 + answers_accepted * 50 +
-//              answers_given * 10 + ideas_posted * 15 + responses_given * 5 +
-//              upvotes_received * 2 - downvotes_received * 1
+// TestUserRepository_List_ReputationCalculation tests the reputation GET /v1/users lists
+// (CanonicalReputationUserRepository, idx 76): reputation earned under the legacy rules is kept
+// as history (reputation_history), confirmed votes on the user's posts and replies score live
+// (+2 up, -1 down), and writing a post or reply scores nothing by itself. The legacy SPEC 10.3
+// formula it used to pin (UserRepository.List over answers and responses) was deleted with the
+// legacy tables (idx 68).
 func TestUserRepository_List_ReputationCalculation(t *testing.T) {
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
@@ -1133,167 +1135,81 @@ func TestUserRepository_List_ReputationCalculation(t *testing.T) {
 	}
 	defer pool.Close()
 
-	// Clean up before test
-	_, _ = pool.Exec(ctx, "DELETE FROM votes")
-	_, _ = pool.Exec(ctx, "DELETE FROM responses")
-	_, _ = pool.Exec(ctx, "DELETE FROM answers")
-	_, _ = pool.Exec(ctx, "DELETE FROM approaches")
-	_, _ = pool.Exec(ctx, "DELETE FROM posts")
-	_, _ = pool.Exec(ctx, "DELETE FROM users")
-
 	userRepo := NewUserRepository(pool)
 	postRepo := NewPostRepository(pool)
-	answersRepo := NewAnswersRepository(pool)
-	responsesRepo := NewResponsesRepository(pool)
+	served := NewCanonicalReputationUserRepository(pool)
 
-	// Create test user
 	suffix := time.Now().Format("150405.000")
-	user := &models.User{
+	created, err := userRepo.Create(ctx, &models.User{
 		Username:       "reptest_" + suffix,
 		DisplayName:    "Reputation Test User",
 		Email:          "reptest_" + suffix + "@example.com",
 		AuthProvider:   models.AuthProviderGitHub,
 		AuthProviderID: "gh_reptest_" + suffix,
 		Role:           models.UserRoleUser,
-	}
-	created, err := userRepo.Create(ctx, user)
+	})
 	if err != nil {
 		t.Fatalf("Create user error = %v", err)
 	}
-
-	// Cleanup at end
 	defer func() {
-		_, _ = pool.Exec(ctx, "DELETE FROM votes")
-		_, _ = pool.Exec(ctx, "DELETE FROM responses")
-		_, _ = pool.Exec(ctx, "DELETE FROM answers")
-		_, _ = pool.Exec(ctx, "DELETE FROM approaches")
-		_, _ = pool.Exec(ctx, "DELETE FROM posts")
+		_, _ = pool.Exec(ctx, "DELETE FROM reputation_history WHERE owner_type = 'human' AND owner_id = $1", created.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM votes WHERE voter_id LIKE $1", "reptest_voter_"+suffix+"%")
+		_, _ = pool.Exec(ctx, "DELETE FROM replies WHERE author_id = $1", created.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE posted_by_id = $1", created.ID)
 		_, _ = pool.Exec(ctx, "DELETE FROM users WHERE id = $1", created.ID)
 	}()
 
-	// Create activity to calculate reputation:
-	// 1. Problem SOLVED: 100 points
-	problemSolved, _ := postRepo.Create(ctx, &models.Post{
-		Type:         models.PostTypeProblem,
-		Title:        "Solved Problem",
-		Description:  "Test",
-		Tags:         []string{"test"},
-		PostedByType: models.AuthorTypeHuman,
-		PostedByID:   created.ID,
-		Status:       models.PostStatusSolved, // SOLVED status
-	})
+	post := func(title string) string {
+		p, err := postRepo.Create(ctx, &models.Post{
+			Type: models.PostTypeProblem, Title: title, Description: "Test", Tags: []string{"test"},
+			PostedByType: models.AuthorTypeHuman, PostedByID: created.ID, Status: models.PostStatusOpen,
+		})
+		if err != nil {
+			t.Fatalf("create post %q: %v", title, err)
+		}
+		return p.ID
+	}
+	upvoted, downvoted := post("Upvoted post"), post("Downvoted post")
+	reply := seedMigratedReply(t, pool, ctx, upvoted, "answer", "human", created.ID, "A reply that is upvoted")
 
-	// 2. Problem CONTRIBUTED (not solved): 25 points
-	problemContributed, _ := postRepo.Create(ctx, &models.Post{
-		Type:         models.PostTypeProblem,
-		Title:        "Open Problem",
-		Description:  "Test",
-		Tags:         []string{"test"},
-		PostedByType: models.AuthorTypeHuman,
-		PostedByID:   created.ID,
-		Status:       models.PostStatusOpen, // OPEN status
-	})
+	voters := 0
+	vote := func(targetType, targetID, direction string) {
+		voters++
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO votes (target_type, target_id, voter_type, voter_id, direction, confirmed)
+			VALUES ($1, $2, 'agent', $3, $4, true)`,
+			targetType, targetID, fmt.Sprintf("reptest_voter_%s_%d", suffix, voters), direction); err != nil {
+			t.Fatalf("vote %s %s: %v", direction, targetType, err)
+		}
+	}
+	vote("post", upvoted, "up")
+	vote("post", downvoted, "down")
+	vote("reply", reply, "up")
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO reputation_history (source, source_id, owner_type, owner_id, points, earned_at)
+		VALUES ('problem_solved', gen_random_uuid(), 'human', $1, 100, NOW())`, created.ID); err != nil {
+		t.Fatalf("seed reputation history: %v", err)
+	}
 
-	// 3. Answer ACCEPTED: 50 points
-	questionForAnswer, _ := postRepo.Create(ctx, &models.Post{
-		Type:         models.PostTypeQuestion,
-		Title:        "Test Question",
-		Description:  "Test",
-		Tags:         []string{"test"},
-		PostedByType: models.AuthorTypeHuman,
-		PostedByID:   created.ID,
-		Status:       models.PostStatusOpen,
-	})
-	answerAccepted, _ := answersRepo.CreateAnswer(ctx, &models.Answer{
-		QuestionID: questionForAnswer.ID,
-		AuthorType: models.AuthorTypeHuman,
-		AuthorID:   created.ID,
-		Content:    "Accepted answer",
-	})
-	// Mark as accepted
-	_, _ = pool.Exec(ctx, "UPDATE answers SET is_accepted = true WHERE id = $1", answerAccepted.ID)
+	// 100 (history) + 2 (post upvote) - 1 (post downvote) + 2 (reply upvote); the two posts and
+	// the reply themselves score nothing.
+	expectedReputation := 103
 
-	// 4. Answer GIVEN (not accepted): 10 points
-	_, _ = answersRepo.CreateAnswer(ctx, &models.Answer{
-		QuestionID: questionForAnswer.ID,
-		AuthorType: models.AuthorTypeHuman,
-		AuthorID:   created.ID,
-		Content:    "Regular answer",
-	})
-
-	// 5. Idea POSTED: 15 points
-	_, _ = postRepo.Create(ctx, &models.Post{
-		Type:         models.PostTypeIdea,
-		Title:        "Test Idea",
-		Description:  "Test",
-		Tags:         []string{"test"},
-		PostedByType: models.AuthorTypeHuman,
-		PostedByID:   created.ID,
-		Status:       models.PostStatusActive,
-	})
-
-	// 6. Response GIVEN: 5 points
-	ideaForResponse, _ := postRepo.Create(ctx, &models.Post{
-		Type:         models.PostTypeIdea,
-		Title:        "Idea for Response",
-		Description:  "Test",
-		Tags:         []string{"test"},
-		PostedByType: models.AuthorTypeHuman,
-		PostedByID:   created.ID,
-		Status:       models.PostStatusActive,
-	})
-	_, _ = responsesRepo.CreateResponse(ctx, &models.Response{
-		IdeaID:       ideaForResponse.ID,
-		AuthorType:   models.AuthorTypeHuman,
-		AuthorID:     created.ID,
-		Content:      "Test response",
-		ResponseType: models.ResponseTypeSupport,
-	})
-
-	// 7. Upvote RECEIVED: 2 points
-	_, _ = pool.Exec(ctx, `
-		INSERT INTO votes (user_id, target_type, target_id, direction, confirmed)
-		VALUES ($1, 'post', $2, 'up', true)
-	`, created.ID, problemSolved.ID)
-
-	// 8. Downvote RECEIVED: -1 point
-	_, _ = pool.Exec(ctx, `
-		INSERT INTO votes (user_id, target_type, target_id, direction, confirmed)
-		VALUES ($1, 'post', $2, 'down', true)
-	`, created.ID, problemContributed.ID)
-
-	// EXPECTED REPUTATION:
-	// problems_solved (1) * 100 = 100
-	// problems_contributed (2) * 25 = 50  (both solved and open count)
-	// answers_accepted (1) * 50 = 50
-	// answers_given (2) * 10 = 20  (both accepted and regular count)
-	// ideas_posted (2) * 15 = 30  (posted 2 ideas)
-	// responses_given (1) * 5 = 5
-	// upvotes_received (1) * 2 = 2
-	// downvotes_received (1) * -1 = -1
-	// TOTAL = 100 + 50 + 50 + 20 + 30 + 5 + 2 - 1 = 256
-	// NOTE: GetUserStats also returns 255 for this data, so 255 is the actual correct value
-	// The off-by-one might be due to how questions are counted (not in reputation formula)
-
-	expectedReputation := 255
-
-	// First check GetUserStats for comparison
-	stats, err := userRepo.GetUserStats(ctx, created.ID)
+	stats, err := served.GetUserStats(ctx, created.ID)
 	if err != nil {
 		t.Fatalf("GetUserStats() error = %v", err)
 	}
-	t.Logf("GetUserStats() Reputation = %d", stats.Reputation)
+	if stats.Reputation != expectedReputation {
+		t.Errorf("GetUserStats() Reputation = %d, want %d", stats.Reputation, expectedReputation)
+	}
 
-	// Call List() to get reputation
-	users, _, err := userRepo.List(ctx, models.PublicUserListOptions{
+	users, _, err := served.List(ctx, models.PublicUserListOptions{
 		Limit: 100,
 		Sort:  models.PublicUserSortNewest,
 	})
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
 	}
-
-	// Find our user
 	var foundUser *models.UserListItem
 	for i, u := range users {
 		if u.ID == created.ID {
@@ -1301,23 +1217,11 @@ func TestUserRepository_List_ReputationCalculation(t *testing.T) {
 			break
 		}
 	}
-
 	if foundUser == nil {
 		t.Fatal("List() did not return our test user")
 	}
-
 	if foundUser.Reputation != expectedReputation {
 		t.Errorf("List() Reputation = %d, want %d", foundUser.Reputation, expectedReputation)
-		t.Logf("Reputation calculation breakdown:")
-		t.Logf("  problems_solved (1) * 100 = 100")
-		t.Logf("  problems_contributed (2) * 25 = 50")
-		t.Logf("  answers_accepted (1) * 50 = 50")
-		t.Logf("  answers_given (2) * 10 = 20")
-		t.Logf("  ideas_posted (2) * 15 = 30")
-		t.Logf("  responses_given (1) * 5 = 5")
-		t.Logf("  upvotes_received (1) * 2 = 2")
-		t.Logf("  downvotes_received (1) * -1 = -1")
-		t.Logf("  EXPECTED TOTAL = 256")
 	}
 }
 

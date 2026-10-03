@@ -126,15 +126,3 @@ func (m *ContributionModerator) notifyAuthor(ctx context.Context, kind, id, post
 
 // SetContributionModerator moderates replies after they are created.
 func (h *RepliesHandler) SetContributionModerator(m *ContributionModerator) { h.contribModerator = m }
-
-// SetContributionModerator moderates approaches and progress notes after they are created.
-func (h *ProblemsHandler) SetContributionModerator(m *ContributionModerator) { h.contribModerator = m }
-
-// SetContributionModerator moderates answers after they are created.
-func (h *QuestionsHandler) SetContributionModerator(m *ContributionModerator) { h.contribModerator = m }
-
-// SetContributionModerator moderates responses after they are created.
-func (h *IdeasHandler) SetContributionModerator(m *ContributionModerator) { h.contribModerator = m }
-
-// SetContributionModerator moderates comments after they are created.
-func (h *CommentsHandler) SetContributionModerator(m *ContributionModerator) { h.contribModerator = m }

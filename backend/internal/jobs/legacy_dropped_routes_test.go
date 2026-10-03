@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/api"
-	"github.com/fcavalcantirj/solvr/internal/api/handlers"
 	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/hub"
@@ -443,13 +442,20 @@ func TestLegacyDroppedDatabase_GetRoutesExposeOnlyLegacyRouteFamilies(t *testing
 	}
 
 	// Positive control: the probe must still see a request that reaches a dropped legacy table.
-	// No served route does since the legacy reads were retired (idx 73 step 3), so the control
-	// serves the handler GET /v1/questions/{id}/answers was mounted on until then
-	// (QuestionsHandler.ListAnswers, kept unmounted) through the same probe, tracer and judge.
+	// No served route does since the legacy reads were retired (idx 73 step 3), and the handler
+	// GET /v1/questions/{id}/answers was mounted on went with the legacy handlers (idx 68), so the
+	// control serves the read it made, the question's answers, through the same probe, tracer and
+	// judge.
 	legacy := chi.NewRouter()
-	questions := handlers.NewQuestionsHandler(db.NewQuestionsRepository(d.pool))
-	questions.SetPostsRepository(db.NewPostRepository(d.pool))
-	legacy.Get("/v1/questions/{id}/answers", questions.ListAnswers)
+	legacy.Get("/v1/questions/{id}/answers", func(w http.ResponseWriter, req *http.Request) {
+		var n int
+		if err := d.pool.QueryRow(req.Context(), `SELECT count(*) FROM answers WHERE question_id::text = $1`,
+			chi.URLParam(req, "id")).Scan(&n); err != nil {
+			http.Error(w, "list answers failed", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
 	control := serveRouteProbe(t, legacy, d.tracer, fx, routeProbeRequest{route: "GET /v1/questions/{id}/answers",
 		family: "legacy-typed-reads", path: "/v1/questions/" + fx.posts["question"] + "/answers", caller: "anonymous"})
 	for _, e := range control.errs {
@@ -458,7 +464,7 @@ func TestLegacyDroppedDatabase_GetRoutesExposeOnlyLegacyRouteFamilies(t *testing
 		}
 	}
 	if !controlSeen {
-		t.Errorf("positive control: the legacy answers list (GET /v1/questions/{id}/answers until idx 73) must reach "+
+		t.Errorf("positive control: the legacy answers read (GET /v1/questions/{id}/answers until idx 73) must reach "+
 			"the dropped answers table; status %d, errors %v", control.status, control.errs)
 	}
 }

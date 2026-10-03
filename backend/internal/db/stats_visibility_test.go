@@ -44,7 +44,7 @@ func TestGetAllStats_ExcludesFamilyPrivatePosts(t *testing.T) {
 	// deletes below must run against an open pool.
 	t.Cleanup(pool.Close)
 
-	repo := NewStatsRepository(pool)
+	repo := NewCanonicalStatsRepository(pool)
 	ctx := context.Background()
 
 	before, err := repo.GetAllStats(ctx)
@@ -94,7 +94,7 @@ func TestGetAllStats_ReflectsCurrentDatabaseState(t *testing.T) {
 	// deletes below must run against an open pool.
 	t.Cleanup(pool.Close)
 
-	repo := NewStatsRepository(pool)
+	repo := NewCanonicalStatsRepository(pool)
 	ctx := context.Background()
 
 	before, err := repo.GetAllStats(ctx)
@@ -133,7 +133,7 @@ func TestPublicPostCounters_ExcludeFamilyPrivatePosts(t *testing.T) {
 	// deletes below must run against an open pool.
 	t.Cleanup(pool.Close)
 
-	repo := NewStatsRepository(pool)
+	repo := NewCanonicalStatsRepository(pool)
 	ctx := context.Background()
 
 	totalBefore, err := repo.GetTotalPostsCount(ctx)
@@ -197,7 +197,7 @@ func TestSectionStats_ExcludeFamilyPrivatePosts(t *testing.T) {
 	// deletes below must run against an open pool.
 	t.Cleanup(pool.Close)
 
-	repo := NewStatsRepository(pool)
+	repo := NewCanonicalStatsRepository(pool)
 	ctx := context.Background()
 
 	problemsBefore, err := repo.GetProblemsStats(ctx)
@@ -254,7 +254,7 @@ func TestPublicStatsLists_ExcludeFamilyPrivatePosts(t *testing.T) {
 	// deletes below must run against an open pool.
 	t.Cleanup(pool.Close)
 
-	repo := NewStatsRepository(pool)
+	repo := NewCanonicalStatsRepository(pool)
 	ctx := context.Background()
 
 	// Fresh sparks / ready-to-develop: high upvotes so a leak would sort to the top.

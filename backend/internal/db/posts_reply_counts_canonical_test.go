@@ -21,13 +21,9 @@ func TestLegacyPostCounts_ServedCanonically(t *testing.T) {
 	}
 	_, ok := LegacyDependencyDispositions["code:internal/db/posts.go"]
 	assert.False(t, ok, "posts.go no longer depends on a legacy table, so it carries no disposition")
-	assert.Equal(t, []string{"internal/db/problems.go"},
-		productionSourcesContaining(t, "func (r *PostRepository) ListCrystallizationCandidates("),
-		"the unwired approach-based crystallization lister drops with the legacy problem repository")
-	d, ok := LegacyDependencyDispositions["code:internal/db/problems.go"]
-	require.True(t, ok)
-	assert.Equal(t, LegacyActionRetire, d.Action)
-	assert.False(t, d.Done)
+	assert.Empty(t, productionSourcesContaining(t, "func (r *PostRepository) ListCrystallizationCandidates("),
+		"the unwired approach-based crystallization lister was deleted with the legacy problem repository (idx 68)")
+	assertLegacyDependencyGone(t, "code:internal/db/problems.go")
 }
 
 // postCounts is what the posts list and detail report for one post.

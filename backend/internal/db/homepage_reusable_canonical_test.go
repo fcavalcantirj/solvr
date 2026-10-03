@@ -11,8 +11,8 @@ import (
 
 // Task idx 76 step 3: the overview's "Knowledge an agent can reuse" section is served from
 // canonical posts and replies by CanonicalHomepageRepository. The legacy
-// HomepageRepository.ListReusablePosts, which counts approaches, answers and responses, stays
-// unwired until the tables go.
+// HomepageRepository.ListReusablePosts, which counted approaches, answers and responses, was
+// deleted with the legacy tables (idx 68).
 func TestLegacyReusablePosts_ServedCanonically(t *testing.T) {
 	assert.ElementsMatch(t, []string{"internal/api/router_homepage.go"},
 		productionSourcesContaining(t, "db.NewCanonicalHomepageRepository("),
@@ -26,11 +26,7 @@ func TestLegacyReusablePosts_ServedCanonically(t *testing.T) {
 	for _, dep := range src {
 		assert.NotEqual(t, "code:internal/db/homepage_reusable_canonical.go", dep.Key, "the canonical reusable posts name no legacy table or type")
 	}
-	d, ok := LegacyDependencyDispositions["code:internal/db/homepage_overview.go"]
-	require.True(t, ok)
-	assert.Equal(t, LegacyActionRefactor, d.Action)
-	assert.False(t, d.Done, "homepage_overview.go still holds the unwired legacy ListReusablePosts and must lose it when the tables go")
-	assert.Contains(t, d.Note, "homepage_reusable_canonical.go", "the note names the served reusable posts")
+	assertLegacyDependencyGone(t, "code:internal/db/homepage_overview.go") // its legacy ListReusablePosts was deleted (idx 68)
 }
 
 // Task idx 76 steps 3 and 5: in a database holding only this fixture, the canonical reusable
@@ -122,7 +118,7 @@ func TestCanonicalReusablePosts_KeepTheLegacyListAcrossTheCutover(t *testing.T) 
 		return out
 	}
 
-	legacy := list(NewHomepageRepository(pool), 50)
+	legacy := list(legacyReusableOracle{NewHomepageRepository(pool)}, 50)
 	require.Equal(t, []string{pMixed, iResponse, qAnswers, pApproach}, ids(legacy),
 		"legacy: posts with a live approach, answer or response, newest activity first; no comment-only, family, draft or deleted post")
 	require.Equal(t, map[string]int{pMixed: 1, iResponse: 1, qAnswers: 2, pApproach: 1}, counts(legacy),

@@ -131,26 +131,13 @@ func TestPostRepository_Canonical_ReplyCount(t *testing.T) {
 
 	ctx := context.Background()
 	repo := NewPostRepository(pool)
-	commentRepo := NewCommentsRepository(pool)
 
 	user := createCommentTestUser(t, pool)
 	post := createCommentTestPost(t, pool, user.ID)
 
 	for i := 0; i < 2; i++ {
-		if _, err := commentRepo.Create(ctx, &models.Comment{
-			TargetType: models.CommentTargetPost,
-			TargetID:   post.ID,
-			AuthorType: models.AuthorTypeHuman,
-			AuthorID:   user.ID,
-			Content:    "A reply-count test comment",
-		}); err != nil {
-			t.Fatalf("failed to create comment: %v", err)
-		}
+		seedMigratedReply(t, pool, ctx, post.ID, "comment", string(models.AuthorTypeHuman), user.ID, "A reply-count test comment")
 	}
-
-	// The replies the contribution cutover makes from these legacy rows (task idx 76): post
-	// counts are read from replies.
-	cutoverRepliesFor(t, pool, ctx, post.ID)
 
 	got, err := repo.FindByID(ctx, post.ID)
 	if err != nil {

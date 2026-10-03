@@ -47,15 +47,11 @@ type UsersUserListRepositoryInterface interface {
 // Per BE-003: User profile endpoints for viewing and editing profiles.
 // Per prd-v4: GET /v1/users/{id}/agents to list agents by human_id.
 // Per prd-v4: GET /v1/users to list all users.
-// Per prd-v4: GET /v1/users/{id}/contributions to list user contributions.
 type UsersHandler struct {
-	userRepo       UsersUserRepositoryInterface
-	postRepo       UsersPostRepositoryInterface
-	agentRepo      UsersAgentRepositoryInterface
-	userListRepo   UsersUserListRepositoryInterface
-	answersRepo    ContribAnswersRepositoryInterface
-	approachesRepo ContribApproachesRepositoryInterface
-	responsesRepo  ContribResponsesRepositoryInterface
+	userRepo     UsersUserRepositoryInterface
+	postRepo     UsersPostRepositoryInterface
+	agentRepo    UsersAgentRepositoryInterface
+	userListRepo UsersUserListRepositoryInterface
 }
 
 // NewUsersHandler creates a new UsersHandler instance.
@@ -413,44 +409,6 @@ func (h *UsersHandler) GetMyPosts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeUsersListJSON(w, http.StatusOK, posts, total, page, perPage)
-}
-
-// GetMyContributions handles GET /v1/me/contributions.
-// Per prd-v4: Returns answers, approaches, and responses for the authenticated user.
-// Uses the same logic as GetUserContributions but with the authenticated user's identity.
-// Unmounted since task idx 73 step 3 retired the route.
-func (h *UsersHandler) GetMyContributions(w http.ResponseWriter, r *http.Request) {
-	authInfo := GetAuthInfo(r)
-	if authInfo == nil {
-		writeUsersError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
-		return
-	}
-
-	// Parse pagination params
-	page, perPage, err := parsePaginationParams(r)
-	if err != nil {
-		writeUsersError(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
-		return
-	}
-
-	// Parse type filter
-	typeFilter := r.URL.Query().Get("type")
-
-	items, total := h.fetchContributions(r.Context(), string(authInfo.AuthorType), authInfo.AuthorID, typeFilter, page, perPage)
-
-	resp := ContributionsResponse{
-		Data: items,
-		Meta: ContributionsMeta{
-			Total:   total,
-			Page:    page,
-			PerPage: perPage,
-			HasMore: total > page*perPage,
-		},
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(resp)
 }
 
 // Helper functions

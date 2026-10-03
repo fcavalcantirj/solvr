@@ -11,8 +11,8 @@ import (
 
 // Task idx 76 step 3: the stats counts on profiles (GET /v1/agents/{id}, /v1/users/{id},
 // /v1/me, the resurrection bundle) are served from canonical posts, replies and votes. The
-// legacy GetAgentStats/GetUserStats, which read answers and responses, stay unwired until the
-// tables go.
+// legacy GetAgentStats/GetUserStats, which read answers and responses, were deleted with the
+// legacy tables (idx 68).
 func TestLegacyProfileStats_ServedCanonically(t *testing.T) {
 	assert.Empty(t, productionSourcesContaining(t, "AgentRepository.GetAgentStats("),
 		"no production code calls the legacy agent stats")
@@ -26,11 +26,7 @@ func TestLegacyProfileStats_ServedCanonically(t *testing.T) {
 		assert.NotEqual(t, "code:internal/db/reputation_canonical.go", dep.Key, "the canonical profile repositories name no legacy table or type")
 	}
 	for _, key := range []string{"code:internal/db/agents.go", "code:internal/db/users.go"} {
-		d, ok := LegacyDependencyDispositions[key]
-		require.True(t, ok, key)
-		assert.Equal(t, LegacyActionRefactor, d.Action, key)
-		assert.False(t, d.Done, "%s still holds the unwired legacy stats and must lose them when the tables go", key)
-		assert.Contains(t, d.Note, "profile_stats_canonical.go", "%s: the note names the served replacement", key)
+		assertLegacyDependencyGone(t, key) // their legacy stats were deleted (idx 68)
 	}
 }
 
@@ -122,7 +118,6 @@ func TestCanonicalProfileStats_KeepsLegacyCountsAcrossTheCutover(t *testing.T) {
 	vote("response", rH, "down", true)
 	vote("approach", apH, "up", true)
 
-	legacyAgents, legacyUsers := NewAgentRepository(pool), NewUserRepository(pool)
 	agentStats := func(repo interface {
 		GetAgentStats(context.Context, string) (*models.AgentStats, error)
 	}, agent string) models.AgentStats {
@@ -140,20 +135,17 @@ func TestCanonicalProfileStats_KeepsLegacyCountsAcrossTheCutover(t *testing.T) {
 		return *s
 	}
 
-	legacyA := agentStats(legacyAgents, a)
-	legacyA.Reputation = 0
-	require.Equal(t, models.AgentStats{
+	// What the legacy GetAgentStats/GetUserStats (deleted, idx 68) returned for this fixture,
+	// reputation aside: the deleted post, the deleted answer, the comment and the approach upvote
+	// did not count, and contributions were answers plus responses.
+	legacyA := models.AgentStats{
 		ProblemsSolved: 1, ProblemsContributed: 2, QuestionsAsked: 1, QuestionsAnswered: 2,
 		AnswersAccepted: 1, IdeasPosted: 1, ResponsesGiven: 1, UpvotesReceived: 3,
-	}, legacyA, "legacy: the deleted post, the deleted answer, the comment and the approach upvote do not count")
-	legacyB := agentStats(legacyAgents, b)
-	legacyB.Reputation = 0
-	require.Equal(t, models.AgentStats{QuestionsAnswered: 1}, legacyB)
-	legacyH := userStats(legacyUsers)
-	legacyH.Reputation = 0
-	require.Equal(t, models.UserStats{
+	}
+	legacyB := models.AgentStats{QuestionsAnswered: 1}
+	legacyH := models.UserStats{
 		PostsCreated: 3, AnswersGiven: 1, AnswersAccepted: 1, UpvotesReceived: 2, Contributions: 2,
-	}, legacyH, "legacy: contributions are answers plus responses")
+	}
 
 	_, err = MigrateContributions(ctx, pool)
 	require.NoError(t, err)

@@ -56,8 +56,7 @@ func productionFilesContaining(t *testing.T, root string, fragments []string) ma
 // schedules the stale-content or auto-solve job (no scanned job:StaleContentJob or
 // job:AutoSolveJob, so neither keeps a job: disposition), nothing constructs their
 // repositories or the forgetting service, and nothing calls the approach archive methods
-// the forgetting service used. The code that remains is only its own definitions, which
-// drop with the legacy tables; the registry records each retirement.
+// the forgetting service used. Their definitions were deleted with the legacy tables (idx 68).
 func TestLegacyLifecycles_RetiredFromProductionPaths(t *testing.T) {
 	root := backendRoot(t)
 	deps, err := ScanLegacySourceDependencies(root)
@@ -74,20 +73,8 @@ func TestLegacyLifecycles_RetiredFromProductionPaths(t *testing.T) {
 		"NewForgettingService(", "NewForgettingServiceWithConfig(",
 		".MarkForForgetting(", ".ArchiveApproach(", ".ListStaleApproaches(",
 	})
-	allowed := map[string][]string{
-		"NewStaleContentJob(":             {"internal/jobs/stale_content.go"},
-		"NewAutoSolveJob(":                {"internal/jobs/auto_solve.go"},
-		"NewStaleContentRepository(":      {"internal/db/stale_content.go"},
-		"NewAutoSolveRepository(":         {"internal/db/auto_solve.go"},
-		"NewForgettingService(":           {"internal/services/forgetting.go"},
-		"NewForgettingServiceWithConfig(": {"internal/services/forgetting.go"},
-		".ArchiveApproach(":               {"internal/services/forgetting.go"},
-		".ListStaleApproaches(":           {"internal/services/forgetting.go"},
-	}
 	for fragment, files := range callers {
-		for _, f := range files {
-			assert.Contains(t, allowed[fragment], f, "%s: production code outside the retired definitions uses %q", f, fragment)
-		}
+		assert.Empty(t, files, "%q: the retired lifecycle code was deleted with the legacy tables (idx 68)", fragment)
 	}
 
 	forgetting := LegacyDependencyDispositions["feature:forgetting"]
@@ -95,10 +82,6 @@ func TestLegacyLifecycles_RetiredFromProductionPaths(t *testing.T) {
 	assert.True(t, forgetting.Done, "feature:forgetting is retired and verified")
 	assert.Contains(t, forgetting.Note, "ForgettingService")
 	for _, key := range []string{"code:internal/db/stale_content.go", "code:internal/db/auto_solve.go"} {
-		d, ok := LegacyDependencyDispositions[key]
-		require.True(t, ok, key)
-		assert.Equal(t, LegacyActionRetire, d.Action, key)
-		assert.False(t, d.Done, "%s still holds legacy SQL; it drops with the tables", key)
-		assert.Contains(t, d.Note, "unscheduled", key)
+		assertLegacyDependencyGone(t, key)
 	}
 }

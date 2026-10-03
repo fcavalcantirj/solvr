@@ -1197,7 +1197,7 @@
       "Migrate the room model in a separate verified step: preserve room IDs and URLs, shared room tokens retired at cutover with no grace period (owner decision 2026-09-30; agents rejoin through the handshake), memberships, every message/event, claims, and sequence mappings; do not couple room downtime to the knowledge conversion.",
       "After the 90-day compatibility period and verified reconciliation, export a checksummed recovery archive and remove legacy runtime tables, fields, code paths, and jobs; retain only compact identifier mappings needed for permanent redirects and archived provenance."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "product",

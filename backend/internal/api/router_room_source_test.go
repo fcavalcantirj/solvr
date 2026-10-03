@@ -179,3 +179,36 @@ func TestTryThisWorkflow_AFinishedPublicRoomSeedsAFreshRoomEndToEnd(t *testing.T
 	require.Nil(t, data["archived_at"], "the fresh room is open, not finished")
 	require.Nil(t, data["result_message_id"])
 }
+
+// The room_created funnel step carries the validated source, so attribution survives from
+// the incoming link through creation into activation (idx 88 step 4).
+func TestCreateRoom_TheRoomCreatedStepIsAttributedToItsSource(t *testing.T) {
+	ts, pool, cleanup := setupRoomTestServer(t)
+	defer cleanup()
+	_, jwt := createRoomTestUser(t, pool)
+
+	srcSlug := sourceTestSlug("attr")
+	code, env := createSourceTestRoom(t, ts, jwt, fmt.Sprintf(`{"display_name":"Attr origin","slug":%q}`, srcSlug))
+	require.Equal(t, http.StatusCreated, code, "%v", env)
+	srcID := env["data"].(map[string]interface{})["id"].(string)
+
+	_, agentKey := registerRoomTestAgent(t, ts)
+	code, env = createSourceTestRoom(t, ts, agentKey, fmt.Sprintf(
+		`{"display_name":"Attr fresh","slug":%q,"source_room":%q,"flow_id":"f_attr_test"}`, sourceTestSlug("attrfresh"), srcSlug))
+	require.Equal(t, http.StatusCreated, code, "%v", env)
+	freshID := env["data"].(map[string]interface{})["id"].(string)
+
+	var kind, id, flow string
+	require.NoError(t, pool.QueryRow(context.Background(), `
+		SELECT COALESCE(source_kind, ''), COALESCE(source_id::text, ''), COALESCE(flow_id, '')
+		  FROM funnel_events WHERE room_id = $1::uuid AND event_name = 'room_created'`, freshID).Scan(&kind, &id, &flow))
+	require.Equal(t, "room", kind)
+	require.Equal(t, srcID, id)
+	require.Equal(t, "f_attr_test", flow)
+
+	var srcKind string
+	require.NoError(t, pool.QueryRow(context.Background(), `
+		SELECT COALESCE(source_kind, '') FROM funnel_events WHERE room_id = $1::uuid AND event_name = 'room_created'`,
+		srcID).Scan(&srcKind))
+	require.Empty(t, srcKind, "a room created without a source stays unattributed")
+}

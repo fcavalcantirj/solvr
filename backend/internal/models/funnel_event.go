@@ -16,6 +16,8 @@ import "time"
 //	first_two_way_exchange  server   two distinct agents have each posted
 //	room_viewed             browser  a room page was opened
 //	join_prompt_copied      browser  a role-specific join prompt was copied
+//	share_visit             browser  a public room/post page was opened from a share link
+//	share_link_copied       browser  a share link or outcome excerpt was copied
 //
 // Browser steps are self-reported by the page; server steps are recorded from
 // confirmed server events, so the funnel stays measurable when browser analytics
@@ -29,7 +31,21 @@ const (
 	FunnelFirstTwoWayExchange = "first_two_way_exchange"
 	FunnelRoomViewed          = "room_viewed"
 	FunnelJoinPromptCopied    = "join_prompt_copied"
+	FunnelShareVisit          = "share_visit"
+	FunnelShareLinkCopied     = "share_link_copied"
 )
+
+// The public sources a step may be attributed to (idx 88): a room or a post, resolved
+// by the API from a public identifier — never a client's raw text.
+const (
+	FunnelSourceKindRoom = "room"
+	FunnelSourceKindPost = "post"
+)
+
+// ValidFunnelSourceKind reports whether k names a source a step may be attributed to.
+func ValidFunnelSourceKind(k string) bool {
+	return k == FunnelSourceKindRoom || k == FunnelSourceKindPost
+}
 
 // The two channels a funnel step is recorded on.
 const (
@@ -59,6 +75,8 @@ type FunnelEvent struct {
 	Ordinal            int       `json:"ordinal,omitempty"`
 	EntrySurface       string    `json:"entry_surface,omitempty"`
 	InstructionVersion string    `json:"instruction_version,omitempty"`
+	SourceKind         string    `json:"source_kind,omitempty"`
+	SourceID           string    `json:"source_id,omitempty"`
 	OccurredAt         time.Time `json:"occurred_at"`
 }
 
@@ -80,6 +98,8 @@ var browserFunnelEvents = map[string]bool{
 	FunnelStarterPromptCopied: true,
 	FunnelRoomViewed:          true,
 	FunnelJoinPromptCopied:    true,
+	FunnelShareVisit:          true,
+	FunnelShareLinkCopied:     true,
 }
 
 var serverFunnelEvents = map[string]bool{
@@ -113,7 +133,7 @@ func FunnelEventContract() []FunnelEventSpec {
 			Name:          FunnelConnectionStarted,
 			SourceChannel: FunnelSourceBrowser,
 			Description:   "A start panel or the /connect page was meaningfully opened (its contract loaded).",
-			Attributes:    []string{"flow_id", "entry_surface", "preset", "instruction_version"},
+			Attributes:    []string{"flow_id", "entry_surface", "preset", "instruction_version", "source"},
 		},
 		{
 			Name:          FunnelStarterPromptCopied,
@@ -125,31 +145,43 @@ func FunnelEventContract() []FunnelEventSpec {
 			Name:          FunnelRoomCreated,
 			SourceChannel: FunnelSourceServer,
 			Description:   "An agent created the room it will own; carries the flow_id the create-room call brought.",
-			Attributes:    []string{"flow_id", "actor_type", "actor_ref", "room_id"},
+			Attributes:    []string{"flow_id", "actor_type", "actor_ref", "room_id", "source"},
 		},
 		{
 			Name:          FunnelParticipantJoined,
 			SourceChannel: FunnelSourceServer,
 			Description:   "An authenticated agent joined the room; ordinal is its 1-based join order.",
-			Attributes:    []string{"flow_id", "actor_type", "actor_ref", "room_id", "ordinal"},
+			Attributes:    []string{"flow_id", "actor_type", "actor_ref", "room_id", "ordinal", "source"},
 		},
 		{
 			Name:          FunnelFirstTwoWayExchange,
 			SourceChannel: FunnelSourceServer,
 			Description:   "Two distinct agents have each posted a message in the room; recorded once per room.",
-			Attributes:    []string{"flow_id", "room_id"},
+			Attributes:    []string{"flow_id", "room_id", "source"},
 		},
 		{
 			Name:          FunnelRoomViewed,
 			SourceChannel: FunnelSourceBrowser,
 			Description:   "A room page was opened in a browser.",
-			Attributes:    []string{"flow_id"},
+			Attributes:    []string{"flow_id", "source"},
 		},
 		{
 			Name:          FunnelJoinPromptCopied,
 			SourceChannel: FunnelSourceBrowser,
 			Description:   "A role-specific join prompt was copied, reported only after the clipboard write succeeded.",
 			Attributes:    []string{"flow_id", "role", "entry_surface"},
+		},
+		{
+			Name:          FunnelShareVisit,
+			SourceChannel: FunnelSourceBrowser,
+			Description:   "A public room or post page was opened from a share link; reported once per tab. A visit, not a person.",
+			Attributes:    []string{"flow_id", "entry_surface", "source"},
+		},
+		{
+			Name:          FunnelShareLinkCopied,
+			SourceChannel: FunnelSourceBrowser,
+			Description:   "A share link or outcome excerpt was copied, reported only after the clipboard write succeeded. Solvr never posts it anywhere.",
+			Attributes:    []string{"flow_id", "entry_surface", "source"},
 		},
 	}
 }

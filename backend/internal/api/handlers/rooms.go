@@ -202,7 +202,7 @@ func (h *RoomHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.recordRoomCreatedFunnel(r.Context(), room.ID, claims, agent, req.FlowID)
+	h.recordRoomCreatedFunnel(r.Context(), room.ID, claims, agent, req.FlowID, roomFunnelSource(room))
 
 	// No shared room token is issued (000098): each agent, the creator included, takes
 	// its own per-agent token from POST /v1/rooms/{slug}/handshake.
@@ -214,7 +214,7 @@ func (h *RoomHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 // and this room's later server steps join into one attempt. Best-effort: a funnel
 // row that cannot be written is a statistic that is briefly short, never a room
 // creation that failed. The actor is reduced to a pseudonymous reference.
-func (h *RoomHandler) recordRoomCreatedFunnel(ctx context.Context, roomID uuid.UUID, claims *auth.Claims, agent *models.Agent, flowID *string) {
+func (h *RoomHandler) recordRoomCreatedFunnel(ctx context.Context, roomID uuid.UUID, claims *auth.Claims, agent *models.Agent, flowID *string, src db.FunnelSource) {
 	if h.funnel == nil {
 		return
 	}
@@ -232,7 +232,7 @@ func (h *RoomHandler) recordRoomCreatedFunnel(ctx context.Context, roomID uuid.U
 	if flowID != nil {
 		flow = *flowID
 	}
-	if err := h.funnel.RecordRoomCreated(ctx, roomID, actorType, actorRef, flow); err != nil {
+	if err := h.funnel.RecordRoomCreatedFrom(ctx, roomID, actorType, actorRef, flow, src); err != nil {
 		slog.Warn("failed to record room_created funnel step", "error", err, "room_id", roomID)
 	}
 }

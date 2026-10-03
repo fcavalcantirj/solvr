@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
@@ -68,4 +69,24 @@ func (r *RoomRepository) PublicRoomSlugs(ctx context.Context, slugs []string) (m
 		out[s] = true
 	}
 	return out, rows.Err()
+}
+
+// PublicRoomID returns the id of a public, existing room by slug; any other room returns
+// ErrRoomNotFound. It attributes a share step to a room without trusting client text.
+func (r *RoomRepository) PublicRoomID(ctx context.Context, slug string) (uuid.UUID, error) {
+	var id uuid.UUID
+	err := r.pool.QueryRow(ctx, `
+		SELECT id FROM rooms
+		 WHERE slug = $1 AND is_private = false
+		   AND deleted_at IS NULL AND (expires_at IS NULL OR expires_at > NOW())`,
+		slug,
+	).Scan(&id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return uuid.Nil, ErrRoomNotFound
+		}
+		LogQueryError(ctx, "PublicRoomID", "rooms", err)
+		return uuid.Nil, fmt.Errorf("public room id: %w", err)
+	}
+	return id, nil
 }

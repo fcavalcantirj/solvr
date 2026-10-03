@@ -29,6 +29,8 @@ func mountFunnelRoutes(r chi.Router, pool *db.Pool) {
 	}
 
 	h := handlers.NewFunnelHandler(db.NewFunnelEventRepository(pool))
+	// A step may be attributed to the public room or post it came from (idx 88).
+	h.SetSourceResolvers(db.NewRoomRepository(pool), db.NewPostRepository(pool))
 	r.Get("/v1/analytics/funnel/contract", h.GetContract)
 
 	jwtSecret := os.Getenv("JWT_SECRET")

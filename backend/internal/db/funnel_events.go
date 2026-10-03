@@ -57,6 +57,22 @@ func PseudonymizeActor(id string) string {
 	return hex.EncodeToString(sum[:16]) // 32 hex chars, well under the column bound
 }
 
+// FunnelSource is the public room or post a step is attributed to (idx 88). The zero
+// value means unattributed. The API resolves it from a public identifier; a client's
+// raw text never reaches the row.
+type FunnelSource struct {
+	Kind string // models.FunnelSourceKindRoom | models.FunnelSourceKindPost
+	ID   uuid.UUID
+}
+
+// columns returns the (source_kind, source_id) values to store: both NULL when unset.
+func (s FunnelSource) columns() (any, any) {
+	if s.Kind == "" || s.ID == uuid.Nil {
+		return nil, nil
+	}
+	return s.Kind, s.ID
+}
+
 // BrowserFunnelEvent is one browser-reported step, as accepted by the ingest
 // endpoint after the API classifies the actor.
 type BrowserFunnelEvent struct {
@@ -68,20 +84,22 @@ type BrowserFunnelEvent struct {
 	Role               string
 	EntrySurface       string
 	InstructionVersion string
+	Source             FunnelSource
 }
 
 // RecordBrowserEvent stores one browser-reported funnel step. The caller has
 // already validated that EventName is a browser event and classified the actor.
 func (r *FunnelEventRepository) RecordBrowserEvent(ctx context.Context, ev BrowserFunnelEvent) error {
+	srcKind, srcID := ev.Source.columns()
 	_, err := r.pool.Exec(ctx, `
 		INSERT INTO funnel_events (
 			flow_id, event_name, source_channel, actor_type, actor_ref,
-			preset, role, entry_surface, instruction_version
-		) VALUES ($1, $2, 'browser', $3, $4, $5, $6, $7, $8)
+			preset, role, entry_surface, instruction_version, source_kind, source_id
+		) VALUES ($1, $2, 'browser', $3, $4, $5, $6, $7, $8, $9, $10)
 	`,
 		nullFunnel(ev.FlowID), ev.EventName, ev.ActorType, nullFunnel(ev.ActorRef),
 		nullFunnel(ev.Preset), nullFunnel(ev.Role), nullFunnel(ev.EntrySurface),
-		nullFunnel(ev.InstructionVersion),
+		nullFunnel(ev.InstructionVersion), srcKind, srcID,
 	)
 	if err != nil {
 		LogQueryError(ctx, "RecordBrowserEvent", "funnel_events", err)
@@ -94,16 +112,23 @@ func (r *FunnelEventRepository) RecordBrowserEvent(ctx context.Context, ev Brows
 // the create-room call brought, which is how a browser step and this room's later
 // server steps are stitched into one attempt. Deduped once per room.
 func (r *FunnelEventRepository) RecordRoomCreated(ctx context.Context, roomID uuid.UUID, actorType, actorRef, flowID string) error {
+	return r.RecordRoomCreatedFrom(ctx, roomID, actorType, actorRef, flowID, FunnelSource{})
+}
+
+// RecordRoomCreatedFrom is RecordRoomCreated for a room seeded from a public source
+// (a room or a post). The room's later server steps inherit the source from this row.
+func (r *FunnelEventRepository) RecordRoomCreatedFrom(ctx context.Context, roomID uuid.UUID, actorType, actorRef, flowID string, src FunnelSource) error {
 	if !models.ValidFunnelActorType(actorType) {
 		actorType = models.FunnelActorAnonymous
 	}
+	srcKind, srcID := src.columns()
 	_, err := r.pool.Exec(ctx, `
 		INSERT INTO funnel_events (
-			flow_id, event_name, source_channel, actor_type, actor_ref, room_id
-		) VALUES ($1, 'room_created', 'server', $2, $3, $4)
+			flow_id, event_name, source_channel, actor_type, actor_ref, room_id, source_kind, source_id
+		) VALUES ($1, 'room_created', 'server', $2, $3, $4, $5, $6)
 		ON CONFLICT (room_id) WHERE event_name = 'room_created' AND room_id IS NOT NULL
 		DO NOTHING
-	`, nullFunnel(flowID), actorType, nullFunnel(actorRef), roomID)
+	`, nullFunnel(flowID), actorType, nullFunnel(actorRef), roomID, srcKind, srcID)
 	if err != nil {
 		LogQueryError(ctx, "RecordRoomCreated", "funnel_events", err)
 		return fmt.Errorf("record funnel room_created: %w", err)
@@ -127,14 +152,19 @@ func (r *FunnelEventRepository) RecordParticipantJoined(ctx context.Context, roo
 	}
 	row := r.pool.QueryRow(ctx, `
 		INSERT INTO funnel_events (
-			flow_id, event_name, source_channel, actor_type, actor_ref, room_id, ordinal
+			flow_id, event_name, source_channel, actor_type, actor_ref, room_id, ordinal,
+			source_kind, source_id
 		)
 		SELECT
 			(SELECT flow_id FROM funnel_events
 			  WHERE room_id = $1 AND event_name = 'room_created' LIMIT 1),
 			'participant_joined', 'server', $2, $3, $1,
 			(SELECT COUNT(*) FROM funnel_events
-			  WHERE room_id = $1 AND event_name = 'participant_joined') + 1
+			  WHERE room_id = $1 AND event_name = 'participant_joined') + 1,
+			created.source_kind, created.source_id
+		FROM (SELECT 1) AS one
+		LEFT JOIN funnel_events created
+		  ON created.room_id = $1 AND created.event_name = 'room_created'
 		ON CONFLICT (room_id, actor_ref)
 			WHERE event_name = 'participant_joined' AND room_id IS NOT NULL AND actor_ref IS NOT NULL
 		DO NOTHING
@@ -160,12 +190,16 @@ func (r *FunnelEventRepository) RecordParticipantJoined(ctx context.Context, roo
 func (r *FunnelEventRepository) RecordFirstTwoWayExchange(ctx context.Context, roomID uuid.UUID) (recorded bool, err error) {
 	tag, err := r.pool.Exec(ctx, `
 		INSERT INTO funnel_events (
-			flow_id, event_name, source_channel, actor_type, room_id
+			flow_id, event_name, source_channel, actor_type, room_id, source_kind, source_id
 		)
 		SELECT
 			(SELECT flow_id FROM funnel_events
 			  WHERE room_id = $1 AND event_name = 'room_created' LIMIT 1),
-			'first_two_way_exchange', 'server', 'agent', $1
+			'first_two_way_exchange', 'server', 'agent', $1,
+			created.source_kind, created.source_id
+		FROM (SELECT 1) AS one
+		LEFT JOIN funnel_events created
+		  ON created.room_id = $1 AND created.event_name = 'room_created'
 		WHERE (
 			SELECT COUNT(DISTINCT COALESCE(author_id, agent_name)) FROM messages
 			 WHERE room_id = $1 AND author_type = 'agent' AND deleted_at IS NULL
@@ -196,7 +230,8 @@ func (r *FunnelEventRepository) list(ctx context.Context, where string, arg any)
 		SELECT id, COALESCE(flow_id, ''), event_name, source_channel, actor_type,
 		       COALESCE(actor_ref, ''), COALESCE(room_id::text, ''), COALESCE(preset, ''),
 		       COALESCE(role, ''), COALESCE(ordinal, 0), COALESCE(entry_surface, ''),
-		       COALESCE(instruction_version, ''), occurred_at
+		       COALESCE(instruction_version, ''), COALESCE(source_kind, ''),
+		       COALESCE(source_id::text, ''), occurred_at
 		  FROM funnel_events `+where+` ORDER BY id ASC`, arg)
 	if err != nil {
 		LogQueryError(ctx, "ListFunnelEvents", "funnel_events", err)
@@ -209,7 +244,7 @@ func (r *FunnelEventRepository) list(ctx context.Context, where string, arg any)
 		var e models.FunnelEvent
 		if err := rows.Scan(&e.ID, &e.FlowID, &e.EventName, &e.SourceChannel, &e.ActorType,
 			&e.ActorRef, &e.RoomID, &e.Preset, &e.Role, &e.Ordinal, &e.EntrySurface,
-			&e.InstructionVersion, &e.OccurredAt); err != nil {
+			&e.InstructionVersion, &e.SourceKind, &e.SourceID, &e.OccurredAt); err != nil {
 			return nil, fmt.Errorf("scan funnel event: %w", err)
 		}
 		out = append(out, e)

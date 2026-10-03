@@ -30,6 +30,10 @@ const funnelBoundedField = 60
 // FunnelHandler serves the connection-funnel ingest and contract endpoints.
 type FunnelHandler struct {
 	repo *db.FunnelEventRepository
+	// sourceRooms / sourcePosts resolve a step's public source (SetSourceResolvers).
+	// Optional: without them a reported source is dropped, the step still recorded.
+	sourceRooms funnelRoomSource
+	sourcePosts connectPostLookup
 }
 
 // NewFunnelHandler wires the handler to the funnel event store.
@@ -45,6 +49,8 @@ type ingestFunnelRequest struct {
 	Role               string `json:"role"`
 	EntrySurface       string `json:"entry_surface"`
 	InstructionVersion string `json:"instruction_version"`
+	// Source names the public room (by slug) or post (by id) this step is attributed to.
+	Source *funnelSourceRef `json:"source,omitempty"`
 }
 
 // IngestBrowserEvent handles POST /v1/analytics/funnel. Public, optional auth:
@@ -61,7 +67,7 @@ func (h *FunnelHandler) IngestBrowserEvent(w http.ResponseWriter, r *http.Reques
 	// step that does not exist — is refused rather than trusted.
 	if !models.IsBrowserFunnelEvent(req.Event) {
 		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR",
-			"event must be one of connection_started, starter_prompt_copied, room_viewed, join_prompt_copied")
+			"event must be one of connection_started, starter_prompt_copied, room_viewed, join_prompt_copied, share_visit, share_link_copied")
 		return
 	}
 
@@ -76,6 +82,12 @@ func (h *FunnelHandler) IngestBrowserEvent(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
+	if req.Source != nil && (!models.ValidFunnelSourceKind(req.Source.Kind) || len(req.Source.Ref) > funnelSourceRefMax) {
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR",
+			"source must be {kind: room|post, ref: a room slug or post id}")
+		return
+	}
+
 	actorType, actorRef := funnelActor(r)
 
 	err := h.repo.RecordBrowserEvent(r.Context(), db.BrowserFunnelEvent{
@@ -87,6 +99,7 @@ func (h *FunnelHandler) IngestBrowserEvent(w http.ResponseWriter, r *http.Reques
 		Role:               req.Role,
 		EntrySurface:       req.EntrySurface,
 		InstructionVersion: req.InstructionVersion,
+		Source:             h.resolveSource(r.Context(), req.Source),
 	})
 	if err != nil {
 		// A funnel row that could not be written is a statistic that is briefly

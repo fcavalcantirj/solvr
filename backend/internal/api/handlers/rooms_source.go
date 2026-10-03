@@ -3,6 +3,9 @@ package handlers
 import (
 	"context"
 
+	"github.com/google/uuid"
+
+	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
@@ -33,4 +36,18 @@ func applyRoomTemplate(req *createRoomRequest, tmpl *models.RoomTemplate) {
 	}
 	id := tmpl.RoomID
 	req.sourceRoomID = &id
+}
+
+// roomFunnelSource is the funnel attribution of a just-created room: the public room or
+// post it was seeded from, or none. Both were validated before the room was created.
+func roomFunnelSource(room *models.Room) db.FunnelSource {
+	if room.SourceRoomID != nil {
+		return db.FunnelSource{Kind: models.FunnelSourceKindRoom, ID: *room.SourceRoomID}
+	}
+	if room.SourcePostID != nil {
+		if id, err := uuid.Parse(*room.SourcePostID); err == nil {
+			return db.FunnelSource{Kind: models.FunnelSourceKindPost, ID: id}
+		}
+	}
+	return db.FunnelSource{}
 }

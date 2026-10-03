@@ -91,7 +91,8 @@ func TestFunnelContract_PublishesVocabulary(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &out))
 	require.Equal(t, ConnectInstructionVersion, out.Data.InstructionVersion)
-	require.Len(t, out.Data.Events, 7)
+	// 7 connection steps + the 2 share steps of idx 88 (share_visit, share_link_copied).
+	require.Len(t, out.Data.Events, 9)
 
 	byName := map[string]models.FunnelEventSpec{}
 	for _, e := range out.Data.Events {
@@ -100,4 +101,6 @@ func TestFunnelContract_PublishesVocabulary(t *testing.T) {
 	require.Equal(t, models.FunnelSourceBrowser, byName[models.FunnelConnectionStarted].SourceChannel)
 	require.Equal(t, models.FunnelSourceServer, byName[models.FunnelRoomCreated].SourceChannel)
 	require.Equal(t, models.FunnelSourceServer, byName[models.FunnelFirstTwoWayExchange].SourceChannel)
+	require.Equal(t, models.FunnelSourceBrowser, byName[models.FunnelShareVisit].SourceChannel)
+	require.Equal(t, models.FunnelSourceBrowser, byName[models.FunnelShareLinkCopied].SourceChannel)
 }

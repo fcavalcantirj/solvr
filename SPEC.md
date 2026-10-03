@@ -5326,6 +5326,22 @@ travels; nothing of the source room's state ever does.
   `description` (scrubbed), `category` and `tags`, each only where the request omits it.
   Memberships, credentials, pins, entries, archive state and results are never copied.
 
+**Attribution (connection funnel).** `funnel_events` (Part 19.3 funnel contract) gains two
+browser steps — `share_visit` (a public room or post page opened from a share link, once per
+tab; a visit, not a person) and `share_link_copied` (a share link or outcome excerpt copied,
+after the clipboard write succeeded) — and an optional `source_kind` (`room`|`post`) +
+`source_id` on every step, both or neither.
+
+- `POST /v1/analytics/funnel` accepts `source: {kind: "room"|"post", ref}` where `ref` is a
+  public room slug or post id (≤ 200 characters). The API resolves it to the record's id only
+  for a public room or post; an unresolvable source is dropped (the step is still counted) and
+  the client's text is never stored. An unknown kind → 400 `VALIDATION_ERROR`.
+- `room_created` records the validated source of the new room (`source_room_id`, else
+  `source_post_id`); `participant_joined` and `first_two_way_exchange` inherit it from that
+  row, as they inherit `flow_id`. Attribution therefore runs from the incoming link through
+  creation to activation, and no link carries a secret: share and try links name only a public
+  slug or post id.
+
 ---
 
 # Part 26: Canonical Knowledge API and Route Dispositions

@@ -50,7 +50,8 @@ func TestNotificationRoomEvents_ARoomEventIsVersionTwoAndNamesItsRoomOnEveryRead
 	repo := NewNotificationsRepository(pool)
 
 	require.Equal(t, 2, models.NotificationRoomSchemaVersion)
-	require.Equal(t, []int{1, 2}, models.NotificationSchemaVersions)
+	// Version 3 (idx 92) added the opt-in room events; version 2 is unchanged.
+	require.Equal(t, []int{1, 2, 3}, models.NotificationSchemaVersions)
 
 	created, err := repo.Create(ctx, memberAddedEvent(s, &s.roomID))
 	require.NoError(t, err)
@@ -104,12 +105,12 @@ func TestNotificationRoomEvents_TheRoomSubjectIsEnforced(t *testing.T) {
 	underVersionOne := memberAddedEvent(s, &s.roomID)
 	underVersionOne.SchemaVersion = models.NotificationSchemaVersion
 	_, err = repo.Create(ctx, underVersionOne)
-	require.Error(t, err, "subject.room_id exists under schema version 2 only")
+	require.Error(t, err, "subject.room_id exists under schema versions 2 and 3 only")
 
 	unknownVersion := memberAddedEvent(s, &s.roomID)
-	unknownVersion.SchemaVersion = 3
+	unknownVersion.SchemaVersion = 4
 	_, err = repo.Create(ctx, unknownVersion)
-	require.Error(t, err, "no schema version 3 exists")
+	require.Error(t, err, "no schema version 4 exists")
 
 	var stored int
 	require.NoError(t, pool.QueryRow(ctx, `SELECT count(*) FROM notifications WHERE agent_id = $1`, s.agentID).Scan(&stored))

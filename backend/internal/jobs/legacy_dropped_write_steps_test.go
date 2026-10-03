@@ -336,6 +336,12 @@ var writeProbeSteps = []func(s *writeProbeState) []writeProbeCall{
 		return []writeProbeCall{
 			call("POST /r/{slug}/messages/{id}/pin", "room", r+"/messages/"+or(s.messageID)+"/pin", `{}`),
 			call("DELETE /r/{slug}/messages/{id}/pin", "room", r+"/messages/"+or(s.messageID)+"/pin", ""),
+			// idx 92: canonical pins and opt-in room notifications.
+			call("POST /v1/rooms/{slug}/entries/{entry_id}/pin", "human", "/v1/rooms/"+s.roomSlug+"/entries/"+or(s.messageID)+"/pin", ""),
+			call("DELETE /v1/rooms/{slug}/entries/{entry_id}/pin", "human", "/v1/rooms/"+s.roomSlug+"/entries/"+or(s.messageID)+"/pin", ""),
+			call("PUT /v1/rooms/{slug}/notifications", "human", "/v1/rooms/"+s.roomSlug+"/notifications", ""),
+			call("DELETE /v1/rooms/{slug}/notifications", "human", "/v1/rooms/"+s.roomSlug+"/notifications", ""),
+			call("PATCH /v1/me/notification-settings", "human", "/v1/me/notification-settings", j(map[string]any{"room_notifications": "on"})),
 			save,
 		}
 	},

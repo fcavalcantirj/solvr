@@ -12617,3 +12617,19 @@ idx 78 slice 32's OWNER NOTE token items (a) and (b) are DONE: slice 32 now only
 
 2026-10-02 17:29 — OWNER DECISIONS for the v1.3 cutover window (Felipe, in chat) — not a task entry
 Rollback redeploy route: (c) a restore commit prepared before the window (tree = c03734ae, parent = the frozen SHA), pushed as a fast-forward of main plus both webhooks; no EasyPanel reconfiguration, no force-push. In-window safety dump: yes. solvr-web keeps running during the write pause. Cutover search sample: 200 on every pass. Frontend version: 0.4.0. The owner ticks the runbook's Pre-G6 EasyPanel env checklist before the G6 yes. The loop stays stopped until the freeze.
+
+2026-10-02 21:19 — v1.3 DEPLOYED TO PRODUCTION (idx 93 cutover window) — orchestrator, on the owner's explicit go; idx 93 passes left for the owner to flip
+FROZEN_SHA 009d0ac3 (frontend 0.4.0). Rollback commit 409cca98 (local branch rollback/v1.3-to-c03734ae: tree = c03734ae, parent = 009d0ac3), not pushed. Logs and dumps: db-backups/window/ (git-ignored).
+PRE-0/1/2 [REAL]: window worktree /Users/fcavalcanti/dev/solvr-window at 009d0ac3; both images build; cutover guard 135; rollback-commit proofs pass.
+P1 [REAL, read-only]: ssl off (sslmode disable), server 17.9, collation 2.41 vs 2.36, no schema_migrations, schema-84 markers present, 85+ absent (tags/post_tags absent), 8 rate_limit_config keys, 11 tombstones (purge subset at 2026-09-29 22:32:29.876149+00, not the reconstruction's 22:23:53), trigger present, RTT 46-52 ms.
+G1 [REAL]: delta scan 324 commits, 18 unhinted rows all reviewed in D4/D7, 0 new; pushed 009d0ac3 to origin/main 20:51 (fast-forward from c03734ae).
+G2 [REAL]: fresh dump (42 tables) restored to solvr_window_g2; 135|f; cutover 883 replies + 135 progress notes, 22 orphans, second pass all_zero; ledger 0 errors.
+WINDOW (owner chose the deploy-webhook route instead of stopping solvr-api in EasyPanel; UNREHEARSED variant):
+ 20:57 safety dump 1 (8.3 MB) while the old API served; P5 dup pre-check 34 indexes 0 duplicates; REINDEX DATABASE 4.0 s; collation refreshed 2.41 -> 2.36.
+ 20:57:53 both deploy webhooks fired; 21:01:03 new code live (/v1/overview 404 -> 200).
+ 21:01 safety dump 2 (exact pre-migration state) + legacy snapshot (= P1 counts); G4 force 84 + up: 51 files, 37 s, 135|f at 21:02.
+ G5: dry run identical to G2's; apply 21:04-21:09 exit 0 (883 replies, 135 progress notes); second pass 21:14 all_zero true, 0 lost in the 200-query search sample; reconcile: 22 orphans, 0 unexplained, drift 0 except search_document 151 (the Voyage job is already embedding: 251 -> 151); contributions 418 = 305 - 26 - 3 + 16 + 126; trigger refuses nan_song and xu_wei, accepts the control.
+ G6 21:14: /v1/overview 200, web skill.md v1.3 marker, probes 13/13 (legacy write 410), total_contributions 418. Partial-service stretch about 13 min (21:01-21:14).
+ Post-deploy read-only checks: /problems/<id> 308 -> /posts/<id> 200; homepage links /data and /skill; /rooms /data /skill /docs /api-docs sitemap.xml 200.
+P7/P8 NOT DONE [REAL]: dry run {"would_unpin":87}; the real unpin returned Cloudflare 524 and gc 502; a second dry run still shows 87 would_unpin, nothing was unpinned. Cause: the API cannot reach the IPFS node (/v1/health/ipfs {"connected":false,"error":"timeout"}). Owner: check solvr-api IPFS_API_URL and the IPFS service in EasyPanel; then re-run P7 in batches small enough to finish under Cloudflare's 100 s, then P8.
+Open for the owner: G7 UAT (OAuth login, a post through moderation, a two-agent room journey, visual check); flipping idx 93; restarting the loop; CI is red on pre-existing lint (30), file size (36) and the 44 referral_code fixtures.

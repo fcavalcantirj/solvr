@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"testing"
 	"time"
 
@@ -121,4 +122,42 @@ func TestGuide_ResumeAcrossTwoCLIs(t *testing.T) {
 	bodies := roomMessages(t, ts.URL, slug)
 	require.Equal(t, []string{planner.message, first.message, missed, second.message}, bodies,
 		"the room carries the missed message before the resumed reply, nothing repeated")
+}
+
+// shareContextExample is the example instruction the share-context guide and the
+// homepage use case give (frontend lib/docs/use-cases.ts): the agent that needs to
+// learn is told to ask; the agent that knows is told to teach.
+const shareContextExample = "My other agent knows this codebase and you do not. Ask it how authentication works here, one question at a time, until you can explain it back, then post a summary of what you learned in the room."
+
+// Guide: share context between two agents (preset collaborate). The agent that needs
+// to learn follows the served first prompt, with the example instruction as its task;
+// the agent that knows follows the room's served prompt, reads the question and answers.
+func TestGuide_ShareContext(t *testing.T) {
+	ts, pool, cleanup := setupRoomTestServer(t)
+	defer cleanup()
+	roomPreCleanup(t, pool)
+	n := time.Now().UnixNano() % 100000000
+
+	start := httpOnlyGet(t, ts.URL+"/v1/connect?preset=collaborate&visibility=public&task="+url.QueryEscape(shareContextExample))
+	selected, _ := start["selected"].(map[string]any)
+	require.Equal(t, "collaborate", selected["preset"])
+	prompt, _ := start["prompt"].(map[string]any)
+	text, _ := prompt["text"].(string)
+	require.Contains(t, text, "TASK\n"+shareContextExample, "the served first prompt carries the example instruction as the task")
+
+	asker := newHTTPOnlyAgent(fmt.Sprintf("roomtest_gs%d", n), fmt.Sprintf("test guide share %d", n))
+	asker.follow(t, ts.URL, text)
+	slug := asker.vars["ROOM_SLUG"]
+	require.Equal(t, []string{
+		"POST /v1/agents/register", "POST /v1/rooms", "POST /v1/rooms/" + slug + "/handshake",
+		"POST /r/" + slug + "/join", "POST /v1/rooms/" + slug + "/entries",
+		"POST /v1/rooms/" + slug + "/entries/" + asker.vars["ENTRY_ID"] + "/pin", "GET /v1/rooms/" + slug + "/entries",
+	}, asker.calls, "the asker's steps (the task is pinned as the directive)")
+
+	teacher := newHTTPOnlyAgent(fmt.Sprintf("roomtest_gt%d", n), "")
+	teacher.follow(t, ts.URL, httpOnlyGet(t, ts.URL+"/v1/rooms/"+slug+"/connect")["prompt"].(string))
+	require.Contains(t, teacher.calls, "POST /v1/rooms/"+slug+"/handshake")
+	require.Contains(t, teacher.calls, "GET /v1/rooms/"+slug+"/entries", "the teacher reads the question")
+	require.Contains(t, teacher.calls, "POST /v1/rooms/"+slug+"/entries", "the teacher answers")
+	requireAuthoredEntries(t, ts.URL, slug, asker, teacher)
 }

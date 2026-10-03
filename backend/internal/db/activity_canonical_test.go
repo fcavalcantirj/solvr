@@ -30,8 +30,8 @@ func TestLegacyAgentActivity_ServedCanonically(t *testing.T) {
 // Task idx 76 steps 3 and 5: in a database holding only this fixture, every item the legacy
 // activity lists before the contribution cutover is listed by the canonical activity after it,
 // as the reply the contribution became: same date, same post, same post title, type "reply",
-// action "replied", its body's first 100 characters as title, "accepted" when its post names it
-// as the accepted reply. Comments, which the legacy feed never listed, are replies now and are
+// action "replied", its body's first 100 characters as title, "accepted" when it was migrated
+// from the accepted answer (provenance is_accepted; accepted_answer_id is retired, idx 68). Comments, which the legacy feed never listed, are replies now and are
 // listed. The total counts exactly the listed items: the legacy total also counted the agent's
 // family posts, which the feed never lists. The canonical activity survives dropping the legacy
 // tables unchanged; native replies move it, and a deleted reply or another agent's does not.
@@ -170,11 +170,11 @@ func TestCanonicalAgentActivity_ListsPostsAndRepliesAcrossTheCutover(t *testing.
 	assert.Equal(t, got, afterDrop, "the canonical activity needs no legacy table")
 	assert.Equal(t, total, afterDropTotal)
 
-	// Native replies after the cutover: a's reply on qA becomes its accepted reply; its child
-	// reply and a reply on the family question are listed; a deleted reply and b's reply are not.
+	// Native replies after the cutover: a's reply on qA, its child reply and a reply on the family
+	// question are listed; a deleted reply and b's reply are not. A native reply is never
+	// "accepted": only an answer migrated as accepted carries that status.
 	long := strings.Repeat("x", 150)
 	nA := id(`INSERT INTO replies (post_id, author_type, author_id, body) VALUES ($1, 'agent', $2, $3)`, qA, a, long)
-	exec(`UPDATE posts SET accepted_answer_id = $2 WHERE id = $1`, qA, nA)
 	nChild := id(`INSERT INTO replies (post_id, parent_reply_id, author_type, author_id, body) VALUES ($1, $2, 'agent', $3, 'native child')`, qA, nA, a)
 	nFamily := id(`INSERT INTO replies (post_id, author_type, author_id, body) VALUES ($1, 'agent', $2, 'native on family')`, qHFamily, a)
 	exec(`INSERT INTO replies (post_id, author_type, author_id, body, deleted_at) VALUES ($1, 'agent', $2, 'gone', NOW())`, pA, a)
@@ -188,8 +188,8 @@ func TestCanonicalAgentActivity_ListsPostsAndRepliesAcrossTheCutover(t *testing.
 		TargetID: qHFamily}, undated(live[0]), "newest first; no family post title")
 	assert.Equal(t, models.ActivityItem{ID: nChild, Type: "reply", Action: "replied", Title: "native child",
 		TargetID: qA, TargetTitle: "activity question by agent"}, undated(live[1]), "a child reply is activity")
-	assert.Equal(t, models.ActivityItem{ID: nA, Type: "reply", Action: "replied", Title: long[:100], Status: "accepted",
-		TargetID: qA, TargetTitle: "activity question by agent"}, undated(live[2]), "the accepted native reply")
+	assert.Equal(t, models.ActivityItem{ID: nA, Type: "reply", Action: "replied", Title: long[:100],
+		TargetID: qA, TargetTitle: "activity question by agent"}, undated(live[2]), "the native reply")
 	assert.Equal(t, got, live[3:], "the earlier items are unchanged")
 
 	page2, page2Total := activity(agents, 2, 4)

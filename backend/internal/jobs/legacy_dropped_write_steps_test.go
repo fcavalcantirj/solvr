@@ -172,10 +172,8 @@ var writeProbeSteps = []func(s *writeProbeState) []writeProbeCall{
 		var calls []writeProbeCall
 		for _, caller := range []string{"human", "agent"} {
 			for _, typ := range probePostTypes {
+				// Every post is type post (idx 68): typ only labels the created post.
 				body := map[string]any{"title": "Route probe write " + typ, "description": probeDescription, "tags": []string{"probe"}}
-				if typ != "post" {
-					body["type"] = typ
-				}
 				c := call("POST /v1/posts", caller, "/v1/posts", j(body))
 				key := caller + " " + typ
 				c.keep = func(s *writeProbeState, v jsonValue) bool {
@@ -191,8 +189,9 @@ var writeProbeSteps = []func(s *writeProbeState) []writeProbeCall{
 				call("PATCH /v1/posts/{id}", postAuthor(i), "/v1/posts/"+id, j(map[string]any{"title": "Route probe edited " + typ})),
 				call("PATCH /v1/posts/{id}", postAuthor(i+1), "/v1/posts/"+id, j(map[string]any{"title": "Not the author's edit"})))
 		}
-		// The problem holds a reply migrated from a succeeded approach, so it may be solved.
-		calls = append(calls, call("PATCH /v1/posts/{id}", "agent", "/v1/posts/"+s.posts["problem"], j(map[string]any{"status": "solved"})))
+		// A status move on the post holding a reply migrated from a succeeded approach (solved is
+		// retired, idx 68).
+		calls = append(calls, call("PATCH /v1/posts/{id}", "agent", "/v1/posts/"+s.posts["problem"], j(map[string]any{"status": "closed"})))
 		for _, typ := range probePostTypes {
 			id := s.posts[typ]
 			for _, caller := range []string{"human", "agent"} {

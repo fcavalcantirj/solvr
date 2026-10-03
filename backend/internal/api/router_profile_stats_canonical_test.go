@@ -17,8 +17,9 @@ import (
 )
 
 // Task idx 76 step 3: the stats on GET /v1/agents/{id}, /v1/users/{id} and /v1/me count
-// canonical replies. Native replies, an accepted native reply and upvotes on replies, which the
-// legacy stats cannot see, move them; a child reply is not an answer.
+// canonical replies. Native replies, a child reply and upvotes on replies, which the legacy stats
+// cannot see, move them. Since idx 68 the stats are posts created, contributions (live replies)
+// and upvotes received; the per-type and accepted-answer counters are retired.
 func TestProfileStatsRoutes_CountCanonicalReplies(t *testing.T) {
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
@@ -81,55 +82,39 @@ func TestProfileStatsRoutes_CountCanonicalReplies(t *testing.T) {
 			postID, parent, authorType, author).Scan(&id))
 		return id
 	}
-	question := newPost("question", "human", userID)
-	idea := newPost("idea", "agent", agentID)
+	question := newPost("post", "human", userID)
+	idea := newPost("post", "agent", agentID)
 	agentAnswer := reply(question, nil, "agent", agentID)
-	reply(question, agentAnswer, "agent", agentID) // a child reply: not an answer
+	reply(question, agentAnswer, "agent", agentID) // a child reply is a contribution too
 	userAnswer := reply(question, nil, "human", userID)
 	reply(idea, nil, "human", userID)
-	_, err = pool.Exec(ctx, `UPDATE posts SET accepted_answer_id = $2 WHERE id = $1`, question, agentAnswer)
-	require.NoError(t, err)
 	replies := db.NewReplyRepository(pool)
 	require.NoError(t, replies.Vote(ctx, agentAnswer, "agent", name+"_voter_1", "up"))
 	require.NoError(t, replies.Vote(ctx, userAnswer, "agent", name+"_voter_2", "up"))
 
+	type stats struct {
+		PostsCreated    int `json:"posts_created"`
+		Contributions   int `json:"contributions"`
+		UpvotesReceived int `json:"upvotes_received"`
+	}
 	var agent struct {
 		Data struct {
-			Stats struct {
-				QuestionsAsked    int `json:"questions_asked"`
-				QuestionsAnswered int `json:"questions_answered"`
-				AnswersAccepted   int `json:"answers_accepted"`
-				IdeasPosted       int `json:"ideas_posted"`
-				ResponsesGiven    int `json:"responses_given"`
-				UpvotesReceived   int `json:"upvotes_received"`
-			} `json:"stats"`
+			Stats stats `json:"stats"`
 		} `json:"data"`
 	}
 	get("/v1/agents/"+agentID, "", &agent)
-	s := agent.Data.Stats
-	assert.Equal(t, 0, s.QuestionsAsked, "GET /v1/agents/{id}")
-	assert.Equal(t, 1, s.QuestionsAnswered, "the native top-level reply on the question; its child is not an answer")
-	assert.Equal(t, 1, s.AnswersAccepted, "the question's accepted reply")
-	assert.Equal(t, 1, s.IdeasPosted)
-	assert.Equal(t, 0, s.ResponsesGiven)
-	assert.Equal(t, 1, s.UpvotesReceived, "the upvote on its reply")
+	assert.Equal(t, stats{PostsCreated: 1, Contributions: 2, UpvotesReceived: 1}, agent.Data.Stats,
+		"GET /v1/agents/{id}: its post, its reply and the child reply, the upvote on its reply")
 
-	type userStats struct {
-		PostsCreated    int `json:"posts_created"`
-		AnswersGiven    int `json:"answers_given"`
-		AnswersAccepted int `json:"answers_accepted"`
-		UpvotesReceived int `json:"upvotes_received"`
-		Contributions   int `json:"contributions"`
-	}
-	want := userStats{PostsCreated: 1, AnswersGiven: 1, AnswersAccepted: 0, UpvotesReceived: 1, Contributions: 2}
+	want := stats{PostsCreated: 1, Contributions: 2, UpvotesReceived: 1}
 	var user struct {
 		Data struct {
-			Stats userStats `json:"stats"`
+			Stats stats `json:"stats"`
 		} `json:"data"`
 	}
 	get("/v1/users/"+userID, "", &user)
-	assert.Equal(t, want, user.Data.Stats, "GET /v1/users/{id}: both native replies contribute, the one on the question answers")
-	user.Data.Stats = userStats{}
+	assert.Equal(t, want, user.Data.Stats, "GET /v1/users/{id}: both native replies contribute")
+	user.Data.Stats = stats{}
 	get("/v1/me", userJWT, &user)
 	assert.Equal(t, want, user.Data.Stats, "GET /v1/me as the user")
 }

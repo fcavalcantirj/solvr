@@ -101,8 +101,8 @@ func TestE2E_AgentRegistrationAndPosting(t *testing.T) {
 	if data["title"] != postTitle {
 		t.Errorf("Step 2: Expected title '%s', got '%v'", postTitle, data["title"])
 	}
-	if data["type"] != "question" {
-		t.Errorf("Step 2: Expected type 'question', got '%v'", data["type"])
+	if data["type"] != "post" {
+		t.Errorf("Step 2: Expected type 'post', got '%v'", data["type"])
 	}
 
 	t.Logf("Step 2 PASSED: Post created with ID: %s", postID)
@@ -314,8 +314,8 @@ func TestE2E_AgentCreatesPost(t *testing.T) {
 	if data["id"] == nil {
 		t.Error("Expected post id")
 	}
-	if data["type"] != "question" {
-		t.Errorf("Expected type 'question', got '%v'", data["type"])
+	if data["type"] != "post" {
+		t.Errorf("Expected type 'post', got '%v'", data["type"])
 	}
 	if data["status"] == nil {
 		t.Error("Expected status field")

@@ -106,7 +106,7 @@ func readRetirement(t *testing.T, path string) LegacyRouteRetirement {
 // legacyFeedSeed holds the posts seeded for the feed adapter tests.
 type legacyFeedSeed struct {
 	tag           string
-	inProgress    string // problem with status in_progress (needs help)
+	inProgress    string // was a problem in progress; in_progress is retired (idx 68), so it is open and needs no help
 	stuckApproach string // open problem with a stuck approach (needs help)
 	openProblem   string // open problem with a working approach (does not need help)
 	unanswered    string
@@ -187,8 +187,9 @@ var legacyFeedFieldMoves = map[string]string{
 
 // TestRetiredFeed_NamedQueryListsWhatTheRouteListed: each retired route names GET /v1/posts and
 // the exact query its adapter served, and that query lists the rows the route listed: stuck =
-// problems in progress or with a stuck approach, unanswered = questions without an answer, the
-// feed = every post, newest first.
+// posts with a stuck approach, unanswered = posts without an answer, the feed = every post,
+// newest first. The legacy types and the in_progress status are retired (idx 68), so the
+// filters no longer narrow by type or status.
 func TestRetiredFeed_NamedQueryListsWhatTheRouteListed(t *testing.T) {
 	ts, pool, cleanup := setupRoomTestServer(t)
 	t.Cleanup(cleanup) // LIFO: seed cleanup runs before the pool closes
@@ -208,8 +209,9 @@ func TestRetiredFeed_NamedQueryListsWhatTheRouteListed(t *testing.T) {
 		listed[fr.path] = getCanonicalFeed(t, ts.URL+fr.canonical+"&tags="+s.tag)
 	}
 
-	assert.ElementsMatch(t, []string{s.inProgress, s.stuckApproach}, canonicalFeedIDs(listed["/v1/feed/stuck"]))
-	assert.Equal(t, []string{s.unanswered}, canonicalFeedIDs(listed["/v1/feed/unanswered"]))
+	assert.ElementsMatch(t, []string{s.stuckApproach}, canonicalFeedIDs(listed["/v1/feed/stuck"]))
+	assert.ElementsMatch(t, []string{s.inProgress, s.stuckApproach, s.openProblem, s.unanswered, s.idea},
+		canonicalFeedIDs(listed["/v1/feed/unanswered"]), "every post without an answer reply")
 	all := listed["/v1/feed"]
 	require.Len(t, all.Data, 6)
 	assert.Equal(t, 6, all.Meta.Total)
@@ -244,9 +246,9 @@ func TestRetiredFeed_NamedQueryCarriesEveryFeedItemField(t *testing.T) {
 	}
 
 	stuck := getCanonicalFeed(t, ts.URL+"/v1/posts?needs_help=true&sort=newest&tags="+s.tag)
-	require.Len(t, stuck.Data, 2)
+	require.Len(t, stuck.Data, 1)
 	for _, d := range stuck.Data {
-		assert.Equal(t, "problem", d.Type)
+		assert.Equal(t, "post", d.Type)
 		assert.Contains(t, d.Description, "Legacy feed adapter body for", "the snippet came from the description")
 		assert.Contains(t, d.Tags, s.tag)
 		assert.NotEmpty(t, d.Status)
@@ -262,7 +264,7 @@ func TestRetiredFeed_NamedQueryCarriesEveryFeedItemField(t *testing.T) {
 	all := getCanonicalFeed(t, ts.URL+"/v1/posts?sort=newest&tags="+s.tag)
 	for _, d := range all.Data {
 		if d.ID == s.answered {
-			assert.Equal(t, 1, d.AnswersCount, "questions keep their answer count")
+			assert.Equal(t, 1, d.AnswersCount, "a post keeps its answer count")
 		}
 	}
 }

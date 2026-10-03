@@ -51,5 +51,5 @@ func TestHomepageOverviewReusablePosts_CountCanonicalReplies(t *testing.T) {
 	assert.Equal(t, reusable, item.ID, "the most recently worked-on post leads")
 	assert.Equal(t, 2, item.ContributionCount, "the reply and its child; not the verdict or the deleted reply")
 	assert.Equal(t, "2 contributions", item.ContributionLabel)
-	assert.Equal(t, "/problems/"+reusable, item.URL)
+	assert.Equal(t, "/posts/"+reusable, item.URL, "every post links to /posts/{id}")
 }

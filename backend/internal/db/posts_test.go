@@ -590,11 +590,11 @@ func TestPostRepository_FindByID_Success(t *testing.T) {
 	// Insert a test post with all fields populated
 	err := pool.QueryRow(ctx, `
 		INSERT INTO posts (type, title, description, tags, posted_by_type, posted_by_id,
-			status, upvotes, downvotes, success_criteria, weight)
-		VALUES ('problem', 'Find By ID Test', 'Test Description', $1, 'agent', 'test_agent_findbyid',
-			'open', 5, 2, $2, 3)
+			status, upvotes, downvotes)
+		VALUES ('post', 'Find By ID Test', 'Test Description', $1, 'agent', 'test_agent_findbyid',
+			'open', 5, 2)
 		RETURNING id::text
-	`, []string{"go", "testing"}, []string{"Criterion 1", "Criterion 2"}).Scan(&postID)
+	`, []string{"go", "testing"}).Scan(&postID)
 	if err != nil {
 		t.Fatalf("failed to insert test post: %v", err)
 	}
@@ -619,7 +619,7 @@ func TestPostRepository_FindByID_Success(t *testing.T) {
 	}
 
 	if post.Type != models.PostTypePost {
-		t.Errorf("expected type problem, got %s", post.Type)
+		t.Errorf("expected type post, got %s", post.Type)
 	}
 
 	if post.Title != "Find By ID Test" {

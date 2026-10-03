@@ -76,13 +76,17 @@ func TestCanonicalSearch_FindsMigratedContributionsAcrossTheCutover(t *testing.T
 			VALUES ($1, $2, 'agent', $3, $4) RETURNING id::text`, targetType, targetID, a, "a comment on "+kw)
 	}
 
-	// q1: an accepted live answer, a deleted answer, a comment on the post and one on the answer.
+	// q1: an accepted live answer (accepted the way the legacy accept wrote it: answers.is_accepted,
+	// which the cutover keeps in provenance, and posts.accepted_answer_id), a deleted answer, a
+	// comment on the post and one on the answer.
 	q1 := post("question", "open", "search canon answered question")
 	an1 := answer(q1, "the live answer about "+kw, false)
 	answer(q1, "the deleted answer about "+kw, true)
 	comment("post", q1)
 	comment("answer", an1)
 	_, err := pool.Exec(ctx, `UPDATE posts SET accepted_answer_id = $1 WHERE id = $2`, an1, q1)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `UPDATE answers SET is_accepted = true WHERE id = $1`, an1)
 	require.NoError(t, err)
 	// p1: a succeeded live approach, a deleted approach, a progress note on the live one.
 	p1 := post("problem", "open", "search canon problem")

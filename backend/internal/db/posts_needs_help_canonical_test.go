@@ -29,11 +29,12 @@ func TestLegacyNeedsHelpAndVisibility_ServedCanonically(t *testing.T) {
 	assertLegacyDependencyGone(t, "code:internal/db/approaches.go")
 }
 
-// Task idx 76 steps 3 and 5: a post needs help when it is in progress or carries a live stuck
-// approach. After the contribution cutover the stuck approach is the reply migrated from it,
-// whose status is kept in provenance, so the filter selects the same posts, and it keeps
-// selecting them once the legacy tables are gone. An approach that was never migrated does
-// not count, and neither does a native reply: replies have no status workflow.
+// Task idx 76 steps 3 and 5: a post needs help when it carries a live stuck approach. After the
+// contribution cutover the stuck approach is the reply migrated from it, whose status is kept in
+// provenance, so the filter selects the same posts, and it keeps selecting them once the legacy
+// tables are gone. An approach that was never migrated does not count, and neither does a
+// native reply: replies have no status workflow. The in_progress status is retired (idx 68):
+// such a post (open after the legacy archive migration) needs help only through a stuck approach.
 func TestCanonicalNeedsHelp_KeepsTheLegacyFilterAcrossTheCutover(t *testing.T) {
 	pool, dropLegacy := newMigratedScratchDatabase(t)
 	ctx := context.Background()
@@ -99,16 +100,16 @@ func TestCanonicalNeedsHelp_KeepsTheLegacyFilterAcrossTheCutover(t *testing.T) {
 		return ids
 	}
 
-	// Before the cutover no approach is a reply yet: only the in-progress post needs help.
-	assert.ElementsMatch(t, []string{pInProgress}, list(), "an approach that was never migrated does not count")
+	// Before the cutover no approach is a reply yet: no post needs help.
+	assert.Empty(t, list(), "an approach that was never migrated does not count, nor does in_progress")
 
 	_, err := MigrateContributions(ctx, pool)
 	require.NoError(t, err)
 	_, err = RemapLegacyRelations(ctx, pool)
 	require.NoError(t, err)
 
-	want := []string{pInProgress, pStuck, pMixed}
-	assert.ElementsMatch(t, want, list(), "in progress, or a live reply migrated from a stuck approach")
+	want := []string{pStuck, pMixed}
+	assert.ElementsMatch(t, want, list(), "a live reply migrated from a stuck approach")
 	assert.ElementsMatch(t, want, filter())
 
 	dropLegacy()
@@ -122,5 +123,6 @@ func TestCanonicalNeedsHelp_KeepsTheLegacyFilterAcrossTheCutover(t *testing.T) {
 	exec(`INSERT INTO replies (post_id, author_type, author_id, body) VALUES ($1, 'agent', $2, 'native reply')`, qOpen, a)
 	// A migrated stuck approach whose reply is deleted no longer counts.
 	exec(`UPDATE replies SET deleted_at = NOW() WHERE post_id = $1 AND legacy_type = 'approach' AND provenance->>'status' = 'stuck'`, pMixed)
-	assert.ElementsMatch(t, []string{pInProgress, pStuck}, filter())
+	assert.ElementsMatch(t, []string{pStuck}, filter())
+	assert.NotContains(t, filter(), pInProgress)
 }

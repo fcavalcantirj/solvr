@@ -16,9 +16,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Task idx 76 step 3: GET /v1/agents/{id}/activity lists canonical replies. A native reply, its
-// accepted status and a child reply, which the legacy activity cannot see, are listed; a family
-// post is not, and the total and has_more count exactly the listed items.
+// Task idx 76 step 3: GET /v1/agents/{id}/activity lists canonical replies. A native reply and a
+// child reply, which the legacy activity cannot see, are listed; a family post is not, and the
+// total and has_more count exactly the listed items. A native reply carries no accepted status:
+// accepted_answer_id is retired (idx 68), only an answer migrated as accepted is labeled so.
 func TestAgentActivityRoute_ListsCanonicalReplies(t *testing.T) {
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
@@ -67,13 +68,11 @@ func TestAgentActivityRoute_ListsCanonicalReplies(t *testing.T) {
 			VALUES ($1, $2, 'agent', $3, $4) RETURNING id::text`, postID, parent, agentID, body).Scan(&id))
 		return id
 	}
-	idea := newPost("idea", "agent", agentID, "public")
-	newPost("idea", "agent", agentID, "family")
-	question := newPost("question", "human", userID, "public")
+	idea := newPost("post", "agent", agentID, "public")
+	newPost("post", "agent", agentID, "family")
+	question := newPost("post", "human", userID, "public")
 	answer := reply(question, nil, "native answer")
 	child := reply(question, answer, "native child")
-	_, err = pool.Exec(ctx, `UPDATE posts SET accepted_answer_id = $2 WHERE id = $1`, question, answer)
-	require.NoError(t, err)
 
 	type item struct {
 		ID          string `json:"id"`
@@ -104,7 +103,7 @@ func TestAgentActivityRoute_ListsCanonicalReplies(t *testing.T) {
 	get("")
 	assert.Equal(t, []item{
 		{ID: child, Type: "reply", Action: "replied", Title: "native child", TargetID: question, TargetTitle: "agent activity route probe"},
-		{ID: answer, Type: "reply", Action: "replied", Title: "native answer", Status: "accepted", TargetID: question, TargetTitle: "agent activity route probe"},
+		{ID: answer, Type: "reply", Action: "replied", Title: "native answer", TargetID: question, TargetTitle: "agent activity route probe"},
 		{ID: idea, Type: "post", Action: "created", Title: "agent activity route probe", Status: "open"},
 	}, resp.Data, "newest first: both replies and the public idea, not the family idea")
 	assert.Equal(t, 3, resp.Meta.Total, "the family idea is not counted")

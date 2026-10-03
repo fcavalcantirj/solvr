@@ -42,12 +42,12 @@ func seedPostListing(ctx context.Context, t *testing.T, pool *Pool) string {
 		{"posts", `
 			INSERT INTO posts (type, title, description, tags, posted_by_type, posted_by_id, status,
 			                   upvotes, downvotes, view_count, created_at, deleted_at, visibility, owner_human_id)
-			SELECT (ARRAY['problem','question','idea','post'])[1 + g % 4], 'Listed post ' || g,
+			SELECT 'post', 'Listed post ' || g,
 			       'Description of listed post ' || g, ARRAY['pltag' || (g % 13), 'pltag' || (g % 7)],
 			       CASE WHEN g % 5 < 3 THEN 'human' ELSE 'agent' END,
 			       CASE WHEN g % 5 < 3 THEN u.id::text ELSE 'pl_agent_' || (1 + g % 2000) END,
 			       CASE WHEN g % 97 = 0 THEN 'pending_review'
-			            ELSE (ARRAY['open','solved','answered','active','in_progress'])[1 + g % 5] END,
+			            ELSE (ARRAY['open','closed','stale','open','open'])[1 + g % 5] END,
 			       (g * 7) % 23, (g * 3) % 5, (g * 11) % 1000, NOW() - g * INTERVAL '1 minute',
 			       CASE WHEN g % 33 = 0 THEN NOW() END,
 			       CASE WHEN g % 20 = 0 THEN 'family' ELSE 'public' END,
@@ -97,8 +97,8 @@ func seedPostListing(ctx context.Context, t *testing.T, pool *Pool) string {
 // original numeric form.
 const referencePostList = `
 	SELECT p.id, p.type, p.title, p.description, p.tags, p.posted_by_type, p.posted_by_id, p.status,
-	       p.upvotes, p.downvotes, p.view_count, p.success_criteria, p.weight, p.accepted_answer_id,
-	       p.evolved_into, p.created_at, p.updated_at, p.deleted_at, p.crystallization_cid, p.crystallized_at,
+	       p.upvotes, p.downvotes, p.view_count, p.created_at, p.updated_at, p.deleted_at,
+	       p.crystallization_cid, p.crystallized_at,
 	       COALESCE(p.original_language, ''), COALESCE(p.original_title, ''), COALESCE(p.original_description, ''),
 	       COALESCE(u.display_name, ag.display_name, ''), COALESCE(u.avatar_url, ag.avatar_url, ''),
 	       COALESCE(rc.ans, 0), COALESCE(rc.app, 0), COALESCE(rc.cmt, 0), COALESCE(ag.human_id::text, ''),
@@ -142,7 +142,7 @@ func postListCases(viewer string) []postListCase {
 		{name: "newest page 40", opts: models.PostListOptions{Page: 40, PerPage: 20, Sort: "new"}, order: newest},
 		{name: "votes", opts: models.PostListOptions{Page: 2, PerPage: 20, Sort: "votes"},
 			order: "(p.upvotes - p.downvotes) DESC, p.created_at DESC"},
-		{name: "type and tag", opts: models.PostListOptions{Page: 1, PerPage: 50, Type: "problem", Tags: []string{"pltag3"}},
+		{name: "type and tag", opts: models.PostListOptions{Page: 1, PerPage: 50, Type: models.PostTypePost, Tags: []string{"pltag3"}},
 			order: newest},
 		{name: "viewer with family and votes", order: newest, opts: models.PostListOptions{Page: 1, PerPage: 100,
 			ViewerType: models.AuthorTypeHuman, ViewerID: viewer, ViewerHuman: viewer}},

@@ -233,9 +233,11 @@ func TestLegacyReadRoutes_AnswerTheMigrationErrorToEveryCaller(t *testing.T) {
 	var ov overviewKnowledgeResp
 	getJSON(t, ts.URL+"/v1/overview", &ov)
 	k := knowledgeByType(ov)
+	_, ok := k["post"]
+	assert.True(t, ok, "GET /v1/overview data.knowledge.types counts the posts the per-type routes counted")
 	for _, legacyType := range []string{"problem", "question", "idea"} {
 		_, ok := k[legacyType]
-		assert.True(t, ok, "GET /v1/overview data.knowledge.types has no %q entry", legacyType)
+		assert.False(t, ok, "GET /v1/overview data.knowledge.types has no %q entry: the legacy types are retired", legacyType)
 	}
 }
 

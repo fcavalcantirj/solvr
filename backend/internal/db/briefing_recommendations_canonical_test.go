@@ -144,12 +144,10 @@ func TestBriefingDiff_CountNewOpportunitiesSince_CanonicalPosts(t *testing.T) {
 	}
 
 	byOther(cbPostSeed{})
-	byOther(cbPostSeed{postType: "problem", status: "in_progress"})
-	byOther(cbPostSeed{postType: "idea", status: "active"})
-	byOther(cbPostSeed{postType: "question"})
+	byOther(cbPostSeed{tags: []string{"cbpl-diff-second", tag}})
 	for _, s := range []cbPostSeed{
 		{age: 2 * time.Hour}, {byID: me}, {visibility: "family"}, {publication: "draft"},
-		{moderation: "pending"}, {deleted: true}, {postType: "problem", status: "solved"},
+		{moderation: "pending"}, {deleted: true}, {status: "stale"},
 		{status: "closed"}, {tags: []string{"cbpl-diff-elsewhere"}},
 	} {
 		byOther(s)
@@ -157,7 +155,7 @@ func TestBriefingDiff_CountNewOpportunitiesSince_CanonicalPosts(t *testing.T) {
 
 	n, err := repo.CountNewOpportunitiesSince(ctx, me, []string{tag}, since)
 	require.NoError(t, err)
-	require.Equal(t, 4, n, "the briefing's opportunity rule, created after since, every post type")
+	require.Equal(t, 2, n, "the briefing's opportunity rule: open posts created after since, in a specialty, not its own")
 
 	n, err = repo.CountNewOpportunitiesSince(ctx, me, nil, since)
 	require.NoError(t, err)

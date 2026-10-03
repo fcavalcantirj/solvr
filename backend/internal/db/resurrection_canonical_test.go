@@ -37,8 +37,8 @@ type resurrectionAttempt struct {
 
 // Task idx 76 step 3: GET /v1/agents/{id}/resurrection-bundle serves its knowledge from the
 // canonical model. ideas lists the agent's live public posts of every type (Problems, Ideas and
-// Questions are one Post model) by net votes; problems lists those still open (draft, open,
-// in_progress or active) newest first; approaches lists the agent's live replies migrated from
+// Questions are one Post model) by net votes; problems lists those still open (draft or open;
+// in_progress and active are retired, idx 68, and read open after the archive) newest first; approaches lists the agent's live replies migrated from
 // approaches, newest first, with the reply id, its post id and the angle, method and status the
 // cutover kept in provenance. Native replies are never approaches. All of it keeps working
 // once the legacy tables are gone.
@@ -136,7 +136,7 @@ func TestCanonicalResurrection_ServesEveryPostTypeAndMigratedApproachesAcrossThe
 	}
 
 	wantIdeas := []string{pIdea, pSolved, pProblem, pQuestion, pWorking, pEvolved, pDraft, pPost, pAnswered}
-	wantProblems := []string{pDraft, pPost, pQuestion, pWorking, pProblem, pIdea}
+	wantProblems := []string{pDraft, pPost, pQuestion, pProblem}
 	checkPosts := func() {
 		t.Helper()
 		assert.Equal(t, wantIdeas, ideas(50), "every live public post of the agent, by net votes then newest")

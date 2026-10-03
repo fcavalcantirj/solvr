@@ -129,19 +129,17 @@ var legacyTypedLists = []struct {
 }
 
 // TestRetiredTypedDiscovery_NamedQueryListsWhatTheRouteListed: each retired route names GET
-// /v1/posts and the typed query its adapter served, and that query lists exactly the posts of
-// the route's type, with the same meta; the canonical list itself is not deprecated.
+// /v1/posts with the caller's query parameters other than type, and that query lists every post
+// the route listed, with the same meta. Since the legacy types were retired (idx 68) every post
+// is type post, so it lists the other legacy types' posts too; the canonical list itself is not
+// deprecated.
 func TestRetiredTypedDiscovery_NamedQueryListsWhatTheRouteListed(t *testing.T) {
 	ts, pool, cleanup := setupRoomTestServer(t)
 	t.Cleanup(cleanup) // LIFO: seed cleanup runs before the pool closes
 	agentID, _ := registerRoomTestAgent(t, ts)
 	s := seedLegacyDiscovery(t, pool, agentID)
 
-	want := map[string][]string{
-		"problem":  {s.problem},
-		"question": {s.unanswered, s.answered},
-		"idea":     {s.idea},
-	}
+	every := []string{s.problem, s.unanswered, s.answered, s.idea}
 	for _, lt := range legacyTypedLists {
 		t.Run(lt.path, func(t *testing.T) {
 			ret := readRetirement(t, lt.path)
@@ -154,16 +152,17 @@ func TestRetiredTypedDiscovery_NamedQueryListsWhatTheRouteListed(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, http.StatusGone, got.status, "%s: %s", lt.path, got.body)
 
-			resp, listed := getLegacyList(t, ts.URL+lt.canonical+"&tags="+s.tag)
+			resp, listed := getLegacyList(t, ts.URL+lt.canonical+"?tags="+s.tag)
 			require.Equal(t, http.StatusOK, resp.StatusCode)
-			assert.ElementsMatch(t, want[lt.postType], listIDs(listed), "%s lists the route's posts", lt.canonical)
-			assert.Equal(t, len(want[lt.postType]), listed.Meta.Total)
+			assert.ElementsMatch(t, every, listIDs(listed), "%s lists every post the route listed", lt.canonical)
+			assert.Equal(t, len(every), listed.Meta.Total)
 			assert.Equal(t, 1, listed.Meta.Page)
 			assert.Equal(t, 20, listed.Meta.PerPage)
 			assert.False(t, listed.Meta.HasMore)
 			for _, d := range listed.Data {
-				assert.Equal(t, lt.postType, d.Type)
+				assert.Equal(t, "post", d.Type)
 			}
+			assert.Contains(t, ret.Instructions, "a type other than post answers 400 LEGACY_FIELD_RETIRED", lt.path)
 			assert.Empty(t, resp.Header.Get("Deprecation"), "the canonical list is not deprecated")
 		})
 	}
@@ -190,7 +189,7 @@ func TestRetiredTypedDiscovery_EveryLegacyQueryShapeGetsTheMigrationError(t *tes
 		assert.Contains(t, ret.Instructions, "per_page above 50 answers 400", lt.path)
 		assert.Contains(t, ret.Instructions, "other than type", "%s: the path's type replaces a caller's type", lt.path)
 
-		for _, pagination := range []string{"&per_page=200", "&page=abc", "&per_page=0"} {
+		for _, pagination := range []string{"?per_page=200", "?page=abc", "?per_page=0"} {
 			got, err := callStatusContract(http.DefaultClient, http.MethodGet, ts.URL+lt.canonical+pagination, "", "")
 			require.NoError(t, err)
 			assert.Equal(t, http.StatusBadRequest, got.status, "%s%s: %s", lt.canonical, pagination, got.body)
@@ -201,7 +200,7 @@ func TestRetiredTypedDiscovery_EveryLegacyQueryShapeGetsTheMigrationError(t *tes
 
 // TestPostsList_HasAnswerFilterDefinedOnce: has_answer is a canonical GET /v1/posts filter; GET
 // /v1/questions?has_answer= reached it through the adapter and now answers the migration error
-// that names it.
+// that names it. Without the question type (idx 68) it applies to every post.
 func TestPostsList_HasAnswerFilterDefinedOnce(t *testing.T) {
 	ts, pool, cleanup := setupRoomTestServer(t)
 	t.Cleanup(cleanup) // LIFO: seed cleanup runs before the pool closes
@@ -211,8 +210,7 @@ func TestPostsList_HasAnswerFilterDefinedOnce(t *testing.T) {
 	base := "/v1/posts?"
 	resp, unanswered := getLegacyList(t, ts.URL+base+"has_answer=false&tags="+s.tag)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
-	require.Len(t, unanswered.Data, 1, "%s has_answer=false", base)
-	assert.Equal(t, s.unanswered, unanswered.Data[0].ID)
+	assert.ElementsMatch(t, []string{s.problem, s.unanswered, s.idea}, listIDs(unanswered), "%s has_answer=false", base)
 
 	resp, withAnswer := getLegacyList(t, ts.URL+base+"has_answer=true&tags="+s.tag)
 	require.Equal(t, http.StatusOK, resp.StatusCode)

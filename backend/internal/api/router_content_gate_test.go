@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/fcavalcantirj/solvr/internal/api/handlers"
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/google/uuid"
@@ -123,7 +124,9 @@ func TestContentGate_TitleRulesOnCanonicalPosts(t *testing.T) {
 }
 
 // Routes 3–5: the legacy typed creates are retired (task idx 52). A title an old client sends
-// there creates nothing, and the same typed post through POST /v1/posts meets the same gate.
+// there creates nothing; the same legacy type through POST /v1/posts is refused before the gate
+// with LEGACY_FIELD_RETIRED (idx 68) and stores nothing either, so the same title sent as a post
+// is the author's first and meets the gate from there.
 func TestContentGate_LegacyTypedCreates(t *testing.T) {
 	ts, _, pool := newStatusContractServer(t)
 	for _, route := range []struct{ path, postType string }{
@@ -135,11 +138,14 @@ func TestContentGate_LegacyTypedCreates(t *testing.T) {
 		require.Equal(t, http.StatusGone, retired.status, "%s: %s", route.path, retired.body)
 		require.Equal(t, ErrCodeEndpointRetired, retired.code, retired.body)
 
-		first := gateCall(t, ts, key, "/v1/posts", postBody(route.postType, "Batch importer stalls on large CSV files "+marker))
-		require.Equal(t, http.StatusCreated, first.status, "%s post: %s", route.postType, first.body)
-		requireRefused(t, gateCall(t, ts, key, "/v1/posts", postBody(route.postType, "Batch importer stalls on large CSV files "+marker)),
+		typed := gateCall(t, ts, key, "/v1/posts", postBody(route.postType, "Batch importer stalls on large CSV files "+marker))
+		requireRefused(t, typed, http.StatusBadRequest, handlers.ErrCodeLegacyFieldRetired, "", "")
+
+		first := gateCall(t, ts, key, "/v1/posts", postBody("post", "Batch importer stalls on large CSV files "+marker))
+		require.Equal(t, http.StatusCreated, first.status, "%s title as a post: %s", route.postType, first.body)
+		requireRefused(t, gateCall(t, ts, key, "/v1/posts", postBody("post", "Batch importer stalls on large CSV files "+marker)),
 			http.StatusConflict, "DUPLICATE_CONTENT", "", first.id)
-		requireRefused(t, gateCall(t, ts, key, "/v1/posts", postBody(route.postType, "Daily heartbeat status "+marker)),
+		requireRefused(t, gateCall(t, ts, key, "/v1/posts", postBody("post", "Daily heartbeat status "+marker)),
 			http.StatusUnprocessableEntity, "CONTENT_NOT_ALLOWED", "heartbeat", "")
 	}
 }

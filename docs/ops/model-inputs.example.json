@@ -1,0 +1,39 @@
+{
+  "label": "example inputs, 2026-10-03",
+  "price_source": "HYPOTHETICAL placeholder prices — not quotes; real prices are the owner's (UAT)",
+  "capacity": {
+    "monthly_active_participants": {"value": 1000000, "source": "hypothetical"},
+    "daily_active_share": {"value": 0.1, "source": "hypothetical"},
+    "requests_per_daily_participant": {"value": 20, "source": "hypothetical"},
+    "polling_share": {"value": 0.2, "source": "hypothetical"},
+    "poll_interval_seconds": {"value": 30, "source": "hypothetical"},
+    "polling_hours_per_day": {"value": 1, "source": "hypothetical"},
+    "stream_share": {"value": 0.05, "source": "hypothetical"},
+    "stream_hours_per_day": {"value": 1, "source": "hypothetical"},
+    "stream_heartbeat_seconds": {"value": 30, "source": "observed"},
+    "burst_factor": {"value": 10.1, "source": "observed"}
+  },
+  "cost": {
+    "prices": {
+      "compute_per_month": 40,
+      "database_per_month": 25,
+      "storage_per_gb_month": 0.1,
+      "egress_per_gb": 0.09,
+      "observability_per_month": 0,
+      "observability_per_gb": 0.5,
+      "embedding_per_million_tokens": 0.18,
+      "email_per_1000": 1
+    },
+    "usage": {
+      "activated_rooms": {"value": 4, "source": "observed"},
+      "entries": {"value": 1515, "source": "observed"},
+      "retained_gb": {"value": 0.091, "source": "observed"},
+      "searches": {"value": 106, "source": "observed"},
+      "returning_participants": {"value": 1, "source": "observed"},
+      "egress_gb": {"value": 5, "source": "hypothetical"},
+      "observability_gb": {"value": 1, "source": "hypothetical"},
+      "embedding_tokens_per_search": {"value": 50, "source": "hypothetical"},
+      "emails": {"value": 7, "source": "observed"}
+    }
+  }
+}

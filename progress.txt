@@ -13222,3 +13222,9 @@ Production [REAL]: schema 138|f; safety dump db-backups/window/v132-pre-20261003
 Rollback (not needed): redeploy the old API FIRST (tree of 33208871 as a fast-forward + both webhooks), THEN migrate down 2 — the other order makes the new API's recorder fail on the dropped column (requests unaffected, events lost).
 UAT (from idx 79): choose an external uptime monitor for the public API; page someone on a /admin/ops/slo queue alarm or unmet target.
 Correction: the idx 24/67/94/95 entry above is stamped 13:40; it was written and committed at 13:19.
+
+2026-10-03 14:40 — Lane L finding F1 FIXED at the edge (owner, Cloudflare dashboard) — orchestrator verified
+Cause: Cloudflare Browser Integrity Check answered 403 "error code: 1010" (text/plain, server: cloudflare) to the Python-urllib User-Agent on api.solvr.dev and solvr.dev; aiohttp, httpx, requests, Go, curl and an empty UA were already 200 [MEASURED 14:30].
+Fix: Configuration Rule "agents: browser integrity check off", expression (http.host in {"api.solvr.dev" "solvr.dev"}), Browser Integrity Check = Off; the rest of the zone keeps the check.
+Verified [REAL 14:40]: Python-urllib/3.12 and python-requests -> 200 on /v1/overview, /v1/rooms/acceptance-1003-p67/entries, / and /skill.md; a real python3 urllib.request call -> 200 application/json.
+Still open (prompt lane): prompts read any 403 as "not admitted"; add that a non-JSON 403 comes from the edge, not admission.

@@ -28,11 +28,16 @@ type RegistrationRateLimitConfig struct {
 	SuspiciousThreshold int
 }
 
-// DefaultRegistrationRateLimitConfig returns the default configuration.
-// Per requirement: 5 registrations per IP per hour.
+// DefaultRegistrationsPerIPPerHour is how many agents one client IP may register in an hour.
+// Owner decision 2026-10-03 (spec.json idx 79): 20, so an 8-agent room set up from one
+// machine fits (idx 24). RATE_LIMIT_REGISTRATIONS_PER_IP_HOUR overrides it at startup.
+const DefaultRegistrationsPerIPPerHour = 20
+
+// DefaultRegistrationRateLimitConfig returns the default configuration:
+// DefaultRegistrationsPerIPPerHour registrations per IP per hour.
 func DefaultRegistrationRateLimitConfig() *RegistrationRateLimitConfig {
 	return &RegistrationRateLimitConfig{
-		MaxPerIP:            5,
+		MaxPerIP:            DefaultRegistrationsPerIPPerHour,
 		Window:              time.Hour,
 		LogPrefix:           "registration",
 		SuspiciousThreshold: 10,

@@ -496,9 +496,9 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 
 	// v1 API routes
 	r.Route("/v1", func(r chi.Router) {
-		// Agent self-registration (no auth required)
+		// Agent self-registration (no auth required), limited per client IP (idx 79)
 		// Per AGENT-ONBOARDING requirement: POST /v1/agents/register
-		r.Post("/agents/register", agentsHandler.RegisterAgent)
+		r.With(registrationRateLimit()).Post("/agents/register", agentsHandler.RegisterAgent)
 
 		// Agent claim endpoints (API-CRITICAL requirement)
 		// POST /v1/agents/me/claim - agent generates claim URL (requires API key auth)

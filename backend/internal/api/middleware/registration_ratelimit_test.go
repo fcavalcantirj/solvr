@@ -286,8 +286,10 @@ func TestRegistrationRateLimiter_XForwardedFor(t *testing.T) {
 func TestRegistrationRateLimiter_DefaultConfig(t *testing.T) {
 	config := DefaultRegistrationRateLimitConfig()
 
-	if config.MaxPerIP != 5 {
-		t.Errorf("expected MaxPerIP 5, got %d", config.MaxPerIP)
+	// Owner decision 2026-10-03 (idx 79): 20 per IP per hour, so an 8-agent room set up from
+	// one machine fits (idx 24). Was 5 while the limiter was not mounted on any route.
+	if config.MaxPerIP != 20 || DefaultRegistrationsPerIPPerHour != 20 {
+		t.Errorf("expected MaxPerIP 20, got %d (constant %d)", config.MaxPerIP, DefaultRegistrationsPerIPPerHour)
 	}
 	if config.Window != time.Hour {
 		t.Errorf("expected Window 1 hour, got %v", config.Window)

@@ -199,6 +199,7 @@ are LAPTOP times.
 | `restore-drill.sh` at schema 139, before 000140; every schema since 000122 has these triggers | **FAIL** | dump 1.8 s, 13.2 MB (`-Fc`); restore 2.6 s, `pg_restore` exit 1 with 2 errors. Version, every row count and all 11 sequences identical. **Missing after restore: `posts.posts_search_document_stale`, `replies.replies_search_document_stale`** |
 | the same at schema 140 (000140 applied) | **PASS** | dump 1.7 s, 13.2 MB; restore 2.5 s, exit 0; every row count, sequence and all 1,428 objects identical. The 38 text-diff lines are only re-parsed `IN (…)` check and partial-index expressions (`ANY ((ARRAY[…])::text[])` comes back as `ANY (ARRAY[(…)::text])`), which are equivalent |
 | `migration-recovery-drill.sh solvr_o_load 3`: down 139, 138, 137, then up | **PASS** | down 0.74 s, up 1.38 s; back at 139 clean. Schema dump identical (6,371 lines); every table's row count identical; `rollback_archive` 0 rows |
+| the same at head 140: down 140, 139, 138, then up | **PASS** | down 0.58 s, up 0.80 s; back at 140 clean; schema and every row count identical; `rollback_archive` 0 rows |
 
 What the down step does to data, so a rollback is chosen knowingly:
 - `000138.down` moves the legacy tables back from `legacy_archive` (exact, checked against its

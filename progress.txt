@@ -12911,3 +12911,116 @@ UAT (for when idx 78 closes, not now): unchanged from slice 32.
 
 git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged (idx 78
   passes stays false).
+
+2026-10-02 23:25 — Task idx 78 (spec.json, category functional) — IN PROGRESS, passes STAYS false
+"Keep SDKs, CLI, MCP, skills, and webhooks consistent with the redesigned product"
+SLICE 34 (REMAINING item "34."): re-check every step of idx 78 against slices 1-33, decide whether it can close.
+DECISION: it CANNOT close yet. Step 5 still has a real gap. This slice fixes the first part of it: the skill
+solvr.dev serves as a download (solvr-skill.zip) was the 2026-07 skill 3.7.16, which offers every removed 3.x
+choice. It is now 4.0.0, built from skill/, and a test holds every served copy to its source.
+================================================================================
+
+TASK SELECTION [REAL, spec.json + progress.txt read this session]: false tasks 24, 67, 68, 78-92, 94, 95. OWNER NOTE
+  2026-10-02 22:00: the loop works ONLY idx 78, then idx 79. Continued from slice 33 (HEAD 16de369f). Tree clean at
+  start.
+
+STEP AUDIT (journal entries of slices 1-33 re-read; code facts below re-checked by reading the code this session):
+  1 "contract-test SDKs, CLI, mcp-server, /v1/mcp, skills against the same OpenAPI examples": slices 1-11 (13
+    operations), 32 (15 operations incl. listRoomMembers/addRoomMember), 33. All 8 consumers green in slice 32.
+    Covered.
+  2 "room create/join/read/send/watch, post search/create, reply operations; consistent names, errors, cursors,
+    credential scopes": slices 1-11 (operationId names, APIError code/message/request_id, meta.next_cursor, room
+    token vs API key). Covered.
+  3 "default HTTP prompt usable without the integrations": slice 12. Covered.
+  4 "webhook and notification events; canonical ids, schema versions, delivery IDs, retry without duplicates":
+    slices 13-16. [REAL code read] models/notification.go NotificationSchemaVersions {1, 2};
+    models/webhook_delivery.go schema_version + delivery ID (X-Solvr-Delivery-ID) the same on every attempt;
+    db/webhooks.go, db/webhook_deliveries.go, api/router_webhooks.go, openapi_webhook_paths.go. Covered.
+  5 "versioned migration notes and deprecation errors; remove legacy problem/idea/answer choices from first-party
+    clients": slices 17-21 (SDKs, both CLIs, both MCP surfaces, skill 4.0.0 refuse every removed choice before
+    any request, with versioned notes). GAPS found this session:
+    a) [REAL] frontend/public/solvr-skill.zip (the /skill page's "Download" link, skill-hero.tsx:58 and
+       skill-install.tsx:73) held skill 3.7.16 (unzip -p skill.json: "3.7.16", last changed in c03734ae,
+       2026-07-06), without solvr-rooms.sh/solvr-migrating.sh. FIXED in this slice (below).
+    b) [REAL, grep] legacy PROSE still steers agents to removed choices: skill/SKILL.md lines 22, 100, 112, 119
+       ("start an approach", "POST APPROACH", "Post the approach BEFORE you start"), skill/HEARTBEAT.md (lines
+       175-176 `GET /v1/search?type=question&status=open` / `type=problem&status=stuck`, the approach-status
+       sections 90-102, 123, 164, 209-237), scripts/install-solvr-skill.sh:52 banner ("Post your approach BEFORE
+       starting", copied to frontend/public/install.sh), frontend/components/skill/skill-preview.tsx:14,31,38 and
+       skill-hero.tsx:38,102 ("POST APPROACH", "Post approach"). The 4.0.0 skill refuses `approach`, so these
+       name a choice the client no longer has. NOT fixed here (next slice).
+  6 "external consumer against a clean new schema plus an upgraded schema": slice 22 (contract/consumer, its own
+    Go module over the Go SDK; TestExternalConsumer_CleanSchema/UpgradedSchema; members phase in slice 24).
+    Covered.
+  7 "participants, roles, invitations, recipient references as collections; each first-party integration adds and
+    works with a third and subsequent agent": slices 23-31 (every one of the 8 integrations, real-API smokes with
+    a third and fourth agent in the same room), 32-33. "Invitations": no invitation object exists ([REAL grep]
+    the only "invit" in backend/internal is connect.go's prompt prose and the add_agent control); admission is
+    POST members or the open-room handshake. Covered.
+  Web composer (not an idx 78 client, checked for step 5): [REAL code read] /posts/new renders PostComposer with
+    no type choice; middleware.ts redirects /new, /problems*, /ideas*, /questions* to /posts*.
+
+DESIGN (fix a):
+  - sync-skill.sh copies skill/SKILL.md over frontend/public/skill.md, so running it as the tree stood would have
+    restored the old positioning text (HANDOVER 2026-09-29 anti-abuse: "Don't restore the old skill text"). The
+    two files differed ONLY on lines 3 (frontmatter description) and 9 (diff: "3c3", "9c9"); skill/SKILL.md now
+    carries the public text (the owner's 3bb120de positioning), so the sync leaves the public skill.md as it is
+    and only rebuilds the zip. The installer downloads skill/SKILL.md from GitHub raw main, so after a push
+    installed skills get the same text solvr.dev/skill.md serves.
+  - The test lives in skill/scripts/test_migration.sh (it already checks sync-skill.sh's zip list): section 8
+    compares the six copies sync-skill.sh publishes (skill.md, heartbeat.md, skill.json, references/api.md,
+    references/examples.md, install.sh) with their sources, unzips solvr-skill.zip and requires exactly the files
+    sync-skill.sh zips, each byte-identical, and runs the zipped solvr.sh `version` (= skill.json's version).
+
+WHAT CHANGED [REAL, git status --porcelain: 3 files M, none new; git diff --stat: 29+/2-]:
+  PRODUCTION / SERVED ASSETS:
+  M skill/SKILL.md (+2/-2): lines 3 and 9 = the text frontend/public/skill.md already served.
+  M frontend/public/solvr-skill.zip (52207 -> 66481 bytes): rebuilt by `bash scripts/sync-skill.sh` (exit 0); now 10
+    files, skill.json 4.0.0. The script's other copies were already identical (git status shows no other public
+    file changed).
+  TESTS:
+  M skill/scripts/test_migration.sh (+27): section 8 above (now 281 lines).
+
+TESTS FIRST [logs /tmp/solvr_idx78_s34/tdd/; no database needed: these tests are offline]:
+  [TEST] RED (red.log, `bash skill/scripts/test_migration.sh`): exit 1, Passed 115 Failed 12, every failure in
+    section 8: "frontend/public/skill.md is skill/SKILL.md" (3c3); "solvr-skill.zip holds exactly the files
+    sync-skill.sh zips" (zip lacked scripts/solvr-migrating.sh and scripts/solvr-rooms.sh); 9 of the 10 zipped
+    files differ from their source (LICENSE the same); "the skill solvr-skill.zip serves prints its version" ->
+    "exit 1: Error: Unknown command: version". The five other public copies PASS (already in sync).
+  [TEST] GREEN (green_*.log): test_migration 127/0; test.sh "All tests passed!" (0 failed); test_contract 51/0;
+    test_members 22/0; test_room_credentials 13/0; test_canonical_posts 55/0.
+  [TEST] MUTATION (mut_extra.log): a stale entry added to the zip (scripts/test.sh) -> exit 1, only "holds exactly
+    the files sync-skill.sh zips" FAILS; zip restored, `shasum -c` OK.
+  [TEST] backend docs tests that read skill/SKILL.md and frontend/public/skill.md (published.log,
+    `go test -count=1 -v -run TestPublished ./internal/api/`): 10 PASS, 0 FAIL/SKIP, ok.
+
+OTHER CHECKS [this session]:
+  [REAL] ./scripts/check-file-size.sh: "Found 32 file(s) exceeding 800 lines" (same as slices 17-33); no file of
+    this slice is scanned. grep: no frontend test reads solvr-skill.zip or public/skill.md.
+  Not run: full backend suite (no Go file changed; the Go tests that read the changed files ran above); SDK, CLI and
+    mcp-server suites (none of their files changed; the fixture is unchanged); frontend suite (no frontend source
+    changed, only the static zip); golangci-lint.
+
+FINDINGS, NOT FIXED:
+  - Gap 5b above (legacy prose in SKILL.md, HEARTBEAT.md, the installer banner, references/api.md's search
+    type/status, the /skill page preview and hero).
+  - Slices 6-33 findings stand: members list owner-only (owner call); host backstop commit message; the owner's
+    participant row answers added_by "system"; MCP versions not bumped for the member tools (owner call); the
+    skill's dashed adapter commands `room-members`/`room-add-member` (owner call); solvr.sh over 800 lines (not
+    CI-scanned); skill search output prints migrated posts' type badges (the API's field); sdk-python .venv lacks
+    types-requests; the shared Postgres (max_connections 100) is exhausted when full backend runs overlap the lanes.
+
+REMAINING FOR idx 78 (next slices, in order):
+  35. gap 5b, test-first: the skill's docs (SKILL.md, HEARTBEAT.md, references/api.md), the installer banner and
+    the /skill page (skill-preview.tsx, skill-hero.tsx) stop naming approach/answer/typed-search choices outside
+    the "Migrating from 3.x" notes; re-run sync-skill.sh so the public copies and the zip follow.
+  36. closing slice: re-run every consumer suite and the full backend at that HEAD (fresh DB), then close with the
+    UAT lines below if all green.
+
+UAT (for when idx 78 closes, not now): as slice 32/33 (push + deploy so solvr.dev serves skill 4.0.0 including
+  this zip, decide the version numbers, deploy the API so production /v1/openapi.json and /v1/mcp serve the member
+  examples and tools, publish @solvr/cli and @solvr/mcp-server, release the Go CLI); owner calls: members list
+  visibility, adapter-command retirement. The zip regeneration is no longer an owner item: it is done here.
+
+git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged (idx 78
+  passes stays false).

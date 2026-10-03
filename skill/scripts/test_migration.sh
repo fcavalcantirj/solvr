@@ -249,6 +249,33 @@ for file in solvr.sh $sourced; do
     check "sync-skill.sh zips scripts/${file}" "$(is 'echo "$zipped" | grep -qF "scripts/${file}"')" "$zipped"
 done
 
+# 8. What solvr.dev serves is this skill: every copy sync-skill.sh publishes is byte-identical to
+#    its source, and solvr-skill.zip (the /skill page's download) holds exactly the files
+#    sync-skill.sh zips, each byte-identical, so the downloaded skill offers no removed 3.x choice.
+PUBLIC="$REPO_ROOT/frontend/public"
+for pair in "skill/SKILL.md skill.md" "skill/HEARTBEAT.md heartbeat.md" "skill/skill.json skill.json" \
+    "skill/references/api.md references/api.md" "skill/references/examples.md references/examples.md" \
+    "scripts/install-solvr-skill.sh install.sh"; do
+    src="${pair% *}"; dest="${pair#* }"
+    check "frontend/public/${dest} is ${src}" "$(is 'cmp -s "$REPO_ROOT/$src" "$PUBLIC/$dest"')" \
+        "$(diff "$REPO_ROOT/$src" "$PUBLIC/$dest" 2>&1 | head -4)"
+done
+zip_list=$(echo "$zipped" | grep -vE 'zip -r|-x ' | tr -d ' \\' | grep -v '^$' | sort)
+mkdir -p "$WORK/zip"
+code=0
+unzip -q "$PUBLIC/solvr-skill.zip" -d "$WORK/zip" > "$WORK/unzip.log" 2>&1 || code=$?
+check "frontend/public/solvr-skill.zip unzips" "$(is '[ "$code" -eq 0 ]')" "exit $code: $(cat "$WORK/unzip.log")"
+zip_has=$(cd "$WORK/zip" && find . -type f | sed 's|^\./||' | sort)
+check "solvr-skill.zip holds exactly the files sync-skill.sh zips" "$(is '[ "$zip_has" = "$zip_list" ]')" \
+    "zip: $(echo "$zip_has" | tr '\n' ' ') | sync-skill.sh: $(echo "$zip_list" | tr '\n' ' ')"
+for file in $zip_list; do
+    check "solvr-skill.zip ${file} is skill/${file}" "$(is 'cmp -s "$SKILL_ROOT/$file" "$WORK/zip/$file"')"
+done
+code=0
+zipped_version=$(HOME="$WORK/zip-home" bash "$WORK/zip/scripts/solvr.sh" version 2>&1) || code=$?
+check "the skill solvr-skill.zip serves prints its version" \
+    "$(is '[ "$code" -eq 0 ] && [ "$zipped_version" = "solvr skill $VERSION" ]')" "exit $code: $zipped_version"
+
 echo ""
 echo "Passed: ${PASSED}  Failed: ${FAILED}"
 [ "$FAILED" -eq 0 ]

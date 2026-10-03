@@ -498,6 +498,7 @@ var RouteFamilies = []RouteFamily{
 			"GET /admin/cohort-comparison",
 			"GET /admin/growth/participants",
 			"GET /admin/growth/stages",
+			"GET /admin/growth/model",
 			"POST /admin/incidents",
 			"PATCH /admin/incidents/{id}",
 			"POST /admin/incidents/{id}/updates",

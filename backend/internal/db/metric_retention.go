@@ -88,6 +88,8 @@ var RawEventSources = []RawEventSource{
 				"operator trending and zero-result terms over any days the caller asks", AllHistory},
 			{"ParticipantActivityRepository.Measure",
 				"operator monthly active participants: searches by identity, anonymous and monitoring searches", 2 * ParticipantWindow},
+			{"AcquisitionModelRepository.MonthlyFlows",
+				"operator acquisition model: monthly retained/new/reactivated searchers and cohorts over all history", AllHistory},
 		},
 	},
 	{
@@ -114,6 +116,8 @@ var RawEventSources = []RawEventSource{
 				"operator monthly active participants: room creators, anonymous flows and activations", 2 * ParticipantWindow},
 			{"GrowthStageRepository.Measure",
 				"operator stage gates: weekly activated rooms, owners, workflows, 24h conversion, creator returns (an owner's first room ever)", AllHistory},
+			{"AcquisitionModelRepository.MonthlyFlows",
+				"operator acquisition model: monthly room creators and cohorts over all history", AllHistory},
 		},
 	},
 	{
@@ -124,6 +128,8 @@ var RawEventSources = []RawEventSource{
 			{"CanonicalPlatformBriefingRepository.GetTrendingNow", "briefing trending, views in the last 7 days", 7 * 24 * time.Hour},
 			{"ParticipantActivityRepository.Measure",
 				"operator monthly active participants: readers by identity and anonymous post views", 2 * ParticipantWindow},
+			{"AcquisitionModelRepository.MonthlyFlows",
+				"operator acquisition model: monthly retained/new/reactivated readers and cohorts over all history", AllHistory},
 		},
 	},
 	{
@@ -141,6 +147,8 @@ var RawEventSources = []RawEventSource{
 			{"RoomRepository", "a room's unique participant count", AllHistory},
 			{"ParticipantActivityRepository.Measure",
 				"operator monthly active participants: room message and event authors, active rooms", 2 * ParticipantWindow},
+			{"AcquisitionModelRepository.MonthlyFlows",
+				"operator acquisition model: monthly retained/new/reactivated room authors and cohorts over all history", AllHistory},
 		},
 	},
 	{

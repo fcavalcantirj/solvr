@@ -90,6 +90,11 @@ var OperatorReports = []OperatorReport{
 	},
 	{
 		Method:  http.MethodGet,
+		Path:    "/admin/growth/model",
+		Reports: "the monthly acquisition model: retained, new and reactivated participants, cohorts, scenarios, channels and the bottleneck",
+	},
+	{
+		Method:  http.MethodGet,
 		Path:    "/admin/email/history",
 		Reports: "what was sent to the mailing list, when, and how much of it landed",
 	},

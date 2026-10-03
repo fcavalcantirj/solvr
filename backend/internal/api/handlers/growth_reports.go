@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/growth"
@@ -13,6 +14,7 @@ import (
 //
 //	GET /admin/growth/participants?end=<RFC3339>  monthly active participants (spec.json idx 86)
 //	GET /admin/growth/stages?end=<RFC3339>        staged growth gates (spec.json idx 89)
+//	GET /admin/growth/model?month=YYYY-MM         the monthly acquisition model (spec.json idx 90)
 //
 // Each report is Solvr reporting about ITSELF — participant counts, traffic, the one-million
 // target — so it is operator analytics: the router gates it with RequireOperatorAccess, this
@@ -30,10 +32,16 @@ type StageReader interface {
 	Measure(ctx context.Context, end time.Time) (growth.StageMeasures, error)
 }
 
+// ModelReader reads observed monthly flows for the month starting at monthStart.
+type ModelReader interface {
+	MonthlyFlows(ctx context.Context, monthStart time.Time) (growth.MonthlyFlows, error)
+}
+
 // GrowthReaders are the measurements the growth reports read.
 type GrowthReaders struct {
 	Participants ParticipantReader
 	Stages       StageReader
+	Model        ModelReader
 }
 
 // GrowthReportsHandler serves the operator growth reports.
@@ -87,6 +95,53 @@ func (h *GrowthReportsHandler) GetStages(w http.ResponseWriter, r *http.Request)
 	writeActivationJSON(w, http.StatusOK, map[string]any{
 		"data": growth.EvaluateStages(m, participantTargetInputs(p)),
 	})
+}
+
+// GetModel handles GET /admin/growth/model?month=YYYY-MM: the monthly acquisition model — observed
+// flows per population, the worked arithmetic, hypothetical scenarios, the channel comparison and
+// the current bottleneck read from the stage gates at the month's end. month defaults to the last
+// complete calendar month (UTC).
+func (h *GrowthReportsHandler) GetModel(w http.ResponseWriter, r *http.Request) {
+	ApplyOperatorReportCachePolicy(w)
+	if !checkActivationAnalyticsAuth(w, r) {
+		return
+	}
+	month, ok := readReportMonth(w, r)
+	if !ok {
+		return
+	}
+	flows, err := h.readers.Model.MonthlyFlows(r.Context(), month)
+	if err != nil {
+		slog.Error("growth model report failed: flows", "error", err)
+		writeOperatorError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to compute the acquisition model")
+		return
+	}
+	stages, err := h.readers.Stages.Measure(r.Context(), month.AddDate(0, 1, 0))
+	if err != nil {
+		slog.Error("growth model report failed: stages", "error", err)
+		writeOperatorError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to compute the acquisition model")
+		return
+	}
+	writeActivationJSON(w, http.StatusOK, map[string]any{"data": growth.BuildModelReport(flows, stages)})
+}
+
+// reportMonthPattern is a calendar month, YYYY-MM.
+var reportMonthPattern = regexp.MustCompile(`^\d{4}-\d{2}$`)
+
+// readReportMonth reads ?month=YYYY-MM as the first instant of that month (UTC), defaulting to the
+// last complete month. It answers a malformed month itself.
+func readReportMonth(w http.ResponseWriter, r *http.Request) (time.Time, bool) {
+	raw := r.URL.Query().Get("month")
+	if raw == "" {
+		now := time.Now().UTC()
+		return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, -1, 0), true
+	}
+	month, err := time.Parse("2006-01", raw)
+	if !reportMonthPattern.MatchString(raw) || err != nil {
+		writeOperatorError(w, http.StatusBadRequest, "INVALID_MONTH", "month must be a calendar month, YYYY-MM")
+		return time.Time{}, false
+	}
+	return month.UTC(), true
 }
 
 // participantTargetInputs reduces participant measures to the identity sums a target reads.

@@ -21,6 +21,7 @@ import (
 var growthReportPaths = []string{
 	"/admin/growth/participants",
 	"/admin/growth/stages",
+	"/admin/growth/model",
 }
 
 func TestGrowthReports_AreRegisteredOperatorReports(t *testing.T) {

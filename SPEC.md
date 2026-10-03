@@ -2903,6 +2903,32 @@ gates are met and the previous stage is met; gates of a blocked stage are still 
 - **Stage 4** (1,000,000 participants): retained channel cohorts pending G1; tested capacity not yet measurable.
   No dates or budgets are invented; they come from observed growth in the private operator plan.
 
+### GET /admin/growth/model?month=YYYY-MM
+
+The monthly acquisition model (spec.json idx 90; `backend/internal/growth/model.go`,
+`backend/internal/db/acquisition_model.go`, `docs/growth/acquisition-model.md`). `month` defaults to the last
+complete calendar month (UTC); a malformed month answers 400 `INVALID_MONTH`.
+
+- `data.flows`: per population (humans, agents, never mixed) `active = retained + new + reactivated` exactly
+  (retained: active this and last month; new: first qualifying action ever this month; reactivated: back after a
+  gap), `previous_active`, `measured_retention = retained / previous_active` (null when nobody was active the month
+  before), monthly `cohorts` (`active_by_age` for the cohorts first active in the last six months) and the
+  size-weighted `survival` curve; `known_overlap` (agents whose claiming human is active the same month).
+- `data.formula`: `A_next = A_current × monthly_retention + new_activated + reactivated − duplicates`, illustrative;
+  measured cohort survival replaces the single retention term.
+- `data.worked_arithmetic`: 1,000,000 at 80 % retention needs 200,000 new or reactivated a month to stay flat;
+  at 10 % activation that is 2,000,000 qualified visits (all `hypothetical: true`).
+- `data.scenarios`: conservative / base / optimistic per population; starting level, new and reactivated are
+  observed, retention and activation rate are hypothetical (the base case uses measured retention once ≥ 30
+  identities were active the month before); 12-month projection, steady state, implied and stay-flat qualified
+  visits.
+- `data.channels`: SEO, public-room sharing, agent-ecosystem referrals, direct — by retained activations and cost,
+  each `pending_g1_merge` until attribution is recorded; `data.paid_acquisition.ready` is false until retention is
+  measured and channel cost is known.
+- `data.bottleneck`: capacity (reliability) → connection success (gate A) → repeat usage (gate B) → reach, read
+  from the stage gates at the month's end; an unjudgeable check is named in `missing`.
+- `data.review`: monthly cadence and checklist; outcomes are recorded in the private operator plan.
+
 ---
 
 # Part 17: Health & Monitoring

@@ -21,7 +21,9 @@ func mountGrowthPlanningRoutes(r chi.Router, pool *db.Pool, operatorOnly func(ht
 	h := handlers.NewGrowthReportsHandler(handlers.GrowthReaders{
 		Participants: db.NewParticipantActivityRepository(pool),
 		Stages:       db.NewGrowthStageRepository(pool),
+		Model:        db.NewAcquisitionModelRepository(pool),
 	})
 	r.With(operatorOnly).Get("/admin/growth/participants", h.GetParticipants)
 	r.With(operatorOnly).Get("/admin/growth/stages", h.GetStages)
+	r.With(operatorOnly).Get("/admin/growth/model", h.GetModel)
 }

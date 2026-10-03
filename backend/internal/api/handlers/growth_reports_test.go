@@ -151,3 +151,60 @@ func TestGrowthStages_RefusesWithoutTheOperatorKeyAndHidesFailures(t *testing.T)
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	assert.NotContains(t, rec.Body.String(), "stage boom")
 }
+
+// fakeModelReader returns canned monthly flows for the month starting at monthStart.
+type fakeModelReader struct {
+	gotMonth time.Time
+	flows    growth.MonthlyFlows
+	err      error
+}
+
+func (f *fakeModelReader) MonthlyFlows(_ context.Context, monthStart time.Time) (growth.MonthlyFlows, error) {
+	f.gotMonth = monthStart
+	f.flows.Start = monthStart
+	f.flows.End = monthStart.AddDate(0, 1, 0)
+	return f.flows, f.err
+}
+
+func TestGrowthModel_ServesTheMonthlyModelWithScenariosAndBottleneck(t *testing.T) {
+	t.Setenv("ADMIN_API_KEY", "op-key")
+	model := &fakeModelReader{flows: growth.MonthlyFlows{Month: "2026-08",
+		Humans: growth.PopulationFlows{Active: 300, Retained: 120, New: 150, Reactivated: 30, PreviousActive: 200},
+		Agents: growth.PopulationFlows{Active: 80, Retained: 40, New: 40, PreviousActive: 50},
+	}}
+	stages := &fakeStageReader{measures: growth.StageMeasures{CoreChecks: 100, CoreOperational: 100, GateAEligible: 10, GateAConverted: 9}}
+	h := NewGrowthReportsHandler(GrowthReaders{Participants: &fakeParticipantReader{}, Stages: stages, Model: model})
+
+	rec := growthRequest(t, h.GetModel, "/admin/growth/model?month=2026-08", map[string]string{OperatorAccessHeader: "op-key"})
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC), model.gotMonth)
+	assert.Equal(t, time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), stages.gotEnd, "the bottleneck reads the gates at the month's end")
+
+	var body struct {
+		Data growth.ModelReport `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Len(t, body.Data.Scenarios, 6, "three scenarios for humans and three for agents")
+	assert.InDelta(t, 2_000_000, body.Data.Arithmetic.QualifiedVisitsToStayFlat, 1e-6)
+	assert.Equal(t, growth.StatusNotYetMeasurable, body.Data.Bottleneck.Bottleneck, "gate A has 10 of 100 rooms")
+	assert.False(t, body.Data.PaidAcquisition.Ready)
+	assert.Equal(t, "monthly", body.Data.Review.Cadence)
+}
+
+func TestGrowthModel_DefaultsToTheLastCompleteMonthAndRejectsABadMonth(t *testing.T) {
+	t.Setenv("ADMIN_API_KEY", "op-key")
+	model := &fakeModelReader{}
+	h := NewGrowthReportsHandler(GrowthReaders{Participants: &fakeParticipantReader{}, Stages: &fakeStageReader{}, Model: model})
+
+	rec := growthRequest(t, h.GetModel, "/admin/growth/model", map[string]string{OperatorAccessHeader: "op-key"})
+	require.Equal(t, http.StatusOK, rec.Code)
+	now := time.Now().UTC()
+	want := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, -1, 0)
+	assert.Equal(t, want, model.gotMonth)
+
+	for _, bad := range []string{"2026-13", "August", "2026-8-1"} {
+		rec = growthRequest(t, h.GetModel, "/admin/growth/model?month="+bad, map[string]string{OperatorAccessHeader: "op-key"})
+		assert.Equal(t, http.StatusBadRequest, rec.Code, bad)
+	}
+	assert.Equal(t, http.StatusUnauthorized, growthRequest(t, h.GetModel, "/admin/growth/model", nil).Code)
+}

@@ -171,20 +171,24 @@ export interface APIOverviewRoomPreview {
   participants: APIOverviewPreviewParticipant[];
   participant_count: number;
   more_participants_label?: string;
-  exchange: APIOverviewPreviewMessage[];
+  /** What the room set out to do (SPEC Part 26, "Featured rooms"). */
+  ask?: APIOverviewPreviewMessage;
+  /** What came out of it; absent for a room with a single message. */
+  outcome?: APIOverviewPreviewMessage;
   message_count: number;
   message_count_label: string;
   last_activity_label: string;
   live_agent_count: number;
-  selected_reason: string;
 }
 
+/** The operator's featured rooms; absent from the overview when none is shown. */
 export interface APIOverviewPreviews {
   heading: string;
   intro: string;
   note: string;
+  ask_label: string;
+  outcome_label: string;
   rooms: APIOverviewRoomPreview[];
-  empty_note: string;
 }
 
 export interface APIOverviewEndpoint {
@@ -365,7 +369,7 @@ export interface APIHomepageOverview {
   hero_numbers: APIHeroNumber[];
   rooms: APIOverviewRooms;
   activity: APIOverviewActivity;
-  previews: APIOverviewPreviews;
+  previews?: APIOverviewPreviews;
   api_usage: APIOverviewAPIUsage;
   search: APIOverviewSearch;
   community: APIOverviewCommunity;

@@ -56,6 +56,15 @@ describe('LiveOverview layout', () => {
     ]);
   });
 
+  it('shows no featured rooms section when the API features none', () => {
+    // An empty pool omits previews from GET /v1/overview (SPEC Part 26): no
+    // empty box, no apology, the page simply moves on.
+    state = { ...state, overview: { ...OVERVIEW, previews: undefined } };
+    renderOverview();
+    expect(screen.queryByTestId('overview-section-previews')).not.toBeInTheDocument();
+    expect(screen.getByTestId('overview-section-activity')).toBeInTheDocument();
+  });
+
   it('ends on the connection control', () => {
     renderOverview();
     const sections = screen.getAllByTestId(/^overview-section-/);

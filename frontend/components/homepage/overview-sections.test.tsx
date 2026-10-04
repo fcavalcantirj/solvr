@@ -30,121 +30,90 @@ const SECTION_FILES = [
 ];
 
 describe('RoomPreviewsSection', () => {
-  it('renders each selected room with purpose, participants and the exchange', () => {
-    render(<RoomPreviewsSection data={OVERVIEW.previews} />);
-    const preview = OVERVIEW.previews.rooms[0];
+  // The operator's featured rooms (SPEC Part 26): each one is quoted by what it
+  // set out to do and what came out of it, one full-width row per room.
+  const PREVIEWS = OVERVIEW.previews!;
 
-    expect(screen.getByText(preview.display_name)).toBeInTheDocument();
-    expect(screen.getByText(preview.purpose)).toBeInTheDocument();
-    expect(screen.getByText(preview.last_activity_label)).toBeInTheDocument();
-    expect(screen.getByText(preview.message_count_label)).toBeInTheDocument();
+  it('renders each featured room as a full-width row: name, purpose, participants, ask and outcome', () => {
+    render(<RoomPreviewsSection data={PREVIEWS} />);
+    const rows = screen.getAllByTestId('featured-room');
+    expect(rows).toHaveLength(PREVIEWS.rooms.length);
 
-    for (const p of preview.participants) {
-      expect(screen.getByText(p.name)).toBeInTheDocument();
-      expect(screen.getByText(p.message_label)).toBeInTheDocument();
-    }
-    for (const m of preview.exchange) {
-      expect(screen.getByText(m.excerpt)).toBeInTheDocument();
-    }
-    expect(screen.getByRole('link', { name: /Tic-Tac-Toe/ })).toHaveAttribute(
-      'href',
-      preview.url,
-    );
+    PREVIEWS.rooms.forEach((room, i) => {
+      const row = within(rows[i]);
+      expect(row.getByRole('link', { name: new RegExp(room.display_name) })).toHaveAttribute('href', room.url);
+      expect(row.getByText(room.purpose)).toBeInTheDocument();
+      expect(row.getByText(room.message_count_label)).toBeInTheDocument();
+      expect(row.getByText(room.last_activity_label)).toBeInTheDocument();
+      for (const p of room.participants) {
+        expect(row.getByText(p.name)).toBeInTheDocument();
+      }
+      expect(row.getByText(room.ask!.excerpt)).toBeInTheDocument();
+      expect(row.getByText(room.outcome!.excerpt)).toBeInTheDocument();
+    });
   });
 
-  it('says why a room is here, so nobody reads it as a ranking', () => {
-    render(<RoomPreviewsSection data={OVERVIEW.previews} />);
-    expect(screen.getByText(OVERVIEW.previews.rooms[0].selected_reason)).toBeInTheDocument();
-    expect(screen.getByText(OVERVIEW.previews.note)).toBeInTheDocument();
+  it('captions the two quotes with the words the API sends', () => {
+    render(<RoomPreviewsSection data={PREVIEWS} />);
+    expect(screen.getAllByText(PREVIEWS.ask_label)).toHaveLength(PREVIEWS.rooms.length);
+    expect(screen.getAllByText(PREVIEWS.outcome_label)).toHaveLength(PREVIEWS.rooms.length);
+    expect(screen.getByText(PREVIEWS.note)).toBeInTheDocument();
   });
 
-  it('labels an excerpt with the API note and links back to the message', () => {
-    render(<RoomPreviewsSection data={OVERVIEW.previews} />);
-    const excerpted = OVERVIEW.previews.rooms[0].exchange[1];
-    expect(screen.getByText(excerpted.excerpt_note!)).toBeInTheDocument();
-    const links = screen
-      .getAllByRole('link')
-      .map((a) => a.getAttribute('href'));
-    expect(links).toContain(excerpted.message_url);
+  it('labels an excerpt with the API note and links each quote back to its message', () => {
+    render(<RoomPreviewsSection data={PREVIEWS} />);
+    const outcome = PREVIEWS.rooms[0].outcome!;
+    expect(screen.getByText(outcome.excerpt_note!)).toBeInTheDocument();
+    const links = screen.getAllByRole('link').map((a) => a.getAttribute('href'));
+    expect(links).toContain(outcome.message_url);
+    expect(links).toContain(PREVIEWS.rooms[0].ask!.message_url);
   });
 
-  it('renders the API empty note when no room is selected', () => {
-    render(<RoomPreviewsSection data={{ ...OVERVIEW.previews, rooms: [] }} />);
-    expect(screen.getByText(OVERVIEW.previews.empty_note)).toBeInTheDocument();
+  it('shows only the ask for a room that has no outcome yet', () => {
+    const single = { ...PREVIEWS, rooms: [{ ...PREVIEWS.rooms[0], outcome: undefined }] };
+    render(<RoomPreviewsSection data={single} />);
+    expect(screen.getByText(PREVIEWS.ask_label)).toBeInTheDocument();
+    expect(screen.queryByText(PREVIEWS.outcome_label)).not.toBeInTheDocument();
   });
 
-  it('degrades cleanly when a selected room has no purpose, participants or exchange', () => {
+  it('degrades cleanly when a featured room has no purpose, participants or quotes', () => {
     const bare = {
-      ...OVERVIEW.previews,
-      rooms: [
-        {
-          ...OVERVIEW.previews.rooms[0],
-          purpose: '',
-          participants: [],
-          exchange: [],
-        },
-      ],
+      ...PREVIEWS,
+      rooms: [{ ...PREVIEWS.rooms[0], purpose: '', participants: [], ask: undefined, outcome: undefined }],
     };
     render(<RoomPreviewsSection data={bare} />);
-
-    // The room is still named, still linked, and still says why it is here.
-    expect(screen.getByText(bare.rooms[0].display_name)).toBeInTheDocument();
-    expect(screen.getByText(bare.rooms[0].selected_reason)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: new RegExp(bare.rooms[0].display_name) })).toBeInTheDocument();
     expect(screen.getByText(bare.rooms[0].message_count_label)).toBeInTheDocument();
-    // And nothing is invented to fill the gaps.
-    expect(screen.queryByText(OVERVIEW.previews.rooms[0].purpose)).not.toBeInTheDocument();
+    // Nothing is invented to fill the gaps.
+    expect(screen.queryByText(PREVIEWS.rooms[0].purpose)).not.toBeInTheDocument();
+    expect(screen.queryByText(PREVIEWS.ask_label)).not.toBeInTheDocument();
   });
 
   it('omits the message link when the API sent no anchor for it', () => {
     const anchorless = {
-      ...OVERVIEW.previews,
+      ...PREVIEWS,
       rooms: [
         {
-          ...OVERVIEW.previews.rooms[0],
-          exchange: [
-            {
-              author: 'planner',
-              author_role: 'agent',
-              excerpt: 'no anchor for this one',
-              is_excerpt: false,
-            },
-          ],
+          ...PREVIEWS.rooms[0],
+          ask: { author: 'planner', author_role: 'agent', excerpt: 'no anchor for this one', is_excerpt: false },
+          outcome: undefined,
         },
       ],
     };
     render(<RoomPreviewsSection data={anchorless} />);
     expect(screen.getByText('no anchor for this one')).toBeInTheDocument();
-    expect(
-      screen.queryByRole('link', { name: /Open the original message/ }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Open the original message/ })).not.toBeInTheDocument();
   });
 
   it('says how many participants the bounded name list leaves out, as the API words it', () => {
     const crowded = {
-      ...OVERVIEW.previews,
-      rooms: [
-        {
-          ...OVERVIEW.previews.rooms[0],
-          participant_count: 20,
-          more_participants_label: '+18 more participants',
-        },
-      ],
+      ...PREVIEWS,
+      rooms: [{ ...PREVIEWS.rooms[0], participant_count: 20, more_participants_label: '+18 more participants' }],
     };
     render(<RoomPreviewsSection data={crowded} />);
     expect(screen.getByText('+18 more participants')).toBeInTheDocument();
   });
-
-  it('adds nothing when every participant is already listed', () => {
-    render(<RoomPreviewsSection data={OVERVIEW.previews} />);
-    expect(screen.queryByText(/more participant/)).not.toBeInTheDocument();
-  });
 });
-
-// ApiUsageSection grew a window selector, a series and its own measurement at
-// the API boundary; its tests live beside it in api-usage-section.test.tsx.
-
-// SearchStatsSection grew a window selector, a chart and its own publishing
-// policy; its tests live beside it in search-stats-section.test.tsx.
 
 describe('CommunityTotalsSection', () => {
   it('renders the all-time totals with the window spelled out', () => {

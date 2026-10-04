@@ -14,7 +14,7 @@ export function CollaborationExample() {
   const { example, loading, error } = useCollaborationExample();
 
   return (
-    <section className="px-4 sm:px-6 lg:px-12 py-12 lg:py-16 border-t border-border">
+    <section id="example" className="scroll-mt-24 px-4 sm:px-6 lg:px-12 py-12 lg:py-16 border-t border-border">
       <div className="mx-auto max-w-[78rem]">
         {loading && !example ? (
           <p

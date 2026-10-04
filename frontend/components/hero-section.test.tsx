@@ -1,5 +1,5 @@
 import { render, screen, within, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { HeroSection } from './hero-section';
@@ -12,7 +12,6 @@ const SUPPORTING =
   'Two agents or a whole team. Paste a prompt into each. They share a Solvr room to plan, build, and review. No human signup or installation needed.';
 // The hero's right column: the numbers GET /v1/overview chose, rendered as sent.
 const HERO_NUMBERS = OVERVIEW.hero_numbers;
-const EXAMPLE_ROOM = '/rooms/tictactoe-human-vs-computer-20260920';
 
 // The hero must not be gated on the auth state: task 2 shipped a header whose
 // primary action was invisible until useAuth resolved. Mocked here so that a
@@ -97,10 +96,13 @@ describe('HeroSection calls to action', () => {
     expect(heading.compareDocumentPosition(panel) & 4).toBeTruthy();
   });
 
-  it('makes Watch an example the secondary action on the public example room', () => {
+  it('makes Watch an example the secondary action, jumping to the example on this page', () => {
     render(<HeroSection />);
     const cta = screen.getByRole('link', { name: 'Watch an example' });
-    expect(cta).toHaveAttribute('href', EXAMPLE_ROOM);
+    // The homepage example section (GET /v1/homepage/example) is the proof and
+    // carries its own room link when a live room exists; a slug in the client
+    // 404s the day that room goes.
+    expect(cta).toHaveAttribute('href', '#example');
     // Quiet outline, not a second filled button competing with Connect.
     expect(cta.className).toContain('border');
     // hover:bg-foreground is fine; an unconditional fill is not.
@@ -133,6 +135,12 @@ describe('HeroSection calls to action', () => {
       expect(screen.getByRole('button', { name: /Connect agents now/i })).toBeInTheDocument();
       unmount();
     }
+  });
+
+  it('names no room of its own', () => {
+    const src = read('components/hero-section.tsx');
+    expect(src).not.toContain('tictactoe');
+    expect(src).not.toContain('/rooms/');
   });
 
   it('does not read the auth state at all', () => {
@@ -249,5 +257,54 @@ describe('homepage speed claims', () => {
       .map((line, i) => [i + 1, line] as const)
       .filter(([, line]) => UNSUPPORTED.test(line));
     expect(offending.map(([n, l]) => `${n}: ${l.trim()}`)).toEqual([]);
+  });
+});
+
+describe('HeroSection — the panel it opens comes into view', () => {
+  // Measured on the build: the panel opened 816px down a 900px window (and
+  // fully below the fold on a phone), so a click looked like nothing happened.
+  const scrollIntoView = vi.fn();
+  const original = Element.prototype.scrollIntoView;
+
+  beforeEach(() => {
+    scrollIntoView.mockClear();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    window.matchMedia = vi.fn().mockReturnValue({ matches: false }) as unknown as typeof window.matchMedia;
+  });
+
+  afterEach(() => {
+    Element.prototype.scrollIntoView = original;
+  });
+
+  it('scrolls the opened panel to the top of the window, clear of the fixed header', () => {
+    render(<HeroSection />);
+    fireEvent.click(screen.getByRole('button', { name: /Connect agents now/i }));
+    const panel = document.getElementById('hero-connect-panel');
+    expect(panel).not.toBeNull();
+    expect(panel!.className).toContain('scroll-mt-24');
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(scrollIntoView.mock.contexts[0]).toBe(panel);
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'smooth' });
+  });
+
+  it('moves focus to the panel without a second jump', () => {
+    render(<HeroSection />);
+    fireEvent.click(screen.getByRole('button', { name: /Connect agents now/i }));
+    expect(document.activeElement).toBe(document.getElementById('hero-connect-panel'));
+  });
+
+  it('jumps without animation when the visitor asks for reduced motion', () => {
+    window.matchMedia = vi.fn().mockReturnValue({ matches: true }) as unknown as typeof window.matchMedia;
+    render(<HeroSection />);
+    fireEvent.click(screen.getByRole('button', { name: /Connect agents now/i }));
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'auto' });
+  });
+
+  it('does not scroll when the panel closes', () => {
+    render(<HeroSection />);
+    const cta = screen.getByRole('button', { name: /Connect agents now/i });
+    fireEvent.click(cta);
+    fireEvent.click(cta);
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
   });
 });

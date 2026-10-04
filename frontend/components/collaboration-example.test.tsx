@@ -204,6 +204,14 @@ describe('CollaborationExample — the real transcript', () => {
     expect(screen.getByTestId('collab-room-link').getAttribute('href')).toBe(REAL.room_url);
   });
 
+  it('is the section the hero\'s Watch an example jumps to', () => {
+    const { container } = render(<CollaborationExample />);
+    const section = container.querySelector('section#example');
+    expect(section).not.toBeNull();
+    // Clear of the fixed header when the page scrolls to it.
+    expect(section!.className).toContain('scroll-mt-24');
+  });
+
   it('offers Try this workflow pointing at the planner/executor preset', () => {
     render(<CollaborationExample />);
     const cta = screen.getByTestId('collab-connect-link');
@@ -231,6 +239,11 @@ describe('CollaborationExample — when the room is gone', () => {
     expect(screen.queryByTestId('collab-step-link')).toBeNull();
     expect(screen.queryByTestId('collab-room-link')).toBeNull();
     expect(screen.queryByText(/raphael_tictactoe/)).toBeNull();
+  });
+
+  it('is still there for Watch an example to land on', () => {
+    const { container } = render(<CollaborationExample />);
+    expect(container.querySelector('section#example')).not.toBeNull();
   });
 
   it('still explains all five beats', () => {

@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowRight } from "lucide-react";
-import Link from "next/link";
 
 import { ConnectPanel } from "@/components/connect/connect-panel";
 import type { APIHeroNumber } from "@/lib/api-types";
@@ -22,12 +21,25 @@ import type { APIHeroNumber } from "@/lib/api-types";
 // order sent, as sent. Without them (the overview could not be read) the column
 // is simply absent — the hero never shows a number of its own.
 //
-// The public collaboration the homepage points at. Task 5 builds the excerpt
-// preview from the same room; the link is the whole proof until then.
-const EXAMPLE_ROOM = "/rooms/tictactoe-human-vs-computer-20260920";
+// Watch an example jumps to the collaboration example further down this page
+// (GET /v1/homepage/example): the API picks the room, falls back to an
+// illustrative workflow, and adds the room's own link when one is live, so the
+// hero names no room and cannot 404 the day a room goes away.
 
 export function HeroSection({ heroNumbers }: { heroNumbers?: APIHeroNumber[] }) {
   const [panelOpen, setPanelOpen] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // The panel opens under the hero numbers, below the fold on most screens, so
+  // opening it brings it into view (clear of the fixed header) and moves focus
+  // there. Smooth unless the visitor asked for reduced motion.
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panelOpen || !panel) return;
+    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
+    panel.scrollIntoView?.({ block: "start", behavior: reduced ? "auto" : "smooth" });
+    panel.focus({ preventScroll: true });
+  }, [panelOpen]);
 
   return (
     <section className="px-4 sm:px-6 lg:px-12 pt-24 pb-14 lg:pt-28 lg:pb-20 max-w-[84rem] mx-auto">
@@ -59,12 +71,12 @@ export function HeroSection({ heroNumbers }: { heroNumbers?: APIHeroNumber[] }) 
                 className="group-hover:translate-x-1 transition-transform"
               />
             </button>
-            <Link
-              href={EXAMPLE_ROOM}
+            <a
+              href="#example"
               className="border border-foreground bg-transparent px-8 py-4 text-center font-mono text-[11px] uppercase tracking-[0.18em] transition-colors hover:bg-foreground hover:text-background focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
             >
               Watch an example
-            </Link>
+            </a>
           </div>
         </div>
 
@@ -97,7 +109,7 @@ export function HeroSection({ heroNumbers }: { heroNumbers?: APIHeroNumber[] }) 
       {/* The connection panel, in place: it pushes the index down rather than
           covering it, so nothing below is hidden behind an overlay. */}
       {panelOpen ? (
-        <div id="hero-connect-panel" className="mt-12">
+        <div id="hero-connect-panel" ref={panelRef} tabIndex={-1} className="mt-12 scroll-mt-24 focus:outline-none">
           <ConnectPanel variant="panel" />
         </div>
       ) : null}

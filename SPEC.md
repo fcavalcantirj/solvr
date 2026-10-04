@@ -3069,6 +3069,19 @@ Response: { "data": {
 - **Queue lag**: the age of the oldest pending webhook delivery whose next attempt is due; above 5
   minutes it is `alarm`, and the 5-minute OpsAlarmJob logs a WARN. Paging is UAT.
 
+### Status page (`GET /v1/status`)
+
+Public, no auth. It reads the same `service_checks` rows, only those of the core services (`ops.CoreServices`:
+api and database, the services the HealthCheckJob checks every 5 minutes). IPFS is not monitored: there is no node.
+
+- `overall_status` is the worst latest check among the core services.
+- Each service row carries its own 30-day `uptime` (its operational share of its checks) and its own 30-day
+  average `latency_ms` (null without a measured sample).
+- `summary.uptime_30d` is operational checks over all checks across the core services;
+  `summary.avg_response_time_ms` is their average latency weighted by sample count.
+- `uptime_history` gives one row per calendar day of the last 30 (today included, newest first); a day's
+  status is the worst core check of that day.
+
 ---
 
 # Appendix A: File Structure

@@ -39,8 +39,8 @@ const (
 	QueueLagAlarmThreshold = 5 * time.Minute
 )
 
-// CoreServices are the service_checks services core-API availability is made of.
-// ipfs is checked too but is not the core API: its outage is reported apart.
+// CoreServices are the service_checks services core-API availability is made of,
+// and the only services the HealthCheckJob checks (there is no IPFS node any more).
 var CoreServices = []string{"api", "database"}
 
 // Queue statuses.

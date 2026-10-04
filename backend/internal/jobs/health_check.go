@@ -6,13 +6,15 @@ import (
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
+	"github.com/fcavalcantirj/solvr/internal/ops"
 )
 
 // DefaultHealthCheckInterval is how often health checks run.
 const DefaultHealthCheckInterval = 5 * time.Minute
 
-// ServiceNames lists the services to check.
-var ServiceNames = []string{"api", "database", "ipfs"}
+// ServiceNames lists the services to check: the core services. There is no
+// IPFS node any more, so it is not checked.
+var ServiceNames = ops.CoreServices
 
 // HealthChecker performs a health check against a named service.
 type HealthChecker interface {

@@ -213,13 +213,8 @@ func main() {
 	// Start health check monitoring job if database is available
 	var healthCheckCancel context.CancelFunc
 	if pool != nil {
-		ipfsURL := os.Getenv("IPFS_API_URL")
-		if ipfsURL == "" {
-			ipfsURL = "http://localhost:5001"
-		}
 		checksRepo := db.NewServiceCheckRepository(pool)
-		ipfsChecker := services.NewKuboIPFSService(ipfsURL)
-		healthSvc := services.NewHealthCheckerService(pool, ipfsChecker)
+		healthSvc := services.NewHealthCheckerService(pool)
 		healthCheckJob := jobs.NewHealthCheckJob(healthSvc, checksRepo)
 		var healthCheckCtx context.Context
 		healthCheckCtx, healthCheckCancel = context.WithCancel(context.Background())

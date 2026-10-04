@@ -3,9 +3,11 @@ package jobs
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
+	"github.com/fcavalcantirj/solvr/internal/ops"
 )
 
 type mockHealthChecker struct {
@@ -46,7 +48,6 @@ func TestHealthCheckJob_RunOnce_AllOperational(t *testing.T) {
 		}{
 			"api":      {models.ServiceStatusOperational, 45, nil},
 			"database": {models.ServiceStatusOperational, 8, nil},
-			"ipfs":     {models.ServiceStatusOperational, 65, nil},
 		},
 	}
 	writer := &mockServiceCheckWriter{}
@@ -54,14 +55,19 @@ func TestHealthCheckJob_RunOnce_AllOperational(t *testing.T) {
 	job := NewHealthCheckJob(checker, writer)
 	checked, failed := job.RunOnce(context.Background())
 
-	if checked != 3 {
-		t.Errorf("expected 3 checked, got %d", checked)
+	if checked != 2 {
+		t.Errorf("expected 2 checked, got %d", checked)
 	}
 	if failed != 0 {
 		t.Errorf("expected 0 failed, got %d", failed)
 	}
-	if len(writer.checks) != 3 {
-		t.Errorf("expected 3 written checks, got %d", len(writer.checks))
+	// Only the core services are checked: there is no IPFS node to watch.
+	names := make([]string, 0, len(writer.checks))
+	for _, c := range writer.checks {
+		names = append(names, c.ServiceName)
+	}
+	if fmt.Sprint(names) != fmt.Sprint(ops.CoreServices) {
+		t.Errorf("expected checks for %v, got %v", ops.CoreServices, names)
 	}
 
 	// Verify each check has correct status
@@ -83,8 +89,7 @@ func TestHealthCheckJob_RunOnce_PartialFailure(t *testing.T) {
 			err    error
 		}{
 			"api":      {models.ServiceStatusOperational, 45, nil},
-			"database": {models.ServiceStatusOperational, 8, nil},
-			"ipfs":     {models.ServiceStatusOutage, 0, errors.New("connection refused")},
+			"database": {models.ServiceStatusOutage, 0, errors.New("connection refused")},
 		},
 	}
 	writer := &mockServiceCheckWriter{}
@@ -92,21 +97,21 @@ func TestHealthCheckJob_RunOnce_PartialFailure(t *testing.T) {
 	job := NewHealthCheckJob(checker, writer)
 	checked, failed := job.RunOnce(context.Background())
 
-	if checked != 3 {
-		t.Errorf("expected 3 checked, got %d", checked)
+	if checked != 2 {
+		t.Errorf("expected 2 checked, got %d", checked)
 	}
 	if failed != 0 {
 		t.Errorf("expected 0 failed, got %d", failed)
 	}
 
-	// Find the IPFS check
+	// Find the database check
 	for _, c := range writer.checks {
-		if c.ServiceName == "ipfs" {
+		if c.ServiceName == "database" {
 			if c.Status != models.ServiceStatusOutage {
-				t.Errorf("expected outage for ipfs, got %s", c.Status)
+				t.Errorf("expected outage for database, got %s", c.Status)
 			}
 			if c.ErrorMessage == nil {
-				t.Error("expected error message for ipfs outage")
+				t.Error("expected error message for database outage")
 			}
 		}
 	}
@@ -121,7 +126,6 @@ func TestHealthCheckJob_RunOnce_WriterError(t *testing.T) {
 		}{
 			"api":      {models.ServiceStatusOperational, 45, nil},
 			"database": {models.ServiceStatusOperational, 8, nil},
-			"ipfs":     {models.ServiceStatusOperational, 65, nil},
 		},
 	}
 	writer := &mockServiceCheckWriter{err: errors.New("db write error")}
@@ -132,8 +136,8 @@ func TestHealthCheckJob_RunOnce_WriterError(t *testing.T) {
 	if checked != 0 {
 		t.Errorf("expected 0 checked, got %d", checked)
 	}
-	if failed != 3 {
-		t.Errorf("expected 3 failed, got %d", failed)
+	if failed != 2 {
+		t.Errorf("expected 2 failed, got %d", failed)
 	}
 }
 
@@ -146,7 +150,6 @@ func TestHealthCheckJob_RunOnce_DegradedService(t *testing.T) {
 		}{
 			"api":      {models.ServiceStatusOperational, 45, nil},
 			"database": {models.ServiceStatusDegraded, 500, nil},
-			"ipfs":     {models.ServiceStatusOperational, 65, nil},
 		},
 	}
 	writer := &mockServiceCheckWriter{}
@@ -154,8 +157,8 @@ func TestHealthCheckJob_RunOnce_DegradedService(t *testing.T) {
 	job := NewHealthCheckJob(checker, writer)
 	checked, _ := job.RunOnce(context.Background())
 
-	if checked != 3 {
-		t.Errorf("expected 3 checked, got %d", checked)
+	if checked != 2 {
+		t.Errorf("expected 2 checked, got %d", checked)
 	}
 
 	for _, c := range writer.checks {

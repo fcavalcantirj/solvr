@@ -93,205 +93,160 @@ func TestServiceCheckRepository_Insert_Outage(t *testing.T) {
 	_, _ = pool.Exec(ctx, "DELETE FROM service_checks WHERE service_name LIKE 'test_%'")
 }
 
-func TestServiceCheckRepository_GetLatestByService(t *testing.T) {
-	pool, repo := setupServiceChecksTest(t)
-	defer pool.Close()
+// testStatusServices are the services the readers below are asked about.
+// test_ipfs is written too, as an outage, and must never be counted.
+var testStatusServices = []string{"test_api", "test_database"}
 
-	ctx := context.Background()
-
-	// Insert checks at different times
-	now := time.Now()
-	rt1 := 10
-	rt2 := 20
-	rt3 := 30
-
-	checks := []models.ServiceCheck{
-		{ServiceName: "test_api", Status: models.ServiceStatusOperational, ResponseTimeMs: &rt1, CheckedAt: now.Add(-10 * time.Minute)},
-		{ServiceName: "test_api", Status: models.ServiceStatusDegraded, ResponseTimeMs: &rt2, CheckedAt: now},
-		{ServiceName: "test_database", Status: models.ServiceStatusOperational, ResponseTimeMs: &rt3, CheckedAt: now},
-	}
+func insertChecks(t *testing.T, repo *ServiceCheckRepository, checks ...models.ServiceCheck) {
+	t.Helper()
 	for _, c := range checks {
-		if err := repo.Insert(ctx, c); err != nil {
+		if err := repo.Insert(context.Background(), c); err != nil {
 			t.Fatalf("Insert() error = %v", err)
 		}
 	}
+}
 
-	latest, err := repo.GetLatestByService(ctx)
+// checkMs is a measured response time.
+func checkMs(v int) *int { return &v }
+
+func TestServiceCheckRepository_GetLatestByService(t *testing.T) {
+	pool, repo := setupServiceChecksTest(t)
+	defer pool.Close()
+	defer pool.Exec(context.Background(), "DELETE FROM service_checks WHERE service_name LIKE 'test_%'")
+
+	now := time.Now()
+	insertChecks(t, repo,
+		models.ServiceCheck{ServiceName: "test_api", Status: models.ServiceStatusOperational, ResponseTimeMs: checkMs(10), CheckedAt: now.Add(-10 * time.Minute)},
+		models.ServiceCheck{ServiceName: "test_api", Status: models.ServiceStatusDegraded, ResponseTimeMs: checkMs(20), CheckedAt: now},
+		models.ServiceCheck{ServiceName: "test_database", Status: models.ServiceStatusOperational, ResponseTimeMs: checkMs(30), CheckedAt: now},
+		models.ServiceCheck{ServiceName: "test_ipfs", Status: models.ServiceStatusOutage, CheckedAt: now},
+	)
+
+	latest, err := repo.GetLatestByService(context.Background(), testStatusServices)
 	if err != nil {
 		t.Fatalf("GetLatestByService() error = %v", err)
 	}
 
-	// Should return only the latest check per service
 	found := map[string]models.ServiceCheck{}
 	for _, c := range latest {
-		if c.ServiceName == "test_api" || c.ServiceName == "test_database" {
-			found[c.ServiceName] = c
-		}
+		found[c.ServiceName] = c
 	}
-
-	if len(found) < 2 {
-		t.Fatalf("expected at least 2 test services, got %d", len(found))
+	if len(found) != 2 || len(latest) != 2 {
+		t.Fatalf("expected exactly test_api and test_database, got %v", found)
 	}
-
-	// test_api should be the latest (degraded)
 	if found["test_api"].Status != models.ServiceStatusDegraded {
 		t.Errorf("expected test_api latest status 'degraded', got '%s'", found["test_api"].Status)
 	}
-
-	// Cleanup
-	_, _ = pool.Exec(ctx, "DELETE FROM service_checks WHERE service_name LIKE 'test_%'")
 }
 
 func TestServiceCheckRepository_GetDailyAggregates(t *testing.T) {
 	pool, repo := setupServiceChecksTest(t)
 	defer pool.Close()
+	defer pool.Exec(context.Background(), "DELETE FROM service_checks WHERE service_name LIKE 'test_%'")
 
-	ctx := context.Background()
 	now := time.Now()
-	rt := 50
+	insertChecks(t, repo,
+		// Today: operational. The test_ipfs outage today is not one of the services asked about.
+		models.ServiceCheck{ServiceName: "test_api", Status: models.ServiceStatusOperational, ResponseTimeMs: checkMs(50), CheckedAt: now},
+		models.ServiceCheck{ServiceName: "test_ipfs", Status: models.ServiceStatusOutage, CheckedAt: now},
+		// Yesterday: degraded.
+		models.ServiceCheck{ServiceName: "test_api", Status: models.ServiceStatusDegraded, ResponseTimeMs: checkMs(50), CheckedAt: now.Add(-24 * time.Hour)},
+		// Two days ago: outage.
+		models.ServiceCheck{ServiceName: "test_database", Status: models.ServiceStatusOutage, CheckedAt: now.Add(-48 * time.Hour)},
+	)
 
-	// Insert checks over multiple days
-	// Today: all operational
-	if err := repo.Insert(ctx, models.ServiceCheck{
-		ServiceName: "test_api", Status: models.ServiceStatusOperational, ResponseTimeMs: &rt, CheckedAt: now,
-	}); err != nil {
-		t.Fatalf("Insert() error = %v", err)
-	}
-
-	// Yesterday: one degraded
-	if err := repo.Insert(ctx, models.ServiceCheck{
-		ServiceName: "test_api", Status: models.ServiceStatusDegraded, ResponseTimeMs: &rt, CheckedAt: now.Add(-24 * time.Hour),
-	}); err != nil {
-		t.Fatalf("Insert() error = %v", err)
-	}
-
-	// 2 days ago: outage
-	errMsg := "timeout"
-	if err := repo.Insert(ctx, models.ServiceCheck{
-		ServiceName: "test_api", Status: models.ServiceStatusOutage, ErrorMessage: &errMsg, CheckedAt: now.Add(-48 * time.Hour),
-	}); err != nil {
-		t.Fatalf("Insert() error = %v", err)
-	}
-
-	aggregates, err := repo.GetDailyAggregates(ctx, 30)
+	aggregates, err := repo.GetDailyAggregates(context.Background(), 30, testStatusServices)
 	if err != nil {
 		t.Fatalf("GetDailyAggregates() error = %v", err)
 	}
 
-	if len(aggregates) == 0 {
-		t.Fatal("expected at least 1 aggregate")
-	}
-
-	// Verify that the aggregates contain days with different statuses
-	statusMap := map[string]bool{}
+	got := make([]string, 0, len(aggregates))
 	for _, a := range aggregates {
-		statusMap[a.Status] = true
+		got = append(got, a.Status)
 	}
-
-	if !statusMap["operational"] {
-		t.Error("expected at least one 'operational' day")
+	want := []string{"operational", "degraded", "outage"}
+	if len(got) != len(want) {
+		t.Fatalf("expected days %v (newest first), got %v", want, got)
 	}
-
-	// Cleanup
-	_, _ = pool.Exec(ctx, "DELETE FROM service_checks WHERE service_name LIKE 'test_%'")
-}
-
-func TestServiceCheckRepository_GetUptimePercentage(t *testing.T) {
-	pool, repo := setupServiceChecksTest(t)
-	defer pool.Close()
-
-	ctx := context.Background()
-	now := time.Now()
-	rt := 50
-
-	// Insert 4 checks: 3 operational, 1 outage = 75% uptime
-	for i := 0; i < 3; i++ {
-		if err := repo.Insert(ctx, models.ServiceCheck{
-			ServiceName: "test_api", Status: models.ServiceStatusOperational, ResponseTimeMs: &rt,
-			CheckedAt: now.Add(-time.Duration(i) * time.Hour),
-		}); err != nil {
-			t.Fatalf("Insert() error = %v", err)
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("expected days %v (newest first), got %v", want, got)
 		}
 	}
-	if err := repo.Insert(ctx, models.ServiceCheck{
-		ServiceName: "test_api", Status: models.ServiceStatusOutage,
-		CheckedAt: now.Add(-4 * time.Hour),
-	}); err != nil {
-		t.Fatalf("Insert() error = %v", err)
-	}
-
-	pct, err := repo.GetUptimePercentage(ctx, 30)
-	if err != nil {
-		t.Fatalf("GetUptimePercentage() error = %v", err)
-	}
-
-	// Should be 75% (3 out of 4 checks operational)
-	if pct < 74.0 || pct > 76.0 {
-		t.Errorf("expected uptime ~75%%, got %.2f%%", pct)
-	}
-
-	// Cleanup
-	_, _ = pool.Exec(ctx, "DELETE FROM service_checks WHERE service_name LIKE 'test_%'")
 }
 
-func TestServiceCheckRepository_GetAvgResponseTime(t *testing.T) {
+func TestServiceCheckRepository_GetDailyAggregates_ThirtyCalendarDays(t *testing.T) {
 	pool, repo := setupServiceChecksTest(t)
 	defer pool.Close()
+	defer pool.Exec(context.Background(), "DELETE FROM service_checks WHERE service_name LIKE 'test_%'")
 
-	ctx := context.Background()
+	// One check on each of 31 calendar days, the oldest inside the rolling 30x24h window.
 	now := time.Now()
-
-	// Insert checks with known response times: 10, 20, 30 → avg = 20
-	for i, rt := range []int{10, 20, 30} {
-		rtCopy := rt
-		if err := repo.Insert(ctx, models.ServiceCheck{
-			ServiceName: "test_api", Status: models.ServiceStatusOperational, ResponseTimeMs: &rtCopy,
-			CheckedAt: now.Add(-time.Duration(i) * time.Hour),
-		}); err != nil {
-			t.Fatalf("Insert() error = %v", err)
-		}
+	for i := 0; i <= 30; i++ {
+		insertChecks(t, repo, models.ServiceCheck{
+			ServiceName: "test_api", Status: models.ServiceStatusOperational,
+			CheckedAt: now.Add(-time.Duration(i)*24*time.Hour + time.Second),
+		})
 	}
 
-	avg, err := repo.GetAvgResponseTime(ctx, 30)
+	aggregates, err := repo.GetDailyAggregates(context.Background(), 30, testStatusServices)
 	if err != nil {
-		t.Fatalf("GetAvgResponseTime() error = %v", err)
+		t.Fatalf("GetDailyAggregates() error = %v", err)
 	}
-
-	if avg < 19.0 || avg > 21.0 {
-		t.Errorf("expected avg response time ~20ms, got %.2fms", avg)
-	}
-
-	// Cleanup
-	_, _ = pool.Exec(ctx, "DELETE FROM service_checks WHERE service_name LIKE 'test_%'")
-}
-
-func TestServiceCheckRepository_GetUptimePercentage_Empty(t *testing.T) {
-	pool, repo := setupServiceChecksTest(t)
-	defer pool.Close()
-
-	ctx := context.Background()
-
-	// No data → should return 0 (not error)
-	pct, err := repo.GetUptimePercentage(ctx, 30)
-	if err != nil {
-		t.Fatalf("GetUptimePercentage() error = %v", err)
-	}
-	if pct != 0 {
-		t.Errorf("expected 0%% for no data, got %.2f%%", pct)
+	// The history is 30 calendar days, today included: one bar per day on the page.
+	if len(aggregates) != 30 {
+		t.Fatalf("expected 30 days, got %d", len(aggregates))
 	}
 }
 
-func TestServiceCheckRepository_GetAvgResponseTime_Empty(t *testing.T) {
+func TestServiceCheckRepository_GetServiceStats(t *testing.T) {
+	pool, repo := setupServiceChecksTest(t)
+	defer pool.Close()
+	defer pool.Exec(context.Background(), "DELETE FROM service_checks WHERE service_name LIKE 'test_%'")
+
+	now := time.Now()
+	insertChecks(t, repo,
+		models.ServiceCheck{ServiceName: "test_api", Status: models.ServiceStatusOperational, ResponseTimeMs: checkMs(10), CheckedAt: now},
+		models.ServiceCheck{ServiceName: "test_api", Status: models.ServiceStatusOperational, ResponseTimeMs: checkMs(20), CheckedAt: now.Add(-time.Hour)},
+		models.ServiceCheck{ServiceName: "test_database", Status: models.ServiceStatusOperational, CheckedAt: now},
+		models.ServiceCheck{ServiceName: "test_database", Status: models.ServiceStatusOutage, CheckedAt: now.Add(-time.Hour)},
+		models.ServiceCheck{ServiceName: "test_ipfs", Status: models.ServiceStatusOutage, ResponseTimeMs: checkMs(126000), CheckedAt: now},
+		// Outside the 30-day window.
+		models.ServiceCheck{ServiceName: "test_api", Status: models.ServiceStatusOutage, ResponseTimeMs: checkMs(9000), CheckedAt: now.Add(-31 * 24 * time.Hour)},
+	)
+
+	stats, err := repo.GetServiceStats(context.Background(), 30, testStatusServices)
+	if err != nil {
+		t.Fatalf("GetServiceStats() error = %v", err)
+	}
+
+	byName := map[string]models.ServiceStat{}
+	for _, s := range stats {
+		byName[s.ServiceName] = s
+	}
+	if len(stats) != 2 {
+		t.Fatalf("expected stats for test_api and test_database only, got %+v", stats)
+	}
+
+	api := byName["test_api"]
+	if api.Checks != 2 || api.Operational != 2 || api.ResponseSamples != 2 || api.AvgResponseMs == nil || *api.AvgResponseMs != 15 {
+		t.Errorf("test_api: expected 2 checks, 2 operational, 2 samples averaging 15ms, got %+v", api)
+	}
+	database := byName["test_database"]
+	if database.Checks != 2 || database.Operational != 1 || database.ResponseSamples != 0 || database.AvgResponseMs != nil {
+		t.Errorf("test_database: expected 2 checks, 1 operational, no latency samples, got %+v", database)
+	}
+}
+
+func TestServiceCheckRepository_GetServiceStats_Empty(t *testing.T) {
 	pool, repo := setupServiceChecksTest(t)
 	defer pool.Close()
 
-	ctx := context.Background()
-
-	avg, err := repo.GetAvgResponseTime(ctx, 30)
+	stats, err := repo.GetServiceStats(context.Background(), 30, testStatusServices)
 	if err != nil {
-		t.Fatalf("GetAvgResponseTime() error = %v", err)
+		t.Fatalf("GetServiceStats() error = %v", err)
 	}
-	if avg != 0 {
-		t.Errorf("expected 0 for no data, got %.2f", avg)
+	if len(stats) != 0 {
+		t.Errorf("expected no stats without checks, got %+v", stats)
 	}
 }

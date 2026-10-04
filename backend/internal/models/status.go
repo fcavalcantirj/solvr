@@ -27,6 +27,17 @@ type DailyAggregate struct {
 	Status string `json:"status"` // "operational", "degraded", "outage"
 }
 
+// ServiceStat is one service's checks over a window: how many there were, how
+// many were operational, and the average response time of the checks that
+// measured one (ResponseSamples of them; AvgResponseMs is nil when none did).
+type ServiceStat struct {
+	ServiceName     string
+	Checks          int
+	Operational     int
+	AvgResponseMs   *float64
+	ResponseSamples int
+}
+
 // IncidentStatus represents the status of an incident.
 type IncidentStatus string
 

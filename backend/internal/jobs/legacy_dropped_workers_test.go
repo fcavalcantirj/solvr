@@ -419,7 +419,7 @@ func scheduledWorkers(pool *db.Pool, tracer *dbErrorTracer) []probeWorker {
 			}
 		}},
 		{"job:HealthCheckJob", func(ctx context.Context, _ *testing.T) {
-			svc := services.NewHealthCheckerService(pool, probeIPFS{})
+			svc := services.NewHealthCheckerService(pool)
 			jobs.NewHealthCheckJob(svc, db.NewServiceCheckRepository(pool)).RunOnce(ctx)
 		}},
 		{"job:OpsAlarmJob", func(ctx context.Context, t *testing.T) {

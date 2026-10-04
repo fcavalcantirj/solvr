@@ -12,23 +12,14 @@ type DBPinger interface {
 	Ping(ctx context.Context) error
 }
 
-// IPFSNodeChecker checks IPFS node connectivity.
-type IPFSNodeChecker interface {
-	NodeInfo(ctx context.Context) (*NodeInfoResult, error)
-}
-
-// HealthCheckerService performs real health checks against API, Database, and IPFS.
+// HealthCheckerService performs real health checks against the API and the database.
 type HealthCheckerService struct {
-	dbPinger  DBPinger
-	ipfsNode  IPFSNodeChecker
+	dbPinger DBPinger
 }
 
 // NewHealthCheckerService creates a new HealthCheckerService.
-func NewHealthCheckerService(dbPinger DBPinger, ipfsNode IPFSNodeChecker) *HealthCheckerService {
-	return &HealthCheckerService{
-		dbPinger: dbPinger,
-		ipfsNode: ipfsNode,
-	}
+func NewHealthCheckerService(dbPinger DBPinger) *HealthCheckerService {
+	return &HealthCheckerService{dbPinger: dbPinger}
 }
 
 // CheckService checks a named service and returns its status, response time, and any error.
@@ -38,8 +29,6 @@ func (s *HealthCheckerService) CheckService(ctx context.Context, serviceName str
 		return s.checkAPI()
 	case "database":
 		return s.checkDatabase(ctx)
-	case "ipfs":
-		return s.checkIPFS(ctx)
 	default:
 		return models.ServiceStatusOutage, 0, nil
 	}
@@ -63,24 +52,6 @@ func (s *HealthCheckerService) checkDatabase(ctx context.Context) (models.Servic
 
 	// Consider degraded if ping takes > 500ms
 	if elapsed > 500 {
-		return models.ServiceStatusDegraded, elapsed, nil
-	}
-
-	return models.ServiceStatusOperational, elapsed, nil
-}
-
-// checkIPFS calls NodeInfo on the IPFS service and measures response time.
-func (s *HealthCheckerService) checkIPFS(ctx context.Context) (models.ServiceCheckStatus, int, error) {
-	start := time.Now()
-	_, err := s.ipfsNode.NodeInfo(ctx)
-	elapsed := int(time.Since(start).Milliseconds())
-
-	if err != nil {
-		return models.ServiceStatusOutage, elapsed, err
-	}
-
-	// Consider degraded if IPFS takes > 2s to respond
-	if elapsed > 2000 {
 		return models.ServiceStatusDegraded, elapsed, nil
 	}
 

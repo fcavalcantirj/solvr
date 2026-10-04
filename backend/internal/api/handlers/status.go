@@ -10,14 +10,15 @@ import (
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
+	"github.com/fcavalcantirj/solvr/internal/ops"
 )
 
-// ServiceCheckReader reads health check data for the status page.
+// ServiceCheckReader reads health check data for the status page, scoped to
+// the services it is asked about.
 type ServiceCheckReader interface {
-	GetLatestByService(ctx context.Context) ([]models.ServiceCheck, error)
-	GetDailyAggregates(ctx context.Context, days int) ([]models.DailyAggregate, error)
-	GetUptimePercentage(ctx context.Context, days int) (float64, error)
-	GetAvgResponseTime(ctx context.Context, days int) (float64, error)
+	GetLatestByService(ctx context.Context, services []string) ([]models.ServiceCheck, error)
+	GetDailyAggregates(ctx context.Context, days int, services []string) ([]models.DailyAggregate, error)
+	GetServiceStats(ctx context.Context, days int, services []string) ([]models.ServiceStat, error)
 }
 
 // IncidentReader reads incidents for the status page.
@@ -76,55 +77,57 @@ type statusIncident struct {
 }
 
 type statusResponse struct {
-	OverallStatus string               `json:"overall_status"`
-	Services      []statusCategory     `json:"services"`
-	Summary       statusSummary        `json:"summary"`
+	OverallStatus string                  `json:"overall_status"`
+	Services      []statusCategory        `json:"services"`
+	Summary       statusSummary           `json:"summary"`
 	UptimeHistory []models.DailyAggregate `json:"uptime_history"`
-	Incidents     []statusIncident     `json:"incidents"`
+	Incidents     []statusIncident        `json:"incidents"`
 }
 
 // serviceDescriptions maps service names to human-readable descriptions.
 var serviceDescriptions = map[string]string{
 	"api":      "Primary API endpoints for all operations",
 	"database": "PostgreSQL data store",
-	"ipfs":     "Decentralized content storage (Kubo)",
 }
 
 // serviceCategoryMap maps service names to their category.
 var serviceCategoryMap = map[string]string{
 	"api":      "Core Services",
 	"database": "Core Services",
-	"ipfs":     "Storage",
 }
 
-// GetStatus handles GET /v1/status.
+// statusWindowDays is the window the uptime, latency and history cover.
+const statusWindowDays = 30
+
+// GetStatus handles GET /v1/status. It reports the core services only
+// (ops.CoreServices, the services the HealthCheckJob checks): checks of any
+// other service still in the table, such as the retired IPFS node, never count.
 func (h *StatusHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	services := ops.CoreServices
 
 	// Graceful degradation: log errors, continue with defaults.
 	// This avoids 500s when tables don't exist yet or DB is temporarily down.
-	latestChecks, err := h.checks.GetLatestByService(ctx)
+	latestChecks, err := h.checks.GetLatestByService(ctx, services)
 	if err != nil {
 		slog.Error("status: failed to get service checks", "error", err)
 		latestChecks = nil
 	}
 
-	history, err := h.checks.GetDailyAggregates(ctx, 30)
+	history, err := h.checks.GetDailyAggregates(ctx, statusWindowDays, services)
 	if err != nil {
 		slog.Error("status: failed to get uptime history", "error", err)
 		history = nil
 	}
 
-	var uptimePct float64
-	uptimePct, err = h.checks.GetUptimePercentage(ctx, 30)
+	stats, err := h.checks.GetServiceStats(ctx, statusWindowDays, services)
 	if err != nil {
-		slog.Error("status: failed to get uptime percentage", "error", err)
+		slog.Error("status: failed to get service stats", "error", err)
+		stats = nil
 	}
-
-	var avgRT float64
-	avgRT, err = h.checks.GetAvgResponseTime(ctx, 30)
-	if err != nil {
-		slog.Error("status: failed to get avg response time", "error", err)
+	statsByService := make(map[string]models.ServiceStat, len(stats))
+	for _, stat := range stats {
+		statsByService[stat.ServiceName] = stat
 	}
 
 	recentIncidents, err := h.incidents.ListRecent(ctx, 10)
@@ -154,12 +157,16 @@ func (h *StatusHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
 			Name:        serviceDisplayName(check.ServiceName),
 			Description: serviceDescriptions[check.ServiceName],
 			Status:      string(check.Status),
-			Uptime:      fmt.Sprintf("%.2f%%", uptimePct),
+			Uptime:      "—",
 		}
 
-		if check.ResponseTimeMs != nil {
-			rt := *check.ResponseTimeMs
-			item.LatencyMs = &rt
+		// Each service's own uptime and average latency over the window.
+		if stat, ok := statsByService[check.ServiceName]; ok && stat.Checks > 0 {
+			item.Uptime = fmt.Sprintf("%.2f%%", float64(stat.Operational)/float64(stat.Checks)*100)
+			if stat.AvgResponseMs != nil {
+				rt := int(math.Round(*stat.AvgResponseMs))
+				item.LatencyMs = &rt
+			}
 		}
 
 		checkedStr := check.CheckedAt.UTC().Format(time.RFC3339)
@@ -179,9 +186,8 @@ func (h *StatusHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
 		cat.Items = append(cat.Items, item)
 	}
 
-	// Order categories: Core Services first, then Storage
 	categories := []statusCategory{}
-	for _, name := range []string{"Core Services", "Storage"} {
+	for _, name := range []string{"Core Services"} {
 		if cat, ok := categoryMap[name]; ok {
 			categories = append(categories, *cat)
 		}
@@ -191,12 +197,24 @@ func (h *StatusHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
 	summary := statusSummary{
 		ServiceCount: len(latestChecks),
 	}
-	if uptimePct > 0 {
-		rounded := math.Round(uptimePct*100) / 100
+	// The summary pools the core services: operational checks over all checks,
+	// and their average latency weighted by how many checks measured one.
+	var totalChecks, operational, samples int
+	var latencySum float64
+	for _, stat := range stats {
+		totalChecks += stat.Checks
+		operational += stat.Operational
+		if stat.AvgResponseMs != nil {
+			latencySum += *stat.AvgResponseMs * float64(stat.ResponseSamples)
+			samples += stat.ResponseSamples
+		}
+	}
+	if totalChecks > 0 {
+		rounded := math.Round(float64(operational)/float64(totalChecks)*100*100) / 100
 		summary.Uptime30d = &rounded
 	}
-	if avgRT > 0 {
-		rounded := math.Round(avgRT*100) / 100
+	if samples > 0 {
+		rounded := math.Round(latencySum/float64(samples)*100) / 100
 		summary.AvgResponseTimeMs = &rounded
 	}
 	if lastCheckedTime != nil {
@@ -245,11 +263,9 @@ func serviceDisplayName(slug string) string {
 	names := map[string]string{
 		"api":      "REST API",
 		"database": "PostgreSQL",
-		"ipfs":     "IPFS Node",
 	}
 	if name, ok := names[slug]; ok {
 		return name
 	}
 	return slug
 }
-

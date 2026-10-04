@@ -30,14 +30,15 @@ func (r *ServiceCheckRepository) Insert(ctx context.Context, check models.Servic
 	return nil
 }
 
-// GetLatestByService returns the most recent check for each distinct service.
-func (r *ServiceCheckRepository) GetLatestByService(ctx context.Context) ([]models.ServiceCheck, error) {
+// GetLatestByService returns the most recent check of each of the given services.
+func (r *ServiceCheckRepository) GetLatestByService(ctx context.Context, services []string) ([]models.ServiceCheck, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT DISTINCT ON (service_name)
 			id, service_name, status, response_time_ms, error_message, checked_at
 		FROM service_checks
+		WHERE service_name = ANY($1)
 		ORDER BY service_name, checked_at DESC
-	`)
+	`, services)
 	if err != nil {
 		return nil, fmt.Errorf("get latest by service: %w", err)
 	}
@@ -54,9 +55,10 @@ func (r *ServiceCheckRepository) GetLatestByService(ctx context.Context) ([]mode
 	return checks, rows.Err()
 }
 
-// GetDailyAggregates returns one row per day for the last N days.
-// Each day's status is the worst status seen that day (outage > degraded > operational).
-func (r *ServiceCheckRepository) GetDailyAggregates(ctx context.Context, days int) ([]models.DailyAggregate, error) {
+// GetDailyAggregates returns one row per calendar day with checks among the
+// last N days (today included), newest first. Each day's status is the worst
+// status any of the given services had that day (outage > degraded > operational).
+func (r *ServiceCheckRepository) GetDailyAggregates(ctx context.Context, days int, services []string) ([]models.DailyAggregate, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT
 			TO_CHAR(checked_at::date, 'YYYY-MM-DD') AS day,
@@ -66,10 +68,11 @@ func (r *ServiceCheckRepository) GetDailyAggregates(ctx context.Context, days in
 				ELSE 'operational'
 			END AS worst_status
 		FROM service_checks
-		WHERE checked_at >= NOW() - $1 * INTERVAL '1 day'
+		WHERE checked_at >= (CURRENT_DATE - ($1::int - 1))::timestamptz
+			AND service_name = ANY($2)
 		GROUP BY checked_at::date
 		ORDER BY checked_at::date DESC
-	`, days)
+	`, days, services)
 	if err != nil {
 		return nil, fmt.Errorf("get daily aggregates: %w", err)
 	}
@@ -89,44 +92,37 @@ func (r *ServiceCheckRepository) GetDailyAggregates(ctx context.Context, days in
 	return aggregates, rows.Err()
 }
 
-// GetUptimePercentage returns the percentage of checks that were "operational"
-// over the last N days. Returns 0 if no data exists.
-func (r *ServiceCheckRepository) GetUptimePercentage(ctx context.Context, days int) (float64, error) {
-	var pct *float64
-	err := r.pool.QueryRow(ctx, `
+// GetServiceStats returns, for each of the given services with checks in the
+// last N days, how many checks it had, how many were operational, and the
+// average response time of the checks that measured one.
+func (r *ServiceCheckRepository) GetServiceStats(ctx context.Context, days int, services []string) ([]models.ServiceStat, error) {
+	rows, err := r.pool.Query(ctx, `
 		SELECT
-			CASE WHEN COUNT(*) = 0 THEN 0
-			ELSE (COUNT(*) FILTER (WHERE status = 'operational'))::float / COUNT(*)::float * 100
-			END
+			service_name,
+			COUNT(*),
+			COUNT(*) FILTER (WHERE status = 'operational'),
+			AVG(response_time_ms)::float,
+			COUNT(response_time_ms)
 		FROM service_checks
 		WHERE checked_at >= NOW() - $1 * INTERVAL '1 day'
-	`, days).Scan(&pct)
+			AND service_name = ANY($2)
+		GROUP BY service_name
+		ORDER BY service_name
+	`, days, services)
 	if err != nil {
-		return 0, fmt.Errorf("get uptime percentage: %w", err)
+		return nil, fmt.Errorf("get service stats: %w", err)
 	}
-	if pct == nil {
-		return 0, nil
-	}
-	return *pct, nil
-}
+	defer rows.Close()
 
-// GetAvgResponseTime returns the average response time in milliseconds
-// over the last N days. Returns 0 if no data exists.
-func (r *ServiceCheckRepository) GetAvgResponseTime(ctx context.Context, days int) (float64, error) {
-	var avg *float64
-	err := r.pool.QueryRow(ctx, `
-		SELECT AVG(response_time_ms)::float
-		FROM service_checks
-		WHERE checked_at >= NOW() - $1 * INTERVAL '1 day'
-			AND response_time_ms IS NOT NULL
-	`, days).Scan(&avg)
-	if err != nil {
-		return 0, fmt.Errorf("get avg response time: %w", err)
+	var stats []models.ServiceStat
+	for rows.Next() {
+		var s models.ServiceStat
+		if err := rows.Scan(&s.ServiceName, &s.Checks, &s.Operational, &s.AvgResponseMs, &s.ResponseSamples); err != nil {
+			return nil, fmt.Errorf("scan service stat: %w", err)
+		}
+		stats = append(stats, s)
 	}
-	if avg == nil {
-		return 0, nil
-	}
-	return *avg, nil
+	return stats, rows.Err()
 }
 
 // DeleteOlderThan removes checks older than the given cutoff for retention.

@@ -409,6 +409,15 @@ bash ~/.claude/skills/solvr/scripts/solvr-admin.sh email history
 
 ## Roadmap
 
+### Password recovery (not built)
+- There is NO password reset anywhere: no API route, no table, no page. Verified 2026-10-04: prod
+  `/v1/auth/forgot-password` returns 404 (while `/v1/auth/login` returns 405), no migration or SPEC entry, and git history
+  only shows the frontend link added in `a39e9ac1` (2026-02-04, "new frontend").
+- The dead "Forgot?" link on /login was removed on 2026-10-04. Email/password users cannot recover an account today
+  (GitHub/Google sign-in is unaffected).
+- When needed, build it API-first: SPEC entry, a migration for single-use expiring reset tokens, `POST /v1/auth/forgot-password`
+  + `POST /v1/auth/reset-password` (Resend email, same answer whether or not the email exists), then the two pages.
+
 ### Sitemap sharding (when approaching 50k URLs)
 - Backend pagination API is already built: `GET /v1/sitemap/urls?type=posts&page=1&per_page=2500`
 - Backend counts API is already built: `GET /v1/sitemap/counts`

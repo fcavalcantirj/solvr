@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Search, ChevronRight, RefreshCw } from "lucide-react";
+import { Search, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -273,10 +273,6 @@ export function BlogPageClient({ initialBlogPosts }: BlogPageClientProps) {
         <div className="mx-auto grid max-w-[84rem] gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:gap-16">
           <div>
             <h3 className="text-2xl font-light tracking-[-0.025em] sm:text-3xl">Popular Tags</h3>
-            <Link href="/blog/tags" className="mt-4 inline-flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground transition-colors hover:text-foreground">
-              VIEW ALL TAGS
-              <ChevronRight size={12} />
-            </Link>
           </div>
           <div className="flex flex-wrap gap-x-6 gap-y-3">
             {tags.map((tag) => (

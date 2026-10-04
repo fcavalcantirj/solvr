@@ -102,3 +102,76 @@ describe('every control answers the pointer', () => {
     expect(css).toMatch(/button:not\(:disabled\)[^{]*\{\s*cursor:\s*pointer;/)
   })
 })
+
+describe('no link points at a page the app does not have', () => {
+  // v1.3.7 crawled the built site: /api, /dashboard/settings and
+  // /forgot-password were linked and 404 on production; /blog/tags returned 500.
+  const ROUTES: string[][] = []
+  const walk = (dir: string) => {
+    for (const entry of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+      const rel = `${dir}/${entry.name}`
+      if (entry.isDirectory()) {
+        walk(rel)
+        continue
+      }
+      const segments = dir.split('/').slice(1).filter((s) => !/^\(.*\)$/.test(s))
+      if (/^(page|route)\.(tsx?|jsx?)$/.test(entry.name)) ROUTES.push(segments)
+      const metadata: Record<string, string> = { 'sitemap.ts': 'sitemap.xml', 'robots.ts': 'robots.txt' }
+      if (metadata[entry.name]) ROUTES.push([...segments, metadata[entry.name]])
+    }
+  }
+  walk('app')
+
+  const routeExists = (href: string) => {
+    const parts = href.split('/').filter(Boolean)
+    return ROUTES.some((route) => {
+      for (let i = 0; i < route.length; i++) {
+        if (/^\[\[?\.\.\./.test(route[i])) return true
+        if (i >= parts.length) return false
+        if (/^\[.*\]$/.test(route[i])) continue
+        if (route[i] !== parts[i]) return false
+      }
+      return route.length === parts.length
+    })
+  }
+
+  // Old paths the middleware redirects (/feed, /new, /problems, …) are real destinations too.
+  const middleware = read('middleware.ts')
+  const REDIRECTED = [...middleware.slice(middleware.indexOf('matcher')).matchAll(/'(\/[^']*)'/g)].map((m) =>
+    m[1].replace(/\/:path\*$/, ''),
+  )
+  const isPublicFile = (href: string) => fs.existsSync(path.join(ROOT, 'public', href))
+
+  function literalHrefs(): { where: string; href: string }[] {
+    const found: { where: string; href: string }[] = []
+    for (const file of SOURCES) {
+      read(file)
+        .split('\n')
+        .forEach((line, index) => {
+          for (const match of line.matchAll(/\bhref\s*[:=]\s*\{?\s*["'`](\/[^"'`\s]*)["'`]/g)) {
+            if (match[1].startsWith('//') || match[1].includes('${')) continue
+            let href = match[1].split('#')[0].split('?')[0] || '/'
+            if (href.length > 1 && href.endsWith('/')) href = href.slice(0, -1)
+            found.push({ where: `${file}:${index + 1}`, href })
+          }
+        })
+    }
+    return found
+  }
+
+  it('finds the routes and links it is meant to be checking', () => {
+    expect(ROUTES.length).toBeGreaterThan(30)
+    expect(literalHrefs().length).toBeGreaterThan(50)
+  })
+
+  it('resolves every literal link to a page, a route handler, a public file or a redirect', () => {
+    const dead = literalHrefs()
+      .filter(({ href }) => !routeExists(href) && !isPublicFile(href) && !REDIRECTED.some((r) => href === r || href.startsWith(`${r}/`)))
+      .map(({ where, href }) => `${where} ${href}`)
+    expect(dead).toEqual([])
+  })
+
+  it('does not link to /blog/tags, which blog/[slug] would otherwise swallow', () => {
+    expect(literalHrefs().filter(({ href }) => href === '/blog/tags')).toEqual([])
+  })
+})

@@ -202,7 +202,7 @@ export default function APIKeysPage() {
             Learn how to use your API keys in the documentation.
           </p>
           <Link
-            href="/api"
+            href="/api-docs"
             className={cn(TEXT_LINK, "mt-3 inline-block text-foreground")}
           >
             View API Documentation →

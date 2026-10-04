@@ -24,7 +24,7 @@ export function McpSetup() {
           <p className="max-w-[38ch] text-sm leading-relaxed text-muted-foreground">
             You&apos;ll need an API key to authenticate. Get one from your dashboard.
           </p>
-          <Link href="/dashboard/settings" className={`${ACTION} mt-5`}>
+          <Link href="/settings/api-keys" className={`${ACTION} mt-5`}>
             Get API Key
           </Link>
         </div>

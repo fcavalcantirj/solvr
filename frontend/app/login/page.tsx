@@ -165,12 +165,6 @@ export default function LoginPage() {
                   <Label htmlFor="password" className="font-mono text-[11px] uppercase tracking-[0.18em]">
                     PASSWORD
                   </Label>
-                  <Link
-                    href="/forgot-password"
-                    className="font-mono text-xs text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    Forgot?
-                  </Link>
                 </div>
                 <div className="relative">
                   <Input

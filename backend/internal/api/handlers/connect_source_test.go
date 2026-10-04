@@ -119,3 +119,56 @@ func TestConnectSource_OneSourceAtATime(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, w.Code)
 	require.True(t, strings.Contains(w.Body.String(), "AMBIGUOUS_SOURCE"))
 }
+
+// Restored from before lane S (they guard production code the slim sentence still uses:
+// the source title and the room share excerpt are scrubbed by publicTemplateText, and
+// scrubRoomTemplate cleans what "Try this workflow" copies into a new room).
+func TestPublicTemplateText_ScrubsCredentialsAndPrivateRoomLinks(t *testing.T) {
+	src := &fakeRoomSources{public: map[string]bool{"open-demo": true}}
+	cases := []struct {
+		name, in   string
+		gone, kept []string
+	}{
+		{"room token", "use solvr_rt_abcdefghijklmnopqrstuvwx now", []string{"solvr_rt_abc"}, []string{"use", "now"}},
+		{"user key", "key solvr_sk_ABCDEFGHIJKLMNOPQRST1234", []string{"solvr_sk_ABC"}, []string{"key"}},
+		{"agent key", "agent solvr_9f8e7d6c5b4a39281706f5e4d3c2b1a0", []string{"solvr_9f8e7d"}, []string{"agent"}},
+		{"jwt", "jwt eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ4In0.c2lnbmF0dXJlLXZhbHVl ok", []string{"eyJhbGci"}, []string{"jwt", "ok"}},
+		{"bearer", "Authorization: Bearer abc.def-123", []string{"abc.def-123"}, []string{"Authorization"}},
+		{"query token", "GET /x?access_token=abc123&type=DONE", []string{"abc123"}, []string{"type=DONE"}},
+		{"private room", "see https://solvr.dev/rooms/hidden-room/entries", []string{"hidden-room"}, []string{"[private room]"}},
+		{"public room", "see /rooms/open-demo", nil, []string{"/rooms/open-demo"}},
+		{"product word", "the solvr_dev database and solvr_ prefix", nil, []string{"solvr_dev", "solvr_ prefix"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out := publicTemplateText(context.Background(), tc.in, src)
+			for _, g := range tc.gone {
+				require.NotContains(t, out, g)
+			}
+			for _, k := range tc.kept {
+				require.Contains(t, out, k)
+			}
+			require.False(t, strings.Contains(out, "$"), "no template-looking residue")
+		})
+	}
+}
+
+func TestScrubRoomTemplate_RemovesSecretsFromTheCopiedDescription(t *testing.T) {
+	desc := "Use solvr_rt_abcdefghijklmnopqrstuvwx and see /rooms/hidden-room or /rooms/open-demo"
+	tmpl := &models.RoomTemplate{Description: &desc, InitialTask: "x"}
+	scrubRoomTemplate(context.Background(), tmpl, &fakeRoomSources{public: map[string]bool{"open-demo": true}})
+
+	require.NotContains(t, *tmpl.Description, "solvr_rt_abc")
+	require.NotContains(t, *tmpl.Description, "hidden-room")
+	require.Contains(t, *tmpl.Description, "/rooms/open-demo")
+	require.Equal(t, "Use solvr_rt_abcdefghijklmnopqrstuvwx and see /rooms/hidden-room or /rooms/open-demo", desc,
+		"the caller's string is not mutated in place")
+}
+
+func TestConnectSource_NoSourceLookupWiredIgnoresTheRoomParameter(t *testing.T) {
+	h := newTestConnectHandler(t, &fakeConnectRooms{room: publicExampleRoom("example-room")}, "example-room")
+	start, _ := getConnect(t, h, "from_room=ttt-public")
+	require.Nil(t, start.Source)
+	require.Empty(t, start.Selected.SourceRoom)
+	require.True(t, segmentsOf(start.Prompt, SegmentIntent)[0].Empty)
+}

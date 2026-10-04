@@ -61,8 +61,13 @@ func TestPublicStatisticsEndpoints_PublishNoAudienceOrGrowthVocabulary(t *testin
 // publishable. A metric that is not on the allowlist never reaches a visitor,
 // because the API withholds it rather than trusting the browser not to draw it.
 func TestPublicOverview_PublishesOnlyAllowlistedSectionsAndMetrics(t *testing.T) {
-	ts, _, cleanup := setupRoomTestServer(t)
+	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
+	defer hpoCleanup(t, pool)
+	// The featured rooms section is published only when a room is featured (SPEC Part 26).
+	featured := hpoSlug("allow")
+	hpoSeedRoom(t, pool, featured, "Allowlist Room", "a featured room", false, []string{"the ask", "the outcome"})
+	featureOnHomepage(t, pool, featured)
 
 	payload, _ := getPublicJSON(t, ts.URL+"/v1/homepage/overview")
 	data, ok := payload["data"].(map[string]any)

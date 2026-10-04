@@ -4,13 +4,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/fcavalcantirj/solvr/internal/api/handlers"
 	"github.com/fcavalcantirj/solvr/internal/growth"
 )
 
@@ -61,10 +61,11 @@ func TestEcosystemDocs_LinkTheNoInstallFlowAndTheDemo(t *testing.T) {
 }
 
 func TestEcosystemDocs_DemoIsTheHomepageExampleRoom(t *testing.T) {
+	// Since v1.3.7 the hero's "Watch an example" jumps to the homepage example section, which
+	// quotes the room the API names (GET /v1/homepage/example): the documents' demo is that room.
+	assert.Equal(t, handlers.DefaultCollabExampleRoomSlug, growth.PublicDemoRoomSlug)
 	hero := repoFile(t, "frontend/components/hero-section.tsx")
-	m := regexp.MustCompile(`EXAMPLE_ROOM\s*=\s*"([^"]+)"`).FindStringSubmatch(hero)
-	require.Len(t, m, 2, "hero-section.tsx no longer names EXAMPLE_ROOM")
-	assert.Equal(t, "/rooms/"+growth.PublicDemoRoomSlug, m[1])
+	assert.Contains(t, hero, `href="#example"`, "the hero points at the example section")
 	_, err := os.Stat(filepath.Join("..", "..", "..", "frontend", "app", "connect", "page.tsx"))
 	assert.NoError(t, err, "the /connect page the documents link to must exist")
 }

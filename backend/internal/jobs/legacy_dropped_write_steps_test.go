@@ -380,6 +380,9 @@ var writeProbeSteps = []func(s *writeProbeState) []writeProbeCall{
 			call("POST /admin/ipfs/unpin", "admin", "/admin/ipfs/unpin", j(map[string]any{
 				"cids": []string{"QmbrPqJC7j1mVmPsjbjyzhU2qq8FFeYyMxox7N5Ztsdzip"}, "dry_run": true})),
 			call("POST /admin/ipfs/gc", "admin", "/admin/ipfs/gc", `{}`),
+			// The homepage's featured rooms: the probe's room is featured, then taken out again.
+			call("PUT /admin/rooms/{slug}/featured", "admin", "/admin/rooms/"+or(s.roomSlug)+"/featured", `{}`),
+			call("DELETE /admin/rooms/{slug}/featured", "admin", "/admin/rooms/"+or(s.roomSlug)+"/featured", ""),
 		}
 	},
 	func(s *writeProbeState) []writeProbeCall {

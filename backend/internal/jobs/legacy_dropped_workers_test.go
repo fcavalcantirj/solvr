@@ -203,9 +203,10 @@ func newMigratedScratchURL(t *testing.T, prefix string) string {
 // archiveIndependentMigrations are migrations numbered after the legacy archive that do not
 // touch the legacy tables and that the code at head needs on every request: the router's
 // API-usage recorder writes api_request_events.duration_ms (000139) on the probe's traced
-// pool. The pre-archive database gets them too, so a probe measures the legacy tables and
-// not a column the head code writes regardless of the archive.
-var archiveIndependentMigrations = []string{"000139_api_request_duration.up.sql"}
+// pool, and the homepage's featured rooms (000141) are read by the overview and written by
+// the operator routes. The pre-archive database gets them too, so a probe measures the legacy
+// tables and not a column or table the head code uses regardless of the archive.
+var archiveIndependentMigrations = []string{"000139_api_request_duration.up.sql", "000141_featured_rooms.up.sql"}
 
 // splitArchiveIndependent separates archiveIndependentMigrations out of the migrations
 // from the legacy archive on, keeping order, and fails if one of them is missing.

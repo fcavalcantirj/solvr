@@ -25,7 +25,7 @@ function PinControl({ message, onTogglePin }: { message: APIRoomMessage; onToggl
     <button
       type="button"
       onClick={() => onTogglePin?.(message)}
-      className="font-mono text-[10px] tracking-wider text-muted-foreground underline underline-offset-2 hover:text-foreground"
+      className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground underline underline-offset-2 hover:text-foreground"
     >
       {message.pinned_at ? "Unpin" : "Pin as directive"}
     </button>
@@ -53,9 +53,9 @@ function MessageBody({
         className={collapsed ? "max-h-72 overflow-hidden" : undefined}
       >
         {contentType === "markdown" ? (
-          <MarkdownContent content={content} variant="compact" />
+          <MarkdownContent content={content} variant="compact" className="text-[0.9375rem] leading-[1.8] [&_p]:text-foreground [&_p]:leading-[1.8] [&_li]:text-foreground" />
         ) : (
-          <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+          <p className="text-[0.9375rem] leading-[1.8] whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
             {content}
           </p>
         )}
@@ -64,7 +64,7 @@ function MessageBody({
         <button
           type="button"
           onClick={() => setExpanded((e) => !e)}
-          className="mt-2 font-mono text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+          className="mt-2 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground underline underline-offset-2 hover:text-foreground"
         >
           {expanded ? "Show less" : "Show more"}
         </button>
@@ -82,21 +82,33 @@ export function MessageBubble({ message, highlighted, canPin, onTogglePin }: Mes
   const anchorClass = hasAnchor ? " scroll-mt-24" : "";
 
   // A deep link resolved by persistent id (not sequence) targets this element
-  // and rings it briefly; the data attribute is a stable scroll/fetch target.
+  // and marks it with the accent fill behind ink; the data attribute is a stable
+  // scroll/fetch target.
   const highlightAttr = highlighted ? "true" : undefined;
   const highlightClass = highlighted
-    ? " ring-2 ring-green-500 ring-offset-2 ring-offset-background rounded-lg"
+    ? " bg-prompt-accent text-prompt-accent-foreground outline outline-1 outline-foreground outline-offset-4"
     : "";
   // Deep links land the reader here regardless of which anchor form was used.
   const deepLinkScrollClass = highlighted && !hasAnchor ? " scroll-mt-24" : "";
 
+  // Every message is one row of the reading column, opened by a hairline: the
+  // speaker, the time in a mono caption, then the words at a reading size.
+  const timeLabel = (
+    <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+      {formatDistanceToNow(new Date(message.created_at), {
+        addSuffix: true,
+      })}
+    </span>
+  );
+
   if (message.author_type === "system") {
+    // A platform note, not a voice: centered, small, between dashed hairlines.
     return (
       <div
         id={anchorId}
         data-message-id={message.id}
         data-highlighted={highlightAttr}
-        className={`text-center text-xs text-muted-foreground font-mono py-2 px-4 border-y border-dashed border-border/50${anchorClass}${highlightClass}${deepLinkScrollClass}`}
+        className={`border-t border-dashed border-border py-5 text-center font-mono text-[11px] uppercase leading-relaxed tracking-[0.18em] text-muted-foreground${anchorClass}${highlightClass}${deepLinkScrollClass}`}
       >
         {message.content}
       </div>
@@ -104,82 +116,74 @@ export function MessageBubble({ message, highlighted, canPin, onTogglePin }: Mes
   }
 
   if (message.author_type === "human") {
+    // A human's interjection steps in from the right on the quiet secondary fill,
+    // so carbon and silicon voices read apart without any colour.
     return (
       <div
         id={anchorId}
         data-message-id={message.id}
         data-highlighted={highlightAttr}
-        className={`flex items-start gap-3 max-w-[70%] ml-auto flex-row-reverse${anchorClass}${deepLinkScrollClass}`}
+        className={`flex min-w-0 border-t border-border py-6${anchorClass}${deepLinkScrollClass}`}
       >
-        <div className="shrink-0 mt-1">
-          <User className="w-4 h-4 text-muted-foreground" />
-        </div>
-        <div className="text-right">
-          <div className="flex items-center gap-2 mb-1 justify-end">
-            {message.author_id ? (
-              <Link
-                href={`/users/${message.author_id}`}
-                className="font-mono text-xs text-muted-foreground hover:underline"
-              >
-                {message.agent_name || "Anonymous"}
-              </Link>
-            ) : (
-              <span className="font-mono text-xs text-muted-foreground">
-                {message.agent_name || "Anonymous"}
-              </span>
-            )}
-            <span className="font-mono text-xs text-muted-foreground">
-              {formatDistanceToNow(new Date(message.created_at), {
-                addSuffix: true,
-              })}
-            </span>
-            {canPin && <PinControl message={message} onTogglePin={onTogglePin} />}
+        <div data-author="human" className="ml-auto flex w-full min-w-0 max-w-[88%] items-start gap-4 bg-secondary px-5 py-5">
+          <div className="shrink-0 pt-1">
+            <User aria-hidden="true" className="w-4 h-4 text-muted-foreground" />
           </div>
-          <div
-            className={`bg-green-50 dark:bg-green-950/30 border border-green-100 dark:border-green-900 rounded-lg p-3 text-left${highlightClass}`}
-          >
-            <MessageBody content={message.content} contentType={message.content_type} />
+          <div className="min-w-0 flex-1">
+            <div className="mb-3 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+              {message.author_id ? (
+                <Link
+                  href={`/users/${message.author_id}`}
+                  className="text-sm text-foreground hover:underline underline-offset-4"
+                >
+                  {message.agent_name || "Anonymous"}
+                </Link>
+              ) : (
+                <span className="text-sm text-foreground">
+                  {message.agent_name || "Anonymous"}
+                </span>
+              )}
+              {timeLabel}
+              {canPin && <PinControl message={message} onTogglePin={onTogglePin} />}
+            </div>
+            <div className={`min-w-0 text-left${highlightClass}`}>
+              <MessageBody content={message.content} contentType={message.content_type} />
+            </div>
           </div>
         </div>
       </div>
     );
   }
 
-  // Agent message (default)
+  // Agent message (default): the voice of the room, on the paper itself.
   return (
     <div
       id={anchorId}
       data-message-id={message.id}
       data-highlighted={highlightAttr}
-      className={`flex items-start gap-3 max-w-[70%]${anchorClass}${deepLinkScrollClass}`}
+      className={`flex min-w-0 items-start gap-4 border-t border-border py-7${anchorClass}${deepLinkScrollClass}`}
     >
-      <div className="shrink-0 mt-1">
-        <Bot className="w-4 h-4 text-muted-foreground" />
+      <div className="shrink-0 pt-1">
+        <Bot aria-hidden="true" className="w-4 h-4 text-muted-foreground" />
       </div>
-      <div className="min-w-0">
-        <div className="flex items-center gap-2 mb-1">
+      <div data-author="agent" className="min-w-0 flex-1">
+        <div className="mb-3 flex flex-wrap items-baseline gap-x-4 gap-y-1">
           {message.author_id ? (
             <Link
               href={`/agents/${message.author_id}`}
-              className="font-mono text-xs text-muted-foreground hover:underline"
+              className="text-sm text-foreground hover:underline underline-offset-4"
             >
               {message.agent_name}
             </Link>
           ) : (
-            <span className="font-mono text-xs text-muted-foreground">
+            <span className="text-sm text-foreground">
               {message.agent_name}
             </span>
           )}
-          <span className="font-mono text-xs text-muted-foreground">
-            {formatDistanceToNow(new Date(message.created_at), {
-              addSuffix: true,
-            })}
-          </span>
+          {timeLabel}
           {canPin && <PinControl message={message} onTogglePin={onTogglePin} />}
         </div>
-        <div
-          className={`bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900 rounded-lg p-3${highlightClass}`}
-        >
+        <div className={`min-w-0${highlightClass}`}>
           <MessageBody content={message.content} contentType={message.content_type} />
         </div>
       </div>

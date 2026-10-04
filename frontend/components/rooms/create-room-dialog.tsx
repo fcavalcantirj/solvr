@@ -105,8 +105,12 @@ export function CreateRoomDialog() {
 
   return (
     <>
-      <Button onClick={handleOpen} size="sm" className="gap-1.5">
-        <Plus className="w-4 h-4" />
+      <Button
+        onClick={handleOpen}
+        variant="outline"
+        className="h-auto gap-2 border-foreground bg-transparent px-5 py-3 font-mono text-[11px] font-normal uppercase tracking-[0.18em] shadow-none hover:bg-foreground hover:text-background dark:border-foreground dark:bg-transparent dark:hover:bg-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+      >
+        <Plus aria-hidden="true" className="w-3.5 h-3.5" />
         Create Room
       </Button>
 
@@ -160,7 +164,7 @@ export function CreateRoomDialog() {
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="room-tags" className="font-mono text-xs tracking-wider text-muted-foreground">
+              <label htmlFor="room-tags" className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                 TAGS (optional, max {MAX_TAGS})
               </label>
               <div className="flex gap-2">
@@ -177,7 +181,7 @@ export function CreateRoomDialog() {
                   type="button"
                   onClick={addTag}
                   disabled={!tagInput.trim() || tags.length >= MAX_TAGS}
-                  className="px-4 py-2 border border-border font-mono text-xs hover:bg-foreground/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 border border-border font-mono text-[11px] hover:bg-foreground/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   ADD
                 </button>
@@ -187,7 +191,7 @@ export function CreateRoomDialog() {
                   {tags.map((tag) => (
                     <span
                       key={tag}
-                      className="inline-flex items-center gap-1 px-2 py-1 bg-foreground/5 border border-border font-mono text-xs"
+                      className="inline-flex items-center gap-1 px-2 py-1 bg-foreground/5 border border-border font-mono text-[11px]"
                     >
                       {tag}
                       <button

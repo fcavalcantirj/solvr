@@ -1,0 +1,230 @@
+/* The rooms index in the /posts language: a full-width mosaic whose tile sizes,
+   inversions and type sizes follow a fixed six-room rhythm by POSITION in the
+   API's list. Nothing here reads a count, a score or a text length. */
+
+.mosaic {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  border-top: 1px solid var(--border);
+}
+
+.tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 32px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--background);
+  color: var(--foreground);
+  overflow-wrap: anywhere;
+}
+
+.title {
+  font-size: 32px;
+  font-weight: 300;
+  line-height: 1.1;
+  letter-spacing: -0.035em;
+}
+
+/* The room's name is its link; the link's box covers the whole tile, so the
+   tile still opens the room while the name alone names the link. */
+.cover {
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 6px;
+  transition: text-decoration-color 160ms;
+}
+
+.cover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.tile:hover .cover {
+  text-decoration-color: currentColor;
+}
+
+/* One focus ring, drawn around the whole tile the link covers (the room frame's
+   generic ring would otherwise also circle the name). */
+.tile .cover:focus-visible {
+  outline: none;
+}
+
+.tile .cover:focus-visible::after {
+  outline: 2px solid currentColor;
+  outline-offset: -8px;
+}
+
+.arrow {
+  display: inline-block;
+  width: 0.6em;
+  height: 0.6em;
+  margin-left: 0.25em;
+  vertical-align: baseline;
+}
+
+.category {
+  margin-top: 16px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.6;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  opacity: 0.7;
+}
+
+.description,
+.preview {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.description {
+  max-width: 52ch;
+  margin-top: 20px;
+  font-size: 15px;
+  line-height: 1.7;
+  opacity: 0.75;
+  -webkit-line-clamp: 3;
+}
+
+/* The latest message, quoted: what the room is actually saying right now. */
+.preview {
+  max-width: 56ch;
+  margin-top: 24px;
+  padding-left: 16px;
+  border-left: 1px solid currentColor;
+  font-size: 15px;
+  line-height: 1.7;
+  -webkit-line-clamp: 3;
+}
+
+.footer {
+  margin-top: auto;
+  padding-top: 40px;
+}
+
+.byline {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 20px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* The owner's profile link sits above the tile-wide room link. */
+.byline a {
+  position: relative;
+  z-index: 1;
+}
+
+.byline a:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 4px;
+}
+
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid currentColor;
+  border-color: color-mix(in oklch, currentColor 20%, transparent);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.6;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+}
+
+/* A fixed six-room composition. */
+.tile:nth-child(6n + 2) {
+  background: var(--foreground);
+  color: var(--background);
+}
+
+.tile:nth-child(6n + 5) {
+  background: var(--secondary);
+}
+
+.tile:nth-child(6n + 1) .title {
+  font-size: 44px;
+  line-height: 1.04;
+}
+
+@media (min-width: 640px) {
+  .mosaic {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tile {
+    padding: 32px 24px;
+    border-right: 1px solid var(--border);
+  }
+
+  .tile:nth-child(6n + 1),
+  .tile:nth-child(6n + 6) {
+    grid-column: span 2;
+  }
+
+  .tile:nth-child(6n + 1) .title {
+    font-size: 56px;
+  }
+}
+
+@media (min-width: 1100px) {
+  .mosaic {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+
+  .tile {
+    grid-column: span 4;
+    min-height: 320px;
+    padding: 36px;
+  }
+
+  .tile:nth-child(6n + 1) {
+    grid-column: span 7;
+    grid-row: span 2;
+    padding: 48px;
+  }
+
+  .tile:nth-child(6n + 1) .title {
+    font-size: clamp(56px, 5.2vw, 88px);
+    line-height: 1.02;
+    letter-spacing: -0.045em;
+  }
+
+  .tile:nth-child(6n + 1) .description {
+    margin-top: 28px;
+    font-size: 18px;
+    -webkit-line-clamp: 5;
+  }
+
+  .tile:nth-child(6n + 1) .preview {
+    margin-top: 36px;
+    padding-left: 24px;
+    font-size: 20px;
+    font-weight: 300;
+    line-height: 1.55;
+    letter-spacing: -0.01em;
+    -webkit-line-clamp: 6;
+  }
+
+  .tile:nth-child(6n + 2),
+  .tile:nth-child(6n + 3) {
+    grid-column: span 5;
+  }
+
+  .tile:nth-child(6n + 2) .title,
+  .tile:nth-child(6n + 3) .title {
+    font-size: 36px;
+  }
+}

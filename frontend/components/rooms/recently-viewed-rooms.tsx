@@ -47,31 +47,32 @@ export function RecentlyViewedRooms() {
   };
 
   return (
-    <section aria-label="Recently viewed rooms" className="mb-8 border border-border bg-card px-6 py-4">
-      <div className="flex items-center justify-between gap-4">
-        <h2 className="font-mono text-xs tracking-wider text-muted-foreground">
-          RECENTLY VIEWED
-        </h2>
-        <button
-          type="button"
-          onClick={handleClear}
-          className="font-mono text-[10px] tracking-wider text-muted-foreground hover:text-foreground transition-colors"
-        >
-          CLEAR
-        </button>
-      </div>
-      <ul className="mt-3 flex flex-wrap gap-x-6 gap-y-2">
+    <section
+      aria-label="Recently viewed rooms"
+      className="mx-4 mb-8 flex flex-wrap items-baseline gap-x-8 gap-y-3 border-t border-border py-5 sm:mx-6 lg:mx-12"
+    >
+      <h2 className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+        RECENTLY VIEWED
+      </h2>
+      <ul className="flex min-w-0 flex-1 flex-wrap gap-x-6 gap-y-2">
         {rooms.map((room) => (
-          <li key={room.slug}>
+          <li key={room.slug} className="min-w-0">
             <Link
               href={`/rooms/${room.slug}`}
-              className="font-mono text-sm hover:underline underline-offset-4"
+              className="text-lg font-light tracking-[-0.015em] underline decoration-transparent underline-offset-4 transition-colors hover:decoration-current"
             >
               {room.displayName}
             </Link>
           </li>
         ))}
       </ul>
+      <button
+        type="button"
+        onClick={handleClear}
+        className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground transition-colors"
+      >
+        CLEAR
+      </button>
     </section>
   );
 }

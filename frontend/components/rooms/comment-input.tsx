@@ -71,17 +71,17 @@ export function CommentInput({ slug, onMessageSent, archived = false }: CommentI
     // The room is Finished: no new messages are accepted. Offer a clean restart
     // that reuses the collaboration's instructions in a brand-new room.
     return (
-      <div className="bg-card border-t border-border px-4 py-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium">This room is finished</p>
-            <p className="text-xs text-muted-foreground">
+      <div className="bg-background border-t border-border py-6">
+        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+          <div className="min-w-0">
+            <p className="text-2xl font-light tracking-[-0.025em]">This room is finished</p>
+            <p className="mt-2 text-sm text-muted-foreground">
               New messages are closed. Start a new room to continue the work.
             </p>
           </div>
           <Link
             href="/connect"
-            className="bg-foreground text-background font-mono text-xs tracking-wider px-6 py-2.5 hover:bg-foreground/90 transition-colors whitespace-nowrap"
+            className="bg-foreground text-background font-mono text-[11px] uppercase tracking-[0.18em] px-6 py-3 hover:bg-foreground/90 transition-colors whitespace-nowrap"
           >
             START A NEW ROOM
           </Link>
@@ -97,11 +97,11 @@ export function CommentInput({ slug, onMessageSent, archived = false }: CommentI
     // path as ?next= so login returns the reader to this same room.
     const next = encodeURIComponent(`/rooms/${slug}`);
     return (
-      <div className="bg-card border-t border-border px-4 py-3">
-        <p className="text-xs text-muted-foreground">
+      <div className="bg-background border-t border-border py-5">
+        <p className="text-sm text-muted-foreground">
           <Link
             href={`/login?next=${next}`}
-            className="font-mono tracking-wider underline underline-offset-4 hover:text-foreground transition-colors"
+            className="font-mono text-[11px] uppercase tracking-[0.18em] underline underline-offset-4 hover:text-foreground transition-colors"
           >
             Log in to comment
           </Link>{' '}
@@ -112,13 +112,13 @@ export function CommentInput({ slug, onMessageSent, archived = false }: CommentI
   }
 
   return (
-    <div className="bg-card border-t border-border px-4 py-3">
+    <div className="bg-background border-t border-border py-5">
       {/* D-31: User identity indicator */}
-      <div className="flex items-center gap-2 mb-2">
+      <div className="flex items-center gap-2 mb-3">
         <div className="w-5 h-5 bg-secondary rounded-full flex items-center justify-center">
-          <User className="w-3 h-3 text-muted-foreground" />
+          <User aria-hidden="true" className="w-3 h-3 text-muted-foreground" />
         </div>
-        <span className="font-mono text-xs text-muted-foreground">{user?.displayName}</span>
+        <span className="text-sm text-muted-foreground">{user?.displayName}</span>
       </div>
       <form onSubmit={handleSubmit} className="flex items-end gap-2">
         <textarea
@@ -129,7 +129,7 @@ export function CommentInput({ slug, onMessageSent, archived = false }: CommentI
           placeholder="Type a message..."
           rows={1}
           disabled={submitting}
-          className="flex-1 resize-none bg-secondary border border-border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-ring/50 focus:outline-none disabled:opacity-50"
+          className="min-w-0 flex-1 resize-none bg-background border border-border rounded-none px-4 py-3 text-[0.9375rem] leading-relaxed placeholder:text-muted-foreground focus:border-foreground focus:outline-none focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground disabled:opacity-50"
           style={{
             maxHeight: '112px',
             overflowY: content.split('\n').length > 4 ? 'auto' : 'hidden',
@@ -138,7 +138,7 @@ export function CommentInput({ slug, onMessageSent, archived = false }: CommentI
         <button
           type="submit"
           disabled={submitting || !content.trim()}
-          className="bg-foreground text-background p-2.5 rounded-md hover:bg-foreground/90 transition-colors disabled:opacity-50 shrink-0"
+          className="flex items-center justify-center bg-foreground text-background p-2.5 rounded-none hover:bg-foreground/90 transition-colors disabled:opacity-50 shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
           style={{ minHeight: '44px', minWidth: '44px' }}
         >
           {submitting ? (
@@ -152,7 +152,7 @@ export function CommentInput({ slug, onMessageSent, archived = false }: CommentI
       {content.length >= 1800 && (
         <p
           className={cn(
-            'font-mono text-xs mt-1 text-right',
+            'font-mono text-[11px] mt-1 text-right',
             content.length >= 2000
               ? 'text-red-700 dark:text-red-400'
               : content.length >= 1900

@@ -1,102 +1,89 @@
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
-import { MessageSquare, Users } from 'lucide-react';
-import { Card, CardHeader, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { MessageSquare, Users, ArrowUpRight } from 'lucide-react';
 import type { APIRoomWithStats } from '@/lib/api-types';
+import styles from './rooms-mosaic.module.css';
 
 interface RoomCardProps {
   room: APIRoomWithStats;
 }
 
+// One tile of the rooms mosaic. Its size and inversion come from its position in
+// the API's list (rooms-mosaic.module.css), never from its numbers. The room's name
+// is the link and its box covers the tile, so the whole tile opens the room.
 export function RoomCard({ room }: RoomCardProps) {
   const lastActive = formatDistanceToNow(new Date(room.last_active_at), { addSuffix: true });
 
   return (
-    <Link href={`/rooms/${room.slug}`} className="block">
-      <Card className="bg-card border border-border hover:border-foreground hover:shadow-sm transition-all h-full rounded-none">
-        <CardHeader className="pb-2">
-          <div className="flex items-start justify-between gap-2">
-            <h3 className="font-mono text-base tracking-tight leading-snug">
-              {room.display_name}
-            </h3>
-            {room.category && (
-              <Badge
-                variant="secondary"
-                className="font-mono text-[10px] tracking-wider shrink-0"
-              >
-                {room.category}
-              </Badge>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          {room.description && (
-            <p className="text-sm text-muted-foreground leading-relaxed line-clamp-2">
-              {room.description}
-            </p>
-          )}
+    <article className={styles.tile}>
+      <h3 className={styles.title}>
+        <Link href={`/rooms/${room.slug}`} className={styles.cover}>
+          {room.display_name}
+          <ArrowUpRight aria-hidden="true" className={styles.arrow} strokeWidth={1} />
+        </Link>
+      </h3>
+      {room.category && (
+        <span className={styles.category}>
+          {room.category}
+        </span>
+      )}
+      {room.description && (
+        <p className={styles.description}>{room.description}</p>
+      )}
 
-          {/* Short preview of the most recent message so the card shows what the
-              room is actually about, not just its metadata. */}
-          {room.last_message_preview && (
-            <p
-              data-testid="room-last-message"
-              className="text-xs text-muted-foreground/80 italic leading-relaxed line-clamp-2 border-l-2 border-border pl-3"
-            >
-              {room.last_message_preview}
-            </p>
-          )}
+      {/* Short preview of the most recent message so the tile shows what the
+          room is actually about, not just its metadata. */}
+      {room.last_message_preview && (
+        <p data-testid="room-last-message" className={styles.preview}>
+          {room.last_message_preview}
+        </p>
+      )}
 
-          {/* Stats row */}
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Live agent count */}
-            <div className="flex items-center gap-1.5">
-              {room.live_agent_count > 0 && (
-                <span className="w-1.5 h-1.5 rounded-full bg-green-700 dark:bg-green-500 animate-pulse" />
-              )}
-              <span className="font-mono text-xs text-muted-foreground">
-                {room.live_agent_count} live
-              </span>
-            </div>
-
-            {/* Unique participant count */}
-            <div className="flex items-center gap-1">
-              <Users size={12} className="text-muted-foreground" />
-              <span className="font-mono text-xs text-muted-foreground">
-                {room.unique_participant_count} participants
-              </span>
-            </div>
-
-            {/* Message count */}
-            <div className="flex items-center gap-1">
-              <MessageSquare size={12} className="text-muted-foreground" />
-              <span className="font-mono text-xs text-muted-foreground">
-                {room.message_count} messages
-              </span>
-            </div>
-
-            {/* Last active */}
-            <span className="font-mono text-xs text-muted-foreground">
-              {lastActive}
-            </span>
-          </div>
-
+      <div className={styles.footer}>
+        <div className={styles.byline}>
           {/* Owner */}
           {room.owner_display_name && room.owner_id && (
-            <div className="flex items-center gap-1">
-              <span className="text-xs text-muted-foreground">by</span>
+            <span className="inline-flex min-w-0 items-center gap-1">
+              <span className="opacity-70">by</span>
               <Link
                 href={`/users/${room.owner_id}`}
-                className="text-xs text-muted-foreground hover:underline"
+                className="hover:underline"
                 onClick={(e) => e.stopPropagation()}
               >
                 {room.owner_display_name}
               </Link>
-            </div>
+            </span>
           )}
-        </CardContent>
-      </Card>
-    </Link>
+          {/* Last active */}
+          <span className="opacity-70">{lastActive}</span>
+        </div>
+
+        {/* Stats row */}
+        <div className={styles.stats}>
+          {/* Live agent count */}
+          <span className="inline-flex items-center gap-2">
+            {room.live_agent_count > 0 && (
+              <span
+                aria-hidden="true"
+                className="w-1.5 h-1.5 shrink-0 rounded-full bg-green-700 dark:bg-green-400 ring-2 ring-background animate-pulse"
+              />
+            )}
+            <span>{room.live_agent_count} live</span>
+          </span>
+
+          {/* Unique participant count */}
+          <span className="inline-flex items-center gap-1.5">
+            <Users aria-hidden="true" size={12} />
+            <span>{room.unique_participant_count} participants</span>
+          </span>
+
+          {/* Message count */}
+          <span className="inline-flex items-center gap-1.5">
+            <MessageSquare aria-hidden="true" size={12} />
+            <span>{room.message_count} messages</span>
+          </span>
+        </div>
+      </div>
+    </article>
   );
 }

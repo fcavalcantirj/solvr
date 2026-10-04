@@ -71,19 +71,19 @@ export function ConnectAgentPanel({ room, tryWorkflowUrl }: ConnectAgentPanelPro
   // Finished room: nothing to join. Offer a fresh start with reusable instructions.
   if (archived) {
     return (
-      <div className="border border-border bg-card" data-testid="connect-agent-panel">
-        <div className="flex items-center gap-2 p-4 border-b border-border">
+      <div className="min-w-0 border-t border-border" data-testid="connect-agent-panel">
+        <div className="flex flex-wrap items-center gap-2 py-4">
           <Terminal size={14} className="text-foreground" />
-          <h3 className="font-mono text-xs tracking-[0.2em]">CONNECT AN AGENT</h3>
+          <h3 className="font-mono text-[11px] uppercase tracking-[0.18em]">CONNECT AN AGENT</h3>
         </div>
-        <div className="p-4 space-y-3">
+        <div className="pb-4 space-y-4">
           <p className="text-xs text-muted-foreground leading-relaxed">
             This room is finished, so there is nothing to join. Start a new room with
             reusable instructions instead.
           </p>
           <a
             href={tryWorkflowUrl ?? "/connect"}
-            className="block w-full font-mono text-xs tracking-wider text-center py-2.5 border border-border hover:border-foreground hover:bg-foreground/5 transition-colors"
+            className="block w-full font-mono text-[11px] uppercase tracking-[0.18em] text-center py-2.5 border border-border hover:border-foreground hover:bg-foreground/5 transition-colors"
           >
             START A NEW ROOM
           </a>
@@ -93,12 +93,12 @@ export function ConnectAgentPanel({ room, tryWorkflowUrl }: ConnectAgentPanelPro
   }
 
   return (
-    <div className="border border-border bg-card" data-testid="connect-agent-panel">
-      <div className="flex items-center gap-2 p-4 border-b border-border">
+    <div className="min-w-0 border-t border-border" data-testid="connect-agent-panel">
+      <div className="flex flex-wrap items-center gap-2 py-4">
         <Terminal size={14} className="text-foreground" />
-        <h3 className="font-mono text-xs tracking-[0.2em]">CONNECT AN AGENT</h3>
+        <h3 className="font-mono text-[11px] uppercase tracking-[0.18em]">CONNECT AN AGENT</h3>
       </div>
-      <div className="p-4 space-y-3">
+      <div className="pb-4 space-y-4">
         <p className="text-xs text-muted-foreground leading-relaxed">
           {room.is_private
             ? "Connect another agent to this private room. Its sentence asks it for its agent id first, so the owner can admit it."
@@ -109,7 +109,7 @@ export function ConnectAgentPanel({ room, tryWorkflowUrl }: ConnectAgentPanelPro
           <button
             onClick={loadPrompt}
             disabled={loading}
-            className="w-full font-mono text-xs tracking-wider text-center py-2.5 border border-border hover:border-foreground hover:bg-foreground/5 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+            className="w-full font-mono text-[11px] uppercase tracking-[0.18em] text-center py-2.5 border border-border hover:border-foreground hover:bg-foreground/5 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
           >
             {loading ? (
               <>
@@ -131,7 +131,7 @@ export function ConnectAgentPanel({ room, tryWorkflowUrl }: ConnectAgentPanelPro
             <button
               onClick={loadPrompt}
               disabled={loading}
-              className="w-full font-mono text-xs tracking-wider text-center py-2.5 border border-border hover:border-foreground hover:bg-foreground/5 transition-colors disabled:opacity-50"
+              className="w-full font-mono text-[11px] uppercase tracking-[0.18em] text-center py-2.5 border border-border hover:border-foreground hover:bg-foreground/5 transition-colors disabled:opacity-50"
             >
               RETRY
             </button>
@@ -141,11 +141,11 @@ export function ConnectAgentPanel({ room, tryWorkflowUrl }: ConnectAgentPanelPro
         {envelope && (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <span className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground">
+              <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                 ROLE
               </span>
               <span
-                className="font-mono text-xs capitalize"
+                className="font-mono text-[11px] capitalize"
                 data-testid="connect-role"
               >
                 {envelope.role}
@@ -162,21 +162,21 @@ export function ConnectAgentPanel({ room, tryWorkflowUrl }: ConnectAgentPanelPro
 
             {envelope.task && (
               <p className="text-xs text-muted-foreground leading-relaxed">
-                <span className="font-mono text-[10px] tracking-[0.2em]">TASK</span>{" "}
+                <span className="font-mono text-[11px] uppercase tracking-[0.18em]">TASK</span>{" "}
                 {envelope.task}
               </p>
             )}
 
             <p
               data-testid="join-prompt"
-              className="prompt-sentence select-text border border-border bg-background p-3 text-[0.9375rem] font-light leading-[1.7] text-foreground"
+              className="prompt-sentence select-text border-y border-border bg-background py-4 text-[0.9375rem] font-light leading-[1.7] text-foreground"
             >
               <PromptSentence segments={envelope.prompt.segments} />
             </p>
 
             <button
               onClick={handleCopy}
-              className="w-full font-mono text-xs tracking-wider text-center py-2.5 border border-border hover:border-foreground hover:bg-foreground/5 transition-colors flex items-center justify-center gap-2"
+              className="w-full font-mono text-[11px] uppercase tracking-[0.18em] text-center py-2.5 border border-border hover:border-foreground hover:bg-foreground/5 transition-colors flex items-center justify-center gap-2"
             >
               {copied ? (
                 <>
@@ -191,7 +191,7 @@ export function ConnectAgentPanel({ room, tryWorkflowUrl }: ConnectAgentPanelPro
               )}
             </button>
 
-            <p className="text-[10px] text-muted-foreground leading-relaxed">
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
               Clipboard blocked? Select the sentence above and copy it by hand.
             </p>
           </div>

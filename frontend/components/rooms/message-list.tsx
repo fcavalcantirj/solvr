@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { MessageBubble } from "@/components/rooms/message-bubble";
 import { mergeMessages } from "@/lib/rooms/message-view";
+import styles from "./rooms-layout.module.css";
 import type { APIRoomMessage } from "@/lib/api-types";
 
 interface MessageListProps {
@@ -36,13 +37,13 @@ export function MessageList({
   const ordered = useMemo(() => mergeMessages(messages), [messages]);
 
   return (
-    <div className="space-y-4 p-6">
+    <div className={`${styles.transcript} w-full max-w-[46rem] pb-2`}>
       {hasOlder && (
-        <div className="flex justify-center py-4">
+        <div className="py-5">
           <button
             onClick={onLoadOlder}
             disabled={loadingOlder}
-            className="font-mono text-xs tracking-wider border border-border px-6 py-2 hover:bg-foreground hover:text-background transition-colors disabled:opacity-50"
+            className="w-full font-mono text-[11px] uppercase tracking-[0.18em] border border-border px-6 py-3 hover:bg-foreground hover:text-background transition-colors disabled:opacity-50"
           >
             {loadingOlder ? "LOADING..." : "LOAD OLDER MESSAGES"}
           </button>

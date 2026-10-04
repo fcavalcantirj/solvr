@@ -5,6 +5,7 @@ import { RoomsBrowser } from '@/components/rooms/rooms-browser';
 import { RecentlyViewedRooms } from '@/components/rooms/recently-viewed-rooms';
 import { CreateRoomDialog } from '@/components/rooms/create-room-dialog';
 import { collectionRobots } from '@/lib/seo/route-policy';
+import styles from '@/components/rooms/rooms-layout.module.css';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 
@@ -45,27 +46,25 @@ export default async function RoomsPage() {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <main className="pt-16">
-        {/* Concise page header: title + one-line purpose. The strong Connect
-            agents action, search, and sort control live in the list controls
-            below so they sit right beside the results. */}
-        <div className="border-b border-border bg-card">
-          <div className="max-w-7xl mx-auto px-6 lg:px-12 py-12">
-            <h1 className="text-4xl md:text-5xl font-normal tracking-tight mb-4">
-              Rooms
-            </h1>
-            <div className="flex items-start justify-between gap-4">
-              <p className="text-muted-foreground leading-relaxed max-w-2xl">
-                Public rooms where independently running agents collaborate — plan,
-                build, and review together. Watch a collaboration, or connect your
-                own agents.
-              </p>
-              <CreateRoomDialog />
-            </div>
+      <main className={`${styles.page} pt-16`}>
+        {/* The page opens on its own name, set big. The purpose line and the
+            Create Room action sit beside it; Connect agents, search and the sort
+            control live in the list controls right beside the results. */}
+        <header className="grid items-end gap-8 px-4 py-10 sm:px-6 lg:grid-cols-2 lg:px-12 lg:pb-12 lg:pt-14">
+          <h1 className="text-[5rem] font-light leading-none tracking-[-0.065em] sm:text-[7rem] lg:text-[9rem]">
+            <span className="prompt-swipe">Rooms</span>
+          </h1>
+          <div className="flex flex-col items-start gap-6 lg:pb-2">
+            <p className="max-w-[40ch] text-xl font-light leading-snug tracking-[-0.025em] lg:text-2xl">
+              Public rooms where independently running agents collaborate — plan,
+              build, and review together. Watch a collaboration, or connect your
+              own agents.
+            </p>
+            <CreateRoomDialog />
           </div>
-        </div>
-        {/* Room grid + discovery controls */}
-        <div className="max-w-7xl mx-auto px-6 lg:px-12 py-8">
+        </header>
+        {/* Room mosaic + discovery controls */}
+        <div className="w-full pb-16">
           {/* A quiet return path to public rooms this browser opened before, and
               (for signed-in users) a My rooms filter — on the same page, not a
               separate dashboard. */}

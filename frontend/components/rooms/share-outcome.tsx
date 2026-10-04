@@ -52,7 +52,7 @@ export function ShareOutcome({ slug }: { slug: string }) {
         type="button"
         onClick={toggle}
         aria-expanded={open}
-        className="inline-flex items-center gap-1.5 border border-border px-3 py-1.5 font-mono text-xs tracking-wider hover:bg-muted transition-colors"
+        className="inline-flex items-center gap-2 border border-border px-4 py-2.5 font-mono text-[11px] uppercase tracking-[0.18em] hover:border-foreground transition-colors"
       >
         <ClipboardCopy className="w-3.5 h-3.5" aria-hidden="true" />
         Copy outcome
@@ -60,17 +60,17 @@ export function ShareOutcome({ slug }: { slug: string }) {
       {open && (
         <div
           data-testid="share-outcome-panel"
-          className="mt-2 sm:absolute sm:right-0 sm:z-10 w-full sm:w-80 border border-border bg-card p-3 space-y-2"
+          className="mt-2 sm:absolute sm:right-0 sm:z-10 w-full sm:w-80 border border-foreground bg-background p-4 space-y-3"
         >
           {failed && (
             <p role="alert" className="text-xs text-muted-foreground">
               The outcome could not be read. Try again in a moment.
             </p>
           )}
-          {!failed && !share && <p className="font-mono text-xs text-muted-foreground">Reading the outcome…</p>}
+          {!failed && !share && <p className="font-mono text-[11px] text-muted-foreground">Reading the outcome…</p>}
           {share && (
             <>
-              <p className="font-mono text-xs tracking-wider">{share.excerpt.title}</p>
+              <p className="text-base font-light leading-snug tracking-[-0.01em]">{share.excerpt.title}</p>
               {share.excerpt.text && <p className="text-xs leading-relaxed">{share.excerpt.text}</p>}
               <pre
                 data-testid="share-outcome-text"
@@ -81,11 +81,11 @@ export function ShareOutcome({ slug }: { slug: string }) {
               <button
                 type="button"
                 onClick={copy}
-                className="w-full font-mono text-xs tracking-wider py-1.5 border border-border hover:border-foreground transition-colors"
+                className="w-full font-mono text-[11px] uppercase tracking-[0.18em] py-2.5 border border-border hover:border-foreground transition-colors"
               >
                 {copied ? "Copied" : "Copy"}
               </button>
-              <p className="text-[10px] leading-relaxed text-muted-foreground">{share.note}</p>
+              <p className="text-[11px] leading-relaxed text-muted-foreground">{share.note}</p>
             </>
           )}
         </div>

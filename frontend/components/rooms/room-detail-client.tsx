@@ -1,5 +1,6 @@
 "use client";
 
+import styles from "./rooms-layout.module.css";
 import { useState, useCallback, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import type { APIRoom, APIRoomMessage, APIAgentPresenceRecord, RoomConnectionStatus } from '@/lib/api-types';
 import { MessageList } from './message-list';
@@ -312,65 +313,37 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
   );
 
   return (
-    <div className="flex flex-col min-h-0 lg:h-full">
+    <div className={styles.page}>
       {/* Room header — lives inside the client component so message_count
           reflects SSE arrivals immediately instead of the stale ISR snapshot. */}
-      <div className="shrink-0">
-        <RoomHeader room={displayedRoom} ownerDisplayName={ownerDisplayName} onlineCount={agents.length} tryWorkflowUrl={tryWorkflowUrl} />
-      </div>
+      <RoomHeader room={displayedRoom} ownerDisplayName={ownerDisplayName} onlineCount={agents.length} tryWorkflowUrl={tryWorkflowUrl} />
 
-      {/* Compact context area: the initial task + latest pinned directive, so a
-          reader does not have to scroll a long transcript to find them. */}
-      <div className="shrink-0">
-        <RoomContextPanel initialTask={initialTask} latestPinned={directive} />
-        <div className="mt-2">
-          <RoomNotifyToggle slug={room.slug} initial={notifications} />
-        </div>
-      </div>
+      <div className={styles.conversation}>
+        {/* The conversation itself: a calm reading column that grows with the
+            transcript and scrolls inside itself once it outgrows the screen. */}
+        <div className={styles.reading}>
+          {/* Connection progress (server-derived) + live SSE transport status,
+              set on top of the conversation they describe. */}
+          <div className="flex shrink-0 flex-wrap items-center gap-x-6 gap-y-3 border-b border-border py-5">
+            <ConnectionStatusBadge status={connectionStatus} />
+            <SseStatusBadge status={status} />
+          </div>
 
-      {/* Fast direct-create landing (task: humans who created the room here). It
-          reads ?created=1 and self-hides on every other room view, so it never
-          fetches or renders for ordinary visitors. */}
-      <div className="shrink-0">
-        <RoomStarterPrompts room={displayedRoom} />
-      </div>
+          {/* Participant offline — a partner that was present has stopped responding.
+              Kept distinct from the transport badge above (which reports the reader's
+              own browser/API connection) and from "waiting for another agent". */}
+          {offlineNames.length > 0 && (
+            <div
+              data-testid="participant-offline"
+              role="status"
+              className="shrink-0 border-b border-border py-4 font-mono text-[11px] uppercase leading-relaxed tracking-[0.18em] text-amber-700 dark:text-amber-400"
+            >
+              {offlineNames.join(", ")} went offline — Solvr is holding the room; they can resume anytime.
+            </div>
+          )}
 
-      {/* Connection progress (server-derived) + live SSE transport status */}
-      <div className="mb-2 shrink-0 flex items-center gap-4">
-        <ConnectionStatusBadge status={connectionStatus} />
-        <SseStatusBadge status={status} />
-      </div>
-
-      {/* Participant offline — a partner that was present has stopped responding.
-          Kept distinct from the transport badge above (which reports the reader's
-          own browser/API connection) and from "waiting for another agent". */}
-      {offlineNames.length > 0 && (
-        <div
-          data-testid="participant-offline"
-          role="status"
-          className="mb-2 shrink-0 font-mono text-[10px] tracking-wider text-amber-700 dark:text-amber-400"
-        >
-          {offlineNames.join(", ")} went offline — Solvr is holding the room; they can resume anytime.
-        </div>
-      )}
-
-      {/* Mobile-only presence strip (hidden on lg+) */}
-      <div className="lg:hidden shrink-0">
-        <PresenceSidebar agents={agents} room={displayedRoom} layout="mobile" />
-        {/* Recruit another agent into this public room — reachable without a
-            Solvr account (task 26). On a finished room it offers a fresh start. */}
-        <div className="mb-4">
-          <ConnectAgentPanel room={displayedRoom} tryWorkflowUrl={tryWorkflowUrl} />
-        </div>
-      </div>
-
-      <div className="flex flex-col lg:flex-row gap-4 lg:gap-8 flex-1 min-h-0">
-        {/* Main message area. On lg+ it fills the remaining viewport via the
-            flex parent chain; on mobile it uses a bounded height so messages
-            stay scrollable instead of crushing to zero. */}
-        <div className="flex-1 min-w-0 border border-border bg-card flex flex-col h-[60vh] lg:h-auto lg:min-h-0">
           {/* Messages — scrollable */}
-          <div ref={scrollContainerRef} data-testid="room-scroll" className="flex-1 overflow-y-auto min-h-0">
+          <div ref={scrollContainerRef} data-testid="room-scroll" className="min-h-0 min-w-0 overflow-y-auto overscroll-contain">
             <MessageList
               messages={messages}
               slug={room.slug}
@@ -383,18 +356,23 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
             />
           </div>
 
-          {/* Comment input — pinned at bottom, always visible */}
-          <div className="border-t border-border shrink-0">
+          {/* Comment input — pinned under the newest message, always visible */}
+          <div className="w-full max-w-[46rem] shrink-0">
             <CommentInput slug={room.slug} onMessageSent={handleMessageSent} archived={displayedRoom.archived_at != null} />
           </div>
         </div>
 
-        {/* Sidebar — stacked below chat on mobile, right rail on desktop.
-            Surfaces the API-owned CONNECT AGENT prompt + ROOM INFO on mobile. */}
-        <aside id="connect-agent" className="w-full lg:w-72 shrink-0 lg:overflow-y-auto space-y-4 scroll-mt-24">
-          {/* Public-room recruit control — logged-out visitors included (task 26).
-              The header's Connect an agent action anchors to this panel (#connect-agent). */}
-          <div className="hidden lg:block">
+        {/* The quiet side column: the room's context (initial task + latest pinned
+            directive, so a reader never hunts the transcript for them), the
+            connect tools, presence and the archive. */}
+        <aside className={styles.rail}>
+          <RoomContextPanel initialTask={initialTask} latestPinned={directive} />
+          <RoomNotifyToggle slug={room.slug} initial={notifications} />
+          {/* The header's Connect an agent action anchors here (#connect-agent).
+              The ?created=1 landing reads the URL and self-hides on every other
+              view; the recruit control serves logged-out visitors too (task 26). */}
+          <div id="connect-agent" className={styles.anchor}>
+            <RoomStarterPrompts room={displayedRoom} />
             <ConnectAgentPanel room={displayedRoom} tryWorkflowUrl={tryWorkflowUrl} />
           </div>
           <PresenceSidebar agents={agents} room={displayedRoom} layout="desktop" />

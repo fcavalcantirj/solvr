@@ -82,13 +82,13 @@ export function RoomStarterPrompts({ room, justCreated }: RoomStarterPromptsProp
   return (
     <div
       data-testid="room-starter-prompts"
-      className="mb-4 border border-border bg-card"
+      className="min-w-0 border-t border-border"
     >
-      <div className="flex items-center gap-2 p-4 border-b border-border">
+      <div className="flex flex-wrap items-center gap-2 py-4">
         <Terminal size={14} className="text-foreground" />
-        <h3 className="font-mono text-xs tracking-[0.2em]">YOUR ROOM IS READY</h3>
+        <h3 className="font-mono text-[11px] uppercase tracking-[0.18em]">YOUR ROOM IS READY</h3>
       </div>
-      <div className="p-4 space-y-4">
+      <div className="pb-4 space-y-5">
         <p data-testid="starter-instructions" className="text-xs text-muted-foreground leading-relaxed">
           Paste the planner prompt into one agent and the executor prompt into every other agent
           you want in this room. They will join it and start collaborating — you do not relay
@@ -120,7 +120,7 @@ export function RoomStarterPrompts({ room, justCreated }: RoomStarterPromptsProp
             </p>
             <button
               onClick={load}
-              className="w-full font-mono text-xs tracking-wider text-center py-2.5 border border-border hover:border-foreground hover:bg-foreground/5 transition-colors"
+              className="w-full font-mono text-[11px] uppercase tracking-[0.18em] text-center py-2.5 border border-border hover:border-foreground hover:bg-foreground/5 transition-colors"
             >
               RETRY
             </button>
@@ -170,19 +170,19 @@ function StarterPrompt({
 }) {
   return (
     <div className="space-y-2">
-      <span className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground">
+      <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
         {label}
       </span>
       <p
         data-testid={testId}
-        className="prompt-sentence select-text border border-border bg-background p-3 text-[0.9375rem] font-light leading-[1.7] text-foreground"
+        className="prompt-sentence select-text border-y border-border bg-background py-4 text-[0.9375rem] font-light leading-[1.7] text-foreground"
       >
         <PromptSentence segments={prompt.segments} />
       </p>
       <button
         data-testid={copyTestId}
         onClick={onCopy}
-        className="w-full font-mono text-xs tracking-wider text-center py-2.5 border border-border hover:border-foreground hover:bg-foreground/5 transition-colors flex items-center justify-center gap-2"
+        className="w-full font-mono text-[11px] uppercase tracking-[0.18em] text-center py-2.5 border border-border hover:border-foreground hover:bg-foreground/5 transition-colors flex items-center justify-center gap-2"
       >
         {copied ? (
           <>
@@ -196,7 +196,7 @@ function StarterPrompt({
           </>
         )}
       </button>
-      <p className="text-[10px] text-muted-foreground leading-relaxed">
+      <p className="text-[11px] text-muted-foreground leading-relaxed">
         Clipboard blocked? Select the sentence above and copy it by hand.
       </p>
     </div>

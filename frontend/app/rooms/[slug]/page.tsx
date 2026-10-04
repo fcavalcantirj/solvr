@@ -5,6 +5,7 @@ import { Header } from "@/components/header";
 import { RoomDetailClient } from "@/components/rooms/room-detail-client";
 import { PrivateRoomView } from "@/components/rooms/private-room-view";
 import { RoomArchiveNav } from "@/components/rooms/room-archive-nav";
+import styles from "@/components/rooms/rooms-layout.module.css";
 import { readForPage } from "@/lib/seo/read-for-page";
 import { JsonLd, roomJsonLd, breadcrumbJsonLd } from "@/components/seo/json-ld";
 import type { APIRoomDetailResponse } from "@/lib/api-types";
@@ -94,10 +95,10 @@ export default async function RoomDetailPage({
   // data is ever server-rendered, so private rooms stay unindexed. API failures threw above.
   if (!payload?.data?.room) {
     return (
-      <div className="min-h-screen lg:h-screen flex flex-col bg-background lg:overflow-hidden">
+      <div className="min-h-screen flex flex-col bg-background">
         <Header />
         <main className="flex-1 flex flex-col min-h-0 pt-16">
-          <div className="flex-1 min-h-0 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-12 py-4">
+          <div className={`${styles.page} flex-1 w-full px-4 sm:px-6 lg:px-12 pb-12`}>
             <PrivateRoomView slug={slug} />
           </div>
         </main>
@@ -114,7 +115,7 @@ export default async function RoomDetailPage({
   const messages = recent_messages || [];
 
   return (
-    <div className="min-h-screen lg:h-screen flex flex-col bg-background lg:overflow-hidden">
+    <div className="min-h-screen flex flex-col bg-background">
       {/* Structured data from what the page shows (task idx 82): the API's description,
           and the opening message decides whether a Person led the discussion. */}
       <JsonLd
@@ -123,7 +124,7 @@ export default async function RoomDetailPage({
       <JsonLd data={breadcrumbJsonLd([{ name: "Rooms", path: "/rooms" }, { name: room.display_name, path: `/rooms/${slug}` }])} />
       <Header />
       <main className="flex-1 flex flex-col min-h-0 pt-16">
-        <div className="flex-1 min-h-0 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-12 py-4">
+        <div className="flex-1 min-w-0 w-full px-4 sm:px-6 lg:px-12 pb-12">
           <RoomDetailClient
             room={room}
             initialMessages={messages}

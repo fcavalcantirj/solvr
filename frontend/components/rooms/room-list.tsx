@@ -1,7 +1,10 @@
 "use client";
 
+import styles from './rooms-mosaic.module.css';
+import { SegmentedControl } from '@/components/page/segmented-control';
 import { useState } from 'react';
 import Link from 'next/link';
+import { Search } from 'lucide-react';
 import { api } from '@/lib/api';
 import { RoomCard } from './room-card';
 import type { APIRoomWithStats, RoomListParams } from '@/lib/api-types';
@@ -97,51 +100,37 @@ export function RoomListClient({ initialRooms, initialSort = 'recent' }: RoomLis
     }
   };
 
-  const sortButton = (value: RoomSort, label: string) => (
-    <button
-      type="button"
-      aria-pressed={sort === value}
-      onClick={() => handleSortChange(value)}
-      className={`font-mono text-xs tracking-wider px-4 py-2 border transition-colors ${
-        sort === value
-          ? 'bg-foreground text-background border-foreground'
-          : 'border-border hover:border-foreground'
-      }`}
-    >
-      {label}
-    </button>
-  );
 
   return (
     <div className="space-y-8">
       {/* Discovery controls: one strong connection action, search, and a single
           Recent / Active now sort toggle. */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <form onSubmit={handleSearch} role="search" className="flex gap-2 w-full md:max-w-md">
+      <div className="mx-4 flex flex-col gap-4 border-t border-border py-4 sm:mx-6 lg:mx-12 lg:flex-row lg:items-center lg:justify-between lg:gap-8">
+        <form onSubmit={handleSearch} role="search" className="flex min-w-0 flex-1 items-center gap-3 lg:max-w-xl">
+          <Search aria-hidden="true" size={18} className="shrink-0 text-muted-foreground" />
           <input
             type="search"
             aria-label="Search rooms"
             placeholder="Search rooms"
             value={queryInput}
             onChange={(e) => setQueryInput(e.target.value)}
-            className="flex-1 border border-border bg-background px-3 py-2 text-sm focus:border-foreground focus:outline-none"
+            className="min-w-0 flex-1 bg-transparent px-1 py-3 text-base placeholder:text-muted-foreground focus-visible:outline focus-visible:outline-1 focus-visible:outline-foreground"
           />
           <button
             type="submit"
-            className="font-mono text-xs tracking-wider border border-border px-4 py-2 hover:bg-foreground hover:text-background transition-colors"
+            className="shrink-0 font-mono text-[11px] uppercase tracking-[0.18em] border border-border px-5 py-3 hover:bg-foreground hover:text-background transition-colors"
           >
             SEARCH
           </button>
         </form>
 
-        <div className="flex items-center gap-3">
-          <div className="flex gap-2" role="group" aria-label="Sort rooms">
-            {sortButton('recent', 'Recent')}
-            {sortButton('active', 'Active now')}
-          </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <SegmentedControl label="Sort rooms" value={sort}
+            options={[{ value: 'recent', label: 'Recent' }, { value: 'active', label: 'Active now' }]}
+            onSelect={(value) => handleSortChange(value as RoomSort)} />
           <Link
             href="/connect"
-            className="font-mono text-xs tracking-wider bg-foreground text-background px-5 py-2.5 hover:bg-foreground/90 transition-colors"
+            className="font-mono text-[11px] uppercase tracking-[0.18em] border border-foreground bg-foreground text-background px-5 py-2.5 hover:bg-foreground/90 transition-colors"
           >
             CONNECT AGENTS
           </Link>
@@ -149,29 +138,29 @@ export function RoomListClient({ initialRooms, initialSort = 'recent' }: RoomLis
       </div>
 
       {error ? (
-        <div className="text-center py-16" role="alert">
-          <p className="text-sm text-muted-foreground mb-6">
+        <div className="px-4 py-24 text-center sm:px-6 lg:px-12" role="alert">
+          <p className="text-base text-muted-foreground mb-6">
             Could not load rooms. Please try again.
           </p>
           <button
             type="button"
             onClick={() => runQuery(sort, activeQuery)}
-            className="font-mono text-xs tracking-wider border border-border px-8 py-3 hover:bg-foreground hover:text-background transition-colors"
+            className="font-mono text-[11px] uppercase tracking-[0.18em] border border-border px-8 py-3 hover:bg-foreground hover:text-background transition-colors"
           >
             RETRY
           </button>
         </div>
       ) : rooms.length === 0 ? (
-        <div className="text-center py-16">
-          <h2 className="font-mono text-lg tracking-tight mb-2">No rooms yet</h2>
-          <p className="text-sm text-muted-foreground leading-relaxed mb-6">
+        <div className="px-4 py-24 sm:px-6 lg:px-12">
+          <h2 className="text-5xl font-light leading-none tracking-[-0.045em] sm:text-7xl">No rooms yet</h2>
+          <p className="mt-6 mb-10 max-w-[52ch] text-lg font-light leading-relaxed text-muted-foreground">
             {activeQuery
               ? `No rooms match "${activeQuery}". Connect your agents to start one.`
               : 'No public rooms are active right now. Connect your agents to start one.'}
           </p>
           <Link
             href="/connect"
-            className="font-mono text-xs tracking-wider bg-foreground text-background px-8 py-3 hover:bg-foreground/90 transition-colors"
+            className="inline-block font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-8 py-4 hover:bg-foreground/90 transition-colors"
           >
             CONNECT AGENTS
           </Link>
@@ -183,23 +172,23 @@ export function RoomListClient({ initialRooms, initialSort = 'recent' }: RoomLis
               server's live_agent_count so offline participants and historical
               activity are never counted as live. */}
           {rooms.every((room) => (room.live_agent_count ?? 0) === 0) && (
-            <p role="status" className="text-sm text-muted-foreground">
+            <p role="status" className="px-4 font-mono text-[11px] uppercase leading-relaxed tracking-[0.18em] text-muted-foreground sm:px-6 lg:px-12">
               No agents are online right now — these are recent collaborations.
             </p>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className={styles.mosaic}>
             {rooms.map((room) => (
               <RoomCard key={room.id} room={room} />
             ))}
           </div>
 
           {hasMore && (
-            <div className="flex justify-center">
+            <div className="px-4 sm:px-6 lg:px-12">
               <button
                 onClick={loadMore}
                 disabled={loading}
-                className="font-mono text-xs tracking-wider border border-border px-8 py-3 hover:bg-foreground hover:text-background transition-colors disabled:opacity-50"
+                className="w-full font-mono text-[11px] uppercase tracking-[0.18em] border border-border px-8 py-5 hover:bg-foreground hover:text-background transition-colors disabled:opacity-50"
               >
                 {loading ? 'LOADING...' : 'LOAD MORE ROOMS'}
               </button>

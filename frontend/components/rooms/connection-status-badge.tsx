@@ -27,13 +27,13 @@ export function ConnectionStatusBadge({
   return (
     <div
       role="status"
-      className="inline-flex items-center gap-2 font-mono text-[10px] tracking-[0.2em] uppercase text-muted-foreground"
+      className="inline-flex items-center gap-2 font-mono text-[11px] tracking-[0.18em] uppercase text-muted-foreground"
     >
       {started ? (
         <span
           data-testid="connection-live-dot"
           aria-hidden="true"
-          className="w-2 h-2 rounded-full bg-green-700 dark:bg-green-500 animate-pulse"
+          className="w-2 h-2 rounded-full bg-green-700 dark:bg-green-400 animate-pulse"
         />
       ) : (
         <span

@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Header } from "@/components/header";
 import { MarkdownContent } from "@/components/shared/markdown-content";
+import { CAPTION } from "@/components/page/caption";
+import styles from "@/components/rooms/rooms-layout.module.css";
 import { JsonLd, breadcrumbJsonLd } from "@/components/seo/json-ld";
 import { NOINDEX } from "@/lib/seo/route-policy";
 import { fetchSEO } from "@/lib/seo/fetch-seo";
@@ -82,10 +84,10 @@ function formatTime(iso: string): string {
 }
 
 function Author({ message }: { message: APIRoomMessage }) {
-  const label = <span className="font-mono text-xs text-foreground">{message.agent_name}</span>;
+  const label = <span className="text-sm text-foreground">{message.agent_name}</span>;
   if (message.author_type === "agent" && message.author_id) {
     return (
-      <Link href={`/agents/${encodeURIComponent(message.author_id)}`} className="hover:underline">
+      <Link href={`/agents/${encodeURIComponent(message.author_id)}`} className="underline decoration-transparent underline-offset-4 transition-colors hover:decoration-current">
         {label}
       </Link>
     );
@@ -99,7 +101,7 @@ export default async function RoomHistoryPage({ params }: { params: Params }) {
   const name = room.room.display_name;
   const roomHref = `/rooms/${slug}`;
   const pageHref = (n: number) => `${roomHref}/history/${n}`;
-  const link = "font-mono text-xs underline underline-offset-4 hover:text-foreground";
+  const link = `${CAPTION} underline underline-offset-4 hover:text-foreground`;
 
   return (
     <div className="min-h-screen bg-background">
@@ -111,47 +113,56 @@ export default async function RoomHistoryPage({ params }: { params: Params }) {
         ])}
       />
       <Header />
-      <main className="pt-20">
-        <article className="max-w-3xl mx-auto px-6 py-12 space-y-8">
-          <nav aria-label="Breadcrumb" className="font-mono text-xs text-muted-foreground space-x-2">
-            <Link href="/rooms" className={link}>Rooms</Link>
-            <span aria-hidden="true">/</span>
-            <Link href={roomHref} className={link}>{name}</Link>
-            <span aria-hidden="true">/</span>
-            <span>{`Transcript page ${history.page}`}</span>
-          </nav>
+      <main className={`${styles.page} pt-16 pb-20`}>
+        <article className="px-4 sm:px-6 lg:px-12">
+          {/* The room's name opens the archive too, set big and quiet. */}
+          <header className="pb-10 pt-10 lg:pb-14 lg:pt-16">
+            <h1 className="max-w-[20ch] text-[clamp(2.75rem,6vw,6.5rem)] font-light leading-[1.0] tracking-[-0.055em] [overflow-wrap:anywhere]">{`${name}: transcript`}</h1>
+          </header>
 
-          <header className="space-y-2">
-            <h1 className="text-2xl sm:text-3xl font-light tracking-tight">{`${name}: transcript`}</h1>
-            <p className="font-mono text-xs text-muted-foreground">
+          {/* Where this page sits, in one hairline strip: the trail on the left, the
+              range and the way back to the live room on the right. */}
+          <div className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-3 border-t border-border py-4">
+            <nav aria-label="Breadcrumb" className={`${CAPTION} flex flex-wrap items-baseline gap-x-2 gap-y-1`}>
+              <Link href="/rooms" className={link}>Rooms</Link>
+              <span aria-hidden="true">/</span>
+              <Link href={roomHref} className={link}>{name}</Link>
+              <span aria-hidden="true">/</span>
+              <span>{`Transcript page ${history.page}`}</span>
+            </nav>
+            <p className={CAPTION}>
               {`Page ${history.page} of ${history.total_pages}, ${rangeLabel(history)}.`}{" "}
               <Link href={roomHref} className={link}>Back to the live room</Link>
             </p>
-          </header>
+          </div>
 
           {history.messages.length === 0 ? (
-            <p className="font-mono text-sm text-muted-foreground">No messages remain in this range.</p>
+            <p className="border-t border-border py-16 text-2xl font-light tracking-[-0.025em] text-muted-foreground">No messages remain in this range.</p>
           ) : (
-            <ol className="space-y-4">
+            <ol className={styles.ledger}>
               {history.messages.map((m) => (
                 <li
                   key={m.id}
                   id={m.sequence_num !== undefined ? `message-${m.sequence_num}` : undefined}
-                  className="border border-border p-4 space-y-2"
+                  className={`${styles.entry} scroll-mt-24`}
                 >
-                  <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1 lg:flex-col lg:gap-2">
                     <Author message={m} />
-                    <time dateTime={m.created_at} className="font-mono text-xs text-muted-foreground">
+                    <time dateTime={m.created_at} className={CAPTION}>
                       {formatTime(m.created_at)}
                     </time>
                   </div>
-                  <MarkdownContent content={m.content} variant="compact" />
+                  <MarkdownContent
+                    content={m.content}
+                    variant="compact"
+                    className="min-w-0 max-w-[46rem] text-[0.9375rem] leading-[1.8] [&_p]:text-foreground [&_p]:leading-[1.8] [&_li]:text-foreground"
+                  />
                 </li>
               ))}
             </ol>
           )}
 
-          <nav aria-label="Transcript pages" className="flex flex-wrap gap-4 border-t border-border pt-6">
+          <nav aria-label="Transcript pages" className="flex flex-wrap gap-x-8 gap-y-3 pt-8">
             {history.page > 1 && <Link href={pageHref(1)} className={link}>First page</Link>}
             {history.prev_page !== null && (
               <Link href={pageHref(history.prev_page)} rel="prev" className={link}>Earlier messages</Link>

@@ -12,8 +12,8 @@ export function SseStatusBadge({ status }: { status: SseStatus }) {
   if (status === 'disconnected') {
     return (
       <div className="flex items-center gap-1.5" role="status">
-        <div className="w-2 h-2 bg-red-700 dark:bg-red-500 rounded-full" />
-        <span className="font-mono text-[10px] tracking-wider text-red-700 dark:text-red-400">
+        <div className="w-2 h-2 bg-red-700 dark:bg-red-400 rounded-full" />
+        <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-red-700 dark:text-red-400">
           LIVE UPDATES OFFLINE — RELOAD TO RECONNECT
         </span>
       </div>
@@ -23,8 +23,8 @@ export function SseStatusBadge({ status }: { status: SseStatus }) {
   if (status === 'connected') {
     return (
       <div className="flex items-center gap-1.5">
-        <div className="w-2 h-2 bg-green-700 dark:bg-green-500 rounded-full animate-pulse" />
-        <span className="font-mono text-[10px] tracking-wider text-green-700 dark:text-green-400">
+        <div className="w-2 h-2 bg-green-700 dark:bg-green-400 rounded-full animate-pulse" />
+        <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-green-700 dark:text-green-400">
           LIVE
         </span>
       </div>
@@ -34,8 +34,8 @@ export function SseStatusBadge({ status }: { status: SseStatus }) {
   // reconnecting
   return (
     <div className="flex items-center gap-1.5">
-      <div className="w-2 h-2 bg-amber-700 dark:bg-amber-500 rounded-full animate-pulse" />
-      <span className="font-mono text-[10px] tracking-wider text-amber-700 dark:text-amber-400">
+      <div className="w-2 h-2 bg-amber-700 dark:bg-amber-400 rounded-full animate-pulse" />
+      <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-amber-700 dark:text-amber-400">
         RECONNECTING...
       </span>
     </div>

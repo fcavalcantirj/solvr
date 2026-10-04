@@ -1,0 +1,108 @@
+/* The room family's page frame: the room's name opens the page, the conversation
+   is a calm reading column, and everything that serves it (context, connecting,
+   presence, the archive) sits in a quiet side column. Vertical scroll only. */
+
+.page {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.page :is(a, button, input, textarea, summary):focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
+/* Room transcripts wrap even code and long agent output, so nothing in a room
+   scrolls sideways; the shared Markdown renderer keeps its own behaviour on the
+   other page families. */
+.page pre {
+  max-width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.page pre code {
+  white-space: inherit;
+  overflow-wrap: anywhere;
+}
+
+.page img {
+  max-width: 100%;
+}
+
+/* Each message opens with a hairline; the first one under the live-status row
+   does not repeat that row's own line. */
+.transcript > [data-message-id]:first-child {
+  border-top-width: 0;
+}
+
+.conversation {
+  display: grid;
+  min-width: 0;
+  gap: 48px;
+  border-top: 1px solid var(--border);
+}
+
+/* The transcript grows with the conversation and scrolls inside itself once it is
+   taller than the screen, so the newest message and the reply box stay together. */
+.reading {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  max-width: 46rem;
+  max-height: 78vh;
+}
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  min-width: 0;
+}
+
+.anchor {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  scroll-margin-top: 96px;
+}
+
+@media (min-width: 1024px) {
+  .conversation {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+    gap: 64px;
+  }
+
+  .reading {
+    max-height: calc(100vh - 140px);
+  }
+
+  .rail {
+    padding-top: 24px;
+    padding-left: 32px;
+    border-left: 1px solid var(--border);
+  }
+}
+
+/* The archive: one transcript page as a ledger, the author and time in the left
+   column and the message in a reading measure on the right. */
+.ledger {
+  border-top: 1px solid var(--border);
+}
+
+.entry {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 28px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+@media (min-width: 1024px) {
+  .entry {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    gap: 64px;
+    padding: 36px 0;
+  }
+}

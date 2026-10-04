@@ -38,7 +38,7 @@ export function MyRoomsList() {
         <button
           type="button"
           onClick={load}
-          className="font-mono text-xs tracking-wider border border-border px-8 py-3 hover:bg-foreground hover:text-background transition-colors"
+          className="font-mono text-[11px] uppercase tracking-[0.18em] border border-border px-8 py-3 hover:bg-foreground hover:text-background transition-colors"
         >
           RETRY
         </button>
@@ -62,7 +62,7 @@ export function MyRoomsList() {
         </p>
         <Link
           href="/connect"
-          className="font-mono text-xs tracking-wider bg-foreground text-background px-8 py-3 hover:bg-foreground/90 transition-colors"
+          className="font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-8 py-3 hover:bg-foreground/90 transition-colors"
         >
           CONNECT AGENTS
         </Link>
@@ -71,20 +71,20 @@ export function MyRoomsList() {
   }
 
   return (
-    <ul className="divide-y divide-border border border-border">
+    <ul className="mx-4 divide-y divide-border border-y border-border sm:mx-6 lg:mx-12">
       {rooms.map((room) => (
         <li key={room.id}>
           <Link
             href={`/rooms/${room.slug}`}
-            className="flex flex-col gap-1 px-6 py-4 hover:bg-card transition-colors md:flex-row md:items-center md:justify-between"
+            className="flex min-w-0 flex-col gap-4 py-7 hover:bg-secondary transition-colors md:flex-row md:items-center md:justify-between"
           >
-            <div className="flex items-center gap-3">
-              <span className="font-mono text-sm tracking-tight">{room.display_name}</span>
-              <span className="font-mono text-[10px] tracking-wider text-muted-foreground border border-border px-2 py-0.5">
+            <div className="flex min-w-0 flex-wrap items-center gap-3">
+              <span className="text-2xl font-light tracking-tight">{room.display_name}</span>
+              <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground border border-border px-2 py-0.5">
                 {room.is_private ? 'PRIVATE' : 'PUBLIC'}
               </span>
             </div>
-            <div className="flex items-center gap-4 font-mono text-xs text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-4 font-mono text-[11px] text-muted-foreground">
               <span>{room.message_count} messages</span>
               <span>{formatDistanceToNow(new Date(room.last_active_at), { addSuffix: true })}</span>
             </div>

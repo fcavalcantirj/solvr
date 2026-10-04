@@ -1,5 +1,6 @@
 "use client";
 
+import { SegmentedControl } from '@/components/page/segmented-control';
 import { useState } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { RoomListClient } from './room-list';
@@ -24,27 +25,14 @@ export function RoomsBrowser({ initialRooms, initialSort = 'recent' }: RoomsBrow
   const [view, setView] = useState<View>('public');
   const showMine = isAuthenticated && view === 'mine';
 
-  const filterButton = (value: View, label: string) => (
-    <button
-      type="button"
-      aria-pressed={view === value}
-      onClick={() => setView(value)}
-      className={`font-mono text-xs tracking-wider px-4 py-2 border transition-colors ${
-        view === value
-          ? 'bg-foreground text-background border-foreground'
-          : 'border-border hover:border-foreground'
-      }`}
-    >
-      {label}
-    </button>
-  );
 
   return (
-    <div className="space-y-8">
+    <div>
       {isAuthenticated && (
-        <div className="flex gap-2" role="group" aria-label="Room filter">
-          {filterButton('public', 'Public rooms')}
-          {filterButton('mine', 'My rooms')}
+        <div className="px-4 pb-6 sm:px-6 lg:px-12">
+          <SegmentedControl label="Room filter" value={view}
+            options={[{ value: 'public', label: 'Public rooms' }, { value: 'mine', label: 'My rooms' }]}
+            onSelect={(value) => setView(value as View)} />
         </div>
       )}
       {showMine ? (

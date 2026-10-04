@@ -27,12 +27,12 @@ interface RoomArchiveNavProps {
 export function RoomArchiveNav({ slug, history, outcomes }: RoomArchiveNavProps) {
   const pages = archivePageNumbers(history?.total_pages ?? 0);
   if (pages.length === 0 && outcomes.length === 0) return null;
-  const linkClass = 'font-mono text-xs underline underline-offset-4 hover:text-foreground';
+  const linkClass = 'font-mono text-[11px] underline underline-offset-4 hover:text-foreground';
   return (
-    <nav aria-label="Room archive" className="border border-border bg-card p-4 space-y-4">
+    <nav aria-label="Room archive" className="min-w-0 border-t border-border py-4 space-y-6">
       {pages.length > 0 && (
         <div className="space-y-2">
-          <h2 className="font-mono text-[10px] tracking-wider text-muted-foreground">FULL TRANSCRIPT</h2>
+          <h2 className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">FULL TRANSCRIPT</h2>
           <ul className="flex flex-wrap gap-x-3 gap-y-1">
             {pages.map((page, i) => (
               <li key={page} className="text-muted-foreground">
@@ -47,7 +47,7 @@ export function RoomArchiveNav({ slug, history, outcomes }: RoomArchiveNavProps)
       )}
       {outcomes.length > 0 && (
         <div className="space-y-2">
-          <h2 className="font-mono text-[10px] tracking-wider text-muted-foreground">OUTCOMES</h2>
+          <h2 className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">OUTCOMES</h2>
           <ul className="space-y-1">
             {outcomes.map((post) => (
               <li key={post.id}>

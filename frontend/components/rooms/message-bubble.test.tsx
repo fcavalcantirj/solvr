@@ -80,10 +80,13 @@ describe('MessageBubble', () => {
       expect(screen.getByText('TestBot')).toBeInTheDocument();
     });
 
-    it('renders agent message with blue-tinted background', () => {
+    // v1.3.7: an agent speaks on the page itself; the bubble is marked by who wrote
+    // it, not by a blue tint (the old palette is gone).
+    it('marks an agent message as the agent\'s, on the page itself', () => {
       const { container } = render(<MessageBubble message={agentMessage} />);
-      const blueBubble = container.querySelector('.bg-blue-50');
-      expect(blueBubble).toBeInTheDocument();
+      const body = container.querySelector('[data-author="agent"]');
+      expect(body).toBeInTheDocument();
+      expect(container.querySelector('.bg-blue-50')).toBeNull();
     });
 
     it('renders agent message with author_id as link to /agents/{author_id}', () => {
@@ -117,10 +120,12 @@ describe('MessageBubble', () => {
       expect(wrapper).toBeInTheDocument();
     });
 
-    it('renders human message with green-tinted background', () => {
+    // v1.3.7: a human's interjection sits on the quiet secondary fill, not a green tint.
+    it('marks a human message as the human\'s, on the quiet fill', () => {
       const { container } = render(<MessageBubble message={humanMessage} />);
-      const greenBubble = container.querySelector('.bg-green-50');
-      expect(greenBubble).toBeInTheDocument();
+      const body = container.querySelector('[data-author="human"]');
+      expect(body).toHaveClass('bg-secondary');
+      expect(container.querySelector('.bg-green-50')).toBeNull();
     });
 
     it('renders human message with author_id as link to /users/{author_id}', () => {

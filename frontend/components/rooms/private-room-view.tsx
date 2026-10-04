@@ -62,20 +62,20 @@ export function PrivateRoomView({ slug }: { slug: string }) {
   }
 
   return (
-    <div className="flex flex-1 items-center justify-center py-16">
-      <div className="max-w-md text-center">
+    <div className="flex flex-1 items-start pb-16 pt-10 lg:pt-16">
+      <div className="min-w-0 max-w-[60rem]">
         {(state.kind === "loading" || authLoading) && (
-          <p className="text-muted-foreground">Loading room…</p>
+          <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Loading room…</p>
         )}
         {state.kind === "needs-login" && (
           <>
-            <h1 className="mb-2 text-lg font-semibold">This room is private</h1>
-            <p className="mb-4 text-muted-foreground">
+            <h1 className="max-w-[16ch] text-[clamp(2.75rem,6vw,6.5rem)] font-light leading-[1.0] tracking-[-0.055em]">This room is private</h1>
+            <p className="mb-8 mt-10 max-w-[48ch] border-t border-border pt-5 text-lg font-light leading-snug text-muted-foreground">
               Log in to view this room and post as yourself.
             </p>
             <Link
               href="/login"
-              className="inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+              className="inline-flex items-center bg-foreground px-6 py-3 font-mono text-[11px] uppercase tracking-[0.18em] text-background hover:opacity-90"
             >
               Log in
             </Link>
@@ -83,24 +83,24 @@ export function PrivateRoomView({ slug }: { slug: string }) {
         )}
         {state.kind === "forbidden" && (
           <>
-            <h1 className="mb-2 text-lg font-semibold">This room is private</h1>
-            <p className="text-muted-foreground">
+            <h1 className="max-w-[16ch] text-[clamp(2.75rem,6vw,6.5rem)] font-light leading-[1.0] tracking-[-0.055em]">This room is private</h1>
+            <p className="mt-10 max-w-[48ch] border-t border-border pt-5 text-lg font-light leading-snug text-muted-foreground">
               You&apos;re not a member of this room.
             </p>
           </>
         )}
         {state.kind === "not-found" && (
           <>
-            <h1 className="mb-2 text-lg font-semibold">Room not found</h1>
-            <p className="text-muted-foreground">
+            <h1 className="max-w-[16ch] text-[clamp(2.75rem,6vw,6.5rem)] font-light leading-[1.0] tracking-[-0.055em]">Room not found</h1>
+            <p className="mt-10 max-w-[48ch] border-t border-border pt-5 text-lg font-light leading-snug text-muted-foreground">
               This room doesn&apos;t exist or has been deleted.
             </p>
           </>
         )}
         {state.kind === "error" && (
           <>
-            <h1 className="mb-2 text-lg font-semibold">Something went wrong</h1>
-            <p className="text-muted-foreground">
+            <h1 className="max-w-[16ch] text-[clamp(2.75rem,6vw,6.5rem)] font-light leading-[1.0] tracking-[-0.055em]">Something went wrong</h1>
+            <p className="mt-10 max-w-[48ch] border-t border-border pt-5 text-lg font-light leading-snug text-muted-foreground">
               Couldn&apos;t load this room. Try again in a moment.
             </p>
           </>

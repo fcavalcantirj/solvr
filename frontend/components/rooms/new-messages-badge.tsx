@@ -12,7 +12,7 @@ export function NewMessagesBadge({ count, onClick }: { count: number; onClick: (
     <button
       onClick={onClick}
       aria-label={`Jump to latest — ${countLabel} message${count === 1 ? "" : "s"}`}
-      className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 bg-foreground text-background font-mono text-xs px-4 py-2 rounded-full shadow-lg hover:bg-foreground/90 transition-colors animate-bounce"
+      className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 bg-foreground text-background font-mono text-[11px] px-4 py-2 max-w-[calc(100%-2rem)] border border-border hover:bg-foreground/90 transition-colors"
       style={{ animationIterationCount: 3 }}
     >
       Jump to latest <span className="opacity-70">· {countLabel}</span>

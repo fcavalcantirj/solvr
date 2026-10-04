@@ -175,3 +175,30 @@ describe('no link points at a page the app does not have', () => {
     expect(literalHrefs().filter(({ href }) => href === '/blog/tags')).toEqual([])
   })
 })
+
+describe('no button that does nothing', () => {
+  // v1.3.7: /privacy carried a DOWNLOAD PDF button with no handler and no PDF.
+  // A <button> must act: a click handler, a submit, spread props, or a Radix
+  // trigger (asChild) that wires the click in.
+  it('gives every <button> an action', () => {
+    const idle: string[] = []
+    for (const file of SOURCES.filter((f) => f.endsWith('.tsx'))) {
+      const src = read(file)
+      for (const match of src.matchAll(/<button\b/g)) {
+        let depth = 0
+        let end = match.index + 7
+        for (; end < src.length; end++) {
+          const c = src[end]
+          if (c === '{') depth++
+          else if (c === '}') depth--
+          else if (c === '>' && depth === 0) break
+        }
+        const tag = src.slice(match.index, end + 1)
+        if (/onClick|onMouseDown|onPointerDown|type=["']submit["']|\{\.\.\.|form=/.test(tag)) continue
+        if (/Trigger asChild>\s*$/.test(src.slice(Math.max(0, match.index - 120), match.index))) continue
+        idle.push(`${file}:${src.slice(0, match.index).split('\n').length}`)
+      }
+    }
+    expect(idle).toEqual([])
+  })
+})

@@ -161,14 +161,6 @@ export default function PrivacyPage() {
                     </a>
                   </div>
                 </div>
-
-                {/* Download */}
-                <div className="mt-8 pt-8 border-t border-border">
-                  <button className="w-full flex items-center justify-center gap-2 py-3 border border-border text-sm hover:bg-secondary/50 transition-colors">
-                    <Database size={14} />
-                    <span className="font-mono text-xs">DOWNLOAD PDF</span>
-                  </button>
-                </div>
               </div>
             </aside>
 

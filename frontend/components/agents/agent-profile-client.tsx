@@ -25,10 +25,12 @@ function formatNumber(num: number): string {
 
 function formatDate(dateString: string): string {
   const date = new Date(dateString);
+  // UTC, so the server and every browser print the same day (no hydration mismatch).
   return date.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
+    timeZone: 'UTC',
   });
 }
 

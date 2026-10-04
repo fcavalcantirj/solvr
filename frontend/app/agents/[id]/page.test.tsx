@@ -176,6 +176,24 @@ describe('AgentProfileClient', () => {
     });
   });
 
+  describe('Join date', () => {
+    // v1.3.7 on production: the server (UTC) rendered "Feb 5, 2026" and a
+    // browser in São Paulo rendered "Feb 4, 2026" for the same timestamp,
+    // so hydration failed (React #418). The date must be the UTC calendar
+    // date wherever it renders, as formatRelativeTime in lib/api.ts already is.
+    it('shows the UTC calendar date whatever the local time zone', () => {
+      const original = process.env.TZ;
+      process.env.TZ = 'America/Sao_Paulo';
+      try {
+        setupAgentMock({ createdAt: '2026-02-05T01:30:00Z' });
+        render(<AgentProfileClient id="test-agent-1" />);
+        expect(screen.getByText(/Joined Feb 5, 2026/i)).toBeInTheDocument();
+      } finally {
+        process.env.TZ = original;
+      }
+    });
+  });
+
   describe('Loading state', () => {
     it('shows loading spinner when loading', () => {
       mockUseAgent.mockReturnValue({

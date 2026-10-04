@@ -40,7 +40,7 @@ function UnsubscribeContent() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="max-w-md w-full mx-4 text-center">
-        <h1 className="font-mono text-2xl tracking-tight mb-2">SOLVR_</h1>
+        <h1 className="font-mono text-lg tracking-tight font-medium mb-2">SOLVR_</h1>
 
         {status === "loading" && (
           <div className="mt-8">

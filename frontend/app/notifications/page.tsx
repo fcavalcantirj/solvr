@@ -17,8 +17,8 @@ export default function NotificationsPage() {
   return (
     <main className="min-h-screen bg-background text-foreground">
       <Header />
-      <section className="px-4 sm:px-6 lg:px-12 pt-24 pb-16 max-w-3xl mx-auto space-y-6">
-        <h1 className="text-3xl font-light tracking-tight">Notifications</h1>
+      <section className="px-4 sm:px-6 lg:px-12 pt-24 pb-16 max-w-[52rem] mx-auto space-y-8 lg:pt-28">
+        <h1 className="text-[2rem] font-light leading-[1.15] tracking-[-0.025em] sm:text-[2.5rem]">Notifications</h1>
         {isLoading ? null : isAuthenticated ? (
           <NotificationsInbox />
         ) : (

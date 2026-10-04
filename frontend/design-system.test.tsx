@@ -482,6 +482,9 @@ describe('the one-sentence page language', () => {
     'app/claim/page.tsx',
     'app/auth/callback/page.tsx',
     'app/email/unsubscribe/page.tsx',
+    'app/not-found.tsx',
+    'app/notifications/page.tsx',
+    'app/zh/promote/page.tsx',
   ]
 
   it.each(MIGRATED)('%s speaks the new language', (file) => {
@@ -491,6 +494,8 @@ describe('the one-sentence page language', () => {
     expect(source, file).not.toContain('text-[10px]')
     // The widest letter-spacing is the old kicker's; captions use tracking-[0.18em].
     expect(source, file).not.toContain('tracking-widest')
+    // Display headings are Inter light; monospace stays at caption, code and wordmark sizes.
+    expect(source, file).not.toMatch(/font-mono[^"]*\btext-[2-6]xl\b|\btext-[2-6]xl\b[^"]*font-mono/)
   })
 })
 

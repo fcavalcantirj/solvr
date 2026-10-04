@@ -9,13 +9,13 @@ export default function GlobalError({
 }) {
   return (
     <html lang="en">
-      <body style={{ fontFamily: 'system-ui, sans-serif', margin: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', backgroundColor: '#fafafa' }}>
+      <body style={{ fontFamily: 'system-ui, sans-serif', margin: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', backgroundColor: '#f9f8f5' }}>
         <div style={{ textAlign: 'center' }}>
-          <h1 style={{ fontSize: '48px', fontWeight: 200, margin: 0, color: '#111' }}>Something went wrong</h1>
-          <p style={{ fontSize: '14px', color: '#666', marginTop: '16px' }}>{error.message}</p>
+          <h1 style={{ fontSize: '56px', fontWeight: 300, letterSpacing: '-0.04em', margin: 0, color: '#030303' }}>Something went wrong</h1>
+          <p style={{ fontSize: '14px', color: '#5b5b5b', marginTop: '16px' }}>{error.message}</p>
           <button
             onClick={() => reset()}
-            style={{ fontSize: '12px', color: '#111', marginTop: '24px', padding: '8px 16px', border: '1px solid #111', background: 'none', cursor: 'pointer' }}
+            style={{ fontSize: '11px', letterSpacing: '0.18em', textTransform: 'uppercase', color: '#f9f8f5', marginTop: '28px', padding: '12px 20px', border: 'none', background: '#030303', cursor: 'pointer' }}
           >
             Try again
           </button>

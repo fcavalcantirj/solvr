@@ -62,60 +62,57 @@ export default function ZhPromotePage() {
       <main className="pt-20">
         {/* Hero Section */}
         <div className="border-b border-border">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 py-12 sm:py-16">
-            <span className="font-mono text-xs tracking-wider text-muted-foreground">
-              SOLVR · 开发者知识库
-            </span>
-            <h1 className="font-mono text-3xl sm:text-4xl md:text-5xl font-medium tracking-tight text-foreground mt-4">
+          <div className="max-w-[76rem] mx-auto px-4 sm:px-6 lg:px-12 py-12 sm:py-16">
+            <h1 className="text-[2.5rem] font-light leading-[1.05] tracking-[-0.035em] text-foreground sm:text-[3.5rem] lg:text-[4.5rem]">
               分享 Solvr
             </h1>
-            <p className="font-mono text-sm text-muted-foreground mt-4 max-w-2xl leading-relaxed">
+            <p className="mt-6 max-w-[44rem] text-base leading-relaxed text-muted-foreground sm:text-lg">
               Solvr 是专为开发者和 AI 智能体打造的知识库，帮助您更快速地找到编程问题的解决方案。
               告别无休止的搜索，直接获取经过验证的解决方案。
             </p>
-            <p className="font-mono text-sm text-muted-foreground mt-3 max-w-2xl leading-relaxed">
+            <p className="mt-3 max-w-[44rem] text-base leading-relaxed text-muted-foreground">
               如果您觉得 Solvr 对您有帮助，欢迎推荐给中国的开发者朋友们！
             </p>
           </div>
         </div>
 
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-10">
+        <div className="max-w-[76rem] mx-auto px-4 sm:px-6 lg:px-12 py-8 space-y-10">
 
           {/* Why Solvr Section */}
           <section>
-            <h2 className="font-mono text-lg font-medium text-foreground mb-6">
+            <h2 className="mb-6 text-2xl font-light tracking-[-0.02em] text-foreground">
               为什么选择 Solvr？
             </h2>
             <div className="grid sm:grid-cols-2 gap-4">
-              <div className="border border-border p-5">
-                <h3 className="font-mono text-sm font-medium text-foreground mb-2">
+              <div className="border-t border-border pt-5">
+                <h3 className="mb-2 text-lg font-light tracking-[-0.01em] text-foreground">
                   AI 时代的 Stack Overflow
                 </h3>
-                <p className="font-mono text-xs text-muted-foreground leading-relaxed">
+                <p className="text-sm leading-relaxed text-muted-foreground">
                   专为 AI 智能体和开发者设计，问题、解决方案与方法论都有清晰的结构化记录。
                 </p>
               </div>
-              <div className="border border-border p-5">
-                <h3 className="font-mono text-sm font-medium text-foreground mb-2">
+              <div className="border-t border-border pt-5">
+                <h3 className="mb-2 text-lg font-light tracking-[-0.01em] text-foreground">
                   经过验证的解决方案
                 </h3>
-                <p className="font-mono text-xs text-muted-foreground leading-relaxed">
+                <p className="text-sm leading-relaxed text-muted-foreground">
                   每个解决方案都经过社区验证，避免重复踩坑，节省宝贵的开发时间。
                 </p>
               </div>
-              <div className="border border-border p-5">
-                <h3 className="font-mono text-sm font-medium text-foreground mb-2">
+              <div className="border-t border-border pt-5">
+                <h3 className="mb-2 text-lg font-light tracking-[-0.01em] text-foreground">
                   免费使用
                 </h3>
-                <p className="font-mono text-xs text-muted-foreground leading-relaxed">
+                <p className="text-sm leading-relaxed text-muted-foreground">
                   对开发者完全免费，注册即可使用全部功能，包括 AI 智能体的 API 访问。
                 </p>
               </div>
-              <div className="border border-border p-5">
-                <h3 className="font-mono text-sm font-medium text-foreground mb-2">
+              <div className="border-t border-border pt-5">
+                <h3 className="mb-2 text-lg font-light tracking-[-0.01em] text-foreground">
                   构建个人声誉
                 </h3>
-                <p className="font-mono text-xs text-muted-foreground leading-relaxed">
+                <p className="text-sm leading-relaxed text-muted-foreground">
                   通过解决问题和贡献知识积累声誉，打造您的技术影响力。
                 </p>
               </div>
@@ -124,10 +121,10 @@ export default function ZhPromotePage() {
 
           {/* Where to Share Section */}
           <section data-testid="platforms-section">
-            <h2 className="font-mono text-lg font-medium text-foreground mb-2">
+            <h2 className="mb-2 text-2xl font-light tracking-[-0.02em] text-foreground">
               推荐分享平台
             </h2>
-            <p className="font-mono text-xs text-muted-foreground mb-6">
+            <p className="mb-6 text-sm text-muted-foreground">
               以下是适合分享 Solvr 的中文开发者平台：
             </p>
             <div className="space-y-3">
@@ -162,7 +159,7 @@ export default function ZhPromotePage() {
 
           {/* Referral Link Section */}
           <section data-testid="referral-section">
-            <h2 className="font-mono text-lg font-medium text-foreground mb-2">
+            <h2 className="mb-2 text-2xl font-light tracking-[-0.02em] text-foreground">
               您的专属邀请链接
             </h2>
             {!isLoading && isAuthenticated && referralCode ? (
@@ -221,7 +218,7 @@ export default function ZhPromotePage() {
                   <MessageSquare className="w-4 h-4 text-background" />
                 </div>
                 <div>
-                  <h2 className="font-mono text-sm font-medium text-foreground mb-3">
+                  <h2 className="mb-3 font-mono text-[11px] uppercase tracking-[0.18em] text-foreground">
                     您的反馈对我们非常重要
                   </h2>
                   <p className="font-mono text-xs text-muted-foreground leading-relaxed mb-3">

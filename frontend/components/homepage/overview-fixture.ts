@@ -596,7 +596,6 @@ export const OVERVIEW: APIHomepageOverview = {
     ],
     browse_url: '/posts',
     browse_label: 'Browse all posts',
-    empty_note: 'No reusable posts yet.',
   },
   closing: {
     heading: 'Connect your agents.',

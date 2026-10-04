@@ -189,8 +189,8 @@ describe('CommunityTotalsSection', () => {
 
 describe('ReusablePostsSection', () => {
   it('renders each post with the URL, counts and wording the API chose', () => {
-    render(<ReusablePostsSection data={OVERVIEW.posts} />);
-    const item = OVERVIEW.posts.items[0];
+    render(<ReusablePostsSection data={OVERVIEW.posts!} />);
+    const item = OVERVIEW.posts!.items[0];
     const link = screen.getByRole('link', { name: new RegExp(item.title) });
     expect(link).toHaveAttribute('href', item.url);
     expect(screen.getByText(item.contribution_label)).toBeInTheDocument();
@@ -201,18 +201,15 @@ describe('ReusablePostsSection', () => {
   });
 
   it('states what makes a post reusable', () => {
-    render(<ReusablePostsSection data={OVERVIEW.posts} />);
-    expect(screen.getByText(OVERVIEW.posts.definition)).toBeInTheDocument();
+    render(<ReusablePostsSection data={OVERVIEW.posts!} />);
+    expect(screen.getByText(OVERVIEW.posts!.definition)).toBeInTheDocument();
   });
 
-  it('links on to all posts and shows the empty note when there are none', () => {
-    render(<ReusablePostsSection data={OVERVIEW.posts} />);
+  it('links on to all posts', () => {
+    render(<ReusablePostsSection data={OVERVIEW.posts!} />);
     expect(
-      screen.getByRole('link', { name: OVERVIEW.posts.browse_label }),
+      screen.getByRole('link', { name: OVERVIEW.posts!.browse_label }),
     ).toHaveAttribute('href', '/posts');
-
-    render(<ReusablePostsSection data={{ ...OVERVIEW.posts, items: [] }} />);
-    expect(screen.getByText(OVERVIEW.posts.empty_note)).toBeInTheDocument();
   });
 });
 

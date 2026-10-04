@@ -345,7 +345,6 @@ export interface APIOverviewPosts {
   items: APIOverviewPostItem[];
   browse_url: string;
   browse_label: string;
-  empty_note: string;
 }
 
 export interface APIOverviewClosing {
@@ -373,7 +372,8 @@ export interface APIHomepageOverview {
   api_usage: APIOverviewAPIUsage;
   search: APIOverviewSearch;
   community: APIOverviewCommunity;
-  posts: APIOverviewPosts;
+  /** Absent when fewer than three posts qualify (SPEC Part 26). */
+  posts?: APIOverviewPosts;
   closing: APIOverviewClosing;
   generated_at: string;
 }

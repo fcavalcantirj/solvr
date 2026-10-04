@@ -65,6 +65,13 @@ describe('LiveOverview layout', () => {
     expect(screen.getByTestId('overview-section-activity')).toBeInTheDocument();
   });
 
+  it('shows no reusable posts section when the API publishes none (fewer than three qualify)', () => {
+    state = { ...state, overview: { ...OVERVIEW, posts: undefined } };
+    renderOverview();
+    expect(screen.queryByTestId('overview-section-posts')).not.toBeInTheDocument();
+    expect(screen.getByTestId('overview-section-closing')).toBeInTheDocument();
+  });
+
   it('ends on the connection control', () => {
     renderOverview();
     const sections = screen.getAllByTestId(/^overview-section-/);

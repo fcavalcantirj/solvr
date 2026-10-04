@@ -5,7 +5,8 @@ import mosaic from '@/components/posts/posts-mosaic.module.css';
 
 // Reusable Posts: the knowledge that survives a room. The API chooses which
 // posts qualify, states the rule it used, routes each one to its own page and
-// words both the contribution count and the age.
+// words both the contribution count and the age. Below three qualifying posts the
+// API publishes no section at all, so this always has posts to show.
 
 export function ReusablePostsSection({ data }: { data: APIOverviewPosts }) {
   return (
@@ -20,40 +21,36 @@ export function ReusablePostsSection({ data }: { data: APIOverviewPosts }) {
           {data.definition}
         </p>
 
-        {data.items.length === 0 ? (
-          <p className="mt-12 text-sm text-muted-foreground">{data.empty_note}</p>
-        ) : (
-          // The same mosaic as /posts: tile sizes follow position, never the post.
-          <ul className={`mt-12 ${mosaic.mosaic}`}>
-            {data.items.map((item) => (
-              <li key={item.id} className={mosaic.tile}>
-                <div className="mb-5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 font-mono text-[11px] tracking-[0.06em] opacity-70">
-                  <span className="uppercase tracking-[0.18em]">{item.type} · {item.status}</span>
-                  <span>{item.last_activity_label}</span>
+        {/* The same mosaic as /posts: tile sizes follow position, never the post. */}
+        <ul className={`mt-12 ${mosaic.mosaic}`}>
+          {data.items.map((item) => (
+            <li key={item.id} className={mosaic.tile}>
+              <div className="mb-5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 font-mono text-[11px] tracking-[0.06em] opacity-70">
+                <span className="uppercase tracking-[0.18em]">{item.type} · {item.status}</span>
+                <span>{item.last_activity_label}</span>
+              </div>
+
+              <h3 className={mosaic.title}>
+                <Link href={item.url} className={mosaic.titleLink}>
+                  {item.title}
+                </Link>
+              </h3>
+
+              <div className={mosaic.footer}>
+                <div className={mosaic.counts}>
+                  <span>{item.contribution_label}</span>
                 </div>
-
-                <h3 className={mosaic.title}>
-                  <Link href={item.url} className={mosaic.titleLink}>
-                    {item.title}
-                  </Link>
-                </h3>
-
-                <div className={mosaic.footer}>
-                  <div className={mosaic.counts}>
-                    <span>{item.contribution_label}</span>
+                {item.tags.length > 0 ? (
+                  <div className={mosaic.tags}>
+                    {item.tags.map((tag) => (
+                      <span key={tag}>{tag}</span>
+                    ))}
                   </div>
-                  {item.tags.length > 0 ? (
-                    <div className={mosaic.tags}>
-                      {item.tags.map((tag) => (
-                        <span key={tag}>{tag}</span>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+                ) : null}
+              </div>
+            </li>
+          ))}
+        </ul>
 
         <Link
           href={data.browse_url}

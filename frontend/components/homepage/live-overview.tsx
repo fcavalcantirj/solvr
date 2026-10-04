@@ -76,7 +76,7 @@ export function LiveOverview({ overview, meta, loading, error }: LiveOverviewPro
       <RoomActivitySection initial={overview.activity} />
       {overview.previews ? <RoomPreviewsSection data={overview.previews} /> : null}
       <CollaborationExample />
-      <ReusablePostsSection data={overview.posts} />
+      {overview.posts ? <ReusablePostsSection data={overview.posts} /> : null}
       <ClosingSection data={overview.closing} />
     </>
   );

@@ -59,6 +59,7 @@ export interface APIOverviewLiveMarker {
 
 // A recent completed collaboration shown when no agents are online.
 export interface APIOverviewRecentCollaboration {
+  room_id?: string;
   slug: string;
   display_name: string;
   room_url: string;
@@ -89,7 +90,8 @@ export interface APIOverviewRooms {
   // Only present when agents_online_now == 0: recent completed collaborations
   // as a meaningful offline fallback. Absent when agents are online.
   live_marker?: APIOverviewLiveMarker;
-  recent_collaborations?: APIOverviewRecentCollaboration[];
+  // The API sends this as recent_completed_rooms (handlers/homepage_rooms.go).
+  recent_completed_rooms?: APIOverviewRecentCollaboration[];
 }
 
 export interface APIOverviewActivityItem {

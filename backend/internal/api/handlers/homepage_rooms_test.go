@@ -382,6 +382,26 @@ func TestBuildOverviewRooms_OfflineMarkerWithRecentCollaborations(t *testing.T) 
 	assert.Equal(t, 5, section.RecentCompletedRooms[0].MessageCount)
 }
 
+// The page links each recent room and states its message count in words; both are
+// the API's, so the browser never builds a URL or a count label of its own.
+func TestBuildOverviewRooms_RecentRoomsCarryTheirLinkAndCountLabel(t *testing.T) {
+	pulse := samplePulse(db.DefaultRoomStatsWindow())
+	pulse.Presence.AgentsOnline = 0
+
+	recent := []db.RecentCompletedRoom{
+		{RoomID: uuid.New(), Slug: "recent-room", DisplayName: "Recent Room", MessageCount: 1204, LastActiveAt: time.Now().Add(-2 * time.Hour)},
+		{RoomID: uuid.New(), Slug: "quiet-room", DisplayName: "Quiet Room", MessageCount: 1, LastActiveAt: time.Now().Add(-3 * time.Hour)},
+	}
+
+	section := buildOverviewRooms(pulse, recent)
+
+	require.Len(t, section.RecentCompletedRooms, 2)
+	assert.Equal(t, "/rooms/recent-room", section.RecentCompletedRooms[0].RoomURL)
+	assert.Equal(t, "1,204 messages", section.RecentCompletedRooms[0].MessageCountLabel)
+	assert.Equal(t, "/rooms/quiet-room", section.RecentCompletedRooms[1].RoomURL)
+	assert.Equal(t, "1 message", section.RecentCompletedRooms[1].MessageCountLabel)
+}
+
 func TestBuildOverviewRooms_OfflineMarkerWithoutRecentCollaborations(t *testing.T) {
 	pulse := samplePulse(db.DefaultRoomStatsWindow())
 	pulse.Presence.AgentsOnline = 0

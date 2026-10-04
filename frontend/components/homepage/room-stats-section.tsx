@@ -175,8 +175,8 @@ export function RoomStatsSection({ initial }: { initial: APIOverviewRooms }) {
             {data.sparkline ? <div className="mt-8"><Sparkline sparkline={data.sparkline} /></div> : null}
           </div>
 
-          {data.recent_collaborations && data.recent_collaborations.length > 0 ? (
-            <RecentCollaborationsSection rooms={data.recent_collaborations} />
+          {data.recent_completed_rooms && data.recent_completed_rooms.length > 0 ? (
+            <RecentCollaborationsSection rooms={data.recent_completed_rooms} />
           ) : null}
         </div>
       </div>

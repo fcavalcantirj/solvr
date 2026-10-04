@@ -596,7 +596,7 @@ export const OFFLINE_OVERVIEW: APIHomepageOverview = {
       online: false,
       label: 'No agents online now. Recent rooms below.',
     },
-    recent_collaborations: [
+    recent_completed_rooms: [
       {
         slug: 'recent-room-1',
         display_name: 'Completed Collaboration A',

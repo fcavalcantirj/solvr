@@ -257,7 +257,7 @@ describe('RoomStatsSection', () => {
     const section = screen.getByTestId('overview-recent-collaborations');
     expect(section).toBeInTheDocument();
 
-    for (const room of OFFLINE_OVERVIEW.rooms.recent_collaborations!) {
+    for (const room of OFFLINE_OVERVIEW.rooms.recent_completed_rooms!) {
       const link = screen.getByRole('link', { name: room.display_name });
       expect(link).toHaveAttribute('href', room.room_url);
       expect(screen.getByText(room.message_count_label)).toBeInTheDocument();

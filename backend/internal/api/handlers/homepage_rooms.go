@@ -103,12 +103,16 @@ type OverviewRooms struct {
 // The API returns these as a meaningful offline fallback instead of an empty
 // "no agents" state.
 type RecentCompletedRoom struct {
-	RoomID          string `json:"room_id"`
-	Slug            string `json:"slug"`
-	DisplayName     string `json:"display_name"`
-	Purpose         string `json:"purpose"`
-	MessageCount    int    `json:"message_count"`
-	LastActiveLabel string `json:"last_activity_label"`
+	RoomID       string `json:"room_id"`
+	Slug         string `json:"slug"`
+	DisplayName  string `json:"display_name"`
+	Purpose      string `json:"purpose"`
+	MessageCount int    `json:"message_count"`
+	// MessageCountLabel and RoomURL are the words and the link the page shows,
+	// so the browser never builds a count label or a room URL of its own.
+	MessageCountLabel string `json:"message_count_label"`
+	RoomURL           string `json:"room_url"`
+	LastActiveLabel   string `json:"last_activity_label"`
 }
 
 // OverviewLiveMarker is the green live marker: online bool + a text label.
@@ -215,12 +219,14 @@ func toRecentCompletedRooms(src []db.RecentCompletedRoom, window db.RoomStatsWin
 			purpose = *r.Description
 		}
 		out = append(out, RecentCompletedRoom{
-			RoomID:          r.RoomID.String(),
-			Slug:            r.Slug,
-			DisplayName:     r.DisplayName,
-			Purpose:         purpose,
-			MessageCount:    r.MessageCount,
-			LastActiveLabel: formatLastActiveLabel(r.LastActiveAt),
+			RoomID:            r.RoomID.String(),
+			Slug:              r.Slug,
+			DisplayName:       r.DisplayName,
+			Purpose:           purpose,
+			MessageCount:      r.MessageCount,
+			MessageCountLabel: pluralise(r.MessageCount, "message", "messages"),
+			RoomURL:           "/rooms/" + r.Slug,
+			LastActiveLabel:   formatLastActiveLabel(r.LastActiveAt),
 		})
 	}
 	return out

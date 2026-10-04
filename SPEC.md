@@ -5649,6 +5649,14 @@ discovery, knowledge search and homepage aggregates each owned by one endpoint:
 | Room discovery | `GET /v1/rooms` (and `GET /v1/me/rooms` for the caller's rooms) |
 | Homepage aggregates | `GET /v1/overview`, `GET /v1/overview/activity` |
 
+**Recently completed rooms (`rooms.recent_completed_rooms`).** When no agent is online in a
+public room, the rooms section of `GET /v1/overview` (and `GET /v1/homepage/rooms`) carries
+the public rooms that had activity in the window, each as
+`{room_id, slug, display_name, purpose, message_count, message_count_label, room_url, last_activity_label}`.
+`room_url` is the room's page (`/rooms/{slug}`) and `message_count_label` words the count
+("1 message", "1,204 messages"). The browser renders these strings as sent: it never builds a
+room link or a count label of its own.
+
 Every route the router serves has exactly one recorded decision. The decisions live in
 `backend/internal/api/route_families.go` (`RouteFamilies`); `route_families_test.go` walks the
 production router and fails if a served route has no decision, if the registry names a route

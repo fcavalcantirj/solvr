@@ -97,33 +97,33 @@ export function PostDetail({ postId, initial }: { postId: string; initial?: Post
     (post.publication_state && post.publication_state !== "published");
 
   return (
-    <article className="max-w-3xl mx-auto space-y-8">
+    <article className="mx-auto max-w-[76rem] space-y-10">
       {notPublic && (
-        <div className="p-4 border border-yellow-500/30 bg-yellow-500/10 font-mono text-xs text-yellow-600 dark:text-yellow-400">
+        <div role="status" className="max-w-[44rem] border-l border-amber-700 pl-3 text-sm text-amber-700 dark:border-amber-400 dark:text-amber-400">
           Awaiting moderation — this post is not yet publicly discoverable. Public discovery waits for approved moderation.
         </div>
       )}
 
-      <header className="space-y-4">
-        <h1 className="text-2xl sm:text-3xl font-light tracking-tight">{post.title}</h1>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+      <header className="space-y-8">
+        <h1 className="max-w-[22ch] text-[2.5rem] font-light leading-[1.05] tracking-[-0.04em] [overflow-wrap:anywhere] sm:text-[3.5rem] lg:text-[4.5rem]">{post.title}</h1>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-y border-border py-4">
           <Link
             href={profileHref(post.author)}
-            className="inline-flex items-center gap-1.5 font-mono text-xs text-muted-foreground hover:text-foreground"
+            className="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.06em] text-muted-foreground hover:text-foreground"
           >
             <User size={12} />
             {post.author.display_name}
           </Link>
-          <time dateTime={post.created_at} className="font-mono text-xs text-muted-foreground" suppressHydrationWarning>
+          <time dateTime={post.created_at} className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground" suppressHydrationWarning>
             {formatRelativeTime(post.created_at)}
           </time>
-          <span className="inline-flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.06em] text-muted-foreground">
             <ArrowUp size={12} />
             {post.vote_score}
           </span>
           <Link
             href={`/posts/${post.id}/edit`}
-            className="inline-flex items-center gap-1.5 font-mono text-xs text-muted-foreground hover:text-foreground"
+            className="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.06em] text-muted-foreground hover:text-foreground"
           >
             <Pencil size={12} />
             Edit
@@ -131,15 +131,16 @@ export function PostDetail({ postId, initial }: { postId: string; initial?: Post
         </div>
       </header>
 
-      <MarkdownContent content={post.description} />
+      <div className="min-w-0 max-w-[44rem] space-y-10 [overflow-wrap:anywhere]">
+      <MarkdownContent content={post.description} className="text-[1.0625rem] leading-relaxed" />
 
       {post.tags && post.tags.length > 0 && (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-x-5 gap-y-2">
           {post.tags.map((tag) => (
             <Link
               key={tag}
               href={`/posts?q=${encodeURIComponent(tag)}`}
-              className="font-mono text-[10px] tracking-wider px-2 py-1 border border-border text-muted-foreground hover:text-foreground hover:border-foreground transition-colors"
+              className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
             >
               #{tag}
             </Link>
@@ -152,14 +153,14 @@ export function PostDetail({ postId, initial }: { postId: string; initial?: Post
       <section className="border-t border-border pt-6">
         <Link
           href={`/connect?post=${encodeURIComponent(post.id)}`}
-          className="inline-flex items-center gap-2 font-mono text-xs tracking-wider border border-border px-3 py-1.5 hover:bg-muted transition-colors"
+          className="inline-flex items-center gap-2 border border-foreground px-4 py-2.5 font-mono text-[11px] uppercase tracking-[0.18em] transition-colors hover:bg-foreground hover:text-background"
         >
           <Users size={12} /> Try this workflow
         </Link>
       </section>
 
       {sourceRoom && (
-        <p className="border-t border-border pt-6 font-mono text-xs text-muted-foreground inline-flex items-center gap-2">
+        <p className="border-t border-border pt-6 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground inline-flex items-center gap-2">
           <Users size={12} /> SAVED FROM{" "}
           <Link href={`/rooms/${sourceRoom.slug}`} className="text-foreground hover:underline">
             {sourceRoom.display_name}
@@ -169,13 +170,13 @@ export function PostDetail({ postId, initial }: { postId: string; initial?: Post
 
       {relatedRooms.length > 0 && (
         <section className="border-t border-border pt-6 space-y-3">
-          <h2 className="font-mono text-xs tracking-wider text-muted-foreground inline-flex items-center gap-2">
+          <h2 className="font-mono text-[11px] uppercase tracking-[0.18em] text-foreground inline-flex items-center gap-2">
             <Users size={12} /> RELATED ROOMS
           </h2>
           <ul className="space-y-2">
             {relatedRooms.map((room) => (
               <li key={room.id}>
-                <Link href={`/rooms/${room.slug}`} className="font-mono text-sm hover:underline">
+                <Link href={`/rooms/${room.slug}`} className="text-lg font-light tracking-[-0.01em] underline-offset-4 hover:underline">
                   {room.display_name}
                 </Link>
               </li>
@@ -186,17 +187,17 @@ export function PostDetail({ postId, initial }: { postId: string; initial?: Post
 
       {post.crystallization_cid && (
         <section className="border-t border-border pt-6 space-y-2">
-          <h2 className="font-mono text-xs tracking-wider text-muted-foreground inline-flex items-center gap-2">
+          <h2 className="font-mono text-[11px] uppercase tracking-[0.18em] text-foreground inline-flex items-center gap-2">
             <Archive size={12} /> SAVED SNAPSHOT
           </h2>
-          <p className="font-mono text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             An immutable saved copy exists{post.crystallized_at ? ` (${formatRelativeTime(post.crystallized_at)})` : ""}. The live post may differ from it.
           </p>
           <a
             href={`https://ipfs.io/ipfs/${post.crystallization_cid}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="font-mono text-xs underline underline-offset-4 break-all"
+            className="font-mono text-[11px] tracking-[0.06em] underline underline-offset-4 break-all"
           >
             {post.crystallization_cid}
           </a>
@@ -204,23 +205,23 @@ export function PostDetail({ postId, initial }: { postId: string; initial?: Post
       )}
 
       <section className="border-t border-border pt-6 space-y-4">
-        <h2 className="font-mono text-xs tracking-wider text-muted-foreground inline-flex items-center gap-2">
+        <h2 className="font-mono text-[11px] uppercase tracking-[0.18em] text-foreground inline-flex items-center gap-2">
           <MessageSquare size={12} /> REPLIES ({post.reply_count ?? replies.length})
         </h2>
         {replies.length === 0 ? (
-          <p className="font-mono text-sm text-muted-foreground">No replies yet.</p>
+          <p className="text-base text-muted-foreground">No replies yet.</p>
         ) : (
-          <ul className="space-y-4">
+          <ul className="border-b border-border">
             {replies.map((r) => (
-              <li id={r.id} key={r.id} className="border border-border p-4 space-y-2 scroll-mt-24">
+              <li id={r.id} key={r.id} className="border-t border-border py-6 space-y-3 scroll-mt-24">
                 <div className="flex items-center gap-3">
                   <Link
                     href={profileHref(r.author)}
-                    className="font-mono text-xs text-muted-foreground hover:text-foreground"
+                    className="text-sm text-foreground underline-offset-4 hover:underline"
                   >
                     {r.author.display_name}
                   </Link>
-                  <time dateTime={r.created_at} className="font-mono text-xs text-muted-foreground" suppressHydrationWarning>
+                  <time dateTime={r.created_at} className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground" suppressHydrationWarning>
                     {formatRelativeTime(r.created_at)}
                   </time>
                 </div>
@@ -233,12 +234,13 @@ export function PostDetail({ postId, initial }: { postId: string; initial?: Post
           <Link
             href={`/posts/${post.id}/replies/2`}
             rel="next"
-            className="inline-block font-mono text-xs underline underline-offset-4 hover:text-foreground"
+            className="inline-block font-mono text-[11px] uppercase tracking-[0.18em] underline underline-offset-4 hover:text-muted-foreground"
           >
             {`Later replies (page 2 of ${replyPages})`}
           </Link>
         )}
       </section>
+      </div>
     </article>
   );
 }

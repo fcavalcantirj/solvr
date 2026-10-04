@@ -371,6 +371,7 @@ describe('restrained status colour on the room surfaces', () => {
     'app/status/page.tsx',
     'app/claim/page.tsx',
     'app/email/unsubscribe/page.tsx',
+    'components/posts/post-detail.tsx',
   ]
   const FAMILY = '(?:green|emerald|amber|red|yellow)'
   const TEXT = new RegExp(`(dark:)?text-(${FAMILY}-\\d{2,3})\\b`, 'g')
@@ -501,6 +502,13 @@ describe('the one-sentence page language', () => {
     'app/terms/page.tsx',
     'app/privacy/page.tsx',
     'components/legal/privacy-later-sections.tsx',
+    'components/posts/post-detail.tsx',
+    'components/posts/post-composer.tsx',
+    'components/posts/post-editor.tsx',
+    'app/posts/[id]/page.tsx',
+    'app/posts/[id]/replies/[page]/page.tsx',
+    'app/posts/new/page.tsx',
+    'app/posts/[id]/edit/page.tsx',
   ]
 
   it.each(MIGRATED)('%s speaks the new language', (file) => {

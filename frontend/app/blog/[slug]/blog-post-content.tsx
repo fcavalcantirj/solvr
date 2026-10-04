@@ -64,7 +64,7 @@ export function BlogPostContent({ post }: { post: BlogPostData }) {
             </div>
 
             {/* Title */}
-            <h1 className="mb-10 max-w-[22ch] text-[2.5rem] font-light leading-[1.05] tracking-[-0.04em] sm:text-[3.5rem] lg:text-[4.5rem]">
+            <h1 className="mb-10 max-w-[22ch] [overflow-wrap:anywhere] text-[2.5rem] font-light leading-[1.05] tracking-[-0.04em] sm:text-[3.5rem] lg:text-[4.5rem]">
               {post.title}
             </h1>
 
@@ -127,7 +127,7 @@ export function BlogPostContent({ post }: { post: BlogPostData }) {
             )}
 
             {/* Body */}
-            <div className="max-w-[44rem]">
+            <div className="min-w-0 max-w-[44rem] [overflow-wrap:anywhere]">
               <MarkdownContent content={post.body} className="mb-10 text-[1.0625rem] leading-relaxed" />
             </div>
 

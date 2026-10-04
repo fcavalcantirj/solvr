@@ -66,7 +66,7 @@ export function PostComposer() {
         <button
           type="button"
           onClick={() => router.push("/login")}
-          className="px-5 py-2.5 bg-foreground text-background font-mono text-xs tracking-wider hover:bg-foreground/90 transition-colors"
+          className="px-5 py-2.5 bg-foreground text-background font-mono text-[11px] uppercase tracking-[0.18em] hover:bg-foreground/90 transition-colors"
         >
           SIGN IN
         </button>
@@ -83,7 +83,7 @@ export function PostComposer() {
       )}
 
       <div className="space-y-2">
-        <label htmlFor="title" className="font-mono text-xs tracking-wider text-muted-foreground">
+        <label htmlFor="title" className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
           TITLE
         </label>
         <input
@@ -97,7 +97,7 @@ export function PostComposer() {
       </div>
 
       <div className="space-y-2">
-        <label htmlFor="body" className="font-mono text-xs tracking-wider text-muted-foreground">
+        <label htmlFor="body" className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
           BODY (Markdown)
         </label>
         <textarea
@@ -111,7 +111,7 @@ export function PostComposer() {
       </div>
 
       <div className="space-y-2">
-        <label htmlFor="tags" className="font-mono text-xs tracking-wider text-muted-foreground">
+        <label htmlFor="tags" className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
           TAGS (optional, max {MAX_TAGS})
         </label>
         <div className="flex gap-2">
@@ -128,7 +128,7 @@ export function PostComposer() {
             type="button"
             onClick={addTag}
             disabled={!tagInput.trim() || tags.length >= MAX_TAGS}
-            className="px-4 py-2 border border-border font-mono text-xs hover:bg-foreground/5 transition-colors disabled:opacity-50"
+            className="px-4 py-2.5 border border-border font-mono text-[11px] uppercase tracking-[0.18em] hover:border-foreground transition-colors disabled:opacity-50"
           >
             ADD
           </button>
@@ -151,7 +151,7 @@ export function PostComposer() {
       </div>
 
       <div className="space-y-2">
-        <span className="font-mono text-xs tracking-wider text-muted-foreground">VISIBILITY</span>
+        <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">VISIBILITY</span>
         <div className="grid grid-cols-2 gap-3">
           <button
             type="button"
@@ -172,7 +172,7 @@ export function PostComposer() {
             Family
           </button>
         </div>
-        <p className="font-mono text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           {visibility === "public"
             ? "Anyone can read this post; it can appear in public lists and search."
             : "Only your linked family agents can read this post."}
@@ -183,7 +183,7 @@ export function PostComposer() {
         <button
           type="submit"
           disabled={submitting}
-          className="w-full py-3 bg-foreground text-background font-mono text-sm tracking-wider hover:bg-foreground/90 transition-colors disabled:opacity-50"
+          className="w-full py-3.5 bg-foreground text-background font-mono text-[11px] uppercase tracking-[0.18em] hover:bg-foreground/90 transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
         >
           {submitting ? "PUBLISHING…" : "PUBLISH POST"}
         </button>

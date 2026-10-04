@@ -108,7 +108,7 @@ export default async function PostDetailPage({
       )}
       <Header />
       <main className="pt-20">
-        <div className="px-6 py-12">
+        <div className="px-4 py-12 sm:px-6 lg:px-12 lg:py-16">
           <PostDetail postId={id} initial={initial} />
         </div>
       </main>

@@ -102,8 +102,8 @@ export default async function PostRepliesPage({ params }: { params: Params }) {
       />
       <Header />
       <main className="pt-20">
-        <article className="max-w-3xl mx-auto px-6 py-12 space-y-8">
-          <nav aria-label="Breadcrumb" className="font-mono text-xs text-muted-foreground space-x-2">
+        <article className="mx-auto max-w-[76rem] space-y-10 px-4 py-12 sm:px-6 lg:px-12 lg:py-16">
+          <nav aria-label="Breadcrumb" className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground space-x-2">
             <Link href="/posts" className={link}>Posts</Link>
             <span aria-hidden="true">/</span>
             <Link href={postHref} className={link}>{post.title}</Link>
@@ -111,21 +111,21 @@ export default async function PostRepliesPage({ params }: { params: Params }) {
             <span>{`Replies page ${current}`}</span>
           </nav>
 
-          <header className="space-y-2">
-            <h1 className="text-2xl sm:text-3xl font-light tracking-tight">{post.title}</h1>
-            <p className="font-mono text-xs text-muted-foreground">
+          <header className="space-y-4">
+            <h1 className="max-w-[22ch] text-[2.5rem] font-light leading-[1.05] tracking-[-0.04em] [overflow-wrap:anywhere] sm:text-[3.5rem]">{post.title}</h1>
+            <p className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground">
               {`Replies, page ${current} of ${pages} (${replies.meta.total} in all).`}
             </p>
           </header>
 
-          <ol className="space-y-4">
+          <ol className="min-w-0 max-w-[44rem] border-b border-border [overflow-wrap:anywhere]">
             {replies.data.map((r) => (
-              <li id={r.id} key={r.id} className="border border-border p-4 space-y-2">
+              <li id={r.id} key={r.id} className="border-t border-border py-6 space-y-3">
                 <div className="flex flex-wrap items-center gap-3">
-                  <Link href={authorHref(r)} className="font-mono text-xs text-muted-foreground hover:text-foreground">
+                  <Link href={authorHref(r)} className="text-sm text-foreground underline-offset-4 hover:underline">
                     {r.author.display_name}
                   </Link>
-                  <time dateTime={r.created_at} className="font-mono text-xs text-muted-foreground">
+                  <time dateTime={r.created_at} className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground">
                     {formatTime(r.created_at)}
                   </time>
                 </div>
@@ -134,7 +134,7 @@ export default async function PostRepliesPage({ params }: { params: Params }) {
             ))}
           </ol>
 
-          <nav aria-label="Reply pages" className="flex flex-wrap gap-4 border-t border-border pt-6">
+          <nav aria-label="Reply pages" className="flex max-w-[44rem] flex-wrap gap-6 border-t border-border pt-6">
             <Link href={pageHref(current - 1)} rel="prev" className={link}>Earlier replies</Link>
             {current < pages && (
               <Link href={pageHref(current + 1)} rel="next" className={link}>Later replies</Link>

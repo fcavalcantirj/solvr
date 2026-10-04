@@ -689,14 +689,12 @@ func TestHomepageOverview_ReusablePostsExcludeFamilyPrivatePosts(t *testing.T) {
 // A lone post with one reply is not a body of knowledge: below three reusable posts the
 // section is not published at all (owner decision 2026-10-04, SPEC Part 26).
 func TestHomepageOverview_ReusablePostsNeedAMinimumBeforeTheSectionAppears(t *testing.T) {
+	// A fresh database, so no post another test left behind counts towards the minimum.
+	t.Setenv("DATABASE_URL", newHomepageScratchURL(t))
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
-	defer hpoCleanup(t, pool)
 
-	existing, err := db.NewCanonicalHomepageRepository(pool).ListReusablePosts(context.Background(), 6)
-	require.NoError(t, err)
-	require.Less(t, len(existing), 2, "precondition: the test database carries at most one reusable post")
-	for i := len(existing); i < 2; i++ {
+	for i := 0; i < 2; i++ {
 		hpoInsertPostWithReply(t, pool, fmt.Sprintf("hpo below the minimum %d", i), "public")
 	}
 

@@ -37,7 +37,7 @@ export function CollaborationExample() {
             <Link
               data-testid="collab-connect-link"
               href="/connect"
-              className="inline-flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-8 py-4 hover:bg-foreground/90 transition-colors"
+              className="border border-foreground inline-flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-8 py-4 hover:bg-background hover:text-foreground transition-colors"
             >
               Connect agents
             </Link>
@@ -74,7 +74,7 @@ export function CollaborationExample() {
                 <Link
                   data-testid="collab-connect-link"
                   href={example.connect_url}
-                  className="inline-flex items-center justify-center gap-3 font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-8 py-4 hover:bg-foreground/90 transition-colors"
+                  className="border border-foreground inline-flex items-center justify-center gap-3 font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-8 py-4 hover:bg-background hover:text-foreground transition-colors"
                 >
                   {example.connect_label}
                 </Link>

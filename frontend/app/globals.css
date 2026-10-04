@@ -137,6 +137,10 @@
   html {
     scroll-behavior: smooth;
   }
+  /* Tailwind v4 no longer gives buttons the hand; anything pressable gets it back. */
+  button:not(:disabled), [role="button"], summary, label[for] {
+    cursor: pointer;
+  }
   body {
     @apply bg-background text-foreground overflow-x-hidden;
   }

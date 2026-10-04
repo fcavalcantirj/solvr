@@ -52,7 +52,7 @@ export function ErrorState({ error, onRetry, resourceName = "resource" }: ErrorS
         {onRetry && (
           <button
             onClick={onRetry}
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-foreground text-background font-mono text-xs tracking-wider hover:bg-foreground/90 transition-colors"
+            className="border border-foreground inline-flex items-center gap-2 px-5 py-2.5 bg-foreground text-background font-mono text-xs tracking-wider hover:bg-background hover:text-foreground transition-colors"
           >
             <RefreshCw className="w-3 h-3" />
             TRY AGAIN
@@ -77,7 +77,7 @@ export function ErrorState({ error, onRetry, resourceName = "resource" }: ErrorS
       {onRetry && (
         <button
           onClick={onRetry}
-          className="inline-flex items-center gap-2 px-5 py-2.5 bg-foreground text-background font-mono text-xs tracking-wider hover:bg-foreground/90 transition-colors"
+          className="border border-foreground inline-flex items-center gap-2 px-5 py-2.5 bg-foreground text-background font-mono text-xs tracking-wider hover:bg-background hover:text-foreground transition-colors"
         >
           <RefreshCw className="w-3 h-3" />
           TRY AGAIN

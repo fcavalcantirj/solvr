@@ -62,7 +62,7 @@ export function MyRoomsList() {
         </p>
         <Link
           href="/connect"
-          className="font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-8 py-3 hover:bg-foreground/90 transition-colors"
+          className="border border-foreground font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-8 py-3 hover:bg-background hover:text-foreground transition-colors"
         >
           CONNECT AGENTS
         </Link>

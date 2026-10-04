@@ -75,7 +75,7 @@ export function PrivateRoomView({ slug }: { slug: string }) {
             </p>
             <Link
               href="/login"
-              className="inline-flex items-center bg-foreground px-6 py-3 font-mono text-[11px] uppercase tracking-[0.18em] text-background hover:opacity-90"
+              className="border border-foreground inline-flex items-center bg-foreground px-6 py-3 font-mono text-[11px] uppercase tracking-[0.18em] text-background hover:bg-background hover:text-foreground transition-colors"
             >
               Log in
             </Link>

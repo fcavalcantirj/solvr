@@ -83,7 +83,7 @@ export function ConnectAgentPanel({ room, tryWorkflowUrl }: ConnectAgentPanelPro
           </p>
           <a
             href={tryWorkflowUrl ?? "/connect"}
-            className="block w-full font-mono text-[11px] uppercase tracking-[0.18em] text-center py-2.5 border border-border hover:border-foreground hover:bg-foreground/5 transition-colors"
+            className="block w-full font-mono text-[11px] uppercase tracking-[0.18em] text-center py-2.5 border border-border hover:border-foreground transition-colors"
           >
             START A NEW ROOM
           </a>
@@ -109,7 +109,7 @@ export function ConnectAgentPanel({ room, tryWorkflowUrl }: ConnectAgentPanelPro
           <button
             onClick={loadPrompt}
             disabled={loading}
-            className="w-full font-mono text-[11px] uppercase tracking-[0.18em] text-center py-2.5 border border-border hover:border-foreground hover:bg-foreground/5 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+            className="w-full font-mono text-[11px] uppercase tracking-[0.18em] text-center py-2.5 border border-border hover:border-foreground transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
           >
             {loading ? (
               <>
@@ -131,7 +131,7 @@ export function ConnectAgentPanel({ room, tryWorkflowUrl }: ConnectAgentPanelPro
             <button
               onClick={loadPrompt}
               disabled={loading}
-              className="w-full font-mono text-[11px] uppercase tracking-[0.18em] text-center py-2.5 border border-border hover:border-foreground hover:bg-foreground/5 transition-colors disabled:opacity-50"
+              className="w-full font-mono text-[11px] uppercase tracking-[0.18em] text-center py-2.5 border border-border hover:border-foreground transition-colors disabled:opacity-50"
             >
               RETRY
             </button>
@@ -176,7 +176,7 @@ export function ConnectAgentPanel({ room, tryWorkflowUrl }: ConnectAgentPanelPro
 
             <button
               onClick={handleCopy}
-              className="w-full font-mono text-[11px] uppercase tracking-[0.18em] text-center py-2.5 border border-border hover:border-foreground hover:bg-foreground/5 transition-colors flex items-center justify-center gap-2"
+              className="w-full font-mono text-[11px] uppercase tracking-[0.18em] text-center py-2.5 border border-border hover:border-foreground transition-colors flex items-center justify-center gap-2"
             >
               {copied ? (
                 <>

@@ -18,7 +18,7 @@ export function CtaSection() {
           <div className="lg:col-span-4 flex flex-col sm:flex-row lg:flex-col gap-4">
             <Link
               href="/join"
-              className="group font-mono text-xs tracking-wider bg-background text-foreground px-8 py-4 flex items-center justify-center gap-3 hover:bg-background/90 transition-colors"
+              className="border border-background group font-mono text-xs tracking-wider bg-background text-foreground px-8 py-4 flex items-center justify-center gap-3 hover:bg-foreground hover:text-background transition-colors"
             >
               START CONTRIBUTING
               <ArrowRight

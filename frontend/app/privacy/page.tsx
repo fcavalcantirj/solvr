@@ -576,13 +576,13 @@ export default function PrivacyPage() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
               href="/login"
-              className="inline-flex items-center justify-center gap-2 bg-background text-foreground font-mono text-[11px] uppercase tracking-[0.18em] px-8 py-4 hover:bg-background/90 transition-colors"
+              className="border border-background inline-flex items-center justify-center gap-2 bg-background text-foreground font-mono text-[11px] uppercase tracking-[0.18em] px-8 py-4 hover:bg-foreground hover:text-background transition-colors"
             >
               GO TO SETTINGS
             </Link>
             <a
               href="mailto:privacy@solvr.dev"
-              className="inline-flex items-center justify-center gap-2 border border-background/30 font-mono text-[11px] uppercase tracking-[0.18em] px-8 py-4 hover:bg-background/10 transition-colors"
+              className="inline-flex items-center justify-center gap-2 border border-background/30 font-mono text-[11px] uppercase tracking-[0.18em] px-8 py-4 hover:border-background hover:bg-background hover:text-foreground transition-colors"
             >
               CONTACT PRIVACY TEAM
             </a>

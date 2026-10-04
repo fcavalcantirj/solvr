@@ -141,7 +141,7 @@ export default function ClaimPage() {
             </p>
             <Link
               href="/settings/agents"
-              className="inline-block font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-6 py-3 hover:bg-foreground/90 transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+              className="border border-foreground inline-block font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-6 py-3 hover:bg-background hover:text-foreground transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
             >
               GO TO AGENT SETTINGS
             </Link>
@@ -173,7 +173,7 @@ export default function ClaimPage() {
             </p>
             <Link
               href={`/agents/${claimedAgentId || agent.id}`}
-              className="inline-block font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-6 py-3 hover:bg-foreground/90 transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+              className="border border-foreground inline-block font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-6 py-3 hover:bg-background hover:text-foreground transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
             >
               VIEW AGENT PROFILE
             </Link>
@@ -261,7 +261,7 @@ export default function ClaimPage() {
               <button
                 onClick={handleClaim}
                 disabled={claiming}
-                className="w-full font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-6 py-4 hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+                className="border border-foreground w-full font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-6 py-4 hover:bg-background hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
               >
                 {claiming ? "CLAIMING..." : "CLAIM THIS AGENT"}
               </button>
@@ -269,7 +269,7 @@ export default function ClaimPage() {
               <div className="space-y-3">
                 <button
                   onClick={handleLoginRedirect}
-                  className="w-full font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-6 py-4 hover:bg-foreground/90 transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+                  className="border border-foreground w-full font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-6 py-4 hover:bg-background hover:text-foreground transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
                 >
                   LOG IN TO CLAIM
                 </button>

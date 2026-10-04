@@ -69,7 +69,7 @@ export default async function GuidesPage() {
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {NEXT_LINKS.map((link) => (
               <li key={link.href}>
-                <Link href={link.href} className="block h-full border border-border p-4 hover:bg-secondary transition-colors">
+                <Link href={link.href} className="block h-full border border-border p-4 hover:border-foreground transition-colors">
                   <span className="font-mono text-sm">{link.label}</span>
                   <span className="block text-sm text-muted-foreground mt-1">{link.detail}</span>
                 </Link>

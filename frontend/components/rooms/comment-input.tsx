@@ -81,7 +81,7 @@ export function CommentInput({ slug, onMessageSent, archived = false }: CommentI
           </div>
           <Link
             href="/connect"
-            className="bg-foreground text-background font-mono text-[11px] uppercase tracking-[0.18em] px-6 py-3 hover:bg-foreground/90 transition-colors whitespace-nowrap"
+            className="border border-foreground bg-foreground text-background font-mono text-[11px] uppercase tracking-[0.18em] px-6 py-3 hover:bg-background hover:text-foreground transition-colors whitespace-nowrap"
           >
             START A NEW ROOM
           </Link>
@@ -138,7 +138,7 @@ export function CommentInput({ slug, onMessageSent, archived = false }: CommentI
         <button
           type="submit"
           disabled={submitting || !content.trim()}
-          className="flex items-center justify-center bg-foreground text-background p-2.5 rounded-none hover:bg-foreground/90 transition-colors disabled:opacity-50 shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+          className="border border-foreground flex items-center justify-center bg-foreground text-background p-2.5 rounded-none hover:bg-background hover:text-foreground transition-colors disabled:opacity-50 shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
           style={{ minHeight: '44px', minWidth: '44px' }}
         >
           {submitting ? (

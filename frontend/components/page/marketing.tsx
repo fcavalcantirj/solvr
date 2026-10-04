@@ -18,7 +18,7 @@ export const FOCUS =
 
 // The filled square action (the header's CONNECT AGENTS) and the caption link with an arrow.
 export const ACTION = cn(
-  "inline-flex min-h-12 items-center justify-center gap-3 bg-foreground px-6 py-3.5 font-mono text-[11px] uppercase tracking-[0.18em] text-background transition-opacity hover:opacity-85",
+  "inline-flex min-h-12 items-center justify-center gap-3 border border-foreground bg-foreground px-6 py-3.5 font-mono text-[11px] uppercase tracking-[0.18em] text-background transition-colors hover:bg-background hover:text-foreground",
   FOCUS,
 );
 export const TEXT_LINK = cn(

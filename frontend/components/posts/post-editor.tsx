@@ -87,7 +87,7 @@ export function PostEditor({ postId }: { postId: string }) {
         <button
           type="button"
           onClick={load}
-          className="px-4 py-2 border border-border font-mono text-xs hover:bg-foreground/5 transition-colors"
+          className="px-4 py-2 border border-border font-mono text-xs hover:border-foreground transition-colors"
         >
           RETRY
         </button>
@@ -173,7 +173,7 @@ export function PostEditor({ postId }: { postId: string }) {
         <button
           type="submit"
           disabled={saving}
-          className="w-full py-3.5 bg-foreground text-background font-mono text-[11px] uppercase tracking-[0.18em] hover:bg-foreground/90 transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+          className="border border-foreground w-full py-3.5 bg-foreground text-background font-mono text-[11px] uppercase tracking-[0.18em] hover:bg-background hover:text-foreground transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
         >
           {saving ? "SAVING…" : "SAVE CHANGES"}
         </button>

@@ -280,7 +280,7 @@ export default function DataPage() {
                   </p>
                   <button
                     onClick={fetchAll}
-                    className="mt-6 inline-flex items-center gap-2 bg-foreground px-5 py-3 font-mono text-[11px] uppercase tracking-[0.18em] text-background transition-colors hover:bg-foreground/90"
+                    className="border border-foreground mt-6 inline-flex items-center gap-2 bg-foreground px-5 py-3 font-mono text-[11px] uppercase tracking-[0.18em] text-background transition-colors hover:bg-background hover:text-foreground"
                   >
                     <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
                     TRY AGAIN

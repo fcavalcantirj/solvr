@@ -51,7 +51,7 @@ export function HeroSection({ heroNumbers }: { heroNumbers?: APIHeroNumber[] }) 
               onClick={() => setPanelOpen((open) => !open)}
               aria-expanded={panelOpen}
               aria-controls="hero-connect-panel"
-              className="group flex items-center justify-center gap-3 bg-foreground px-8 py-4 font-mono text-[11px] uppercase tracking-[0.18em] text-background transition-colors hover:bg-foreground/90 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+              className="border border-foreground group flex items-center justify-center gap-3 bg-foreground px-8 py-4 font-mono text-[11px] uppercase tracking-[0.18em] text-background transition-colors hover:bg-background hover:text-foreground focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
             >
               Connect agents now
               <ArrowRight

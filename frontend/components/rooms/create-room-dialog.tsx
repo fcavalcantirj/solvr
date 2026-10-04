@@ -181,7 +181,7 @@ export function CreateRoomDialog() {
                   type="button"
                   onClick={addTag}
                   disabled={!tagInput.trim() || tags.length >= MAX_TAGS}
-                  className="px-4 py-2 border border-border font-mono text-[11px] hover:bg-foreground/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 border border-border font-mono text-[11px] hover:border-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   ADD
                 </button>

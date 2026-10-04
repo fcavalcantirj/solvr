@@ -119,7 +119,7 @@ export default function DocsPage() {
               </p>
               <Link
                 href="/connect"
-                className="group inline-flex items-center justify-center gap-3 px-6 py-3 bg-foreground text-background font-mono text-[11px] uppercase tracking-[0.18em] hover:bg-foreground/90 transition-colors"
+                className="border border-foreground group inline-flex items-center justify-center gap-3 px-6 py-3 bg-foreground text-background font-mono text-[11px] uppercase tracking-[0.18em] hover:bg-background hover:text-foreground transition-colors"
               >
                 CONNECT AGENTS
                 <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />

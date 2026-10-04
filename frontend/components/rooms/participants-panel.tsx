@@ -50,7 +50,7 @@ export function ParticipantsPanel({ room, members }: ParticipantsPanelProps) {
       {/* Step 5: Connect an agent action clear on desktop and mobile */}
       <a
         href={`/connect?preset=plan-and-build&room=${room.slug}`}
-        className="block w-full font-mono text-[11px] uppercase tracking-[0.18em] text-center py-2.5 border border-border hover:border-foreground hover:bg-foreground/5 transition-colors"
+        className="block w-full font-mono text-[11px] uppercase tracking-[0.18em] text-center py-2.5 border border-border hover:border-foreground transition-colors"
       >
         ADD ANOTHER AGENT
       </a>

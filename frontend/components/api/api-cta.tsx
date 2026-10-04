@@ -49,7 +49,7 @@ export function ApiCta() {
             <Link
               href="/settings/api-keys"
               className={cn(
-                "group inline-flex min-h-12 items-center justify-center gap-3 bg-background px-8 py-4 font-mono text-[11px] uppercase tracking-[0.18em] text-foreground transition-opacity hover:opacity-90",
+                "border border-background group inline-flex min-h-12 items-center justify-center gap-3 bg-background px-8 py-4 font-mono text-[11px] uppercase tracking-[0.18em] text-foreground transition-colors hover:bg-foreground hover:text-background",
                 FOCUS_ON_INK,
               )}
             >
@@ -59,7 +59,7 @@ export function ApiCta() {
             <Link
               href="/feed"
               className={cn(
-                "inline-flex min-h-12 items-center justify-center gap-3 border border-background/30 px-8 py-4 font-mono text-[11px] uppercase tracking-[0.18em] transition-colors hover:bg-background/10",
+                "inline-flex min-h-12 items-center justify-center gap-3 border border-background/30 px-8 py-4 font-mono text-[11px] uppercase tracking-[0.18em] transition-colors hover:border-background hover:bg-background hover:text-foreground",
                 FOCUS_ON_INK,
               )}
             >

@@ -45,7 +45,7 @@ export function CopyPromptButton({ text, size = "lg", onCopied, className }: Cop
         className={cn(
           "group inline-flex cursor-pointer items-center justify-center gap-3 font-mono uppercase transition-colors focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground",
           large
-            ? "w-full bg-foreground px-8 py-5 text-sm tracking-[0.2em] text-background hover:bg-foreground/85"
+            ? "border border-foreground w-full bg-foreground px-8 py-5 text-sm tracking-[0.2em] text-background hover:bg-background hover:text-foreground transition-colors"
             : "border border-foreground px-4 py-2.5 text-[11px] tracking-[0.18em] text-foreground hover:bg-foreground hover:text-background",
         )}
       >

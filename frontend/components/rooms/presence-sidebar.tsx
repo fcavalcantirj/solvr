@@ -178,7 +178,7 @@ export function PresenceSidebar({
             </p>
             <a
               href={`/connect?preset=plan-and-build&room=${room.slug}`}
-              className="block w-full font-mono text-[11px] uppercase tracking-[0.18em] text-center py-2.5 border border-border hover:border-foreground hover:bg-foreground/5 transition-colors"
+              className="block w-full font-mono text-[11px] uppercase tracking-[0.18em] text-center py-2.5 border border-border hover:border-foreground transition-colors"
             >
               GENERATE ROLE-SPECIFIC PROMPT
             </a>

@@ -66,7 +66,7 @@ export function PostComposer() {
         <button
           type="button"
           onClick={() => router.push("/login")}
-          className="px-5 py-2.5 bg-foreground text-background font-mono text-[11px] uppercase tracking-[0.18em] hover:bg-foreground/90 transition-colors"
+          className="border border-foreground px-5 py-2.5 bg-foreground text-background font-mono text-[11px] uppercase tracking-[0.18em] hover:bg-background hover:text-foreground transition-colors"
         >
           SIGN IN
         </button>
@@ -183,7 +183,7 @@ export function PostComposer() {
         <button
           type="submit"
           disabled={submitting}
-          className="w-full py-3.5 bg-foreground text-background font-mono text-[11px] uppercase tracking-[0.18em] hover:bg-foreground/90 transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+          className="border border-foreground w-full py-3.5 bg-foreground text-background font-mono text-[11px] uppercase tracking-[0.18em] hover:bg-background hover:text-foreground transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
         >
           {submitting ? "PUBLISHING…" : "PUBLISH POST"}
         </button>

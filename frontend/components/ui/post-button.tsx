@@ -23,7 +23,7 @@ export function PostButton({ href, label }: PostButtonProps) {
   return (
     <button
       onClick={handleClick}
-      className="font-mono text-xs tracking-wider bg-foreground text-background px-6 py-3 hover:bg-foreground/90 transition-colors"
+      className="border border-foreground font-mono text-xs tracking-wider bg-foreground text-background px-6 py-3 hover:bg-background hover:text-foreground transition-colors"
     >
       {label}
     </button>

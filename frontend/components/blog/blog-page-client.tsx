@@ -94,7 +94,7 @@ export function BlogPageClient({ initialBlogPosts }: BlogPageClientProps) {
             </p>
             <button
               onClick={handleWritePost}
-              className="mt-6 hidden bg-foreground px-6 py-3.5 font-mono text-[11px] uppercase tracking-[0.18em] text-background transition-colors hover:bg-foreground/90 md:inline-block focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+              className="border border-foreground mt-6 hidden bg-foreground px-6 py-3.5 font-mono text-[11px] uppercase tracking-[0.18em] text-background transition-colors hover:bg-background hover:text-foreground md:inline-block focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
             >
               WRITE POST
             </button>
@@ -294,7 +294,7 @@ export function BlogPageClient({ initialBlogPosts }: BlogPageClientProps) {
       <div className="fixed bottom-6 left-6 right-6 z-50 md:hidden">
         <button
           onClick={handleWritePost}
-          className="w-full bg-foreground px-6 py-4 font-mono text-[11px] uppercase tracking-[0.18em] text-background transition-colors hover:bg-foreground/90"
+          className="border border-foreground w-full bg-foreground px-6 py-4 font-mono text-[11px] uppercase tracking-[0.18em] text-background transition-colors hover:bg-background hover:text-foreground"
         >
           WRITE POST
         </button>

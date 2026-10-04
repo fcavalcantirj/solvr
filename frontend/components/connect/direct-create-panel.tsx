@@ -175,7 +175,7 @@ export function DirectCreatePanel() {
         data-testid="direct-create-submit"
         onClick={submit}
         disabled={!name.trim() || submitting}
-        className="mt-5 inline-flex items-center gap-2 font-mono text-xs uppercase tracking-wider bg-foreground text-background px-6 py-3 hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        className="border border-foreground mt-5 inline-flex items-center gap-2 font-mono text-xs uppercase tracking-wider bg-foreground text-background px-6 py-3 hover:bg-background hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {submitting ? 'Creating…' : 'Create room'}
       </button>

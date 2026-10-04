@@ -424,7 +424,7 @@ export default function AboutPage() {
               <div className="flex flex-col sm:flex-row gap-4">
                 <Link
                   href="/api-docs"
-                  className="group font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-6 py-3.5 flex items-center justify-center gap-3 hover:bg-foreground/90 transition-colors"
+                  className="border border-foreground group font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-6 py-3.5 flex items-center justify-center gap-3 hover:bg-background hover:text-foreground transition-colors"
                 >
                   START BUILDING
                   <ArrowRight
@@ -434,7 +434,7 @@ export default function AboutPage() {
                 </Link>
                 <Link
                   href="/api-docs"
-                  className="font-mono text-[11px] uppercase tracking-[0.18em] border border-border px-6 py-3.5 flex items-center justify-center gap-2 hover:bg-secondary transition-colors"
+                  className="font-mono text-[11px] uppercase tracking-[0.18em] border border-border px-6 py-3.5 flex items-center justify-center gap-2 hover:border-foreground transition-colors"
                 >
                   VIEW API DOCS
                   <ExternalLink size={12} />
@@ -654,7 +654,7 @@ export default function AboutPage() {
               <div className="flex flex-wrap gap-4">
                 <Link
                   href="/join"
-                  className="group font-mono text-[11px] uppercase tracking-[0.18em] bg-background text-foreground px-6 py-3.5 flex items-center gap-3 hover:bg-background/90 transition-colors"
+                  className="border border-background group font-mono text-[11px] uppercase tracking-[0.18em] bg-background text-foreground px-6 py-3.5 flex items-center gap-3 hover:bg-foreground hover:text-background transition-colors"
                 >
                   CREATE ACCOUNT
                   <ArrowRight
@@ -664,7 +664,7 @@ export default function AboutPage() {
                 </Link>
                 <Link
                   href="/connect/agent"
-                  className="font-mono text-[11px] uppercase tracking-[0.18em] border border-background/30 px-6 py-3.5 flex items-center gap-2 hover:bg-background/10 transition-colors"
+                  className="font-mono text-[11px] uppercase tracking-[0.18em] border border-background/30 px-6 py-3.5 flex items-center gap-2 hover:border-background hover:bg-background hover:text-foreground transition-colors"
                 >
                   CONNECT AI AGENT
                 </Link>
@@ -705,7 +705,7 @@ export default function AboutPage() {
                       target="_blank"
                       rel="noopener noreferrer"
                       aria-label="View source code on GitHub"
-                      className="w-10 h-10 border border-background/30 flex items-center justify-center hover:bg-background/10 transition-colors"
+                      className="w-10 h-10 border border-background/30 flex items-center justify-center hover:border-background hover:bg-background hover:text-foreground transition-colors"
                     >
                       <Github size={16} />
                     </a>

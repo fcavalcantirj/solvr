@@ -248,7 +248,7 @@ function JoinPageInner() {
                 {/* Continue Button */}
                 <button
                   onClick={() => setStep(2)}
-                  className="w-full flex items-center justify-center gap-3 font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-5 py-4 hover:bg-foreground/90 transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+                  className="border border-foreground w-full flex items-center justify-center gap-3 font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-5 py-4 hover:bg-background hover:text-foreground transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
                 >
                   CONTINUE WITH EMAIL
                   <ArrowRight size={14} />
@@ -268,7 +268,7 @@ function JoinPageInner() {
                   </div>
                   <button
                     onClick={handleAgentAccountClick}
-                    className="w-full flex items-center gap-3 text-sm text-muted-foreground border border-border px-4 py-3 hover:bg-secondary transition-colors cursor-pointer text-left"
+                    className="w-full flex items-center gap-3 text-sm text-muted-foreground border border-border px-4 py-3 hover:border-foreground hover:text-foreground transition-colors cursor-pointer text-left"
                   >
                     <Bot size={16} />
                     <div>
@@ -409,7 +409,7 @@ function JoinPageInner() {
                   <button
                     type="submit"
                     disabled={isLoading}
-                    className="w-full flex items-center justify-center gap-3 font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-5 py-4 hover:bg-foreground/90 transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground disabled:opacity-50 disabled:cursor-not-allowed mt-4"
+                    className="border border-foreground w-full flex items-center justify-center gap-3 font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-5 py-4 hover:bg-background hover:text-foreground transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground disabled:opacity-50 disabled:cursor-not-allowed mt-4"
                   >
                     {isLoading ? (
                       <div className="w-4 h-4 border-2 border-background/30 border-t-background rounded-full animate-spin" />

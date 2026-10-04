@@ -120,7 +120,7 @@ export function RoomStarterPrompts({ room, justCreated }: RoomStarterPromptsProp
             </p>
             <button
               onClick={load}
-              className="w-full font-mono text-[11px] uppercase tracking-[0.18em] text-center py-2.5 border border-border hover:border-foreground hover:bg-foreground/5 transition-colors"
+              className="w-full font-mono text-[11px] uppercase tracking-[0.18em] text-center py-2.5 border border-border hover:border-foreground transition-colors"
             >
               RETRY
             </button>
@@ -182,7 +182,7 @@ function StarterPrompt({
       <button
         data-testid={copyTestId}
         onClick={onCopy}
-        className="w-full font-mono text-[11px] uppercase tracking-[0.18em] text-center py-2.5 border border-border hover:border-foreground hover:bg-foreground/5 transition-colors flex items-center justify-center gap-2"
+        className="w-full font-mono text-[11px] uppercase tracking-[0.18em] text-center py-2.5 border border-border hover:border-foreground transition-colors flex items-center justify-center gap-2"
       >
         {copied ? (
           <>

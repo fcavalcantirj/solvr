@@ -20,7 +20,7 @@ export function ClosingSection({ data }: { data: APIOverviewClosing }) {
 
         <Link
           href={data.connect_url}
-          className="group inline-flex items-center gap-3 mt-10 font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-8 py-4 hover:bg-foreground/90 transition-colors"
+          className="border border-foreground group inline-flex items-center gap-3 mt-10 font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-8 py-4 hover:bg-background hover:text-foreground transition-colors"
         >
           {data.connect_label}
           <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />

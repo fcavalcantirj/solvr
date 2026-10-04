@@ -84,7 +84,7 @@ export function PostDetail({ postId, initial }: { postId: string; initial?: Post
         <button
           type="button"
           onClick={load}
-          className="px-4 py-2 border border-border font-mono text-xs hover:bg-foreground/5 transition-colors"
+          className="px-4 py-2 border border-border font-mono text-xs hover:border-foreground transition-colors"
         >
           RETRY
         </button>

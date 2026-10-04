@@ -50,7 +50,7 @@ export function RoomHeaderActions({ slug, displayName, connectHref = "#connect-a
         </button>
         <a
           href={connectHref}
-          className="inline-flex items-center gap-2 border border-foreground bg-foreground text-background px-4 py-2.5 font-mono text-[11px] uppercase tracking-[0.18em] hover:opacity-90 transition-opacity"
+          className="inline-flex items-center gap-2 border border-foreground bg-foreground text-background px-4 py-2.5 font-mono text-[11px] uppercase tracking-[0.18em] hover:bg-background hover:text-foreground transition-colors"
         >
           <UserPlus className="w-3.5 h-3.5" aria-hidden="true" />
           Connect an agent

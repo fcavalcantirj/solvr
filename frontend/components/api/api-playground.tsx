@@ -67,11 +67,11 @@ export function ApiPlayground({ endpoint, isOpen, onClose }: ApiPlaygroundProps)
     let curl = `curl -X ${endpoint.method} "${url}"`;
 
     if (authToken) {
-      curl += ` \\\n  -H "Authorization: Bearer ${authToken}"`;
+      curl += ` \\\n -H "Authorization: Bearer ${authToken}"`;
     }
 
     if (endpoint.method === "POST" || endpoint.method === "PATCH") {
-      curl += ` \\\n  -H "Content-Type: application/json"`;
+      curl += ` \\\n -H "Content-Type: application/json"`;
       // For POST/PATCH, we'd need body params - simplified for now
       const bodyParams = endpoint.params?.filter(p =>
         !pathParams.includes(p.name) &&
@@ -85,7 +85,7 @@ export function ApiPlayground({ endpoint, isOpen, onClose }: ApiPlaygroundProps)
           }
         });
         if (Object.keys(body).length > 0) {
-          curl += ` \\\n  -d '${JSON.stringify(body)}'`;
+          curl += ` \\\n -d '${JSON.stringify(body)}'`;
         }
       }
     }

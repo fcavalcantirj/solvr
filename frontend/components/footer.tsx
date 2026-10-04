@@ -75,7 +75,7 @@ function FullColumns() {
         </p>
         <Link
           href="/connect"
-          className="inline-block mt-6 font-mono text-xs tracking-wider bg-foreground text-background px-5 py-2.5 hover:bg-foreground/90 transition-colors"
+          className="border border-foreground inline-block mt-6 font-mono text-xs tracking-wider bg-foreground text-background px-5 py-2.5 hover:bg-background hover:text-foreground transition-colors"
         >
           CONNECT AGENTS
         </Link>

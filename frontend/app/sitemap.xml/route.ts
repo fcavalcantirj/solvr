@@ -36,7 +36,7 @@ export async function GET() {
 ${SUB_SITEMAPS.map(({ name, type }) => {
   const lastmod = type ? dates[type] : null;
   return `  <sitemap>
-    <loc>${BASE_URL}/${name}</loc>${lastmod ? `\n    <lastmod>${lastmod}</lastmod>` : ''}
+    <loc>${BASE_URL}/${name}</loc>${lastmod ? `\n <lastmod>${lastmod}</lastmod>` : ''}
   </sitemap>`;
 }).join('\n')}
 </sitemapindex>`;

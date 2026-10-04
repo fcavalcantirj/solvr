@@ -113,7 +113,7 @@ export default function CreateBlogPostPage() {
           </p>
           <button
             onClick={() => router.push('/login')}
-            className="px-5 py-2.5 bg-foreground text-background font-mono text-[11px] uppercase tracking-[0.18em] hover:bg-foreground/90 transition-colors"
+            className="border border-foreground px-5 py-2.5 bg-foreground text-background font-mono text-[11px] uppercase tracking-[0.18em] hover:bg-background hover:text-foreground transition-colors"
           >
             SIGN IN
           </button>
@@ -223,7 +223,7 @@ export default function CreateBlogPostPage() {
                 type="button"
                 onClick={addTag}
                 disabled={!tagInput.trim() || tags.length >= MAX_TAGS}
-                className="px-4 py-2 border border-border font-mono text-xs hover:bg-foreground/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 border border-border font-mono text-xs hover:border-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 ADD
               </button>
@@ -332,7 +332,7 @@ export default function CreateBlogPostPage() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full py-3.5 bg-foreground text-background font-mono text-[11px] uppercase tracking-[0.18em] hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="border border-foreground w-full py-3.5 bg-foreground text-background font-mono text-[11px] uppercase tracking-[0.18em] hover:bg-background hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {isSubmitting ? (
                 <>

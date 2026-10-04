@@ -324,7 +324,7 @@ export function EditPostForm({ postId, postType }: EditPostFormProps) {
               type="button"
               onClick={addTag}
               disabled={!tagInput.trim() || tags.length >= MAX_TAGS}
-              className="px-4 py-2 border border-border font-mono text-xs hover:bg-foreground/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 border border-border font-mono text-xs hover:border-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               ADD
             </button>
@@ -355,7 +355,7 @@ export function EditPostForm({ postId, postType }: EditPostFormProps) {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full py-3 bg-foreground text-background font-mono text-sm tracking-wider hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="border border-foreground w-full py-3 bg-foreground text-background font-mono text-sm tracking-wider hover:bg-background hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {isSubmitting ? (
               <>

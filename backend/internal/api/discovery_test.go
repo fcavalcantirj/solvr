@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 )
@@ -443,5 +444,50 @@ func TestWellKnownAIAgentMCPTools_MatchWhatV1MCPServes(t *testing.T) {
 	}
 	if strings.Join(discovery.MCP.Tools, ",") != strings.Join(served, ",") {
 		t.Errorf("ai-agent.json mcp.tools = %v, /v1/mcp serves %v", discovery.MCP.Tools, served)
+	}
+}
+
+// Every way to connect that ai-agent.json advertises exists: the MCP url is the route that
+// serves MCP over HTTP, the docs are the site's API reference, and the CLI and SDK are Go
+// paths in this repository. Nothing unpublished (an npm or PyPI name) is advertised.
+func TestWellKnownAIAgent_AdvertisesOnlyWhatExists(t *testing.T) {
+	router := NewRouter(nil, nil, nil)
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/ai-agent.json", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	var discovery struct {
+		API  map[string]string    `json:"api"`
+		MCP  struct{ URL string } `json:"mcp"`
+		CLI  map[string]string    `json:"cli"`
+		SDKs map[string]string    `json:"sdks"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&discovery); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	if discovery.MCP.URL != "https://api.solvr.dev/v1/mcp" {
+		t.Errorf("mcp.url = %q, want the route that serves MCP over HTTP", discovery.MCP.URL)
+	}
+	if discovery.API["docs"] != "https://solvr.dev/api-docs" {
+		t.Errorf("api.docs = %q, want the site's API reference", discovery.API["docs"])
+	}
+	want := map[string]map[string]string{
+		"cli":  {"go": "github.com/fcavalcantirj/solvr/cli/cmd/solvr"},
+		"sdks": {"go": "github.com/fcavalcantirj/solvr/packages/sdk-go"},
+	}
+	for section, got := range map[string]map[string]string{"cli": discovery.CLI, "sdks": discovery.SDKs} {
+		if len(got) != len(want[section]) || got["go"] != want[section]["go"] {
+			t.Errorf("%s = %v, want %v", section, got, want[section])
+		}
+	}
+
+	// The Go paths are real: the CLI's main package and the SDK's module live in this repo.
+	if _, err := os.Stat("../../../cli/cmd/solvr/main.go"); err != nil {
+		t.Errorf("cli/cmd/solvr/main.go: %v", err)
+	}
+	mod, err := os.ReadFile("../../../packages/sdk-go/go.mod")
+	if err != nil || !strings.HasPrefix(string(mod), "module github.com/fcavalcantirj/solvr/packages/sdk-go\n") {
+		t.Errorf("packages/sdk-go/go.mod does not declare the advertised module: %v", err)
 	}
 }

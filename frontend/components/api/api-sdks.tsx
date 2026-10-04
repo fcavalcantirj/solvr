@@ -8,68 +8,9 @@ import { SegmentedControl } from "@/components/page/segmented-control";
 
 export const sdks = [
   {
-    language: "JavaScript / TypeScript",
-    package: "@solvr/sdk",
-    install: "npm install @solvr/sdk",
-    code: `import { Solvr } from '@solvr/sdk';
-
-const solvr = new Solvr({ apiKey: process.env.SOLVR_API_KEY });
-
-// Search
-const results = await solvr.search('async postgres race condition');
-
-// Get a post, then its replies
-const post = await solvr.get('post_abc123');
-const replies = await solvr.replies('post_abc123');
-
-// Create a post (a post has no type)
-const newPost = await solvr.post({
-  title: 'Memory leak in Node.js worker threads',
-  description: 'Detailed description...',
-  tags: ['nodejs', 'memory', 'workers']
-});
-
-// Reply to a post (every contribution is a reply)
-const reply = await solvr.reply('post_abc123', 'Heap snapshot analysis showed...');
-await solvr.reply('post_abc123', 'Confirmed on Node 22.', { parentReplyId: reply.data.id });`,
-  },
-  {
-    language: "Python",
-    package: "solvr",
-    install: "pip install solvr",
-    code: `from solvr import Solvr
-import os
-
-client = Solvr(api_key=os.environ['SOLVR_API_KEY'])
-
-# Search
-results = client.search(
-    "async postgres race condition",
-    limit=5,
-)
-
-for r in results.data:
-    print(f"{r.title} (score: {r.score})")
-
-# Get a post, then its replies
-post = client.get("post_abc123")
-replies = client.replies("post_abc123")
-
-# Create a post (a post has no type)
-new_post = client.post(
-    title="Race condition in async PostgreSQL queries",
-    description="When running multiple async queries...",
-    tags=["postgresql", "async", "python"]
-)
-
-# Reply to a post (every contribution is a reply)
-reply = client.reply("post_abc123", "Separate pools per worker fixed it...")
-client.reply("post_abc123", "Confirmed on Python 3.12.", parent_reply_id=reply.id)`,
-  },
-  {
     language: "Go",
-    package: "github.com/fcavalcantirj/solvr-go",
-    install: "go get github.com/fcavalcantirj/solvr-go",
+    package: "github.com/fcavalcantirj/solvr/packages/sdk-go",
+    install: "go get github.com/fcavalcantirj/solvr/packages/sdk-go",
     code: `package main
 
 import (
@@ -77,7 +18,7 @@ import (
     "fmt"
     "os"
 
-    solvr "github.com/fcavalcantirj/solvr-go"
+    solvr "github.com/fcavalcantirj/solvr/packages/sdk-go"
 )
 
 func main() {
@@ -117,8 +58,8 @@ func main() {
   },
   {
     language: "CLI",
-    package: "@solvr/cli",
-    install: "npm install -g @solvr/cli",
+    package: "github.com/fcavalcantirj/solvr/cli",
+    install: "go install github.com/fcavalcantirj/solvr/cli/cmd/solvr@latest",
     code: `# Configure
 solvr config set api-key solvr_sk_xxxxx
 
@@ -149,9 +90,9 @@ export function ApiSdks() {
 
   return (
     <MarketingSection
-      heading="Native libraries for every stack"
+      heading="A Go SDK and a command line"
       headingId="sdk-heading"
-      intro="Official SDKs with TypeScript definitions, error handling, and automatic retries."
+      intro="The Go SDK and the solvr command line, both installable with Go today."
     >
       {/* Language Tabs */}
       <SegmentedControl

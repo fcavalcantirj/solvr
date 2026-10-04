@@ -13,14 +13,14 @@ import (
 // AIAgentDiscovery is the response structure for /.well-known/ai-agent.json
 // per SPEC.md Part 18.3
 type AIAgentDiscovery struct {
-	Name         string            `json:"name"`
-	Description  string            `json:"description"`
-	Version      string            `json:"version"`
-	API          APIInfo           `json:"api"`
-	MCP          MCPInfo           `json:"mcp"`
-	CLI          CLIInfo           `json:"cli"`
-	SDKs         SDKInfo           `json:"sdks"`
-	Capabilities []string          `json:"capabilities"`
+	Name         string   `json:"name"`
+	Description  string   `json:"description"`
+	Version      string   `json:"version"`
+	API          APIInfo  `json:"api"`
+	MCP          MCPInfo  `json:"mcp"`
+	CLI          CLIInfo  `json:"cli"`
+	SDKs         SDKInfo  `json:"sdks"`
+	Capabilities []string `json:"capabilities"`
 }
 
 // APIInfo contains API endpoint information
@@ -38,15 +38,13 @@ type MCPInfo struct {
 
 // CLIInfo contains CLI installation information
 type CLIInfo struct {
-	NPM string `json:"npm"`
-	Go  string `json:"go"`
+	Go string `json:"go"`
 }
 
-// SDKInfo contains SDK package information
+// SDKInfo contains SDK package information. Only published or go-gettable packages are
+// listed: the TypeScript and Python SDKs are not on npm or PyPI yet.
 type SDKInfo struct {
-	Python     string `json:"python"`
-	JavaScript string `json:"javascript"`
-	Go         string `json:"go"`
+	Go string `json:"go"`
 }
 
 // wellKnownAIAgentHandler handles GET /.well-known/ai-agent.json
@@ -58,20 +56,17 @@ func wellKnownAIAgentHandler(w http.ResponseWriter, r *http.Request) {
 		API: APIInfo{
 			BaseURL: "https://api.solvr.dev",
 			OpenAPI: "https://api.solvr.dev/v1/openapi.json",
-			Docs:    "https://docs.solvr.dev",
+			Docs:    "https://solvr.dev/api-docs",
 		},
 		MCP: MCPInfo{
-			URL:   "mcp://solvr.dev",
-			Tools: handlers.MCPToolNames(), // exactly what POST /v1/mcp tools/list serves
+			URL:   "https://api.solvr.dev/v1/mcp", // MCP over HTTP (POST /v1/mcp)
+			Tools: handlers.MCPToolNames(),        // exactly what POST /v1/mcp tools/list serves
 		},
 		CLI: CLIInfo{
-			NPM: "@solvr/cli",
-			Go:  "github.com/fcavalcantirj/solvr/cli",
+			Go: "github.com/fcavalcantirj/solvr/cli/cmd/solvr", // go install ...@latest gives `solvr`
 		},
 		SDKs: SDKInfo{
-			Python:     "solvr",
-			JavaScript: "@solvr/sdk",
-			Go:         "github.com/fcavalcantirj/solvr-go",
+			Go: "github.com/fcavalcantirj/solvr/packages/sdk-go",
 		},
 		Capabilities: []string{"search", "read", "write", "webhooks"},
 	}
@@ -150,16 +145,16 @@ func buildPaths() map[string]interface{} {
 		"/stats/trending": statsTrendingPath(),
 		"/stats/ideas":    statsIdeasPath(),
 		// Posts
-		"/posts":                postsPath(),
-		"/posts/{id}":           postByIDPath(),
-		"/posts/{id}/vote":      postVotePath(),
-		"/posts/{id}/view":      postViewPath(),
-		"/posts/{id}/views":     postViewsPath(),
-		"/posts/{id}/comments":  postCommentsPath(),
+		"/posts":               postsPath(),
+		"/posts/{id}":          postByIDPath(),
+		"/posts/{id}/vote":     postVotePath(),
+		"/posts/{id}/view":     postViewPath(),
+		"/posts/{id}/views":    postViewsPath(),
+		"/posts/{id}/comments": postCommentsPath(),
 		// Problems
-		"/problems":                  problemsPath(),
-		"/problems/{id}":             problemByIDPath(),
-		"/problems/{id}/approaches":  problemApproachesPath(),
+		"/problems":                 problemsPath(),
+		"/problems/{id}":            problemByIDPath(),
+		"/problems/{id}/approaches": problemApproachesPath(),
 		// Approaches
 		"/approaches/{id}":          approachPath(),
 		"/approaches/{id}/progress": approachProgressPath(),
@@ -201,10 +196,10 @@ func buildPaths() map[string]interface{} {
 		"/users/me/bookmarks":                bookmarksPath(),
 		"/users/me/bookmarks/{id}":           bookmarkByIDPath(),
 		// Notifications
-		"/notifications":             notificationsPath(),
-		"/notifications/{id}":        notificationDeletePath(),
-		"/notifications/{id}/read":   notificationReadPath(),
-		"/notifications/read-all":    notificationReadAllPath(),
+		"/notifications":           notificationsPath(),
+		"/notifications/{id}":      notificationDeletePath(),
+		"/notifications/{id}/read": notificationReadPath(),
+		"/notifications/read-all":  notificationReadAllPath(),
 		// Reports
 		"/reports":       reportsPath(),
 		"/reports/check": reportsCheckPath(),
@@ -215,14 +210,14 @@ func buildPaths() map[string]interface{} {
 		"/auth/google/callback": authGoogleCallbackPath(),
 		"/auth/moltbook":        authMoltbookPath(),
 		// IPFS Pinning
-		"/pins":              pinsPath(),
-		"/pins/{requestid}":  pinByRequestIDPath(),
-		"/agents/{id}/pins":  agentPinsPath(),
+		"/pins":             pinsPath(),
+		"/pins/{requestid}": pinByRequestIDPath(),
+		"/agents/{id}/pins": agentPinsPath(),
 		// Agent Continuity
-		"/agents/me/checkpoints":             agentMeCheckpointsPath(),
-		"/agents/{id}/checkpoints":           agentCheckpointsPath(),
-		"/agents/{id}/resurrection-bundle":   agentResurrectionBundlePath(),
-		"/agents/me/identity":                agentMeIdentityPath(),
+		"/agents/me/checkpoints":           agentMeCheckpointsPath(),
+		"/agents/{id}/checkpoints":         agentCheckpointsPath(),
+		"/agents/{id}/resurrection-bundle": agentResurrectionBundlePath(),
+		"/agents/me/identity":              agentMeIdentityPath(),
 	}
 }
 

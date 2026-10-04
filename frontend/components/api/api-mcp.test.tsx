@@ -30,7 +30,8 @@ describe('ApiMcp', () => {
     expect(screen.getByText('solvr_post')).toBeInTheDocument();
     expect(screen.getByText('solvr_reply')).toBeInTheDocument();
     expect(screen.queryByText('solvr_answer')).not.toBeInTheDocument();
-    expect(screen.getByText('solvr_claim')).toBeInTheDocument();
+    // solvr_claim is a tool of the unpublished stdio package only; the hosted server has no such tool.
+    expect(screen.queryByText('solvr_claim')).not.toBeInTheDocument();
 
     // Wait for health check to settle
     await waitFor(() => {
@@ -38,22 +39,19 @@ describe('ApiMcp', () => {
     });
   });
 
-  // idx 52 step 2: the npm mcp-server this section documents takes no post type and replaces
-  // solvr_answer with solvr_reply; the listed tools and parameters follow mcp-server/src/tools.ts.
-  it('lists exactly the npm mcp-server tools with their canonical parameters', async () => {
+  // idx 52 step 2: the hosted MCP server this section documents takes no post type and replaces
+  // solvr_answer with solvr_reply; the listed tools follow what POST /v1/mcp serves (mcp.go).
+  it('lists exactly the hosted MCP tools with their canonical parameters', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({ ok: true }) as unknown as typeof fetch;
-    // idx 78: the room tools are defined in mcp-server/src/room-tools.ts (served after the others).
-    const src = ['tools.ts', 'room-tools.ts']
-      .map((file) => readFileSync(resolve(__dirname, '../../../mcp-server/src', file), 'utf8'))
-      .join('\n');
-    const served = [...src.matchAll(/^\s+name: '(solvr_\w+)',$/gm)].map((m) => m[1]);
+    const src = readFileSync(resolve(__dirname, '../../../backend/internal/api/handlers/mcp.go'), 'utf8');
+    const served = [...src.matchAll(/^\t\t"name":\s+"(solvr_\w+)",$/gm)].map((m) => m[1]);
 
     render(<ApiMcp />);
 
     expect(served).toContain('solvr_reply');
     expect(served).toContain('solvr_room_watch');
     expect(screen.getAllByText(/^solvr_\w+$/).map((el) => el.textContent)).toEqual(served);
-    expect(screen.getByText('title, description, tags?, visibility?')).toBeInTheDocument();
+    expect(screen.getByText('title, description, tags?')).toBeInTheDocument();
     expect(screen.getByText('post_id, body, parent_reply_id?')).toBeInTheDocument();
     // solvr_get_reply also takes an id: look it up in the solvr_get row.
     expect(within(screen.getByText('solvr_get').closest('.bg-card') as HTMLElement).getByText('id')).toBeInTheDocument();
@@ -64,7 +62,7 @@ describe('ApiMcp', () => {
     });
   });
 
-  // idx 78 step 5: @solvr/mcp-server 2.0.0 removed solvr_search's type filter (search covers every post).
+  // idx 78 step 5: /v1/mcp 2.0.0 removed solvr_search's type filter (search covers every post).
   it('documents solvr_search without the type filter 2.0.0 removed', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({ ok: true }) as unknown as typeof fetch;
 
@@ -127,22 +125,22 @@ describe('ApiMcp', () => {
     render(<ApiMcp />);
 
     expect(screen.getByText('MCP SERVER URL')).toBeInTheDocument();
-    expect(screen.getByText('mcp://solvr.dev')).toBeInTheDocument();
+    expect(screen.getByText('https://api.solvr.dev/v1/mcp')).toBeInTheDocument();
 
     await waitFor(() => {
       expect(screen.getByText('ONLINE')).toBeInTheDocument();
     });
   });
 
-  it('renders cloud and self-hosted config blocks', async () => {
+  it('renders the hosted config and the Claude Code command', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
     }) as unknown as typeof fetch;
 
     render(<ApiMcp />);
 
-    expect(screen.getByText('CLOUD CONFIG (RECOMMENDED)')).toBeInTheDocument();
-    expect(screen.getByText('SELF-HOSTED CONFIG')).toBeInTheDocument();
+    expect(screen.getByText('MCP CONFIG (CURSOR, .MCP.JSON)')).toBeInTheDocument();
+    expect(screen.getByText('CLAUDE CODE')).toBeInTheDocument();
 
     await waitFor(() => {
       expect(screen.getByText('ONLINE')).toBeInTheDocument();

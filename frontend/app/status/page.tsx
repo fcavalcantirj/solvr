@@ -1,63 +1,44 @@
 "use client";
 
-// Force dynamic rendering - this page uses client-side state (useState)
-// and should not be statically generated at build time
 export const dynamic = 'force-dynamic';
 
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Caption, CAPTION } from "@/components/page/caption";
 import { useStatus } from "@/hooks/use-status";
-import {
-  CheckCircle2,
-  AlertTriangle,
-  XCircle,
-  Activity,
-  Database,
-  Server,
-  Clock,
-  ArrowUpRight,
-  ChevronDown,
-  ChevronUp,
-  RefreshCw,
-} from "lucide-react";
-import Link from "next/link";
+import { CheckCircle2, XCircle, Server, ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
 import { useState } from "react";
-import type {
-  APIStatusService,
-  APIStatusIncident,
-  APIStatusUptimeDay,
-} from "@/lib/api-types";
+import type { APIStatusService, APIStatusIncident, APIStatusUptimeDay } from "@/lib/api-types";
 
 type ServiceStatus = "operational" | "degraded" | "outage";
+
+const SECTION = "grid min-w-0 gap-8 border-t border-border px-4 py-12 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:gap-16 lg:px-12 lg:py-16";
+const HEADING = "text-2xl font-light leading-tight tracking-[-0.025em] sm:text-3xl";
 
 function StatusBadge({ status }: { status: ServiceStatus }) {
   const config = {
     operational: {
-      icon: CheckCircle2,
       label: "Operational",
-      className: "text-emerald-600 bg-emerald-50",
-      dotClassName: "bg-emerald-500",
+      className: "text-green-700 dark:text-green-400",
+      dotClassName: "bg-green-700 dark:bg-green-400",
     },
     degraded: {
-      icon: AlertTriangle,
       label: "Degraded",
-      className: "text-amber-600 bg-amber-50",
-      dotClassName: "bg-amber-500",
+      className: "text-amber-700 dark:text-amber-400",
+      dotClassName: "bg-amber-700 dark:bg-amber-400",
     },
     outage: {
-      icon: XCircle,
       label: "Outage",
-      className: "text-red-600 bg-red-50",
-      dotClassName: "bg-red-500",
+      className: "text-red-700 dark:text-red-400",
+      dotClassName: "bg-red-700 dark:bg-red-400",
     },
   };
-
   const { label, className } = config[status];
 
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2 py-1 text-xs font-mono ${className}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${config[status].dotClassName}`} />
+    <span className={`inline-flex items-center gap-2 text-xs ${className}`}>
+      <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${config[status].dotClassName}`} />
       {label}
     </span>
   );
@@ -65,68 +46,66 @@ function StatusBadge({ status }: { status: ServiceStatus }) {
 
 function IncidentStatusBadge({ status }: { status: APIStatusIncident["status"] }) {
   const config = {
-    investigating: { label: "Investigating", className: "text-amber-600 bg-amber-50" },
-    identified: { label: "Identified", className: "text-blue-600 bg-blue-50" },
-    monitoring: { label: "Monitoring", className: "text-indigo-600 bg-indigo-50" },
-    resolved: { label: "Resolved", className: "text-emerald-600 bg-emerald-50" },
+    investigating: { label: "Investigating", className: "text-amber-700 dark:text-amber-400" },
+    identified: { label: "Identified", className: "text-amber-700 dark:text-amber-400" },
+    monitoring: { label: "Monitoring", className: "text-amber-700 dark:text-amber-400" },
+    resolved: { label: "Resolved", className: "text-green-700 dark:text-green-400" },
   };
-
   const { label, className } = config[status];
 
-  return (
-    <span className={`inline-flex items-center px-2 py-1 text-xs font-mono ${className}`}>
-      {label}
-    </span>
-  );
+  return <span className={`inline-flex items-center text-xs ${className}`}>{label}</span>;
 }
 
-function ServiceCard({ service }: { service: APIStatusService }) {
+function ServiceRow({ service }: { service: APIStatusService }) {
   return (
-    <div className="flex items-center justify-between py-4 border-b border-border last:border-0">
-      <div className="flex-1 min-w-0 pr-4">
-        <div className="flex items-center gap-3 mb-1">
-          <h3 className="font-mono text-sm">{service.name}</h3>
+    <div className="grid min-w-0 gap-4 border-b border-border py-6 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-8">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <h3 className="text-lg font-light [overflow-wrap:anywhere]">{service.name}</h3>
           <StatusBadge status={service.status} />
         </div>
-        <p className="text-xs text-muted-foreground">{service.description}</p>
+        <p className="mt-2 max-w-[48ch] text-sm leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">{service.description}</p>
+        {service.last_checked && (
+          <p className="mt-2 text-xs text-muted-foreground">{formatRelativeTime(service.last_checked)}</p>
+        )}
       </div>
-      <div className="flex items-center gap-6 shrink-0 text-xs text-muted-foreground font-mono">
-        <div className="hidden sm:block">
-          <span className="text-foreground">{service.uptime}</span> uptime
+      <div className="flex flex-wrap items-start gap-x-8 gap-y-3 sm:justify-end sm:text-right">
+        <div>
+          <span className="block text-3xl font-light tracking-[-0.04em] tabular-nums sm:text-4xl">{service.uptime}</span>
+          <Caption className="mt-2">uptime</Caption>
         </div>
         {service.latency_ms != null && (
-          <div className="hidden md:block">
-            <span className="text-foreground">{service.latency_ms}ms</span> avg
+          <div>
+            <span className="block text-3xl font-light tracking-[-0.04em] tabular-nums sm:text-4xl">{service.latency_ms}ms</span>
+            <Caption className="mt-2">avg</Caption>
           </div>
-        )}
-        {service.last_checked && (
-          <div className="text-[10px]">{formatRelativeTime(service.last_checked)}</div>
         )}
       </div>
     </div>
   );
 }
 
-function IncidentCard({ incident }: { incident: APIStatusIncident }) {
+function IncidentRow({ incident }: { incident: APIStatusIncident }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
-    <div className="border border-border">
+    <div className="min-w-0 border-t border-border">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full p-4 sm:p-6 text-left flex items-start justify-between gap-4"
+        aria-expanded={isExpanded}
+        className="flex w-full items-start justify-between gap-4 py-6 text-left focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-4 focus-visible:outline-foreground"
       >
-        <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
-            <span className="font-mono text-[10px] text-muted-foreground">{incident.id}</span>
+        <div className="min-w-0 flex-1">
+          <h3 className="mb-3 text-xl font-light [overflow-wrap:anywhere]">{incident.title}</h3>
+          <div className="mb-2 flex flex-wrap items-center gap-3">
+            <Caption as="span">{incident.id}</Caption>
             <IncidentStatusBadge status={incident.status} />
           </div>
-          <h3 className="font-mono text-sm mb-2">{incident.title}</h3>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
             {incident.created_at} — {incident.updated_at}
           </p>
         </div>
-        <div className="shrink-0 mt-1">
+        <div className="mt-1 shrink-0">
           {isExpanded ? (
             <ChevronUp size={16} className="text-muted-foreground" />
           ) : (
@@ -134,21 +113,14 @@ function IncidentCard({ incident }: { incident: APIStatusIncident }) {
           )}
         </div>
       </button>
-
       {isExpanded && (
-        <div className="px-4 sm:px-6 pb-6 border-t border-border pt-4">
-          <div className="space-y-4">
-            {incident.updates.map((update, index) => (
-              <div key={index} className="flex gap-4">
-                <div className="w-16 shrink-0 font-mono text-[10px] text-muted-foreground pt-0.5">
-                  {update.time}
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm text-muted-foreground leading-relaxed">{update.message}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+        <div className="space-y-5 border-t border-border py-6">
+          {incident.updates.map((update, index) => (
+            <div key={index} className="grid grid-cols-[4rem_minmax(0,1fr)] gap-4">
+              <div className="pt-0.5 font-mono text-[11px] text-muted-foreground [overflow-wrap:anywhere]">{update.time}</div>
+              <p className="text-sm leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">{update.message}</p>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -169,42 +141,29 @@ function formatRelativeTime(dateString: string): string {
   return `${diffDays}d ago`;
 }
 
-function getCategoryIcon(category: string) {
-  switch (category) {
-    case "Core Services":
-      return <Server size={16} strokeWidth={1.5} />;
-    case "Storage":
-      return <Database size={16} strokeWidth={1.5} />;
-    default:
-      return <Server size={16} strokeWidth={1.5} />;
-  }
-}
-
 function LoadingSkeleton() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Header />
-      <section className="pt-32 pb-16 px-4 sm:px-6 lg:px-12">
-        <div className="max-w-5xl mx-auto">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 mb-12">
-            <div>
-              <Skeleton className="h-3 w-32 mb-4" />
-              <Skeleton className="h-10 w-48" />
-            </div>
-            <Skeleton className="h-12 w-56" />
+      <main aria-busy="true" className="px-4 pb-16 pt-28 sm:px-6 lg:px-12 lg:pt-32">
+        <Skeleton className="mb-12 h-6 w-40" />
+        <div className="grid gap-12 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] lg:gap-16">
+          <div className="space-y-4">
+            <Skeleton className="h-24 w-4/5" />
+            <Skeleton className="h-24 w-full" />
           </div>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-border border border-border mb-16">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="bg-background p-4 sm:p-6">
-                <Skeleton className="h-4 w-4 mb-4" />
-                <Skeleton className="h-8 w-24 mb-2" />
-                <Skeleton className="h-3 w-32" />
+          <div>
+            <Skeleton className="mb-8 h-28 w-4/5" />
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex justify-between border-t border-border py-5">
+                <Skeleton className="h-4 w-28" />
+                <Skeleton className="h-8 w-20" />
               </div>
             ))}
           </div>
-          <Skeleton className="h-10 w-full mb-16" />
         </div>
-      </section>
+        <Skeleton className="mt-16 h-20 w-full" />
+      </main>
       <Footer />
     </div>
   );
@@ -214,254 +173,178 @@ function ErrorState({ error, onRetry }: { error: string; onRetry: () => void }) 
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Header />
-      <section className="pt-32 pb-16 px-4 sm:px-6 lg:px-12">
-        <div className="max-w-5xl mx-auto text-center">
-          <XCircle size={48} strokeWidth={1} className="text-red-500 mx-auto mb-6" />
-          <h1 className="text-2xl font-light mb-4">Unable to Load Status</h1>
-          <p className="text-sm text-muted-foreground mb-8">{error}</p>
-          <button
-            onClick={onRetry}
-            className="inline-flex items-center gap-2 px-4 py-2 border border-border font-mono text-sm hover:bg-secondary transition-colors"
-          >
-            <RefreshCw size={14} />
-            Retry
-          </button>
-        </div>
-      </section>
+      <main className="px-4 pb-16 pt-32 sm:px-6 lg:px-12">
+        <h1 className="flex items-center gap-4 text-3xl font-light sm:text-5xl">
+          <XCircle size={32} strokeWidth={1} className="shrink-0 text-red-700 dark:text-red-400" />
+          Unable to Load Status
+        </h1>
+        <p className="mb-8 mt-6 text-sm text-muted-foreground">{error}</p>
+        <button onClick={onRetry} className="inline-flex items-center gap-2 border border-border px-5 py-3 text-sm transition-colors hover:bg-secondary focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-4 focus-visible:outline-foreground">
+          <RefreshCw size={14} />
+          Retry
+        </button>
+      </main>
       <Footer />
     </div>
   );
 }
 
 function UptimeChart({ history }: { history: APIStatusUptimeDay[] }) {
-  // Pad to 30 days if needed
   const days = history.length > 0 ? history : [];
 
   return (
-    <div className="mb-16">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="font-mono text-xs tracking-[0.2em] text-muted-foreground">
-          30-DAY UPTIME HISTORY
-        </h2>
-        <div className="flex items-center gap-4 text-xs font-mono text-muted-foreground">
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 bg-emerald-500" /> Operational
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 bg-amber-500" /> Degraded
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 bg-red-500" /> Outage
-          </span>
-        </div>
-      </div>
-      <div className="flex gap-0.5 sm:gap-1 overflow-x-auto pb-2">
-        {days.length > 0 ? (
-          days.map((day, index) => (
-            <div key={index} className="flex flex-col items-center gap-2 group">
-              <div
-                className={`w-2 sm:w-3 h-8 sm:h-10 transition-all ${
-                  day.status === "operational"
-                    ? "bg-emerald-500 hover:bg-emerald-400"
-                    : day.status === "degraded"
-                      ? "bg-amber-500 hover:bg-amber-400"
-                      : "bg-red-500 hover:bg-red-400"
-                }`}
-                title={`${day.date}: ${day.status}`}
-              />
-              {index === 0 && (
-                <span className="text-[8px] sm:text-[10px] font-mono text-muted-foreground">Today</span>
-              )}
-              {index === days.length - 1 && days.length > 1 && (
-                <span className="text-[8px] sm:text-[10px] font-mono text-muted-foreground">
-                  {days.length}d
-                </span>
-              )}
-            </div>
-          ))
-        ) : (
-          <div className="w-full text-center py-4">
-            <p className="text-xs text-muted-foreground font-mono">
+    <section className={SECTION}>
+      <h2 className={HEADING}>30-DAY UPTIME HISTORY</h2>
+      <div className="min-w-0">
+        <div className="flex min-w-0 gap-[3px]">
+          {days.length > 0 ? (
+            days.map((day, index) => (
+              // One slot per day of the 30-day window, so a bar always reads as one day wide.
+              <div key={index} className="relative w-[calc((100%-87px)/30)] flex-none pb-7">
+                <div
+                  className={`h-16 w-full border border-foreground sm:h-20 ${
+                    day.status === "operational"
+                      ? "bg-foreground"
+                      : day.status === "degraded"
+                        ? "bg-muted-foreground"
+                        : "bg-background"
+                  }`}
+                  title={`${day.date}: ${day.status}`}
+                />
+                {index === 0 && (
+                  <span className="absolute bottom-0 left-0 font-mono text-[11px] text-muted-foreground">Today</span>
+                )}
+                {index === days.length - 1 && days.length > 1 && (
+                  <span className="absolute bottom-0 right-0 font-mono text-[11px] text-muted-foreground">{days.length}d</span>
+                )}
+              </div>
+            ))
+          ) : (
+            <p className="w-full border-t border-border py-6 text-sm text-muted-foreground">
               Uptime history will appear as health checks accumulate
             </p>
-          </div>
-        )}
+          )}
+        </div>
+        <div className="mt-6 flex flex-wrap gap-x-6 gap-y-3 text-xs text-muted-foreground">
+          <span className="flex items-center gap-2"><span className="size-2 border border-foreground bg-foreground" /> Operational</span>
+          <span className="flex items-center gap-2"><span className="size-2 border border-foreground bg-muted-foreground" /> Degraded</span>
+          <span className="flex items-center gap-2"><span className="size-2 border border-foreground bg-background" /> Outage</span>
+        </div>
       </div>
-    </div>
+    </section>
   );
 }
 
 export default function StatusPage() {
   const { data, loading, error, refetch } = useStatus();
 
-  if (loading && !data) {
-    return <LoadingSkeleton />;
-  }
-
-  if (error && !data) {
-    return <ErrorState error={error} onRetry={refetch} />;
-  }
+  if (loading && !data) return <LoadingSkeleton />;
+  if (error && !data) return <ErrorState error={error} onRetry={refetch} />;
 
   const allOperational = data?.overall_status === "operational";
 
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Header />
-
-      {/* Hero Section */}
-      <section className="pt-32 pb-16 px-4 sm:px-6 lg:px-12">
-        <div className="max-w-5xl mx-auto">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 mb-12">
-            <div>
-              <p className="font-mono text-xs tracking-[0.3em] text-muted-foreground mb-4">
+      <main className="pt-16">
+        <section className="px-4 pb-12 pt-12 sm:px-6 lg:px-12 lg:pb-16 lg:pt-16">
+          <h1 className="text-2xl font-normal tracking-[-0.025em]">Solvr Status</h1>
+          <div className="mt-10 grid min-w-0 gap-10 lg:mt-14 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] lg:gap-16">
+            <div className="min-w-0 lg:border-r lg:border-border lg:pr-12">
+              <p className="max-w-[12ch] text-[clamp(2.75rem,7.5vw,8.5rem)] font-light leading-[0.98] tracking-[-0.055em] [overflow-wrap:anywhere]">
+                {allOperational ? "All Systems Operational" : "Partial Service Disruption"}
+              </p>
+              <Caption className="mt-7 flex items-center gap-3">
+                <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${allOperational ? "bg-green-700 dark:bg-green-400" : "bg-amber-700 dark:bg-amber-400"}`} />
                 SYSTEM STATUS
-              </p>
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-light tracking-tight">
-                Solvr Status
-              </h1>
+              </Caption>
             </div>
-            <div className="flex items-center gap-3">
-              {allOperational ? (
-                <div className="flex items-center gap-3 px-4 py-3 bg-emerald-50 border border-emerald-200">
-                  <span className="relative flex h-3 w-3">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500" />
-                  </span>
-                  <span className="font-mono text-sm text-emerald-700">All Systems Operational</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-200">
-                  <span className="relative flex h-3 w-3">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500" />
-                  </span>
-                  <span className="font-mono text-sm text-amber-700">Partial Service Disruption</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Overall Stats */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-border border border-border mb-16">
-            <div className="bg-background p-4 sm:p-6">
-              <Activity size={18} strokeWidth={1.5} className="text-muted-foreground mb-4" />
-              <p className="font-mono text-2xl sm:text-3xl font-light mb-1">
-                {data?.summary.uptime_30d != null ? `${data.summary.uptime_30d.toFixed(2)}%` : "—"}
-              </p>
-              <p className="text-xs text-muted-foreground font-mono">Overall Uptime (30d)</p>
-            </div>
-            <div className="bg-background p-4 sm:p-6">
-              <Clock size={18} strokeWidth={1.5} className="text-muted-foreground mb-4" />
-              <p className="font-mono text-2xl sm:text-3xl font-light mb-1">
-                {data?.summary.avg_response_time_ms != null
+            <dl className="min-w-0">
+              <div className="flex flex-col pb-8">
+                <dd className="text-[clamp(4.5rem,8vw,9rem)] font-light leading-none tracking-[-0.065em] tabular-nums [overflow-wrap:anywhere]">
+                  {data?.summary.uptime_30d != null ? `${data.summary.uptime_30d.toFixed(2)}%` : "—"}
+                </dd>
+                <Caption as="dt" className="mt-4">Overall Uptime (30d)</Caption>
+              </div>
+              <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-5 border-t border-border py-5">
+                <Caption as="dt">Avg Response Time</Caption>
+                <dd className="text-right text-4xl font-light leading-none tracking-[-0.04em] tabular-nums [overflow-wrap:anywhere]">
+                  {data?.summary.avg_response_time_ms != null
                   ? `${Math.round(data.summary.avg_response_time_ms)}ms`
                   : "—"}
-              </p>
-              <p className="text-xs text-muted-foreground font-mono">Avg Response Time</p>
-            </div>
-            <div className="bg-background p-4 sm:p-6">
-              <Server size={18} strokeWidth={1.5} className="text-muted-foreground mb-4" />
-              <p className="font-mono text-2xl sm:text-3xl font-light mb-1">
-                {data?.summary.service_count ?? 0}
-              </p>
-              <p className="text-xs text-muted-foreground font-mono">Active Services</p>
-            </div>
-            <div className="bg-background p-4 sm:p-6">
-              <RefreshCw size={18} strokeWidth={1.5} className="text-muted-foreground mb-4" />
-              <p className="font-mono text-2xl sm:text-3xl font-light mb-1">
-                {data?.summary.last_checked
+                </dd>
+              </div>
+              <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-5 border-t border-border py-5">
+                <Caption as="dt">Active Services</Caption>
+                <dd className="text-right text-4xl font-light leading-none tracking-[-0.04em] tabular-nums [overflow-wrap:anywhere]">{data?.summary.service_count ?? 0}</dd>
+              </div>
+              <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-5 border-t border-border py-5">
+                <Caption as="dt">Last Checked</Caption>
+                <dd className="text-right text-3xl font-light leading-none tracking-[-0.04em] [overflow-wrap:anywhere]">
+                  {data?.summary.last_checked
                   ? formatRelativeTime(data.summary.last_checked)
                   : "—"}
-              </p>
-              <p className="text-xs text-muted-foreground font-mono">Last Checked</p>
-            </div>
+                </dd>
+              </div>
+            </dl>
           </div>
+        </section>
 
-          {/* 30-Day Uptime Chart */}
-          <UptimeChart history={data?.uptime_history ?? []} />
-        </div>
-      </section>
+        <UptimeChart history={data?.uptime_history ?? []} />
 
-      {/* Services Section */}
-      <section className="py-16 px-4 sm:px-6 lg:px-12 bg-secondary/30">
-        <div className="max-w-5xl mx-auto">
-          <h2 className="font-mono text-xs tracking-[0.3em] text-muted-foreground mb-8">
-            SERVICE STATUS
-          </h2>
-
-          <div className="space-y-8">
+        <section className={SECTION}>
+          <h2 className={HEADING}>SERVICE STATUS</h2>
+          <div className="min-w-0 space-y-10">
             {(data?.services ?? []).map((category) => (
-              <div key={category.category} className="bg-background border border-border">
-                <div className="px-4 sm:px-6 py-4 border-b border-border flex items-center gap-3">
-                  {getCategoryIcon(category.category)}
-                  <h3 className="font-mono text-sm">{category.category}</h3>
-                  <span className="text-xs text-muted-foreground font-mono ml-auto">
+              <div key={category.category} className="min-w-0">
+                <div className="flex flex-wrap items-baseline justify-between gap-3 border-b border-border pb-4">
+                  <h3 className="text-xl font-light">{category.category}</h3>
+                  <span className="text-xs text-muted-foreground">
                     {category.items.filter((s) => s.status === "operational").length}/{category.items.length} operational
                   </span>
                 </div>
-                <div className="px-4 sm:px-6">
-                  {category.items.map((service) => (
-                    <ServiceCard key={service.name} service={service} />
-                  ))}
-                </div>
+                {category.items.map((service) => <ServiceRow key={service.name} service={service} />)}
               </div>
             ))}
-
             {(data?.services ?? []).length === 0 && (
-              <div className="border border-border p-12 text-center">
-                <Server size={32} strokeWidth={1} className="text-muted-foreground mx-auto mb-4" />
-                <p className="font-mono text-sm mb-2">No service data yet</p>
-                <p className="text-xs text-muted-foreground">
-                  Health checks will appear after the first monitoring cycle
-                </p>
+              <div className="border-t border-border py-6">
+                <p className="mb-2 flex items-center gap-3 text-xl font-light"><Server size={24} strokeWidth={1} />No service data yet</p>
+                <p className="text-sm text-muted-foreground">Health checks will appear after the first monitoring cycle</p>
               </div>
             )}
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Recent Incidents */}
-      <section className="py-16 px-4 sm:px-6 lg:px-12">
-        <div className="max-w-5xl mx-auto">
-          <h2 className="font-mono text-xs tracking-[0.3em] text-muted-foreground mb-8">
-            RECENT INCIDENTS
-          </h2>
-
-          <div className="space-y-4">
-            {(data?.incidents ?? []).map((incident) => (
-              <IncidentCard key={incident.id} incident={incident} />
-            ))}
+        <section className={SECTION}>
+          <h2 className={HEADING}>RECENT INCIDENTS</h2>
+          <div className="min-w-0">
+            {(data?.incidents ?? []).map((incident) => <IncidentRow key={incident.id} incident={incident} />)}
+            {(data?.incidents ?? []).length === 0 && (
+              <div className="border-t border-border py-6">
+                <p className="mb-3 flex items-center gap-3 text-xl font-light sm:text-2xl">
+                  <CheckCircle2 size={24} strokeWidth={1} className="shrink-0 text-green-700 dark:text-green-400" />
+                  No recent incidents
+                </p>
+                <p className="text-sm text-muted-foreground">All systems have been operating normally</p>
+              </div>
+            )}
           </div>
+        </section>
 
-          {(data?.incidents ?? []).length === 0 && (
-            <div className="border border-border p-12 text-center">
-              <CheckCircle2 size={32} strokeWidth={1} className="text-emerald-500 mx-auto mb-4" />
-              <p className="font-mono text-sm mb-2">No recent incidents</p>
-              <p className="text-xs text-muted-foreground">All systems have been operating normally</p>
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* API Status */}
-      <section className="py-16 px-4 sm:px-6 lg:px-12">
-        <div className="max-w-5xl mx-auto">
-          <h2 className="font-mono text-xs tracking-[0.3em] text-muted-foreground mb-8">
-            PROGRAMMATIC ACCESS
-          </h2>
-
-          <div className="border border-border p-6">
-            <h3 className="font-mono text-sm mb-3">Status API</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              Get real-time status updates via our JSON API.
-            </p>
-            <code className="block bg-secondary p-3 font-mono text-xs text-muted-foreground overflow-x-auto">
+        <section className={SECTION}>
+          <h2 className={HEADING}>PROGRAMMATIC ACCESS</h2>
+          <details className="group min-w-0 border-t border-border">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-5 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-4 focus-visible:outline-foreground [&::-webkit-details-marker]:hidden">
+              <h3 className="text-xl font-light">Status API</h3>
+              <ChevronDown aria-hidden="true" size={16} className="transition-transform group-open:rotate-180" />
+            </summary>
+            <p className="mb-5 text-sm text-muted-foreground">Get real-time status updates via our JSON API.</p>
+            <code className={`${CAPTION} block whitespace-pre-wrap border-t border-border py-5 normal-case tracking-normal [overflow-wrap:anywhere]`}>
               GET https://api.solvr.dev/v1/status
             </code>
-          </div>
-        </div>
-      </section>
-
+          </details>
+        </section>
+      </main>
       <Footer />
     </div>
   );

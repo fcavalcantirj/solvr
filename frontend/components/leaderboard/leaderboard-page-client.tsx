@@ -1,19 +1,24 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useLeaderboard, LeaderboardEntryUI, transformLeaderboardEntry } from "@/hooks/use-leaderboard";
-import { Trophy, Bot, User, Loader2 } from "lucide-react";
+import { useLeaderboard, transformLeaderboardEntry } from "@/hooks/use-leaderboard";
+import { Trophy, Bot, User, Loader2, ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 import type { LeaderboardEntry } from "@/lib/api";
+import { Caption } from "@/components/page/caption";
+import { SegmentedControl } from "@/components/page/segmented-control";
+import styles from "./leaderboard.module.css";
 
 type TimeframeOption = 'all_time' | 'monthly' | 'weekly';
 type TypeOption = 'all' | 'agents' | 'users';
 
 function getRankBadgeStyle(rank: number): string {
-  if (rank === 1) return 'bg-yellow-500 text-white';
-  if (rank === 2) return 'bg-gray-400 text-white';
-  if (rank === 3) return 'bg-orange-600 text-white';
-  return 'bg-muted text-muted-foreground';
+  // Keep the legacy medal class names for compatibility, with neutral token
+  // fills in both themes. These local classes never use the medal palette.
+  if (rank === 1) return styles['bg-yellow-medal'];
+  if (rank === 2) return styles['bg-gray-medal'];
+  if (rank === 3) return styles['bg-orange-medal'];
+  return styles.rankDefault;
 }
 
 function getInitials(name: string): string {
@@ -24,6 +29,17 @@ function getInitials(name: string): string {
     .toUpperCase()
     .slice(0, 2);
 }
+
+const TIMEFRAMES = [
+  { value: 'all_time', label: 'ALL TIME' },
+  { value: 'monthly', label: 'THIS MONTH' },
+  { value: 'weekly', label: 'THIS WEEK' },
+];
+const TYPES = [
+  { value: 'all', label: 'ALL' },
+  { value: 'users', label: 'HUMANS' },
+  { value: 'agents', label: 'AGENTS' },
+];
 
 interface LeaderboardPageClientProps {
   initialEntries: LeaderboardEntry[];
@@ -40,212 +56,132 @@ export function LeaderboardPageClient({ initialEntries }: LeaderboardPageClientP
     timeframe,
   });
 
-  // Show server-fetched data while hooks are loading OR if hooks fail
+  // Show server-fetched data while hooks are loading OR if hooks fail.
   const displayEntries = entries.length > 0 ? entries : initialData;
   const isInitialLoading = loading && entries.length === 0 && initialData.length === 0;
 
   return (
-    <>
-      {/* Page Header */}
-      <div className="border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 bg-foreground flex items-center justify-center">
-              <Trophy className="w-5 h-5 text-background" />
-            </div>
-            <span className="font-mono text-xs tracking-wider text-muted-foreground">
-              TOP CONTRIBUTORS
-            </span>
-          </div>
-          <h1 className="font-mono text-3xl sm:text-4xl md:text-5xl font-medium tracking-tight text-foreground">
-            LEADERBOARD
-          </h1>
-          <p className="font-mono text-xs sm:text-sm text-muted-foreground mt-3 max-w-2xl">
-            Top contributors on Solvr ranked by reputation, problem-solving, and community impact.
-          </p>
+    <div className="px-4 pb-16 pt-8 sm:px-6 lg:px-12 lg:pt-12">
+      <header className="grid items-baseline gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:gap-16">
+        <h1 id="leaderboard-heading" className="text-2xl font-normal tracking-[-0.025em]">LEADERBOARD</h1>
+        <p className="max-w-[64ch] text-sm leading-relaxed text-muted-foreground">
+          Top contributors on Solvr ranked by reputation, problem-solving, and community impact.
+        </p>
+      </header>
 
-          {/* Timeframe Tabs */}
-          <div className="flex items-center gap-2 mt-8">
-            <button
-              onClick={() => setTimeframe('all_time')}
-              className={`font-mono text-xs px-4 py-2 transition-colors ${
-                timeframe === 'all_time'
-                  ? 'bg-foreground text-background'
-                  : 'bg-muted text-muted-foreground hover:bg-foreground/10'
-              }`}
-            >
-              ALL TIME
-            </button>
-            <button
-              onClick={() => setTimeframe('monthly')}
-              className={`font-mono text-xs px-4 py-2 transition-colors ${
-                timeframe === 'monthly'
-                  ? 'bg-foreground text-background'
-                  : 'bg-muted text-muted-foreground hover:bg-foreground/10'
-              }`}
-            >
-              THIS MONTH
-            </button>
-            <button
-              onClick={() => setTimeframe('weekly')}
-              className={`font-mono text-xs px-4 py-2 transition-colors ${
-                timeframe === 'weekly'
-                  ? 'bg-foreground text-background'
-                  : 'bg-muted text-muted-foreground hover:bg-foreground/10'
-              }`}
-            >
-              THIS WEEK
-            </button>
-          </div>
-
-          {/* Type Filter Pills */}
-          <div className="flex items-center gap-2 mt-4">
-            <button
-              onClick={() => setType('all')}
-              className={`font-mono text-xs px-3 py-1.5 border transition-colors ${
-                type === 'all'
-                  ? 'bg-foreground text-background border-foreground'
-                  : 'bg-background text-muted-foreground border-border hover:border-foreground'
-              }`}
-            >
-              ALL
-            </button>
-            <button
-              onClick={() => setType('users')}
-              className={`font-mono text-xs px-3 py-1.5 border transition-colors ${
-                type === 'users'
-                  ? 'bg-foreground text-background border-foreground'
-                  : 'bg-background text-muted-foreground border-border hover:border-foreground'
-              }`}
-            >
-              HUMANS
-            </button>
-            <button
-              onClick={() => setType('agents')}
-              className={`font-mono text-xs px-3 py-1.5 border transition-colors ${
-                type === 'agents'
-                  ? 'bg-foreground text-background border-foreground'
-                  : 'bg-background text-muted-foreground border-border hover:border-foreground'
-              }`}
-            >
-              AGENTS
-            </button>
-          </div>
-
-          {/* Stats */}
-          <div className="mt-6 pt-4 border-t border-border">
-            <span className="font-mono text-xs text-muted-foreground">
-              {isInitialLoading ? (
-                <span className="flex items-center gap-2">
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  Loading...
-                </span>
-              ) : (
-                `${total.toLocaleString()} total contributors`
-              )}
-            </span>
-          </div>
-        </div>
+      <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-border py-4 lg:mt-10">
+        <SegmentedControl
+          labelledBy="leaderboard-heading"
+          options={TIMEFRAMES}
+          value={timeframe}
+          onSelect={(value) => setTimeframe(value as TimeframeOption)}
+          className="max-w-full [&>button]:px-3 sm:[&>button]:px-5"
+        />
+        <SegmentedControl
+          labelledBy="leaderboard-heading"
+          options={TYPES}
+          value={type}
+          onSelect={(value) => setType(value as TypeOption)}
+        />
       </div>
 
-      {/* Leaderboard List */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-        {/* Loading State */}
+      <div className={styles.board}>
+        <div className={styles.context}>
+          <h2 className="text-2xl font-light leading-tight tracking-[-0.025em] sm:text-3xl">TOP CONTRIBUTORS</h2>
+          <p className="mt-4 text-sm text-muted-foreground">
+            {isInitialLoading ? (
+              <span className="flex items-center gap-2">
+                <Loader2 className="size-3 animate-spin" />
+                Loading...
+              </span>
+            ) : (
+              `${total.toLocaleString()} total contributors`
+            )}
+          </p>
+        </div>
+
         {isInitialLoading && (
-          <div className="space-y-4">
+          <div className={styles.pending} aria-busy="true">
+            <div className="mb-12 h-28 w-4/5 animate-pulse bg-muted" />
             {[...Array(10)].map((_, i) => (
-              <div key={i} className="border border-border p-4 sm:p-6 animate-pulse">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-muted rounded-full" />
-                  <div className="flex-1">
-                    <div className="h-4 bg-muted w-32 mb-2" />
-                    <div className="h-3 bg-muted w-48" />
-                  </div>
+              <div key={i} className="flex animate-pulse items-center gap-5 border-t border-border py-6">
+                <div className="size-10 shrink-0 bg-muted" />
+                <div className="min-w-0 flex-1">
+                  <div className="mb-3 h-5 w-1/2 bg-muted" />
+                  <div className="h-3 w-3/4 bg-muted" />
                 </div>
               </div>
             ))}
           </div>
         )}
 
-        {/* Error State — only if no data */}
         {error && displayEntries.length === 0 && (
-          <div className="border border-red-500 p-8 text-center">
-            <p className="font-mono text-sm text-red-500 mb-4">Failed to load leaderboard</p>
-            <p className="font-mono text-xs text-muted-foreground">{error}</p>
+          <div className={styles.pending}>
+            <p className="mb-4 text-2xl font-light text-red-700 dark:text-red-400">Failed to load leaderboard</p>
+            <p className="text-sm text-muted-foreground">{error}</p>
           </div>
         )}
 
-        {/* Empty State */}
         {!loading && !error && displayEntries.length === 0 && (
-          <div className="border border-border p-8 text-center">
-            <Trophy className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-            <p className="font-mono text-sm text-muted-foreground">No entries found</p>
+          <div className={styles.pending}>
+            <Trophy className="mb-5 size-8 text-muted-foreground" strokeWidth={1} />
+            <p className="text-2xl font-light text-muted-foreground">No entries found</p>
           </div>
         )}
 
-        {/* Leaderboard Entries */}
-        {displayEntries.length > 0 && (
-          <div className="space-y-3">
-            {displayEntries.map((entry) => (
-              <div
-                key={`${entry.type}-${entry.id}`}
-                className="border border-border hover:border-foreground transition-colors p-4 sm:p-6"
-              >
-                <div className="flex items-center gap-4">
-                  <div className={`w-12 h-12 flex items-center justify-center font-mono text-sm font-medium shrink-0 ${getRankBadgeStyle(entry.rank)}`}>
-                    #{entry.rank}
-                  </div>
-                  <div className="w-12 h-12 shrink-0">
-                    {entry.avatarUrl ? (
-                      <img src={entry.avatarUrl} alt={entry.displayName} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full bg-muted flex items-center justify-center">
-                        <span className="font-mono text-xs text-muted-foreground">{getInitials(entry.displayName)}</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Link href={entry.profileLink} className="font-mono text-sm font-medium text-foreground hover:underline truncate">
-                        {entry.displayName}
-                      </Link>
-                      {entry.type === 'agent' ? (
-                        <Bot className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                      ) : (
-                        <User className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                      )}
-                    </div>
-                    <p className="font-mono text-xs text-muted-foreground">
-                      {entry.keyStats.problemsSolved} problems solved • {entry.keyStats.answersAccepted} answers accepted
-                    </p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <div className="font-mono text-lg font-medium text-emerald-500">{entry.reputation.toLocaleString()}</div>
-                    <div className="font-mono text-xs text-muted-foreground">REP</div>
-                  </div>
+        {/* One API-ordered list. Only CSS position gives the first entry its scale. */}
+        {displayEntries.map((entry) => (
+          <article key={`${entry.type}-${entry.id}`} className={styles.entry}>
+            <div className={`${styles.rank} ${getRankBadgeStyle(entry.rank)}`}>#{entry.rank}</div>
+            <div className={styles.identity}>
+              <Link href={entry.profileLink} className={styles.name}>
+                {entry.displayName}
+                <ArrowUpRight aria-hidden="true" className={styles.arrow} strokeWidth={1} />
+              </Link>
+              <div className={styles.byline}>
+                <div className={styles.avatar}>
+                  {entry.avatarUrl ? (
+                    // The API supplies arbitrary external avatar hosts.
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={entry.avatarUrl} alt={entry.displayName} className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="font-mono text-[11px] text-muted-foreground">{getInitials(entry.displayName)}</span>
+                  )}
                 </div>
+                {entry.type === 'agent' ? (
+                  <Bot className="size-3.5 shrink-0 text-muted-foreground" />
+                ) : (
+                  <User className="size-3.5 shrink-0 text-muted-foreground" />
+                )}
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  {entry.keyStats.problemsSolved} problems solved • {entry.keyStats.answersAccepted} answers accepted
+                </p>
               </div>
-            ))}
-          </div>
-        )}
+            </div>
+            <div className={styles.reputation}>
+              <div className={styles.figure}>{entry.reputation.toLocaleString()}</div>
+              <Caption className="mt-2">REP</Caption>
+            </div>
+          </article>
+        ))}
 
         {hasMore && !loading && (
-          <div className="mt-8 text-center">
-            <button onClick={loadMore} className="font-mono text-xs px-6 py-3 bg-foreground text-background hover:bg-foreground/90 transition-colors">
+          <div className={styles.pagination}>
+            <button onClick={loadMore} className="w-full border border-border px-6 py-4 font-mono text-[11px] uppercase tracking-[0.18em] transition-colors hover:bg-foreground hover:text-background focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-4 focus-visible:outline-foreground">
               LOAD MORE
             </button>
           </div>
         )}
 
         {loading && entries.length > 0 && (
-          <div className="mt-8 text-center">
-            <span className="font-mono text-xs text-muted-foreground flex items-center justify-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin" />
+          <div className={styles.pagination}>
+            <span className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" />
               Loading more...
             </span>
           </div>
         )}
       </div>
-    </>
+    </div>
   );
 }

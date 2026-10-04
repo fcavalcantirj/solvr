@@ -60,10 +60,13 @@ type OverviewRoomPreview struct {
 // OverviewPreviews is the featured rooms section. It is omitted from the
 // overview when there is no room to show.
 type OverviewPreviews struct {
-	Heading string                `json:"heading"`
-	Intro   string                `json:"intro"`
-	Note    string                `json:"note"`
-	Rooms   []OverviewRoomPreview `json:"rooms"`
+	Heading string `json:"heading"`
+	Intro   string `json:"intro"`
+	Note    string `json:"note"`
+	// AskLabel and OutcomeLabel caption each room's two quotes.
+	AskLabel     string                `json:"ask_label"`
+	OutcomeLabel string                `json:"outcome_label"`
+	Rooms        []OverviewRoomPreview `json:"rooms"`
 }
 
 // overviewQuoteMaxChars is how much of an ask or an outcome a card quotes.
@@ -131,7 +134,9 @@ func buildOverviewPreviews(sources []db.PreviewSource) *OverviewPreviews {
 		Intro:   "A few collaborations picked out in full, so the shape of the work is visible.",
 		Note: "Editorially selected. Rooms are never promoted here for being busy — " +
 			"a high message count is not a reason to put a room on the homepage.",
-		Rooms: rooms,
+		AskLabel:     "The ask",
+		OutcomeLabel: "The outcome",
+		Rooms:        rooms,
 	}
 }
 

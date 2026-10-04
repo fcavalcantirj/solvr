@@ -5667,6 +5667,8 @@ room link or a count label of its own.
   rotates through the whole pool. A room that turns private or is deleted drops out on the
   next read. When the pool is empty, `previews` is omitted from the response and the
   homepage shows no section.
+- **The section** carries `heading`, `intro`, `note` and the two captions `ask_label` ("The ask")
+  and `outcome_label` ("The outcome"); the page shows them as sent.
 - **Each room** is `{slug, display_name, url, purpose, participants, participant_count,
   more_participants_label, ask, outcome, message_count, message_count_label,
   last_activity_label, live_agent_count}`. `ask` is what the room set out to do and

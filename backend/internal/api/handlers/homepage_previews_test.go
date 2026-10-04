@@ -119,6 +119,8 @@ func TestOverviewPreviews_QuoteTheAskAndTheOutcomeAsPlainText(t *testing.T) {
 	assert.Equal(t, fmt.Sprintf("Excerpt — the original message is %d characters", len([]rune(strings.TrimSpace(long)))), p.Outcome.ExcerptNote)
 	assert.Equal(t, "/rooms/room-a#message-9", p.Outcome.MessageURL)
 	assert.NotEmpty(t, section.Note, "the section states it is selected, not ranked")
+	assert.Equal(t, "The ask", section.AskLabel, "the API words the captions the page shows")
+	assert.Equal(t, "The outcome", section.OutcomeLabel)
 }
 
 func TestOverviewPreviews_ARoomWithOneMessageHasNoOutcome(t *testing.T) {

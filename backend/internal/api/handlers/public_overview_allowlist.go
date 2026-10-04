@@ -154,7 +154,7 @@ var publicOverviewAuthoredTextKeys = map[string]bool{
 	"searcher_label": true, "with_results_label": true, "load_more_label": true,
 	"browse_label": true, "docs_label": true, "connect_label": true, "rooms_label": true,
 	"search_label": true, "new_label": true, "summary": true, "scope_heading": true,
-	"start_note": true,
+	"start_note": true, "ask_label": true, "outcome_label": true,
 }
 
 // PublicOverviewAuthoredText reports whether the text under a JSON key was

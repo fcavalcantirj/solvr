@@ -361,7 +361,14 @@ describe('generous spacing', () => {
 describe('restrained status colour on the room surfaces', () => {
   // Rooms and room detail are where Solvr uses colour at all: green for
   // confirmed presence, amber while reconnecting, red at the hard limit.
-  const ROOM_FILES = sourceFiles(['components/rooms'])
+  // v1.3.7: /data carries the same live dots and the amber stale notice, so it
+  // is held to the same contrast.
+  const ROOM_FILES = [
+    ...sourceFiles(['components/rooms']),
+    'app/data/page.tsx',
+    'components/homepage/room-stats-section.tsx',
+    'components/homepage/overview-meta-banner.tsx',
+  ]
   const FAMILY = '(?:green|emerald|amber|red|yellow)'
   const TEXT = new RegExp(`(dark:)?text-(${FAMILY}-\\d{2,3})\\b`, 'g')
   const DOT = new RegExp(`(dark:)?bg-(${FAMILY}-\\d{2,3})\\b`, 'g')
@@ -445,5 +452,29 @@ describe('restrained status colour on the room surfaces', () => {
   it('says "reconnecting" in words, not only in amber', () => {
     render(<SseStatusBadge status="reconnecting" />)
     expect(screen.getByText('RECONNECTING...')).toBeInTheDocument()
+  })
+})
+
+describe('the one-sentence page language', () => {
+  // Pages moved to the v1.3.7 look, one family at a time. A migrated file sets no
+  // kicker above a heading (the 0.3em-tracked label), no old 7xl column and no
+  // 10px labels; captions are the 11px mono of components/page/caption.tsx.
+  const MIGRATED = [
+    'app/data/page.tsx',
+    'components/data/platform-statistics.tsx',
+    'components/data/statistics-primitives.tsx',
+    'components/homepage/room-stats-section.tsx',
+    'components/homepage/api-usage-section.tsx',
+    'components/homepage/search-stats-section.tsx',
+    'components/homepage/community-totals-section.tsx',
+    'components/page/caption.tsx',
+    'components/page/segmented-control.tsx',
+  ]
+
+  it.each(MIGRATED)('%s speaks the new language', (file) => {
+    const source = read(file)
+    expect(source, file).not.toContain('tracking-[0.3em]')
+    expect(source, file).not.toContain('max-w-7xl')
+    expect(source, file).not.toContain('text-[10px]')
   })
 })

@@ -103,6 +103,44 @@ describe('PlatformStatistics', () => {
     expect(screen.queryByTestId('overview-section-community')).not.toBeInTheDocument();
   });
 
+  // v1.3.7: the page opens on the headline figures GET /v1/overview chose, as sent.
+  it('opens on the headline figures the API chose, in its order and words', () => {
+    render(<PlatformStatistics />);
+    const hero = screen.getByTestId('data-hero-figures');
+    const labels = within(hero).getAllByRole('term').map((node) => node.firstChild?.textContent);
+    expect(labels).toEqual(OVERVIEW.hero_numbers.map((n) => n.label));
+    for (const n of OVERVIEW.hero_numbers) {
+      expect(within(hero).getAllByText(n.display).length).toBeGreaterThan(0);
+      expect(within(hero).getAllByText(n.window).length).toBeGreaterThan(0);
+    }
+  });
+
+  it('shows no headline figures of its own when the API sent none', () => {
+    mockUseOverview.mockReturnValue({
+      overview: { ...OVERVIEW, hero_numbers: [] },
+      meta: null,
+      loading: false,
+      error: null,
+    });
+    render(<PlatformStatistics />);
+    expect(within(screen.getByTestId('data-hero-figures')).queryAllByRole('term')).toHaveLength(0);
+  });
+
+  it('links to each section by the heading the API gave it', () => {
+    render(<PlatformStatistics />);
+    const nav = screen.getByRole('navigation');
+    const sections: [string, string, string][] = [
+      ['#rooms', OVERVIEW.rooms.heading, 'overview-section-rooms'],
+      ['#api', OVERVIEW.api_usage.heading, 'overview-section-api'],
+      ['#search', OVERVIEW.search.heading, 'overview-section-search'],
+      ['#community', OVERVIEW.community.heading, 'overview-section-community'],
+    ];
+    for (const [href, heading, testId] of sections) {
+      expect(within(nav).getByRole('link', { name: heading })).toHaveAttribute('href', href);
+      expect(screen.getByTestId(testId)).toHaveAttribute('id', href.slice(1));
+    }
+  });
+
   it('never invents a number of its own', () => {
     const source = read('components/data/platform-statistics.tsx');
     expect(source).not.toMatch(/(?<![\w-])\d{3,}(?![\w%-])/);

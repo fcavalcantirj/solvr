@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act, within } from "@testing-library/react";
 import DataPage from "./page";
 import { metadata } from "./layout";
 
@@ -23,52 +23,6 @@ vi.mock("@/hooks/use-auth", () => ({
     loading: false,
   })),
 }));
-
-// Mock Tabs so TabsTrigger clicks directly invoke onValueChange via a global registry
-// Tabs stores its onValueChange callback keyed by a stable id so TabsTrigger can call it.
-const tabsCallbacks: Record<string, (v: string) => void> = {};
-let tabsIdCounter = 0;
-
-vi.mock("@/components/ui/tabs", () => {
-  return {
-    Tabs: ({
-      children,
-      onValueChange,
-    }: {
-      children: unknown;
-      onValueChange?: (v: string) => void;
-      defaultValue?: string;
-    }) => {
-      const id = String(++tabsIdCounter);
-      if (onValueChange) tabsCallbacks[id] = onValueChange;
-      return (
-        <div data-testid="tabs" data-tabs-id={id}>
-          {children as React.ReactNode}
-        </div>
-      );
-    },
-    TabsList: ({ children }: { children: unknown }) => (
-      <div data-testid="tabs-list">{children as React.ReactNode}</div>
-    ),
-    TabsTrigger: ({
-      children,
-      value,
-    }: {
-      children: unknown;
-      value: string;
-    }) => (
-      <button
-        data-testid={`tab-${value}`}
-        onClick={() => {
-          // Call all registered onValueChange callbacks
-          Object.values(tabsCallbacks).forEach((cb) => cb(value));
-        }}
-      >
-        {children as React.ReactNode}
-      </button>
-    ),
-  };
-});
 
 // Mock recharts to avoid canvas issues in JSDOM
 vi.mock("recharts", () => ({
@@ -337,6 +291,36 @@ describe("DataPage is the statistics page", () => {
     render(<DataPage />);
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Solvr statistics");
     expect(screen.getByRole("heading", { level: 2, name: "Live Search Activity" })).toBeInTheDocument();
+    // v1.3.7: no kicker above the title any more.
+    expect(screen.queryByText("STATISTICS")).not.toBeInTheDocument();
+  });
+
+  // v1.3.7: the live window is the shared square control, named by its heading.
+  it("names the live window control by its heading", async () => {
+    await act(async () => {
+      render(<DataPage />);
+      await new Promise((r) => setTimeout(r, 150));
+    });
+    const group = await screen.findByRole("group", { name: "Live Search Activity" });
+    expect(within(group).getByRole("button", { name: "7d" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("shows the live dot only while live data is on the page", async () => {
+    await act(async () => {
+      render(<DataPage />);
+      await new Promise((r) => setTimeout(r, 150));
+    });
+    await waitFor(() => expect(screen.getByTestId("live-search-dot")).toBeInTheDocument());
+  });
+
+  it("drops the live dot when the search data could not be read", async () => {
+    global.fetch = vi.fn().mockRejectedValue(new Error("Network error"));
+    await act(async () => {
+      render(<DataPage />);
+      await new Promise((r) => setTimeout(r, 50));
+    });
+    await waitFor(() => expect(screen.getByText(/could not load/i)).toBeInTheDocument());
+    expect(screen.queryByTestId("live-search-dot")).not.toBeInTheDocument();
   });
 
   it("puts the platform statistics above the live search activity", () => {

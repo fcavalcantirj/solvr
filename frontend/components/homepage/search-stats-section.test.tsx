@@ -43,6 +43,14 @@ beforeEach(() => {
 });
 
 describe('SearchStatsSection', () => {
+  // v1.3.7: the lists the reader comes for are open; the hourly table starts closed.
+  it('opens the published search lists and keeps the hourly table closed', () => {
+    render(<SearchStatsSection initial={SEARCH} />);
+    expect(screen.getByTestId('search-top-table').querySelector('details')).toHaveAttribute('open');
+    expect(screen.getByTestId('search-recent-list').querySelector('details')).toHaveAttribute('open');
+    expect(screen.getByTestId('search-series-table').closest('details')).not.toHaveAttribute('open');
+  });
+
   it('renders the API heading, intro and the four totals it was sent', () => {
     render(<SearchStatsSection initial={SEARCH} />);
 

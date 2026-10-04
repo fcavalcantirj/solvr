@@ -5,7 +5,9 @@ import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { APIOverviewAPIUsage, APIOverviewSeries } from '@/lib/api-types';
-import { MetricGrid, SectionHeading } from './metric';
+import { MetricGrid } from './metric';
+import { SegmentedControl } from '@/components/page/segmented-control';
+import { StatisticsDetails, StatisticsHeading } from '@/components/data/statistics-primitives';
 
 // How much the API is called.
 //
@@ -24,17 +26,17 @@ function UsageChart({ series }: { series: APIOverviewSeries }) {
   const { sparkline } = series;
 
   return (
-    <figure className="border border-border p-4 sm:p-6">
+    <figure className="min-w-0">
       <figcaption className="flex flex-wrap items-baseline justify-between gap-2 mb-5">
-        <span className="font-mono text-[10px] tracking-[0.2em]" title={sparkline.definition}>
+        <span className="font-mono text-[11px] uppercase tracking-[0.18em]" title={sparkline.definition}>
           {sparkline.label}
         </span>
-        <span className="font-mono text-[10px] tracking-wider text-muted-foreground">
+        <span className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground">
           {sparkline.window}
         </span>
       </figcaption>
 
-      <div className="flex items-end gap-px h-24" role="img" aria-label={sparkline.definition}>
+      <div className="flex items-end gap-px h-28 border-b border-border" role="img" aria-label={sparkline.definition}>
         {sparkline.points.map((point) => (
           <div
             key={point.label}
@@ -43,24 +45,24 @@ function UsageChart({ series }: { series: APIOverviewSeries }) {
           >
             <div
               data-testid="api-usage-spark-bar"
-              className="w-full bg-foreground min-h-px"
+              className="w-full bg-foreground"
               style={{ height: point.height }}
             />
           </div>
         ))}
       </div>
 
-      {/* The accessible equivalent: the same rows, as a table. */}
+      <StatisticsDetails label={series.table_heading}>
       <table data-testid="api-usage-series-table" className="w-full mt-6 text-left">
-        <caption className="font-mono text-[10px] leading-relaxed text-muted-foreground/70 text-left mb-3 caption-bottom">
+        <caption className="text-[0.8125rem] leading-relaxed text-muted-foreground text-left mb-3 caption-bottom">
           {series.table_caption}
         </caption>
         <thead>
           <tr className="border-b border-border">
-            <th scope="col" className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground py-2">
+            <th scope="col" className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground py-2">
               {series.period_header}
             </th>
-            <th scope="col" className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground py-2 text-right">
+            <th scope="col" className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground py-2 text-right">
               {series.count_header}
             </th>
           </tr>
@@ -76,6 +78,7 @@ function UsageChart({ series }: { series: APIOverviewSeries }) {
           ))}
         </tbody>
       </table>
+      </StatisticsDetails>
     </figure>
   );
 }
@@ -101,94 +104,48 @@ export function ApiUsageSection({ initial }: { initial: APIOverviewAPIUsage }) {
 
   return (
     <section
+      id="api"
       data-testid="overview-section-api"
-      className="px-4 sm:px-6 lg:px-12 py-12 lg:py-16 border-t border-border"
+      className="px-4 sm:px-6 lg:px-12 py-12 lg:py-16 border-t border-border scroll-mt-16"
     >
-      <div className="max-w-7xl mx-auto">
-        <SectionHeading eyebrow="API" heading={data.heading} intro={data.intro} />
+      <div className="mx-auto grid max-w-[70rem] gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:gap-16">
+        <StatisticsHeading heading={data.heading} intro={data.intro}>
+          <p className="mt-6 max-w-[34ch] text-[0.8125rem] leading-relaxed text-muted-foreground">{data.scope_note}</p>
+          {data.start_note ? (
+            <p data-testid="api-usage-start-note" className="mt-3 max-w-[34ch] text-[0.8125rem] leading-relaxed text-muted-foreground">{data.start_note}</p>
+          ) : null}
+          <Link href={data.docs_url} className="group mt-6 inline-flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.18em] hover:text-muted-foreground">
+            {data.docs_label}
+            <ArrowRight aria-hidden="true" size={14} className="transition-transform group-hover:translate-x-1" />
+          </Link>
+        </StatisticsHeading>
 
-        <div className="mt-8 flex flex-wrap items-center justify-end gap-4">
-          <div
-            role="group"
-            aria-label={data.window_label}
-            className="flex border border-border divide-x divide-border bg-background"
-          >
-            {data.window_options.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                aria-pressed={option.value === data.selected_window}
-                disabled={loading}
-                onClick={() => selectWindow(option.value)}
-                className={`font-mono text-[10px] uppercase tracking-[0.2em] px-4 py-3 transition-colors disabled:opacity-50 ${
-                  option.value === data.selected_window
-                    ? 'bg-foreground text-background'
-                    : 'hover:bg-secondary'
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
+        <div className="min-w-0">
+          <div className="mb-8 flex justify-end">
+            <SegmentedControl
+              label={data.window_label}
+              options={data.window_options}
+              value={data.selected_window}
+              onSelect={selectWindow}
+              disabled={loading}
+            />
+          </div>
+          {error ? <p role="alert" className="mb-5 text-sm text-muted-foreground">{error}</p> : null}
+          <div data-testid="api-usage-metrics"><MetricGrid metrics={data.metrics} /></div>
+          <div className="mt-8"><UsageChart series={data.series} /></div>
+          <div className="mt-10">
+            <ul className="divide-y divide-border border-t border-border">
+              {data.endpoints.map((endpoint) => (
+                <li key={`${endpoint.method} ${endpoint.path}`} data-testid="overview-endpoint" className="py-4">
+                  <p className="break-words font-mono text-xs">
+                    <span className="text-muted-foreground">{endpoint.method}</span>{' '}{endpoint.path}
+                  </p>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{endpoint.summary}</p>
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
-
-        {error ? (
-          <p role="alert" className="mt-5 font-mono text-xs text-muted-foreground">
-            {error}
-          </p>
-        ) : null}
-
-        <div className="mt-6 grid lg:grid-cols-12 gap-8 lg:gap-12 items-start">
-          <div className="lg:col-span-7">
-            <div data-testid="api-usage-metrics">
-              <MetricGrid metrics={data.metrics} />
-            </div>
-
-            {/* When measurement began, when that falls inside the window. */}
-            {data.start_note ? (
-              <p
-                data-testid="api-usage-start-note"
-                className="mt-4 font-mono text-[10px] leading-relaxed text-muted-foreground/70"
-              >
-                {data.start_note}
-              </p>
-            ) : null}
-          </div>
-
-          <div className="lg:col-span-5">
-            <UsageChart series={data.series} />
-          </div>
-        </div>
-
-        <p className="mt-8 max-w-3xl text-sm text-muted-foreground leading-relaxed">
-          {data.scope_note}
-        </p>
-
-        <ul className="mt-10 border border-border divide-y divide-border">
-          {data.endpoints.map((endpoint) => (
-            <li
-              key={`${endpoint.method} ${endpoint.path}`}
-              data-testid="overview-endpoint"
-              className="p-4 sm:p-5"
-            >
-              <p className="font-mono text-xs tracking-wider break-words">
-                <span className="text-muted-foreground">{endpoint.method}</span>{' '}
-                {endpoint.path}
-              </p>
-              <p className="text-sm text-muted-foreground leading-relaxed mt-1">
-                {endpoint.summary}
-              </p>
-            </li>
-          ))}
-        </ul>
-
-        <Link
-          href={data.docs_url}
-          className="group inline-flex items-center gap-3 mt-10 font-mono text-xs uppercase tracking-wider border border-foreground px-8 py-4 hover:bg-foreground hover:text-background transition-colors"
-        >
-          {data.docs_label}
-          <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
-        </Link>
       </div>
     </section>
   );

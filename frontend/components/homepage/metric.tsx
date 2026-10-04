@@ -1,40 +1,31 @@
 import type { APIOverviewMetric, APIOverviewTable } from '@/lib/api-types';
 
-// The shared vocabulary of the live index: a strong monospaced number, the
-// window it was measured over, and the definition of what it counts — all of
-// them API strings. Thin dividers, square corners, no colour.
+import { MetricNote } from '@/components/data/statistics-primitives';
 
-// The grid draws its rules as cell borders rather than as gaps over a coloured
-// background. A section may carry any number of metrics, and with a partly
-// filled last row the gap version paints the unused cells in the border colour.
+// Open rows: what a figure counts on the left, the figure set big on the right, and
+// the window it was measured over under its label. The window opens the definition
+// and any caveat, by keyboard or touch. Every word and display value is the API's.
 export function MetricGrid({ metrics }: { metrics: APIOverviewMetric[] }) {
   return (
-    <dl className="grid grid-cols-2 lg:grid-cols-3 border-t border-l border-border">
+    <dl className="divide-y divide-border">
       {metrics.map((metric) => (
         <div
           key={metric.key}
           data-testid="overview-metric"
-          className="bg-background border-r border-b border-border p-5 sm:p-6"
+          className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-6 py-5 first:pt-0"
         >
+          <dt className="max-w-[30ch] font-mono text-[11px] uppercase leading-relaxed tracking-[0.18em] text-foreground">
+            {metric.label}
+          </dt>
           <dd
-            className="font-mono text-3xl sm:text-4xl font-light tracking-tight"
+            className="row-span-2 text-[2.5rem] font-light leading-none tracking-[-0.04em] tabular-nums sm:text-5xl"
             title={metric.definition}
           >
             {metric.display}
           </dd>
-          <dt className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground mt-3">
-            {metric.label}
-          </dt>
-          <p className="font-mono text-[10px] tracking-wider text-muted-foreground/70 mt-1">
-            {metric.window}
-          </p>
-          {/* The caveat the number cannot state on its own: an unverified
-              identity share, or why a measurement is missing. The API words it. */}
-          {metric.qualifier ? (
-            <p className="font-mono text-[10px] leading-relaxed text-muted-foreground/70 mt-2">
-              {metric.qualifier}
-            </p>
-          ) : null}
+          <dd className="mt-1.5 min-w-0">
+            <MetricNote window={metric.window} definition={metric.definition} qualifier={metric.qualifier} />
+          </dd>
         </div>
       ))}
     </dl>

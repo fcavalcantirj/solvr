@@ -2,9 +2,12 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { ArrowRight } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { APIOverviewRooms, APIOverviewLiveMarker, APIOverviewRecentCollaboration, APIOverviewSparkline } from '@/lib/api-types';
-import { MetricGrid, SectionHeading } from './metric';
+import { MetricGrid } from './metric';
+import { SegmentedControl } from '@/components/page/segmented-control';
+import { StatisticsDetails, StatisticsHeading } from '@/components/data/statistics-primitives';
 
 // The room statistics. The API counts every room, private ones included, and
 // names or quotes only public ones; the scope note it sends says so.
@@ -17,20 +20,20 @@ import { MetricGrid, SectionHeading } from './metric';
 
 function Sparkline({ sparkline }: { sparkline: APIOverviewSparkline }) {
   return (
-    <figure className="border border-border p-4 sm:p-6">
+    <figure className="min-w-0">
       <figcaption className="flex flex-wrap items-baseline justify-between gap-2 mb-5">
         <span
-          className="font-mono text-[10px] tracking-[0.2em]"
+          className="font-mono text-[11px] uppercase tracking-[0.18em]"
           title={sparkline.definition}
         >
           {sparkline.label}
         </span>
-        <span className="font-mono text-[10px] tracking-wider text-muted-foreground">
+        <span className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground">
           {sparkline.window}
         </span>
       </figcaption>
 
-      <div className="flex items-end gap-px h-24" role="img" aria-label={sparkline.definition}>
+      <div className="flex items-end gap-px h-28 border-b border-border" role="img" aria-label={sparkline.definition}>
         {sparkline.points.map((point) => (
           <div
             key={point.label}
@@ -39,7 +42,7 @@ function Sparkline({ sparkline }: { sparkline: APIOverviewSparkline }) {
           >
             <div
               data-testid="overview-spark-bar"
-              className="w-full bg-foreground min-h-px"
+              className="w-full bg-foreground"
               style={{ height: point.height }}
             />
           </div>
@@ -55,7 +58,7 @@ function LiveMarker({ marker }: { marker: APIOverviewLiveMarker }) {
   return (
     <div
       data-testid="overview-live-marker"
-      className="mt-8 flex items-center gap-3 font-mono text-xs tracking-wider"
+      className="mt-8 flex items-center gap-3 text-sm text-foreground"
     >
       <span
         data-testid="overview-live-dot"
@@ -79,12 +82,9 @@ function RecentCollaborationsSection({
 }) {
   return (
     <div data-testid="overview-recent-collaborations" className="mt-12">
-      <p className="font-mono text-xs tracking-[0.2em] text-muted-foreground mb-4">
-        RECENTLY COMPLETED
-      </p>
       <ul className="space-y-4">
         {rooms.map((room) => (
-          <li key={room.slug} className="border border-border p-4 sm:p-6">
+          <li key={room.slug} className="border-t border-border py-4">
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-baseline gap-2">
               <h4 className="text-lg font-medium">
                 <Link
@@ -132,92 +132,53 @@ export function RoomStatsSection({ initial }: { initial: APIOverviewRooms }) {
 
   return (
     <section
+      id="rooms"
       data-testid="overview-section-rooms"
-      className="px-4 sm:px-6 lg:px-12 py-12 lg:py-16 border-t border-border"
+      className="px-4 sm:px-6 lg:px-12 py-12 lg:py-16 border-t border-border scroll-mt-16"
     >
-      <div className="max-w-7xl mx-auto">
-        <SectionHeading eyebrow="LIVE" heading={data.heading} intro={data.intro} />
+      <div className="mx-auto grid max-w-[70rem] gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:gap-16">
+        <StatisticsHeading heading={data.heading} intro={data.intro}>
+          {data.live_marker ? <LiveMarker marker={data.live_marker} /> : null}
+          <div className="mt-6">
+            <StatisticsDetails label={data.scope_label}>
+              <p className="text-sm leading-relaxed text-muted-foreground">{data.scope_note}</p>
+            </StatisticsDetails>
+          </div>
+          <Link href={data.rooms_url} className="group mt-6 inline-flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.18em] hover:text-muted-foreground">
+            {data.rooms_label}
+            <ArrowRight aria-hidden="true" size={14} className="transition-transform group-hover:translate-x-1" />
+          </Link>
+        </StatisticsHeading>
 
-        {data.live_marker ? (
-          <LiveMarker marker={data.live_marker} />
-        ) : null}
-
-        <div className="mt-8 max-w-3xl">
-          <p className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground">
-            {data.scope_label}
-          </p>
-          <p className="text-sm text-muted-foreground leading-relaxed mt-2">
-            {data.scope_note}
-          </p>
-        </div>
-
-        {/* The "now" half. No selector reaches these. */}
-        <div className="mt-12">
-          <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2 mb-5">
-            <h3 className="font-mono text-xs tracking-[0.3em]">{data.presence_heading}</h3>
-            <p className="font-mono text-[10px] tracking-wider text-muted-foreground">
-              {data.presence_note}
-            </p>
+        <div className="min-w-0">
+          <div className="mb-6 flex items-baseline justify-between gap-4">
+            <h3 className="text-lg font-light">{data.presence_heading}</h3>
           </div>
           <div data-testid="overview-presence-metrics">
             <MetricGrid metrics={data.presence_metrics} />
+          </div>
+          <p className="max-w-[64ch] text-xs leading-relaxed text-muted-foreground">{data.presence_note}</p>
+
+          <div className="mt-12 border-t border-border pt-6">
+            <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+              <h3 className="text-lg font-light">{data.window_heading}</h3>
+              <SegmentedControl
+                label={data.window_label}
+                options={data.window_options}
+                value={data.selected_window}
+                onSelect={selectWindow}
+                disabled={loading}
+              />
+            </div>
+            {error ? <p role="alert" className="mb-5 text-sm text-muted-foreground">{error}</p> : null}
+            <MetricGrid metrics={data.metrics} />
+            {data.sparkline ? <div className="mt-8"><Sparkline sparkline={data.sparkline} /></div> : null}
           </div>
 
           {data.recent_collaborations && data.recent_collaborations.length > 0 ? (
             <RecentCollaborationsSection rooms={data.recent_collaborations} />
           ) : null}
         </div>
-
-        {/* The windowed half, and the selector that drives it. */}
-        <div className="mt-16">
-          <div className="flex flex-wrap items-center justify-between gap-4 mb-5">
-            <h3 className="font-mono text-xs tracking-[0.3em]">{data.window_heading}</h3>
-            <div
-              role="group"
-              aria-label={data.window_label}
-              className="flex border border-border divide-x divide-border"
-            >
-              {data.window_options.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  aria-pressed={option.value === data.selected_window}
-                  disabled={loading}
-                  onClick={() => selectWindow(option.value)}
-                  className={`font-mono text-[10px] uppercase tracking-[0.2em] px-4 py-3 transition-colors disabled:opacity-50 ${
-                    option.value === data.selected_window
-                      ? 'bg-foreground text-background'
-                      : 'hover:bg-secondary'
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {error ? (
-            <p role="alert" className="mb-5 font-mono text-xs text-muted-foreground">
-              {error}
-            </p>
-          ) : null}
-
-          <div className="grid lg:grid-cols-12 gap-8 lg:gap-12 items-start">
-            <div className="lg:col-span-7">
-              <MetricGrid metrics={data.metrics} />
-            </div>
-            <div className="lg:col-span-5">
-              {data.sparkline ? <Sparkline sparkline={data.sparkline} /> : null}
-            </div>
-          </div>
-        </div>
-
-        <Link
-          href={data.rooms_url}
-          className="inline-block mt-10 font-mono text-xs uppercase tracking-wider border border-foreground px-8 py-4 hover:bg-foreground hover:text-background transition-colors"
-        >
-          {data.rooms_label}
-        </Link>
       </div>
     </section>
   );

@@ -4,7 +4,9 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import type { APIOverviewSearch, APIOverviewSeries } from '@/lib/api-types';
-import { MetricGrid, SectionHeading } from './metric';
+import { MetricGrid } from './metric';
+import { SegmentedControl } from '@/components/page/segmented-control';
+import { StatisticsDetails, StatisticsHeading } from '@/components/data/statistics-primitives';
 
 // What people and agents search for.
 //
@@ -23,17 +25,17 @@ function SearchChart({ series }: { series: APIOverviewSeries }) {
   const { sparkline } = series;
 
   return (
-    <figure className="border border-border p-4 sm:p-6">
+    <figure className="min-w-0">
       <figcaption className="flex flex-wrap items-baseline justify-between gap-2 mb-5">
-        <span className="font-mono text-[10px] tracking-[0.2em]" title={sparkline.definition}>
+        <span className="font-mono text-[11px] uppercase tracking-[0.18em]" title={sparkline.definition}>
           {sparkline.label}
         </span>
-        <span className="font-mono text-[10px] tracking-wider text-muted-foreground">
+        <span className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground">
           {sparkline.window}
         </span>
       </figcaption>
 
-      <div className="flex items-end gap-px h-24" role="img" aria-label={sparkline.definition}>
+      <div className="flex items-end gap-px h-28 border-b border-border" role="img" aria-label={sparkline.definition}>
         {sparkline.points.map((point) => (
           <div
             key={point.label}
@@ -42,24 +44,24 @@ function SearchChart({ series }: { series: APIOverviewSeries }) {
           >
             <div
               data-testid="search-spark-bar"
-              className="w-full bg-foreground min-h-px"
+              className="w-full bg-foreground"
               style={{ height: point.height }}
             />
           </div>
         ))}
       </div>
 
-      {/* The accessible equivalent: the same rows, as a table. */}
+      <StatisticsDetails label={series.table_heading}>
       <table data-testid="search-series-table" className="w-full mt-6 text-left">
-        <caption className="font-mono text-[10px] leading-relaxed text-muted-foreground/70 text-left mb-3 caption-bottom">
+        <caption className="text-[0.8125rem] leading-relaxed text-muted-foreground text-left mb-3 caption-bottom">
           {series.table_caption}
         </caption>
         <thead>
           <tr className="border-b border-border">
-            <th scope="col" className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground py-2">
+            <th scope="col" className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground py-2">
               {series.period_header}
             </th>
-            <th scope="col" className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground py-2 text-right">
+            <th scope="col" className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground py-2 text-right">
               {series.count_header}
             </th>
           </tr>
@@ -75,6 +77,7 @@ function SearchChart({ series }: { series: APIOverviewSeries }) {
           ))}
         </tbody>
       </table>
+      </StatisticsDetails>
     </figure>
   );
 }
@@ -100,187 +103,161 @@ export function SearchStatsSection({ initial }: { initial: APIOverviewSearch }) 
 
   return (
     <section
+      id="search"
       data-testid="overview-section-search"
-      className="px-4 sm:px-6 lg:px-12 py-12 lg:py-16 border-t border-border bg-secondary"
+      className="px-4 sm:px-6 lg:px-12 py-12 lg:py-16 border-t border-border scroll-mt-16"
     >
-      <div className="max-w-7xl mx-auto">
-        <SectionHeading eyebrow="SEARCH" heading={data.heading} intro={data.intro} />
-
-        <div className="mt-8 flex flex-wrap items-center justify-end gap-4">
-          <div
-            role="group"
-            aria-label={data.window_label}
-            className="flex border border-border divide-x divide-border bg-background"
-          >
-            {data.window_options.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                aria-pressed={option.value === data.selected_window}
-                disabled={loading}
-                onClick={() => selectWindow(option.value)}
-                className={`font-mono text-[10px] uppercase tracking-[0.2em] px-4 py-3 transition-colors disabled:opacity-50 ${
-                  option.value === data.selected_window
-                    ? 'bg-foreground text-background'
-                    : 'hover:bg-secondary'
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
+      <div className="mx-auto grid max-w-[70rem] gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:gap-16">
+        <StatisticsHeading heading={data.heading} intro={data.intro}>
+          <p className="mt-6 max-w-[34ch] text-[0.8125rem] leading-relaxed text-muted-foreground">{data.privacy_note}</p>
+          {/* Known automated monitoring, stated apart from the totals. */}
+          {data.monitoring ? (
+            <div data-testid="search-monitoring" className="mt-6 max-w-[34ch] border-t border-border pt-4">
+              <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <span className="text-3xl font-light tabular-nums tracking-[-0.04em]">{data.monitoring.display}</span>
+                <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-foreground">{data.monitoring.label}</span>
+                <span className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground">{data.monitoring.window}</span>
+              </p>
+              <p className="mt-2 text-[0.8125rem] leading-relaxed text-muted-foreground">{data.monitoring.definition}</p>
+            </div>
+          ) : null}
+        </StatisticsHeading>
+        <div className="min-w-0">
+          <div className="mb-8 flex flex-wrap items-center justify-end gap-4">
+            <SegmentedControl
+              label={data.window_label}
+              options={data.window_options}
+              value={data.selected_window}
+              onSelect={selectWindow}
+              disabled={loading}
+            />
           </div>
-        </div>
 
-        {error ? (
-          <p role="alert" className="mt-5 font-mono text-xs text-muted-foreground">
-            {error}
-          </p>
-        ) : null}
-
-        <div data-testid="search-metrics" className="mt-6 bg-background">
-          <MetricGrid metrics={data.metrics} />
-        </div>
-
-        {/* Known automated monitoring, stated apart from the totals above. */}
-        {data.monitoring ? (
-          <div
-            data-testid="search-monitoring"
-            className="mt-6 border border-border bg-background p-5 sm:p-6 flex flex-wrap items-baseline gap-x-6 gap-y-2"
-          >
-            <span className="font-mono text-2xl font-light tracking-tight">
-              {data.monitoring.display}
-            </span>
-            <span className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground">
-              {data.monitoring.label}
-            </span>
-            <span className="font-mono text-[10px] tracking-wider text-muted-foreground">
-              {data.monitoring.window}
-            </span>
-            <p className="font-mono text-[10px] leading-relaxed text-muted-foreground/70 basis-full">
-              {data.monitoring.definition}
+          {error ? (
+            <p role="alert" className="mt-5 font-mono text-xs text-muted-foreground">
+              {error}
             </p>
-          </div>
-        ) : null}
+          ) : null}
 
-        <div className="mt-8 grid lg:grid-cols-12 gap-6 lg:gap-8 items-start">
-          <div className="lg:col-span-7 bg-background">
-            {/* Top searches */}
-            <div data-testid="search-top-table" className="border border-border">
-              <div className="px-4 py-3 border-b border-border flex flex-wrap items-baseline justify-between gap-2">
-                <p className="font-mono text-[10px] tracking-[0.2em]" title={data.top.definition}>
-                  {data.top.heading}
-                </p>
-                <p className="font-mono text-[10px] tracking-wider text-muted-foreground">
-                  {data.top.window}
-                </p>
+          <div data-testid="search-metrics" className="min-w-0">
+            <MetricGrid metrics={data.metrics} />
+          </div>
+
+          <div className="mt-8"><SearchChart series={data.series} /></div>
+
+          <div className="mt-4">
+            <div className="min-w-0">
+              {/* Top searches */}
+              <div data-testid="search-top-table">
+                <StatisticsDetails label={data.top.heading} defaultOpen>
+                  <div className="py-3 border-b border-border flex flex-wrap items-baseline justify-between gap-2">
+                    <p className="text-xs leading-relaxed text-muted-foreground" title={data.top.definition}>{data.top.definition}</p>
+                    <p className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground">
+                      {data.top.window}
+                    </p>
+                  </div>
+
+                  {data.top.rows.length === 0 ? (
+                    <p className="py-4 text-sm text-muted-foreground">{data.top.empty_note}</p>
+                  ) : (
+                    <table className="w-full table-fixed text-left">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th scope="col" className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground py-2">
+                            {data.top.query_header}
+                          </th>
+                          <th scope="col" className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground py-2 text-right">
+                            {data.top.count_header}
+                          </th>
+                          <th scope="col" className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground py-2 text-right">
+                            {data.top.with_results_header}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {data.top.rows.map((row) => (
+                          <tr key={row.query}>
+                            <th scope="row" className="font-normal py-3">
+                              <Link
+                                href={row.search_url}
+                                title={row.search_label}
+                                className="text-[0.9375rem] underline-offset-4 [overflow-wrap:anywhere] hover:underline"
+                              >
+                                {row.query}
+                              </Link>
+                            </th>
+                            <td className="font-mono text-xs text-muted-foreground py-3 text-right">
+                              {row.count_label}
+                            </td>
+                            <td className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground py-3 text-right">
+                              {row.with_results_label}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+
+                  {data.top.withheld_note ? (
+                    <p
+                      data-testid="search-withheld-note"
+                      className="py-3 border-t border-border text-[0.8125rem] leading-relaxed text-muted-foreground"
+                    >
+                      {data.top.withheld_note}
+                    </p>
+                  ) : null}
+                </StatisticsDetails>
               </div>
 
-              {data.top.rows.length === 0 ? (
-                <p className="px-4 py-4 text-sm text-muted-foreground">{data.top.empty_note}</p>
-              ) : (
-                <table className="w-full text-left">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th scope="col" className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground px-4 py-2">
-                        {data.top.query_header}
-                      </th>
-                      <th scope="col" className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground px-4 py-2 text-right">
-                        {data.top.count_header}
-                      </th>
-                      <th scope="col" className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground px-4 py-2 text-right">
-                        {data.top.with_results_header}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {data.top.rows.map((row) => (
-                      <tr key={row.query}>
-                        <th scope="row" className="font-normal px-4 py-3">
+              {/* Recent searches */}
+              <div data-testid="search-recent-list">
+                <StatisticsDetails label={data.recent.heading} defaultOpen>
+                  <div className="py-3 border-b border-border flex flex-wrap items-baseline justify-between gap-2">
+                    <p className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground">
+                      {data.recent.window}
+                    </p>
+                  </div>
+
+                  {data.recent.rows.length === 0 ? (
+                    <p className="py-4 text-sm text-muted-foreground">{data.recent.empty_note}</p>
+                  ) : (
+                    <ul className="divide-y divide-border">
+                      {data.recent.rows.map((row) => (
+                        <li
+                          key={row.query}
+                          className="py-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1"
+                        >
                           <Link
                             href={row.search_url}
                             title={row.search_label}
-                            className="font-mono text-xs break-words hover:underline"
+                            className="min-w-0 text-[0.9375rem] underline-offset-4 [overflow-wrap:anywhere] hover:underline"
                           >
                             {row.query}
                           </Link>
-                        </th>
-                        <td className="font-mono text-xs text-muted-foreground px-4 py-3 text-right whitespace-nowrap">
-                          {row.count_label}
-                        </td>
-                        <td className="font-mono text-[10px] tracking-wider text-muted-foreground px-4 py-3 text-right whitespace-nowrap">
-                          {row.with_results_label}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+                          <span className="flex flex-wrap items-baseline gap-3">
+                            <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                              {row.searcher_label}
+                            </span>
+                            <span className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground">
+                              {row.time_label}
+                            </span>
+                            <span className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground">
+                              {row.results_label}
+                            </span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
 
-              {data.top.withheld_note ? (
-                <p
-                  data-testid="search-withheld-note"
-                  className="px-4 py-3 border-t border-border font-mono text-[10px] leading-relaxed text-muted-foreground/70"
-                >
-                  {data.top.withheld_note}
-                </p>
-              ) : null}
-            </div>
-
-            {/* Recent searches */}
-            <div data-testid="search-recent-list" className="border border-border border-t-0">
-              <div className="px-4 py-3 border-b border-border flex flex-wrap items-baseline justify-between gap-2">
-                <p className="font-mono text-[10px] tracking-[0.2em]">{data.recent.heading}</p>
-                <p className="font-mono text-[10px] tracking-wider text-muted-foreground">
-                  {data.recent.window}
-                </p>
+                  <p className="py-3 border-t border-border text-[0.8125rem] leading-relaxed text-muted-foreground">
+                    {data.recent.definition}
+                  </p>
+                </StatisticsDetails>
               </div>
-
-              {data.recent.rows.length === 0 ? (
-                <p className="px-4 py-4 text-sm text-muted-foreground">{data.recent.empty_note}</p>
-              ) : (
-                <ul className="divide-y divide-border">
-                  {data.recent.rows.map((row) => (
-                    <li
-                      key={row.query}
-                      className="px-4 py-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1"
-                    >
-                      <Link
-                        href={row.search_url}
-                        title={row.search_label}
-                        className="font-mono text-xs break-words min-w-0 hover:underline"
-                      >
-                        {row.query}
-                      </Link>
-                      <span className="flex items-baseline gap-3 shrink-0">
-                        <span className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground">
-                          {row.searcher_label}
-                        </span>
-                        <span className="font-mono text-[10px] tracking-wider text-muted-foreground">
-                          {row.time_label}
-                        </span>
-                        <span className="font-mono text-[10px] tracking-wider text-muted-foreground">
-                          {row.results_label}
-                        </span>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              <p className="px-4 py-3 border-t border-border font-mono text-[10px] leading-relaxed text-muted-foreground/70">
-                {data.recent.definition}
-              </p>
             </div>
-          </div>
-
-          <div className="lg:col-span-5 bg-background">
-            <SearchChart series={data.series} />
           </div>
         </div>
-
-        <p className="mt-8 max-w-3xl text-sm text-muted-foreground leading-relaxed">
-          {data.privacy_note}
-        </p>
       </div>
     </section>
   );

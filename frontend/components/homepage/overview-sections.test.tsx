@@ -186,6 +186,17 @@ describe('CommunityTotalsSection', () => {
     expect(screen.getAllByText(registration.qualifier!).length).toBeGreaterThan(0);
   });
 
+  // v1.3.7: a figure reads first; its window opens the caveat, one click away.
+  it('keeps the caveat behind the window it qualifies', () => {
+    render(<CommunityTotalsSection data={OVERVIEW.community} />);
+    const registration = OVERVIEW.community.metrics.find(
+      (m) => m.key === 'registered_agents',
+    )!;
+    const details = screen.getAllByText(registration.qualifier!)[0].closest('details');
+    expect(details).not.toBeNull();
+    expect(details!.querySelector('summary')).toHaveTextContent(registration.window);
+  });
+
   it('never calls a registered account an active one', () => {
     render(<CommunityTotalsSection data={OVERVIEW.community} />);
     const rendered = squish(

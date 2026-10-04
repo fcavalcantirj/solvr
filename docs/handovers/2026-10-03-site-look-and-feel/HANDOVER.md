@@ -1,7 +1,7 @@
 ---
 slug: site-look-and-feel
 date: 2026-10-03
-status: open
+status: approved
 round: 0
 author_session: lane S executor (Opus 5.5) — built the one-sentence Prompt look on /connect, guides and home cards (v1.3.6)
 ---

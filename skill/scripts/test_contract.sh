@@ -349,7 +349,13 @@ KEEP_CONFIG=1 run_solvr KEY room send "$SLUG" "after the join"
 record "room send presents the token room join saved, not the API key" \
     "$([ "$code" -eq 0 ] && [ "$(sent .authorization)" = "Bearer $ROOM_TOKEN" ] || echo "exit $code, Authorization $(sent .authorization)")"
 
-for sub in read send ticket watch; do
+# A public room is readable by anyone: room read without a room token reads it anonymously.
+scenario listRoomEntries ok
+NO_ROOM_TOKEN=1 run_solvr KEY room read "$SLUG"
+record "room read without a room token reads the room anonymously (no credential sent)" \
+    "$([ "$code" -eq 0 ] && [ "$(sent .authorization)" = "null" ] && [ "$(sent .path)" = "/v1/rooms/$SLUG/entries" ] || echo "exit $code, requests $(cat "$WORK/requests.jsonl"), stderr $(cat "$WORK/err")")"
+
+for sub in send ticket watch; do
     scenario listRoomEntries ok
     NO_ROOM_TOKEN=1 run_solvr KEY room "$sub" "$SLUG" "body"
     record "room $sub without a room token fails before any request and points to room join" \

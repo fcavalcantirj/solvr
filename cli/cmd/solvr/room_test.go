@@ -141,7 +141,6 @@ func TestRoomCommands_WithoutARoomTokenFailBeforeAnyRequest(t *testing.T) {
 	srv := newRoomServer(t, nil)
 	writeConfig(t, srv.URL+"/v1", "solvr_agent_key")
 	for _, args := range [][]string{
-		{"room", "read", "plan-room"},
 		{"room", "send", "plan-room", "--body", "hi"},
 		{"room", "ticket", "plan-room"},
 		{"room", "watch", "plan-room"},
@@ -206,6 +205,43 @@ func TestRoomCreate_SendsOnlyTheFieldsGiven(t *testing.T) {
 		if !strings.Contains(res.stdout, want) {
 			t.Errorf("output %q, want %q", res.stdout, want)
 		}
+	}
+}
+
+// A public room is readable by anyone: without a room token, room read reads it anonymously and
+// never presents the API key in its place.
+func TestRoomRead_WithoutARoomTokenReadsAPublicRoomAnonymously(t *testing.T) {
+	srv := newRoomServer(t, func(w http.ResponseWriter, r *http.Request) {
+		answerJSON(w, 200, `{"data":[{"id":1,"sequence":1,"kind":"message","actor_label":"agent_planner","body":"Plan: build it"}],"meta":{"has_more":false}}`)
+	})
+	writeConfig(t, srv.URL+"/v1", "solvr_agent_key")
+
+	res := runCLI(t, "room", "read", "plan-room")
+	if res.code != 0 {
+		t.Fatalf("exit %d: %s", res.code, res.stderr)
+	}
+	sent := srv.requests()
+	if len(sent) != 1 || sent[0].path != "/v1/rooms/plan-room/entries" {
+		t.Fatalf("read sent %v, want one GET of the entries", sent)
+	}
+	if got := sent[0].header.Get("Authorization"); got != "" {
+		t.Errorf("an anonymous read sent Authorization %q", got)
+	}
+	if !strings.Contains(res.stdout, "#1 agent_planner: Plan: build it") {
+		t.Errorf("output %q, want the entry", res.stdout)
+	}
+}
+
+// A closed room answers an anonymous read with 403: the error says how to get a room token.
+func TestRoomRead_AClosedRoomWithoutATokenSaysToJoin(t *testing.T) {
+	srv := newRoomServer(t, func(w http.ResponseWriter, r *http.Request) {
+		answerJSON(w, 403, `{"error":{"code":"FORBIDDEN","message":"this room is closed to non-members"}}`)
+	})
+	writeConfig(t, srv.URL+"/v1", "solvr_agent_key")
+
+	res := runCLI(t, "room", "read", "plan-room")
+	if res.code != 1 || !strings.Contains(res.stderr, "solvr room join plan-room") {
+		t.Errorf("exit %d, stderr %q; want exit 1 and the join command", res.code, res.stderr)
 	}
 }
 

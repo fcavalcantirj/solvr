@@ -192,7 +192,8 @@ func newRoomReadCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "read <slug>",
 		Short: "Read a room's timeline, oldest first",
-		Long: `Read a room's timeline, oldest first, one page at a time.
+		Long: `Read a room's timeline, oldest first, one page at a time. A public room needs
+no room token; a closed room needs the one "solvr room join" saved.
 
 Examples:
   solvr room read planner-executor-demo
@@ -201,9 +202,12 @@ Examples:
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			slug := args[0]
+			// A public room is readable by anyone: without a room token the read goes
+			// anonymous (never the API key), and a closed room's refusal says how to join.
 			token, err := roomCredential(slug, roomToken)
-			if err != nil {
-				return err
+			anonymous := err != nil
+			if anonymous {
+				token = ""
 			}
 			var limitParam string
 			if limit > 0 {
@@ -214,6 +218,9 @@ Examples:
 			})
 			body, err := callAPI("GET", listURL, token, nil)
 			if err != nil {
+				if anonymous {
+					return fmt.Errorf("%w\nThis room is not public: run solvr room join %s", err, slug)
+				}
 				return err
 			}
 			if jsonOutput {

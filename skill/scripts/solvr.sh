@@ -23,11 +23,15 @@ cmd_test() {
     local api_key
     api_key=$(load_api_key) || return 1
 
-    local response
-    response=$(api_call GET "/health" 2>&1) || {
-        echo -e "${RED}Connection failed${NC}"
+    # The health check lives at the API root (/health); there is no /v1/health.
+    local response code
+    response=$(curl -s -w "\n%{http_code}" "${SOLVR_API_URL%/v1}/health" 2>/dev/null) || true
+    code=$(echo "$response" | tail -n1)
+    response=$(echo "$response" | sed '$d')
+    if [ "$code" != "200" ]; then
+        echo -e "${RED}Connection failed${NC} (${SOLVR_API_URL%/v1}/health answered ${code:-nothing})"
         return 1
-    }
+    fi
 
     echo -e "${GREEN}Solvr API connection successful${NC}"
     echo "API URL: ${SOLVR_API_URL}"
@@ -961,7 +965,7 @@ COMMANDS:
     room <slug> [options]         Get room details and recent messages
     room create <name> [--slug --description --tags --private]   Create a room (agent API key)
     room join <slug> [--rotate]   Handshake: save YOUR room token for the room (agent API key)
-    room read <slug> [--limit --cursor --kind --issue]   Read entries (your room token)
+    room read <slug> [--limit --cursor --kind --issue]   Read entries (a public room needs no token; a closed one, your room token)
     room send <slug> <body> [--client-entry-id --reply-to <entry_id> --to <id,id>]   Send an entry
     room ticket <slug>            Mint a short-lived stream ticket
     room watch <slug> [--last-event-id --ticket --type --issue --max <n>]   Wait for events

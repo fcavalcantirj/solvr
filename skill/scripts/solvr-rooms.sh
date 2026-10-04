@@ -227,8 +227,12 @@ cmd_room_read() {
         esac
     done
 
-    local token
-    token=$(room_token_for "$slug" "$token_flag") || return 1
+    # A public room is readable by anyone: without a room token the read goes anonymous, and
+    # only a closed room (403) asks for a join.
+    local token="" auth="anonymous"
+    if token=$(room_token_for "$slug" "$token_flag" 2>/dev/null); then
+        auth="token:${token}"
+    fi
     local query=""
     [ -n "$limit" ] && query="${query}&limit=$(urlencode "$limit")"
     [ -n "$cursor" ] && query="${query}&cursor=$(urlencode "$cursor")"
@@ -237,7 +241,12 @@ cmd_room_read() {
     [ -n "$query" ] && query="?${query#&}"
 
     local response
-    response=$(solvr_request GET "/rooms/$(path_segment "$slug")/entries${query}" "token:${token}") || return 1
+    response=$(solvr_request GET "/rooms/$(path_segment "$slug")/entries${query}" "$auth") || {
+        if [ "$auth" = anonymous ]; then
+            echo -e "${RED}This room is not public: run solvr.sh room join ${slug}${NC}" >&2
+        fi
+        return 1
+    }
     if [ "$json_output" = true ]; then echo "$response"; return 0; fi
 
     echo "$response" | jq -r '

@@ -88,9 +88,9 @@ export function RoomActivitySection({ initial }: { initial: APIOverviewActivity 
       data-testid="overview-section-activity"
       className="px-4 sm:px-6 lg:px-12 py-12 lg:py-16 border-t border-border"
     >
-      <div className="mx-auto grid max-w-[78rem] gap-12 lg:grid-cols-12 lg:gap-16">
-        {/* What the stream is, and the controls that change it, beside it */}
-        <div className="min-w-0 lg:col-span-4">
+      <div className="mx-auto grid max-w-[78rem] gap-12 lg:grid-cols-12 lg:grid-rows-[auto_1fr] lg:gap-x-16 lg:gap-y-8">
+        {/* What the stream is, beside it on wide screens, above it on phones */}
+        <div className="min-w-0 lg:col-span-4 lg:col-start-1 lg:row-start-1">
           <SectionHeading
             heading={initial.heading}
             intro={initial.intro}
@@ -113,31 +113,10 @@ export function RoomActivitySection({ initial }: { initial: APIOverviewActivity 
               </button>
             ) : null}
           </div>
-
-          <p className="mt-6 max-w-[52ch] text-[0.8125rem] leading-relaxed text-muted-foreground">
-            {initial.refresh_note}
-          </p>
-
-          {hasMore ? (
-            <button
-              type="button"
-              onClick={loadMore}
-              disabled={loading}
-              className="mt-8 font-mono text-[11px] uppercase tracking-[0.18em] border border-foreground px-8 py-4 hover:bg-foreground hover:text-background transition-colors disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-foreground"
-            >
-              {initial.load_more_label}
-            </button>
-          ) : null}
-
-          {error ? (
-            <p role="alert" className="mt-6 text-sm text-muted-foreground">
-              {error}
-            </p>
-          ) : null}
         </div>
 
         {/* The stream itself: one block per room, one row per entry */}
-        <div className="min-w-0 lg:col-span-8">
+        <div className="min-w-0 lg:col-span-8 lg:col-start-5 lg:row-span-2 lg:row-start-1">
           {groups.length === 0 ? (
             <p className="border-t border-foreground pt-6 text-sm text-muted-foreground">{initial.empty_note}</p>
           ) : (
@@ -178,6 +157,30 @@ export function RoomActivitySection({ initial }: { initial: APIOverviewActivity 
               ))}
             </ul>
           )}
+        </div>
+
+        {/* How the list moves, and Load more: under the heading on wide screens, after the stream on phones */}
+        <div className="min-w-0 lg:col-span-4 lg:col-start-1 lg:row-start-2 lg:self-start">
+          <p className="max-w-[52ch] text-[0.8125rem] leading-relaxed text-muted-foreground">
+            {initial.refresh_note}
+          </p>
+
+          {hasMore ? (
+            <button
+              type="button"
+              onClick={loadMore}
+              disabled={loading}
+              className="mt-8 font-mono text-[11px] uppercase tracking-[0.18em] border border-foreground px-8 py-4 hover:bg-foreground hover:text-background transition-colors disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-foreground"
+            >
+              {initial.load_more_label}
+            </button>
+          ) : null}
+
+          {error ? (
+            <p role="alert" className="mt-6 text-sm text-muted-foreground">
+              {error}
+            </p>
+          ) : null}
         </div>
       </div>
     </section>

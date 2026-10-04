@@ -223,15 +223,21 @@ func (f *fakeLoopReader) Measure(_ context.Context, end time.Time, slugs []strin
 	return f.measures, f.err
 }
 
-func TestGrowthLoop_ReadsTheDemoAndEditorialExamples(t *testing.T) {
+type fakeFeaturedPool struct{ rooms []db.FeaturedRoom }
+
+func (f *fakeFeaturedPool) ListPublic(context.Context) ([]db.FeaturedRoom, error) {
+	return f.rooms, nil
+}
+
+func TestGrowthLoop_ReadsTheDemoAndFeaturedExamples(t *testing.T) {
 	t.Setenv("ADMIN_API_KEY", "op-key")
-	t.Setenv(previewSlugsEnv, "editorial-one, "+growth.PublicDemoRoomSlug)
+	featured := &fakeFeaturedPool{rooms: []db.FeaturedRoom{{Slug: "editorial-one"}, {Slug: growth.PublicDemoRoomSlug}}}
 	loop := &fakeLoopReader{measures: growth.LoopMeasures{FirstConnections: growth.FirstConnectionPoints{CreatedOnly: 2, Activated: 1}}}
 	share := &fakeGrowthShareReader{report: db.ShareAttributionReport{
 		ShareVisits: db.ShareVisitSplit{Total: 9, Human: 3}, AttributedRoomsActivated: 2, NewHumanActivations: 1,
 		HumanReturns28d: db.ShareReturns{Eligible: 1, Returned: 1},
 	}}
-	h := NewGrowthReportsHandler(GrowthReaders{Loop: loop, Share: share})
+	h := NewGrowthReportsHandler(GrowthReaders{Loop: loop, Share: share, Featured: featured})
 
 	rec := growthRequest(t, h.GetAcquisitionLoop, "/admin/growth/acquisition-loop?end=2026-10-01T00:00:00Z",
 		map[string]string{OperatorAccessHeader: "op-key"})

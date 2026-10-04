@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -341,11 +342,11 @@ func homepagePreview(t *testing.T, slug string) map[string]any {
 }
 
 // homepagePreviews reads the homepage overview from a fresh instance with slugs (comma
-// separated) as the editorial allow-list, returning the previews and the raw body.
+// separated) as the featured pool, returning the previews and the raw body.
 func homepagePreviews(t *testing.T, slugs string) ([]map[string]any, string) {
 	t.Helper()
-	t.Setenv("HOMEPAGE_PREVIEW_ROOM_SLUGS", slugs)
 	fresh := startRoomInstance(t, RoomRelayOptions{})
+	featureOnHomepage(t, fresh.pool, strings.Split(slugs, ",")...)
 	resp, err := http.Get(fresh.ts.URL + "/v1/homepage/overview")
 	require.NoError(t, err)
 	defer resp.Body.Close()

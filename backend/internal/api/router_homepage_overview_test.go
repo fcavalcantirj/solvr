@@ -118,14 +118,17 @@ type hpoPreview struct {
 		Role         string `json:"role"`
 		MessageLabel string `json:"message_label"`
 	} `json:"participants"`
-	Exchange []struct {
-		Author     string `json:"author"`
-		Excerpt    string `json:"excerpt"`
-		MessageURL string `json:"message_url"`
-	} `json:"exchange"`
-	MessageCount      int    `json:"message_count"`
-	LastActivityLabel string `json:"last_activity_label"`
-	SelectedReason    string `json:"selected_reason"`
+	Ask               *hpoQuote `json:"ask"`
+	Outcome           *hpoQuote `json:"outcome"`
+	MessageCount      int       `json:"message_count"`
+	LastActivityLabel string    `json:"last_activity_label"`
+}
+
+// hpoQuote is the ask or the outcome a featured room is quoted by.
+type hpoQuote struct {
+	Author     string `json:"author"`
+	Excerpt    string `json:"excerpt"`
+	MessageURL string `json:"message_url"`
 }
 
 type hpoOverview struct {
@@ -364,7 +367,6 @@ func hpoSlug(suffix string) string {
 
 func TestHomepageOverview_ServesEverySectionToALoggedOutVisitor(t *testing.T) {
 	previewSlug := hpoSlug("preview")
-	t.Setenv("HOMEPAGE_PREVIEW_ROOM_SLUGS", previewSlug)
 
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
@@ -376,6 +378,7 @@ func TestHomepageOverview_ServesEverySectionToALoggedOutVisitor(t *testing.T) {
 		"PLAN APPROVED. Keep the fixed minimax tie-break.",
 		"IMPLEMENTATION COMPLETE. 8 tests pass, 0 fail.",
 	})
+	featureOnHomepage(t, pool, previewSlug)
 	hpoInsertSearches(t, pool, "hpo postgres race condition", 3)
 	publicTitle := "hpo public reusable problem"
 	hpoInsertPostWithReply(t, pool, publicTitle, "public")
@@ -429,17 +432,19 @@ func TestHomepageOverview_ServesEverySectionToALoggedOutVisitor(t *testing.T) {
 	}
 	assert.True(t, found, "the seeded public room appears in the stream")
 
-	// --- editorial previews ---------------------------------------------
+	// --- featured rooms -------------------------------------------------
 	require.Len(t, ov.Previews.Rooms, 1)
 	preview := ov.Previews.Rooms[0]
 	assert.Equal(t, previewSlug, preview.Slug)
 	assert.Equal(t, "/rooms/"+previewSlug, preview.URL)
 	assert.Equal(t, "Two agents build a game", preview.Purpose, "purpose comes from the room")
 	assert.Len(t, preview.Participants, 2, "both agents are named")
-	require.Len(t, preview.Exchange, 2, "a preview shows a real back-and-forth")
-	assert.NotEqual(t, preview.Exchange[0].Author, preview.Exchange[1].Author)
+	require.NotNil(t, preview.Ask, "a featured room is quoted by what it set out to do")
+	require.NotNil(t, preview.Outcome, "and by what came out of it")
+	assert.Contains(t, preview.Ask.Excerpt, "PLANNER ONLINE", "the first message, when nothing is pinned")
+	assert.Contains(t, preview.Outcome.Excerpt, "IMPLEMENTATION COMPLETE", "the last message, when nothing is pinned")
+	assert.Contains(t, preview.Outcome.MessageURL, "/rooms/"+previewSlug+"#message-")
 	assert.NotEmpty(t, preview.LastActivityLabel)
-	assert.NotEmpty(t, preview.SelectedReason)
 	assert.NotEmpty(t, ov.Previews.Note)
 
 	// --- API usage ------------------------------------------------------
@@ -498,7 +503,6 @@ func TestHomepageOverview_NeverLeaksAPrivateRoom(t *testing.T) {
 	publicSlug := hpoSlug("pub")
 	privateSlug := hpoSlug("priv")
 	secret := "CONFIDENTIAL PRIVATE ROOM CONTENT that must never reach the homepage"
-	t.Setenv("HOMEPAGE_PREVIEW_ROOM_SLUGS", privateSlug)
 
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
@@ -510,6 +514,7 @@ func TestHomepageOverview_NeverLeaksAPrivateRoom(t *testing.T) {
 	hpoSeedRoom(t, pool, privateSlug, "Private Room", "closed", true, []string{
 		secret, secret + " again",
 	})
+	featureOnHomepage(t, pool, privateSlug)
 
 	_, raw := getHomepageOverview(t, ts.URL)
 
@@ -518,15 +523,14 @@ func TestHomepageOverview_NeverLeaksAPrivateRoom(t *testing.T) {
 	assert.NotContains(t, raw, "Private Room", "a private room's name must not appear")
 	assert.Contains(t, raw, publicSlug, "the public room still appears")
 
-	// Even when it is the ONLY configured preview, a private room yields no preview.
+	// Even when it is the ONLY featured room, a private room is never shown.
 	ov, _ := getHomepageOverview(t, ts.URL)
 	assert.Empty(t, ov.Previews.Rooms, "a private room is never previewed")
 }
 
-func TestHomepageOverview_PreviewsHonourTheAllowListAndIgnoreVolume(t *testing.T) {
+func TestHomepageOverview_PreviewsShowOnlyTheFeaturedPoolAndIgnoreVolume(t *testing.T) {
 	selectedSlug := hpoSlug("chosen")
 	loudSlug := hpoSlug("loud")
-	t.Setenv("HOMEPAGE_PREVIEW_ROOM_SLUGS", selectedSlug)
 
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
@@ -545,10 +549,11 @@ func TestHomepageOverview_PreviewsHonourTheAllowListAndIgnoreVolume(t *testing.T
 	}
 	loud := hpoSeedRoom(t, pool, loudSlug, "Very Busy Room", "lots of noise", false, loudMessages)
 	require.Equal(t, 40, loud.MessageCount)
+	featureOnHomepage(t, pool, selectedSlug)
 
 	ov, _ := getHomepageOverview(t, ts.URL)
 
-	require.Len(t, ov.Previews.Rooms, 1, "only the allow-listed room is previewed")
+	require.Len(t, ov.Previews.Rooms, 1, "only the featured room is shown")
 	assert.Equal(t, selectedSlug, ov.Previews.Rooms[0].Slug)
 	previewSlugs := []string{ov.Previews.Rooms[0].Slug}
 	assert.NotContains(t, previewSlugs, loudSlug,
@@ -557,7 +562,6 @@ func TestHomepageOverview_PreviewsHonourTheAllowListAndIgnoreVolume(t *testing.T
 
 func TestHomepageOverview_PreviewDisappearsWhenTheRoomGoesPrivate(t *testing.T) {
 	slug := hpoSlug("flip")
-	t.Setenv("HOMEPAGE_PREVIEW_ROOM_SLUGS", slug)
 
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
@@ -566,6 +570,7 @@ func TestHomepageOverview_PreviewDisappearsWhenTheRoomGoesPrivate(t *testing.T) 
 	room := hpoSeedRoom(t, pool, slug, "Flipping Room", "public for now", false, []string{
 		"planner speaks here", "executor answers here",
 	})
+	featureOnHomepage(t, pool, slug)
 
 	before, _ := getHomepageOverview(t, ts.URL)
 	require.Len(t, before.Previews.Rooms, 1)
@@ -584,7 +589,6 @@ func TestHomepageOverview_PreviewDisappearsWhenTheRoomGoesPrivate(t *testing.T) 
 
 func TestHomepageActivity_PaginatesBehindLoadMore(t *testing.T) {
 	slug := hpoSlug("page")
-	t.Setenv("HOMEPAGE_PREVIEW_ROOM_SLUGS", slug)
 
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
@@ -621,8 +625,6 @@ func TestHomepageActivity_PaginatesBehindLoadMore(t *testing.T) {
 }
 
 func TestHomepageOverview_RecentQueriesOnlyShowRepeatedTerms(t *testing.T) {
-	t.Setenv("HOMEPAGE_PREVIEW_ROOM_SLUGS", hpoSlug("none"))
-
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
 	defer hpoCleanup(t, pool)
@@ -649,8 +651,6 @@ func TestHomepageOverview_RecentQueriesOnlyShowRepeatedTerms(t *testing.T) {
 }
 
 func TestHomepageOverview_ReusablePostsExcludeFamilyPrivatePosts(t *testing.T) {
-	t.Setenv("HOMEPAGE_PREVIEW_ROOM_SLUGS", hpoSlug("none"))
-
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
 	defer hpoCleanup(t, pool)

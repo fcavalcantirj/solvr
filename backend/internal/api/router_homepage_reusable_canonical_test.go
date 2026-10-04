@@ -13,7 +13,6 @@ import (
 // verdict and a deleted reply do not, and a post without replies is not reusable. (The case of
 // a legacy approach that was never migrated is gone: the legacy tables are archived, 000138.)
 func TestHomepageOverviewReusablePosts_CountCanonicalReplies(t *testing.T) {
-	t.Setenv("HOMEPAGE_PREVIEW_ROOM_SLUGS", hpoSlug("none"))
 
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()

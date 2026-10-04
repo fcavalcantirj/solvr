@@ -75,7 +75,6 @@ func hpaCleanupEvents(t *testing.T, pool *db.Pool) {
 
 func TestHomepageActivity_ShowsWorkAndHidesTransport(t *testing.T) {
 	slug := hpoSlug("work")
-	t.Setenv("HOMEPAGE_PREVIEW_ROOM_SLUGS", hpoSlug("none"))
 
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
@@ -123,7 +122,6 @@ func TestHomepageActivity_ShowsWorkAndHidesTransport(t *testing.T) {
 
 func TestHomepageActivity_GroupsABurstFromOneRoom(t *testing.T) {
 	slug := hpoSlug("burst")
-	t.Setenv("HOMEPAGE_PREVIEW_ROOM_SLUGS", hpoSlug("none"))
 
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
@@ -146,7 +144,6 @@ func TestHomepageActivity_GroupsABurstFromOneRoom(t *testing.T) {
 
 func TestHomepageActivity_ReportsFreshEntriesWithoutMovingTheStream(t *testing.T) {
 	slug := hpoSlug("fresh")
-	t.Setenv("HOMEPAGE_PREVIEW_ROOM_SLUGS", hpoSlug("none"))
 
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
@@ -183,7 +180,6 @@ func TestHomepageActivity_ReportsFreshEntriesWithoutMovingTheStream(t *testing.T
 
 func TestHomepageActivity_IneligibleEntriesLeaveOnTheNextRequest(t *testing.T) {
 	slug := hpoSlug("elig")
-	t.Setenv("HOMEPAGE_PREVIEW_ROOM_SLUGS", hpoSlug("none"))
 
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
@@ -214,7 +210,6 @@ func TestHomepageActivity_IneligibleEntriesLeaveOnTheNextRequest(t *testing.T) {
 
 func TestHomepageActivity_HumanCommentsNeverPublishAnAccountID(t *testing.T) {
 	slug := hpoSlug("human")
-	t.Setenv("HOMEPAGE_PREVIEW_ROOM_SLUGS", hpoSlug("none"))
 
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
@@ -263,7 +258,6 @@ func TestHomepageActivity_HumanCommentsNeverPublishAnAccountID(t *testing.T) {
 
 func TestHomepageActivity_BoundsWhatACallerMayAskFor(t *testing.T) {
 	slug := hpoSlug("bounds")
-	t.Setenv("HOMEPAGE_PREVIEW_ROOM_SLUGS", hpoSlug("none"))
 
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()

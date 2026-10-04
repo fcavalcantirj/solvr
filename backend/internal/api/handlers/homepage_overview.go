@@ -142,7 +142,7 @@ type HomepageOverview struct {
 	HeroNumbers []OverviewHeroNumber `json:"hero_numbers"`
 	Rooms       OverviewRooms        `json:"rooms"`
 	Activity    OverviewActivity     `json:"activity"`
-	Previews    OverviewPreviews     `json:"previews"`
+	Previews    *OverviewPreviews    `json:"previews,omitempty"`
 	APIUsage    OverviewAPIUsage     `json:"api_usage"`
 	Search      OverviewSearch       `json:"search"`
 	Community   OverviewCommunity    `json:"community"`
@@ -372,8 +372,10 @@ type HomepageOverviewHandler struct {
 	roomRepo   *db.RoomRepository
 	statsRepo  OverviewStatsReader
 	searchRepo *db.SearchAnalyticsRepository
-	// previewSlugs is the editorial allow-list, in display order.
-	previewSlugs []string
+	// featuredRepo is the operator's featured pool (SPEC Part 26, "Featured rooms").
+	featuredRepo *db.FeaturedRoomRepository
+	// now reads the clock the daily rotation uses; nil means time.Now.
+	now func() time.Time
 	// cache is the bounded 30-second server-side cache for the consolidated
 	// endpoint. May be nil (no caching).
 	cache *OverviewCache
@@ -385,15 +387,23 @@ func NewHomepageOverviewHandler(
 	roomRepo *db.RoomRepository,
 	statsRepo OverviewStatsReader,
 	searchRepo *db.SearchAnalyticsRepository,
-	previewSlugs []string,
+	featuredRepo *db.FeaturedRoomRepository,
 ) *HomepageOverviewHandler {
 	return &HomepageOverviewHandler{
 		homeRepo:     homeRepo,
 		roomRepo:     roomRepo,
 		statsRepo:    statsRepo,
 		searchRepo:   searchRepo,
-		previewSlugs: previewSlugs,
+		featuredRepo: featuredRepo,
 	}
+}
+
+// clock is the time the featured rotation is read at.
+func (h *HomepageOverviewHandler) clock() time.Time {
+	if h.now != nil {
+		return h.now()
+	}
+	return time.Now()
 }
 
 // SetOverviewCache attaches a bounded server-side cache so the consolidated
@@ -547,7 +557,7 @@ func (h *HomepageOverviewHandler) buildOverview(ctx Context, window db.RoomStats
 		HeroNumbers: buildOverviewHeroNumbers(totals, pulse, roomsRead, searchPulse, searchRead),
 		Rooms:       buildOverviewRooms(pulse, recentRooms),
 		Activity:    buildOverviewActivity(activityRows, overviewActivityDefaultLimit, 0, 0, time.Now()),
-		Previews:    buildOverviewPreviews(h.loadPreviewSources(ctx), h.previewSlugs),
+		Previews:    buildOverviewPreviews(h.loadPreviewSources(ctx)),
 		APIUsage:    buildOverviewAPIUsage(usage),
 		Search:      buildOverviewSearch(searchPulse),
 		Community:   buildOverviewCommunity(totals, stats),
@@ -696,7 +706,7 @@ func (h *HomepageOverviewHandler) GetOverview(w http.ResponseWriter, r *http.Req
 		HeroNumbers: buildOverviewHeroNumbers(totals, pulse, roomsRead, searchPulse, searchRead),
 		Rooms:       buildOverviewRooms(pulse, recentRooms),
 		Activity:    buildOverviewActivity(activityRows, overviewActivityDefaultLimit, 0, 0, time.Now()),
-		Previews:    buildOverviewPreviews(h.loadPreviewSources(ctx), h.previewSlugs),
+		Previews:    buildOverviewPreviews(h.loadPreviewSources(ctx)),
 		APIUsage:    buildOverviewAPIUsage(usage),
 		Search:      buildOverviewSearch(searchPulse),
 		Community:   buildOverviewCommunity(totals, stats),

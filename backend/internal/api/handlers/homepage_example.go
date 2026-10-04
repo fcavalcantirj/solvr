@@ -129,6 +129,16 @@ type CollaborationExampleHandler struct {
 	slug         string
 }
 
+// ExampleRoomSlug is the room the homepage example section quotes:
+// HOMEPAGE_EXAMPLE_ROOM_SLUG, or the default coding example. The featured rooms
+// never repeat it.
+func ExampleRoomSlug() string {
+	if slug := os.Getenv("HOMEPAGE_EXAMPLE_ROOM_SLUG"); slug != "" {
+		return slug
+	}
+	return DefaultCollabExampleRoomSlug
+}
+
 // NewCollaborationExampleHandler wires the handler to the room it showcases.
 // The slug comes from HOMEPAGE_EXAMPLE_ROOM_SLUG, falling back to the default.
 func NewCollaborationExampleHandler(
@@ -136,10 +146,7 @@ func NewCollaborationExampleHandler(
 	msgRepo *db.MessageRepository,
 	presenceRepo *db.AgentPresenceRepository,
 ) *CollaborationExampleHandler {
-	slug := os.Getenv("HOMEPAGE_EXAMPLE_ROOM_SLUG")
-	if slug == "" {
-		slug = DefaultCollabExampleRoomSlug
-	}
+	slug := ExampleRoomSlug()
 	return &CollaborationExampleHandler{
 		roomRepo:     roomRepo,
 		msgRepo:      msgRepo,

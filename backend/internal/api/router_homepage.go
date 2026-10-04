@@ -48,7 +48,7 @@ func mountHomepageRoutes(r chi.Router, pool *db.Pool) {
 		db.NewRoomRepository(pool),
 		db.NewCanonicalStatsRepository(pool),
 		db.NewSearchAnalyticsRepository(pool),
-		handlers.PreviewSlugsFromEnv(),
+		db.NewFeaturedRoomRepository(pool),
 	)
 	overviewHandler.SetOverviewCache(handlers.NewOverviewCache())
 	handlers.SetOverviewCacheInvalidator(overviewHandler.InvalidateCache)

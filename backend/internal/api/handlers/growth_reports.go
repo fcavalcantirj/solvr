@@ -49,6 +49,11 @@ type ShareReader interface {
 	Measure(ctx context.Context, from, to, now time.Time) (db.ShareAttributionReport, error)
 }
 
+// FeaturedPoolReader lists the homepage's featured rooms (db.FeaturedRoomRepository).
+type FeaturedPoolReader interface {
+	ListPublic(ctx context.Context) ([]db.FeaturedRoom, error)
+}
+
 // GrowthReaders are the measurements the growth reports read.
 type GrowthReaders struct {
 	Participants ParticipantReader
@@ -56,6 +61,9 @@ type GrowthReaders struct {
 	Model        ModelReader
 	Loop         LoopReader
 	Share        ShareReader
+	// Featured names the homepage's featured rooms as example rooms; nil means
+	// the public demo room alone.
+	Featured FeaturedPoolReader
 }
 
 // GrowthReportsHandler serves the operator growth reports.
@@ -173,7 +181,7 @@ func (h *GrowthReportsHandler) GetAcquisitionLoop(w http.ResponseWriter, r *http
 	if !ok {
 		return
 	}
-	m, err := h.readers.Loop.Measure(r.Context(), end, exampleRoomSlugs())
+	m, err := h.readers.Loop.Measure(r.Context(), end, h.exampleRoomSlugs(r.Context()))
 	if err == nil {
 		m.Source, err = h.readSource(r.Context(), end.AddDate(0, 0, -growth.ParticipantWindowDays), end)
 	}
@@ -185,14 +193,22 @@ func (h *GrowthReportsHandler) GetAcquisitionLoop(w http.ResponseWriter, r *http
 	writeActivationJSON(w, http.StatusOK, map[string]any{"data": growth.BuildLoopReport(m)})
 }
 
-// exampleRoomSlugs is the public demo room followed by the editorial preview rooms, each once.
-func exampleRoomSlugs() []string {
+// exampleRoomSlugs is the public demo room followed by the homepage's featured rooms, each once.
+func (h *GrowthReportsHandler) exampleRoomSlugs(ctx context.Context) []string {
 	slugs := []string{growth.PublicDemoRoomSlug}
+	if h.readers.Featured == nil {
+		return slugs
+	}
+	pool, err := h.readers.Featured.ListPublic(ctx)
+	if err != nil {
+		slog.Error("acquisition loop: featured rooms failed", "error", err)
+		return slugs
+	}
 	seen := map[string]bool{growth.PublicDemoRoomSlug: true}
-	for _, s := range PreviewSlugsFromEnv() {
-		if !seen[s] {
-			seen[s] = true
-			slugs = append(slugs, s)
+	for _, room := range pool {
+		if !seen[room.Slug] {
+			seen[room.Slug] = true
+			slugs = append(slugs, room.Slug)
 		}
 	}
 	return slugs

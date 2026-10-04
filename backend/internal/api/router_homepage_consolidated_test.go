@@ -128,7 +128,6 @@ func TestOverviewConsolidated_PartialErrorsIsAnEmptyArrayNotNull(t *testing.T) {
 }
 
 func TestOverviewConsolidated_EnvelopeShape(t *testing.T) {
-	t.Setenv("HOMEPAGE_PREVIEW_ROOM_SLUGS", hpoSlug("env"))
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
 	defer hpoCleanup(t, pool)
@@ -174,7 +173,6 @@ func TestOverviewConsolidated_EnvelopeShape(t *testing.T) {
 }
 
 func TestOverviewConsolidated_WindowValidation(t *testing.T) {
-	t.Setenv("HOMEPAGE_PREVIEW_ROOM_SLUGS", hpoSlug("win"))
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
 	defer hpoCleanup(t, pool)
@@ -204,7 +202,6 @@ func TestOverviewConsolidated_WindowValidation(t *testing.T) {
 }
 
 func TestOverviewConsolidated_CacheControl(t *testing.T) {
-	t.Setenv("HOMEPAGE_PREVIEW_ROOM_SLUGS", hpoSlug("cache"))
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
 	defer hpoCleanup(t, pool)
@@ -222,16 +219,16 @@ func TestOverviewConsolidated_CacheControl(t *testing.T) {
 
 func TestOverviewConsolidated_NeverLeaksAPrivateRoom(t *testing.T) {
 	privateSlug := hpoSlug("priv")
-	t.Setenv("HOMEPAGE_PREVIEW_ROOM_SLUGS", privateSlug)
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
 	defer hpoCleanup(t, pool)
 
 	secret := "CONFIDENTIAL PRIVATE ROOM CONTENT that must never reach the homepage"
-	// The private room is the ONLY configured preview.
+	// The private room is the ONLY featured room.
 	hpoSeedRoom(t, pool, privateSlug, "Private Room", "closed", true, []string{
 		secret, secret + " again",
 	})
+	featureOnHomepage(t, pool, privateSlug)
 
 	_, raw := getConsolidatedOverview(t, ts.URL)
 
@@ -241,7 +238,6 @@ func TestOverviewConsolidated_NeverLeaksAPrivateRoom(t *testing.T) {
 }
 
 func TestOverviewConsolidated_ActivityAliasRouted(t *testing.T) {
-	t.Setenv("HOMEPAGE_PREVIEW_ROOM_SLUGS", hpoSlug("act"))
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
 	defer hpoCleanup(t, pool)
@@ -260,7 +256,6 @@ func TestOverviewConsolidated_ActivityAliasRouted(t *testing.T) {
 func TestOverviewConsolidated_PartialErrorDegradation(t *testing.T) {
 	// A failing search section must not break the room data. The endpoint still
 	// returns 200 with partial_errors populated.
-	t.Setenv("HOMEPAGE_PREVIEW_ROOM_SLUGS", hpoSlug("degrade"))
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
 	defer hpoCleanup(t, pool)
@@ -277,7 +272,6 @@ func TestOverviewConsolidated_PartialErrorDegradation(t *testing.T) {
 }
 
 func TestOverviewConsolidated_CacheInvalidatedOnVisibilityChange(t *testing.T) {
-	t.Setenv("HOMEPAGE_PREVIEW_ROOM_SLUGS", hpoSlug("inv"))
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
 	defer hpoCleanup(t, pool)

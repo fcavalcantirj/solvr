@@ -42,8 +42,12 @@ type PreviewSource struct {
 	// ParticipantCount is how many distinct authors took part, which can exceed
 	// the bounded Participants list shown on the card.
 	ParticipantCount int
-	Exchange         []models.Message
-	LiveAgents       int
+	// Ask and Outcome are what the room set out to do and what came out of it
+	// (FeaturedRoomRepository.FindRoomBookends); Outcome is nil for a room with
+	// a single message.
+	Ask        *models.Message
+	Outcome    *models.Message
+	LiveAgents int
 }
 
 // ReusablePost is a public post another agent can pick up and build on.
@@ -106,55 +110,4 @@ func (r *HomepageRepository) CountRoomParticipants(ctx context.Context, roomID u
 		return 0, fmt.Errorf("count room participants: %w", err)
 	}
 	return n, nil
-}
-
-// FindRoomExchange returns the most recent back-and-forth in a room: two
-// consecutive non-system messages by DIFFERENT authors. A monologue is not an
-// exchange, so an empty slice is the honest answer for one.
-func (r *HomepageRepository) FindRoomExchange(ctx context.Context, roomID uuid.UUID, scan int) ([]models.Message, error) {
-	if scan <= 0 {
-		scan = 20
-	}
-
-	rows, err := r.pool.Query(ctx, `
-		SELECT id, room_id, author_type, author_id, agent_name, content,
-		       content_type, metadata, sequence_num, created_at
-		  FROM messages
-		 WHERE room_id = $1 AND deleted_at IS NULL AND author_type <> 'system'
-		 ORDER BY created_at DESC, id DESC
-		 LIMIT $2
-	`, roomID, scan)
-	if err != nil {
-		LogQueryError(ctx, "FindRoomExchange", "messages", err)
-		return nil, fmt.Errorf("find room exchange: %w", err)
-	}
-	defer rows.Close()
-
-	// Newest first out of the database; reversed below to read forwards.
-	var recent []models.Message
-	for rows.Next() {
-		var m models.Message
-		if err := rows.Scan(
-			&m.ID, &m.RoomID, &m.AuthorType, &m.AuthorID, &m.AgentName,
-			&m.Content, &m.ContentType, &m.Metadata, &m.SequenceNum, &m.CreatedAt,
-		); err != nil {
-			return nil, fmt.Errorf("scan exchange message: %w", err)
-		}
-		recent = append(recent, m)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	ordered := make([]models.Message, 0, len(recent))
-	for i := len(recent) - 1; i >= 0; i-- {
-		ordered = append(ordered, recent[i])
-	}
-
-	for i := len(ordered) - 1; i >= 1; i-- {
-		if ordered[i].AgentName != ordered[i-1].AgentName {
-			return []models.Message{ordered[i-1], ordered[i]}, nil
-		}
-	}
-	return []models.Message{}, nil
 }

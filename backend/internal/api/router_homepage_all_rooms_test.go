@@ -328,12 +328,12 @@ func decodeData(t *testing.T, body string, into any) {
 func TestHomepageStatistics_CountEveryRoomAndShowOnlyPublicOnes(t *testing.T) {
 	scratch := newHomepageScratchURL(t)
 	t.Setenv("DATABASE_URL", scratch)
-	// Both rooms are allow-listed for a preview: only the public one may appear.
-	t.Setenv("HOMEPAGE_PREVIEW_ROOM_SLUGS", "test-hpa-hideout,test-hpa-public")
+	// Both rooms are featured: only the public one may appear.
 
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
 	f := seedHomepageAllRooms(t, pool)
+	featureOnHomepage(t, pool, "test-hpa-hideout", "test-hpa-public")
 
 	endpoints := map[string]string{
 		"overview":            hpaGet(t, ts.URL, "/v1/homepage/overview?window=24h"),
@@ -421,11 +421,11 @@ func TestHomepageStatistics_CountEveryRoomAndShowOnlyPublicOnes(t *testing.T) {
 func TestHomepageStatistics_PrivateActivityIsCountedButNeverListed(t *testing.T) {
 	scratch := newHomepageScratchURL(t)
 	t.Setenv("DATABASE_URL", scratch)
-	t.Setenv("HOMEPAGE_PREVIEW_ROOM_SLUGS", "test-hpa-hideout,test-hpa-public")
 
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
 	f := seedHomepageAllRooms(t, pool)
+	featureOnHomepage(t, pool, "test-hpa-hideout", "test-hpa-public")
 
 	readRooms := func(window string) (hpaRooms, string) {
 		body := hpaGet(t, ts.URL, "/v1/homepage/rooms?window="+window)

@@ -64,11 +64,11 @@ func waitOverviewHides(t *testing.T, inst *roomInstance, slug string, d time.Dur
 
 func TestRoomOverview_VisibilityChangeOnOneInstanceClearsEveryInstanceSnapshot(t *testing.T) {
 	slug := hpoSlug("mi")
-	t.Setenv("HOMEPAGE_PREVIEW_ROOM_SLUGS", slug)
 	a := startRoomInstance(t, RoomRelayOptions{SweepInterval: -1})
 	b := startRoomInstance(t, RoomRelayOptions{SweepInterval: -1})
 	t.Cleanup(func() { hpoCleanup(t, a.pool) })
 	ownerJWT := overviewRoom(t, a, slug)
+	featureOnHomepage(t, a.pool, slug)
 
 	require.True(t, overviewShows(t, a, slug), "A previews the public room")
 	require.True(t, overviewShows(t, b, slug), "B previews the public room (now cached on B)")
@@ -83,12 +83,12 @@ func TestRoomOverview_VisibilityChangeOnOneInstanceClearsEveryInstanceSnapshot(t
 
 func TestRoomOverview_InvalidationLostDuringListenerGapIsCaughtUpOnReconnect(t *testing.T) {
 	slug := hpoSlug("mig")
-	t.Setenv("HOMEPAGE_PREVIEW_ROOM_SLUGS", slug)
 	opts := RoomRelayOptions{ReconnectBackoff: 1500 * time.Millisecond, SweepInterval: -1}
 	a := startRoomInstance(t, opts)
 	b := startRoomInstance(t, opts)
 	t.Cleanup(func() { hpoCleanup(t, a.pool) })
 	ownerJWT := overviewRoom(t, a, slug)
+	featureOnHomepage(t, a.pool, slug)
 	require.True(t, overviewShows(t, b, slug), "B previews the public room (now cached on B)")
 
 	var killed int

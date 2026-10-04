@@ -522,6 +522,9 @@ var RouteFamilies = []RouteFamily{
 			"GET /admin/return-usage",
 			"GET /admin/ops/slo",
 			"GET /admin/seo/baseline",
+			"PUT /admin/rooms/{slug}/featured",
+			"DELETE /admin/rooms/{slug}/featured",
+			"GET /admin/rooms/featured",
 		},
 	},
 }

@@ -37,10 +37,10 @@ func getHomepage(t *testing.T, url string) (string, string) {
 
 func TestHomepageRoomSurfaces_AreRevalidatedAndDropARoomTheMomentItTurnsPrivate(t *testing.T) {
 	slug := hpoSlug("cp")
-	t.Setenv("HOMEPAGE_PREVIEW_ROOM_SLUGS", slug)
 	a := startRoomInstance(t, RoomRelayOptions{SweepInterval: -1})
 	t.Cleanup(func() { hpoCleanup(t, a.pool) })
 	ownerJWT := overviewRoom(t, a, slug)
+	featureOnHomepage(t, a.pool, slug)
 
 	for _, path := range homepageRoomPaths {
 		cacheControl, _ := getHomepage(t, a.ts.URL+path)

@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -10,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/fcavalcantirj/solvr/internal/db"
-	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
 // The homepage overview is built entirely by the API: every number carries the
@@ -18,91 +16,6 @@ import (
 // excerpt is cut server-side, every relative time is worded server-side, and
 // the sparkline arrives pre-normalised so the browser only multiplies by a
 // height. These tests pin that contract on the pure builders — no database.
-
-func TestOverviewPreviews_OnlyTheAllowListIsShownAndItIsNotRankedByVolume(t *testing.T) {
-	// Step 4: prefer the supplied coding example and owner-selected rooms. A
-	// loud room that nobody selected must never be promoted by message volume.
-	loud := db.PreviewSource{
-		Room: models.Room{
-			Slug:         "someones-personal-diary",
-			DisplayName:  "Personal diary",
-			MessageCount: 5000,
-			LastActiveAt: time.Now(),
-		},
-	}
-	selected := db.PreviewSource{
-		Room: models.Room{
-			Slug:         "tictactoe-human-vs-computer-20260920",
-			DisplayName:  "Tic Tac Toe",
-			Description:  strPtr("Two agents build a game"),
-			MessageCount: 9,
-			LastActiveAt: time.Now().Add(-25 * time.Hour),
-		},
-		Participants: []db.RoomParticipant{
-			{Name: "planner", AuthorType: "agent", MessageCount: 5},
-			{Name: "executor", AuthorType: "agent", MessageCount: 4},
-		},
-		Exchange: []models.Message{
-			{ID: 1, AuthorType: "agent", AgentName: "planner", Content: "do the thing", SequenceNum: intPtr(4)},
-			{ID: 2, AuthorType: "agent", AgentName: "executor", Content: "done, here is the evidence", SequenceNum: intPtr(5)},
-		},
-	}
-
-	section := buildOverviewPreviews([]db.PreviewSource{selected}, []string{selected.Room.Slug})
-
-	require.Len(t, section.Rooms, 1)
-	p := section.Rooms[0]
-	assert.Equal(t, "tictactoe-human-vs-computer-20260920", p.Slug)
-	assert.Equal(t, "/rooms/tictactoe-human-vs-computer-20260920", p.URL)
-	assert.Equal(t, "Two agents build a game", p.Purpose)
-	assert.Len(t, p.Participants, 2)
-	assert.Len(t, p.Exchange, 2)
-	assert.NotEmpty(t, p.LastActivityLabel)
-	assert.NotEmpty(t, p.SelectedReason, "the page says why this room is here")
-	assert.NotEmpty(t, section.Note, "the section states it is editorially selected")
-
-	// The loud room is simply not in the allow-list, so it cannot appear.
-	assert.NotContains(t, previewSlugs(buildOverviewPreviews([]db.PreviewSource{selected}, []string{selected.Room.Slug})), loud.Room.Slug)
-}
-
-func TestOverviewPreviews_CapsAtThree(t *testing.T) {
-	sources := make([]db.PreviewSource, 0, 5)
-	slugs := make([]string, 0, 5)
-	for _, s := range []string{"room-a", "room-b", "room-c", "room-d", "room-e"} {
-		sources = append(sources, db.PreviewSource{Room: models.Room{
-			Slug: s, DisplayName: s, LastActiveAt: time.Now(),
-		}})
-		slugs = append(slugs, s)
-	}
-
-	section := buildOverviewPreviews(sources, slugs)
-
-	assert.Len(t, section.Rooms, maxOverviewPreviews)
-	assert.Equal(t, 3, maxOverviewPreviews)
-}
-
-func TestOverviewPreviews_KeepsTheConfiguredOrderWithTheCodingExampleFirst(t *testing.T) {
-	sources := []db.PreviewSource{
-		{Room: models.Room{Slug: "room-b", DisplayName: "B", LastActiveAt: time.Now()}},
-		{Room: models.Room{Slug: DefaultCollabExampleRoomSlug, DisplayName: "Example", LastActiveAt: time.Now()}},
-	}
-
-	section := buildOverviewPreviews(sources, []string{DefaultCollabExampleRoomSlug, "room-b"})
-
-	require.Len(t, section.Rooms, 2)
-	assert.Equal(t, DefaultCollabExampleRoomSlug, section.Rooms[0].Slug)
-	assert.Equal(t, "room-b", section.Rooms[1].Slug)
-}
-
-func TestOverviewPreviewSlugs_DefaultsToTheCodingExample(t *testing.T) {
-	assert.Equal(t, []string{DefaultCollabExampleRoomSlug}, parsePreviewSlugs(""))
-	assert.Equal(t,
-		[]string{"a", "b"},
-		parsePreviewSlugs(" a , b ,, "),
-		"blank entries are dropped, whitespace trimmed",
-	)
-	assert.Len(t, parsePreviewSlugs("a,b,c,d,e"), maxOverviewPreviews, "never asks for more than it shows")
-}
 
 // The search section moved to homepage_search.go when it grew a window
 // selector, a chart and its own publishing policy. Its tests live beside it in
@@ -284,14 +197,6 @@ func TestOverviewClosing_EndsOnConnectAgentsNow(t *testing.T) {
 	assert.NotEmpty(t, closing.Heading)
 }
 
-func previewSlugs(section OverviewPreviews) []string {
-	out := make([]string, 0, len(section.Rooms))
-	for _, r := range section.Rooms {
-		out = append(out, r.Slug)
-	}
-	return out
-}
-
 // ---- meta / stale-label coverage (added by task 16) ----
 
 // These tests pin the Task 16 additions to the overview meta and room section:
@@ -328,36 +233,4 @@ func TestBuildStaleLabel_SingularAndPlural(t *testing.T) {
 
 	many := buildStaleLabel([]string{"search unavailable", "activity unavailable"})
 	assert.Contains(t, many, "2 statistics sections")
-}
-
-func TestOverviewPreviews_StateTheRealParticipantCountBeyondTheShownNames(t *testing.T) {
-	names := make([]db.RoomParticipant, 0, 6)
-	for i := 0; i < 6; i++ {
-		names = append(names, db.RoomParticipant{Name: fmt.Sprintf("agent-%d", i), AuthorType: "agent", MessageCount: 1})
-	}
-	big := db.PreviewSource{
-		Room:             models.Room{Slug: "twenty-agents", DisplayName: "Twenty agents", LastActiveAt: time.Now()},
-		Participants:     names,
-		ParticipantCount: 20,
-	}
-	pair := db.PreviewSource{
-		Room:             models.Room{Slug: "two-agents", DisplayName: "Two agents", LastActiveAt: time.Now()},
-		Participants:     names[:2],
-		ParticipantCount: 2,
-	}
-	oneMore := db.PreviewSource{
-		Room:             models.Room{Slug: "seven-agents", DisplayName: "Seven agents", LastActiveAt: time.Now()},
-		Participants:     names,
-		ParticipantCount: 7,
-	}
-
-	section := buildOverviewPreviews([]db.PreviewSource{big, pair, oneMore}, []string{"twenty-agents", "two-agents", "seven-agents"})
-
-	require.Len(t, section.Rooms, 3)
-	assert.Len(t, section.Rooms[0].Participants, 6, "the card still lists a bounded set of names")
-	assert.Equal(t, 20, section.Rooms[0].ParticipantCount, "but states how many took part")
-	assert.Equal(t, "+14 more participants", section.Rooms[0].MoreParticipantsLabel)
-	assert.Equal(t, 2, section.Rooms[1].ParticipantCount)
-	assert.Empty(t, section.Rooms[1].MoreParticipantsLabel, "nothing hidden, nothing to say")
-	assert.Equal(t, "+1 more participant", section.Rooms[2].MoreParticipantsLabel)
 }

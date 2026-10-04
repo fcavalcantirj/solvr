@@ -153,6 +153,7 @@ func NewRouter(pool *db.Pool, hubMgr *hub.HubManager, registry *hub.PresenceRegi
 	mountGrowthReportRoutes(r, pool, operatorOnly)
 	mountSEOReportRoutes(r, pool, operatorOnly)
 	mountGrowthPlanningRoutes(r, pool, operatorOnly)
+	mountFeaturedRoomsAdminRoutes(r, pool, operatorOnly)
 	mountOpsRoutes(r, pool, operatorOnly)
 	r.With(operatorOnly).Get("/admin/email/history", adminHandler.ListBroadcasts)
 

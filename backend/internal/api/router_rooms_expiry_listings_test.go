@@ -35,10 +35,10 @@ func getBody(t *testing.T, url, bearer string) string {
 
 func TestRoomExpiry_ExpiredRoomLeavesEveryListingBeforeTheReaper(t *testing.T) {
 	slug := hpoSlug("exp")
-	t.Setenv("HOMEPAGE_PREVIEW_ROOM_SLUGS", slug)
 	a := startRoomInstance(t, RoomRelayOptions{SweepInterval: -1})
 	t.Cleanup(func() { hpoCleanup(t, a.pool) })
 	ownerJWT := overviewRoom(t, a, slug)
+	featureOnHomepage(t, a.pool, slug)
 
 	// A real public post: a post's related-rooms list answers 404 for a post that does not
 	// exist, exactly as GET /v1/posts/{id} does.

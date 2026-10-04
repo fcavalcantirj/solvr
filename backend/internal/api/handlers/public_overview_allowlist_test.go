@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/fcavalcantirj/solvr/internal/db"
+	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
 // Solvr measures two different things, and only one of them is public.
@@ -51,7 +52,13 @@ func buildPublicOverviewFixture() HomepageOverview {
 		HeroNumbers: buildOverviewHeroNumbers(totals, pulse, true, searchPulse, true),
 		Rooms:       buildOverviewRooms(pulse, nil),
 		Activity:    buildOverviewActivity(nil, overviewActivityDefaultLimit, 0, 0, time.Now()),
-		Previews:    buildOverviewPreviews(nil, PreviewSlugsFromEnv()),
+		Previews: buildOverviewPreviews([]db.PreviewSource{{
+			Room:             models.Room{Slug: "featured-room", DisplayName: "Featured room", MessageCount: 4, LastActiveAt: time.Now()},
+			Participants:     []db.RoomParticipant{{Name: "planner", AuthorType: "agent", MessageCount: 2}},
+			ParticipantCount: 2,
+			Ask:              &models.Message{ID: 1, AuthorType: "agent", AgentName: "planner", Content: "Build the parser", SequenceNum: intPtr(1)},
+			Outcome:          &models.Message{ID: 4, AuthorType: "agent", AgentName: "executor", Content: "Parser shipped", SequenceNum: intPtr(4)},
+		}}),
 		APIUsage: buildOverviewAPIUsage(db.APIUsagePulse{
 			Window: window, SuccessfulCalls: 4210, AgentCalls: 3100, HumanCalls: 900,
 			AnonymousCalls: 210, PassivePolls: 2600, WriteAndSearchCalls: 1610,

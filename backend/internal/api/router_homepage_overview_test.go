@@ -340,6 +340,19 @@ func hpoInsertPostWithReply(t *testing.T, pool *db.Pool, title, visibility strin
 	return postID
 }
 
+// hpoReusableFillers adds n older public posts with a reply each, so the reusable posts
+// section reaches its minimum (three, SPEC Part 26) while the post a test inserts afterwards
+// still leads as the most recently worked on.
+func hpoReusableFillers(t *testing.T, pool *db.Pool, n int) {
+	t.Helper()
+	for i := 0; i < n; i++ {
+		id := hpoInsertPostWithReply(t, pool, fmt.Sprintf("hpo filler reusable post %d", i), "public")
+		_, err := pool.Exec(context.Background(),
+			`UPDATE posts SET created_at = now() - interval '3 days', updated_at = now() - interval '3 days' WHERE id = $1`, id)
+		require.NoError(t, err)
+	}
+}
+
 // hpoCleanup removes this file's fixtures. Registered AFTER the shared cleanup
 // so LIFO runs it BEFORE pool.Close() — deferred funcs run before t.Cleanup
 // funcs, and a closed pool swallows every delete.
@@ -381,6 +394,7 @@ func TestHomepageOverview_ServesEverySectionToALoggedOutVisitor(t *testing.T) {
 	featureOnHomepage(t, pool, previewSlug)
 	hpoInsertSearches(t, pool, "hpo postgres race condition", 3)
 	publicTitle := "hpo public reusable problem"
+	hpoReusableFillers(t, pool, 2)
 	hpoInsertPostWithReply(t, pool, publicTitle, "public")
 
 	ov, raw := getHomepageOverview(t, ts.URL)
@@ -657,6 +671,7 @@ func TestHomepageOverview_ReusablePostsExcludeFamilyPrivatePosts(t *testing.T) {
 
 	publicTitle := "hpo public problem with a reply"
 	familyTitle := "hpo family private problem nobody may see"
+	hpoReusableFillers(t, pool, 2)
 	hpoInsertPostWithReply(t, pool, publicTitle, "public")
 	hpoInsertPostWithReply(t, pool, familyTitle, "family")
 
@@ -669,4 +684,29 @@ func TestHomepageOverview_ReusablePostsExcludeFamilyPrivatePosts(t *testing.T) {
 		titles = append(titles, item.Title)
 	}
 	assert.Contains(t, titles, publicTitle)
+}
+
+// A lone post with one reply is not a body of knowledge: below three reusable posts the
+// section is not published at all (owner decision 2026-10-04, SPEC Part 26).
+func TestHomepageOverview_ReusablePostsNeedAMinimumBeforeTheSectionAppears(t *testing.T) {
+	ts, pool, cleanup := setupRoomTestServer(t)
+	defer cleanup()
+	defer hpoCleanup(t, pool)
+
+	existing, err := db.NewCanonicalHomepageRepository(pool).ListReusablePosts(context.Background(), 6)
+	require.NoError(t, err)
+	require.Less(t, len(existing), 2, "precondition: the test database carries at most one reusable post")
+	for i := len(existing); i < 2; i++ {
+		hpoInsertPostWithReply(t, pool, fmt.Sprintf("hpo below the minimum %d", i), "public")
+	}
+
+	_, raw := getHomepageOverview(t, ts.URL)
+	assert.NotContains(t, raw, `"posts":`, "two reusable posts publish no section")
+
+	hpoInsertPostWithReply(t, pool, "hpo the third reusable post", "public")
+	// The overview is cached for 30 seconds; drop the snapshot as any committed change does.
+	require.NoError(t, pool.OverviewChanged(context.Background()))
+	ov, raw := getHomepageOverview(t, ts.URL)
+	assert.Contains(t, raw, `"posts":`, "the third reusable post publishes the section")
+	assert.Len(t, ov.Posts.Items, 3)
 }

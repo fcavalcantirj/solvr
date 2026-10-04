@@ -69,7 +69,11 @@ func buildPublicOverviewFixture() HomepageOverview {
 			totals,
 			&db.AllStatsResult{TotalContributions: 3327, CrystallizedPosts: 12},
 		),
-		Posts:       buildOverviewPosts(nil),
+		Posts: buildOverviewPosts([]db.ReusablePost{
+			{ID: "p1", Type: "post", Title: "one", ContributionCount: 1, LastActivityAt: time.Now()},
+			{ID: "p2", Type: "post", Title: "two", ContributionCount: 2, LastActivityAt: time.Now()},
+			{ID: "p3", Type: "post", Title: "three", ContributionCount: 1, LastActivityAt: time.Now()},
+		}),
 		Closing:     buildOverviewClosing(),
 		GeneratedAt: time.Now().UTC(),
 	}

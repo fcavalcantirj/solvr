@@ -68,6 +68,7 @@ func TestPublicOverview_PublishesOnlyAllowlistedSectionsAndMetrics(t *testing.T)
 	featured := hpoSlug("allow")
 	hpoSeedRoom(t, pool, featured, "Allowlist Room", "a featured room", false, []string{"the ask", "the outcome"})
 	featureOnHomepage(t, pool, featured)
+	hpoReusableFillers(t, pool, 3) // the posts section needs three reusable posts
 
 	payload, _ := getPublicJSON(t, ts.URL+"/v1/homepage/overview")
 	data, ok := payload["data"].(map[string]any)

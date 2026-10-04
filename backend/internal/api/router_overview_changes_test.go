@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -152,6 +153,18 @@ func TestOverview_ASnapshotBuiltAcrossAChangeIsNotKept(t *testing.T) {
 	_, err = db.NewReplyRepository(pool).Create(ctx, &models.Reply{PostID: post.ID, AuthorType: models.AuthorTypeAgent,
 		AuthorID: agentID, Body: "A live reply"})
 	require.NoError(t, err)
+	// The reusable posts section is published from three posts on (SPEC Part 26).
+	for i := 0; i < 2; i++ {
+		other, err := posts.Create(ctx, &models.Post{
+			Type: models.PostTypePost, Title: fmt.Sprintf("Another reusable post %d", i),
+			Description: "Another reusable post, kept so the section is published", Tags: []string{"overview"},
+			PostedByType: models.AuthorTypeAgent, PostedByID: agentID, Status: models.PostStatusOpen,
+		})
+		require.NoError(t, err)
+		_, err = db.NewReplyRepository(pool).Create(ctx, &models.Reply{PostID: other.ID, AuthorType: models.AuthorTypeAgent,
+			AuthorID: agentID, Body: "A live reply"})
+		require.NoError(t, err)
+	}
 
 	stats := &racingStats{OverviewStatsReader: db.NewCanonicalStatsRepository(pool)}
 	h := handlers.NewHomepageOverviewHandler(db.NewCanonicalHomepageRepository(pool), db.NewRoomRepository(pool),

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -137,8 +138,18 @@ func TestOverviewAllTimeSection_ReportsEachUnreadTotalSeparately(t *testing.T) {
 	})
 }
 
+// reusablePosts pads the given posts up to the section's minimum with older ones.
+func reusablePosts(lead ...db.ReusablePost) []db.ReusablePost {
+	out := append([]db.ReusablePost{}, lead...)
+	for i := len(out); i < overviewReusablePostMinimum; i++ {
+		out = append(out, db.ReusablePost{ID: fmt.Sprintf("filler-%d", i), Type: "post", Title: "filler",
+			ContributionCount: 1, LastActivityAt: time.Now().Add(-72 * time.Hour)})
+	}
+	return out
+}
+
 func TestOverviewPostsSection_LinksReusableKnowledge(t *testing.T) {
-	posts := []db.ReusablePost{{
+	posts := reusablePosts(db.ReusablePost{
 		ID:                "11111111-1111-1111-1111-111111111111",
 		Type:              "problem",
 		Title:             "pgx pool exhausted under load",
@@ -146,11 +157,12 @@ func TestOverviewPostsSection_LinksReusableKnowledge(t *testing.T) {
 		Tags:              []string{"go", "postgres"},
 		ContributionCount: 3,
 		LastActivityAt:    time.Now().Add(-48 * time.Hour),
-	}}
+	})
 
 	section := buildOverviewPosts(posts)
 
-	require.Len(t, section.Items, 1)
+	require.NotNil(t, section)
+	require.Len(t, section.Items, overviewReusablePostMinimum)
 	item := section.Items[0]
 	assert.Equal(t, "/posts/11111111-1111-1111-1111-111111111111", item.URL)
 	assert.Equal(t, "pgx pool exhausted under load", item.Title)
@@ -160,12 +172,21 @@ func TestOverviewPostsSection_LinksReusableKnowledge(t *testing.T) {
 	assert.Equal(t, "/posts", section.BrowseURL)
 }
 
+// Below the minimum the section is not published at all: a lone post with one reply is not
+// a body of knowledge worth a homepage section (owner decision 2026-10-04, SPEC Part 26).
+func TestOverviewPostsSection_IsOmittedBelowTheMinimum(t *testing.T) {
+	assert.Equal(t, 3, overviewReusablePostMinimum)
+	assert.Nil(t, buildOverviewPosts(nil))
+	assert.Nil(t, buildOverviewPosts(reusablePosts()[:overviewReusablePostMinimum-1]))
+	assert.NotNil(t, buildOverviewPosts(reusablePosts()))
+}
+
 // Every post links to its /posts page, whatever type a row still stores before the legacy
 // archive migration relabels it (idx 68).
 func TestOverviewPostsSection_LinksEveryPostToItsPostPage(t *testing.T) {
 	for _, typ := range []string{"post", "problem", "question", "idea"} {
-		section := buildOverviewPosts([]db.ReusablePost{{ID: "abc", Type: typ, Title: "t"}})
-		require.Len(t, section.Items, 1)
+		section := buildOverviewPosts(reusablePosts(db.ReusablePost{ID: "abc", Type: typ, Title: "t"}))
+		require.NotNil(t, section)
 		assert.Equal(t, "/posts/abc", section.Items[0].URL, "type %q", typ)
 	}
 }

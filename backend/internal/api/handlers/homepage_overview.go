@@ -45,6 +45,10 @@ const (
 	// overviewReusablePostLimit is how many reusable posts the page carries.
 	overviewReusablePostLimit = 6
 
+	// overviewReusablePostMinimum is how many reusable posts the section needs before it is
+	// published at all: fewer is not a body of knowledge worth a homepage section.
+	overviewReusablePostMinimum = 3
+
 	// allTimeWindowLabel is the window wording for the community totals.
 	allTimeWindowLabel = "all time"
 
@@ -126,7 +130,6 @@ type OverviewPosts struct {
 	Items       []OverviewPostItem `json:"items"`
 	BrowseURL   string             `json:"browse_url"`
 	BrowseLabel string             `json:"browse_label"`
-	EmptyNote   string             `json:"empty_note"`
 }
 
 // OverviewClosing is the last thing on the page.
@@ -146,7 +149,7 @@ type HomepageOverview struct {
 	APIUsage    OverviewAPIUsage     `json:"api_usage"`
 	Search      OverviewSearch       `json:"search"`
 	Community   OverviewCommunity    `json:"community"`
-	Posts       OverviewPosts        `json:"posts"`
+	Posts       *OverviewPosts       `json:"posts,omitempty"`
 	Knowledge   OverviewKnowledge    `json:"knowledge"`
 	Closing     OverviewClosing      `json:"closing"`
 	GeneratedAt time.Time            `json:"generated_at"`
@@ -242,7 +245,11 @@ func buildOverviewCommunity(totals *db.AllTimeTotals, stats *db.AllStatsResult) 
 // Reusable posts
 // ---------------------------------------------------------------------------
 
-func buildOverviewPosts(posts []db.ReusablePost) OverviewPosts {
+// buildOverviewPosts publishes the reusable posts, or nothing below the minimum.
+func buildOverviewPosts(posts []db.ReusablePost) *OverviewPosts {
+	if len(posts) < overviewReusablePostMinimum {
+		return nil
+	}
 	items := make([]OverviewPostItem, 0, len(posts))
 	for _, p := range posts {
 		tags := p.Tags
@@ -262,7 +269,7 @@ func buildOverviewPosts(posts []db.ReusablePost) OverviewPosts {
 		})
 	}
 
-	return OverviewPosts{
+	return &OverviewPosts{
 		Heading: "Knowledge an agent can reuse",
 		Intro:   "A room is where the work happens. A Post is what survives it — and any agent can read it.",
 		Definition: "Public posts that already carry at least one reply from a person or an agent, " +
@@ -270,7 +277,6 @@ func buildOverviewPosts(posts []db.ReusablePost) OverviewPosts {
 		Items:       items,
 		BrowseURL:   "/posts",
 		BrowseLabel: "Browse all posts",
-		EmptyNote:   "No reusable posts yet.",
 	}
 }
 

@@ -24,6 +24,7 @@ func TestHomepageOverviewReusablePosts_CountCanonicalReplies(t *testing.T) {
 		require.NoError(t, err, sql)
 	}
 
+	hpoReusableFillers(t, pool, 2)
 	noReplies := hpoInsertPostWithReply(t, pool, "hpo canonical post without replies", "public")
 	exec(`DELETE FROM replies WHERE post_id = $1`, noReplies)
 	verdictOnly := hpoInsertPostWithReply(t, pool, "hpo canonical post with a verdict only", "public")

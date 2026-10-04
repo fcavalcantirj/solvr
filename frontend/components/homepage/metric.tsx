@@ -32,28 +32,27 @@ export function MetricGrid({ metrics }: { metrics: APIOverviewMetric[] }) {
   );
 }
 
-// SectionHeading carries the eyebrow, the API heading and its intro.
+// SectionHeading opens a homepage section on the API heading and its intro.
+// No kicker above it (v1.3.7): the heading carries its own weight.
 export function SectionHeading({
-  eyebrow,
   heading,
   intro,
   definition,
 }: {
-  eyebrow: string;
   heading: string;
   intro?: string;
   definition?: string;
 }) {
   return (
-    <div className="max-w-3xl">
-      <p className="font-mono text-xs tracking-[0.3em] text-muted-foreground mb-4">
-        {eyebrow}
-      </p>
-      <h2 className="text-3xl md:text-4xl font-light tracking-tight" title={definition}>
+    <div className="max-w-[44rem]">
+      <h2
+        className="text-[2rem] font-light leading-[1.08] tracking-[-0.03em] sm:text-[2.75rem]"
+        title={definition}
+      >
         {heading}
       </h2>
       {intro ? (
-        <p className="text-muted-foreground leading-relaxed mt-4">{intro}</p>
+        <p className="mt-4 text-base leading-relaxed text-muted-foreground sm:text-lg">{intro}</p>
       ) : null}
     </div>
   );

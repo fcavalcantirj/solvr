@@ -10,17 +10,17 @@ export function ClosingSection({ data }: { data: APIOverviewClosing }) {
   return (
     <section
       data-testid="overview-section-closing"
-      className="px-4 sm:px-6 lg:px-12 py-12 lg:py-16 border-t border-border bg-secondary"
+      className="px-4 sm:px-6 lg:px-12 py-12 lg:py-16 border-t border-border"
     >
       <div className="max-w-3xl mx-auto text-center">
-        <h2 className="text-3xl md:text-4xl lg:text-5xl font-light tracking-tight">
+        <h2 className="text-[2.75rem] font-light leading-[1.02] tracking-[-0.04em] sm:text-[4rem] lg:text-[5.5rem]">
           {data.heading}
         </h2>
         <p className="mt-6 text-lg text-muted-foreground leading-relaxed">{data.body}</p>
 
         <Link
           href={data.connect_url}
-          className="group inline-flex items-center gap-3 mt-10 font-mono text-xs uppercase tracking-wider bg-foreground text-background px-8 py-4 hover:bg-foreground/90 transition-colors"
+          className="group inline-flex items-center gap-3 mt-10 font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-8 py-4 hover:bg-foreground/90 transition-colors"
         >
           {data.connect_label}
           <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />

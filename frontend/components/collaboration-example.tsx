@@ -14,30 +14,30 @@ export function CollaborationExample() {
   const { example, loading, error } = useCollaborationExample();
 
   return (
-    <section className="px-4 sm:px-6 lg:px-12 py-12 lg:py-16 bg-secondary">
-      <div className="max-w-7xl mx-auto">
+    <section className="px-4 sm:px-6 lg:px-12 py-12 lg:py-16 border-t border-border">
+      <div className="mx-auto max-w-[78rem]">
         {loading && !example ? (
           <p
             data-testid="collab-loading"
-            className="font-mono text-xs tracking-[0.3em] text-muted-foreground"
+            className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground"
           >
             LOADING THE EXAMPLE...
           </p>
         ) : !example ? (
           <div className="max-w-2xl">
-            <p className="font-mono text-xs tracking-[0.3em] text-muted-foreground mb-4">
-              EXAMPLE UNAVAILABLE
-            </p>
-            <h2 className="text-3xl md:text-4xl font-light tracking-tight mb-6">
+            <h2 className="mb-4 text-[2rem] font-light leading-[1.08] tracking-[-0.03em] sm:text-[2.75rem]">
               The example could not be loaded right now.
             </h2>
+            <p className="mb-6 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+              EXAMPLE UNAVAILABLE
+            </p>
             {error ? (
               <p className="text-muted-foreground mb-8">{error}</p>
             ) : null}
             <Link
               data-testid="collab-connect-link"
               href="/connect"
-              className="inline-flex items-center gap-3 font-mono text-xs uppercase tracking-wider bg-foreground text-background px-8 py-4 hover:bg-foreground/90 transition-colors"
+              className="inline-flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-8 py-4 hover:bg-foreground/90 transition-colors"
             >
               Connect agents
             </Link>
@@ -46,15 +46,15 @@ export function CollaborationExample() {
           <div className="grid lg:grid-cols-12 gap-12 lg:gap-16">
             {/* What this is */}
             <div className="lg:col-span-4">
+              <h2 className="mb-4 text-[2rem] font-light leading-[1.08] tracking-[-0.03em] sm:text-[2.75rem]">
+                {example.headline}
+              </h2>
               <p
                 data-testid="collab-state-label"
-                className="font-mono text-xs tracking-[0.3em] text-muted-foreground mb-4"
+                className="mb-6 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground"
               >
                 {example.label}
               </p>
-              <h2 className="text-3xl md:text-4xl font-light tracking-tight mb-6">
-                {example.headline}
-              </h2>
               <p className="text-muted-foreground leading-relaxed mb-8">
                 {example.summary}
               </p>
@@ -62,7 +62,7 @@ export function CollaborationExample() {
               {example.participants.length > 0 ? (
                 <ul data-testid="collab-participants" className="space-y-2 mb-8">
                   {example.participants.map((p) => (
-                    <li key={p.name} className="font-mono text-xs tracking-wider">
+                    <li key={p.name} className="text-base">
                       <span>{p.name}</span>
                       <span className="text-muted-foreground"> · {p.role}</span>
                     </li>
@@ -74,7 +74,7 @@ export function CollaborationExample() {
                 <Link
                   data-testid="collab-connect-link"
                   href={example.connect_url}
-                  className="inline-flex items-center justify-center gap-3 font-mono text-xs uppercase tracking-wider bg-foreground text-background px-8 py-4 hover:bg-foreground/90 transition-colors"
+                  className="inline-flex items-center justify-center gap-3 font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-8 py-4 hover:bg-foreground/90 transition-colors"
                 >
                   {example.connect_label}
                 </Link>
@@ -82,7 +82,7 @@ export function CollaborationExample() {
                   <Link
                     data-testid="collab-room-link"
                     href={example.room_url}
-                    className="inline-flex items-center justify-center gap-2 font-mono text-xs uppercase tracking-wider border border-foreground px-8 py-4 hover:bg-foreground hover:text-background transition-colors"
+                    className="inline-flex items-center justify-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em] border border-foreground px-8 py-4 hover:bg-foreground hover:text-background transition-colors"
                   >
                     Open the full room
                     <ArrowUpRight size={14} />
@@ -92,20 +92,20 @@ export function CollaborationExample() {
             </div>
 
             {/* The sequence itself */}
-            <ol className="lg:col-span-8 border border-border bg-card divide-y divide-border">
+            <ol className="lg:col-span-8 border-t border-foreground divide-y divide-border">
               {example.steps.map((step, index) => (
                 <li
                   key={step.beat}
                   data-testid="collab-step"
-                  className="p-5 sm:p-6"
+                  className="py-6"
                 >
                   <div className="flex items-baseline gap-3 mb-3">
-                    <span className="font-mono text-[10px] text-muted-foreground">
+                    <span className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground">
                       {(index + 1).toString().padStart(2, "0")}
                     </span>
                     <h3
                       data-testid="collab-step-label"
-                      className="font-mono text-xs tracking-wider"
+                      className="font-mono text-[11px] uppercase tracking-[0.18em] text-foreground"
                     >
                       {step.label}
                     </h3>
@@ -114,13 +114,13 @@ export function CollaborationExample() {
                   {step.author ? (
                     <p
                       data-testid="collab-step-author"
-                      className="font-mono text-[10px] tracking-wider text-muted-foreground mb-3"
+                      className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground mb-3"
                     >
                       {step.author} · {step.author_role}
                     </p>
                   ) : null}
 
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                  <p className="max-w-[68ch] text-base leading-relaxed whitespace-pre-wrap">
                     {step.excerpt}
                   </p>
 
@@ -128,7 +128,7 @@ export function CollaborationExample() {
                     {step.is_excerpt && step.excerpt_note ? (
                       <span
                         data-testid="collab-step-excerpt-note"
-                        className="font-mono text-[10px] tracking-wider text-muted-foreground"
+                        className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground"
                       >
                         {step.excerpt_note}
                       </span>
@@ -137,7 +137,7 @@ export function CollaborationExample() {
                       <Link
                         data-testid="collab-step-link"
                         href={step.message_url}
-                        className="font-mono text-[10px] tracking-wider underline underline-offset-4 hover:no-underline"
+                        className="font-mono text-[11px] tracking-[0.06em] underline underline-offset-4 hover:no-underline"
                       >
                         Open the original message: {step.label}
                       </Link>

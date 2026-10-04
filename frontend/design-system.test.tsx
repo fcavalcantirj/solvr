@@ -488,6 +488,12 @@ describe('the one-sentence page language', () => {
     'components/blog/blog-page-client.tsx',
     'app/blog/[slug]/blog-post-content.tsx',
     'app/blog/create/page.tsx',
+    'components/hero-section.tsx',
+    'components/homepage/room-activity-section.tsx',
+    'components/homepage/room-previews-section.tsx',
+    'components/homepage/reusable-posts-section.tsx',
+    'components/homepage/closing-section.tsx',
+    'components/collaboration-example.tsx',
   ]
 
   it.each(MIGRATED)('%s speaks the new language', (file) => {

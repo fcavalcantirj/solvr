@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { APIOverviewPosts } from '@/lib/api-types';
 import { SectionHeading } from './metric';
+import mosaic from '@/components/posts/posts-mosaic.module.css';
 
 // Reusable Posts: the knowledge that survives a room. The API chooses which
 // posts qualify, states the rule it used, routes each one to its own page and
@@ -12,47 +13,42 @@ export function ReusablePostsSection({ data }: { data: APIOverviewPosts }) {
       data-testid="overview-section-posts"
       className="px-4 sm:px-6 lg:px-12 py-12 lg:py-16 border-t border-border"
     >
-      <div className="max-w-7xl mx-auto">
-        <SectionHeading eyebrow="POSTS" heading={data.heading} intro={data.intro} />
+      <div className="mx-auto max-w-[78rem]">
+        <SectionHeading heading={data.heading} intro={data.intro} />
 
-        <p className="mt-4 font-mono text-[10px] tracking-wider text-muted-foreground max-w-3xl">
+        <p className="mt-4 max-w-[68ch] text-[0.8125rem] leading-relaxed text-muted-foreground">
           {data.definition}
         </p>
 
         {data.items.length === 0 ? (
           <p className="mt-12 text-sm text-muted-foreground">{data.empty_note}</p>
         ) : (
-          <ul className="mt-12 border border-border divide-y divide-border">
+          // The same mosaic as /posts: tile sizes follow position, never the post.
+          <ul className={`mt-12 ${mosaic.mosaic}`}>
             {data.items.map((item) => (
-              <li key={item.id} className="p-5 sm:p-6">
-                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                  <p className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground">
-                    {item.type} · {item.status}
-                  </p>
-                  <span className="font-mono text-[10px] tracking-wider text-muted-foreground">
-                    {item.last_activity_label}
-                  </span>
+              <li key={item.id} className={mosaic.tile}>
+                <div className="mb-5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 font-mono text-[11px] tracking-[0.06em] opacity-70">
+                  <span className="uppercase tracking-[0.18em]">{item.type} · {item.status}</span>
+                  <span>{item.last_activity_label}</span>
                 </div>
 
-                <Link
-                  href={item.url}
-                  className="block mt-2 text-lg font-light tracking-tight underline underline-offset-4 hover:no-underline"
-                >
-                  {item.title}
-                </Link>
+                <h3 className={mosaic.title}>
+                  <Link href={item.url} className={mosaic.titleLink}>
+                    {item.title}
+                  </Link>
+                </h3>
 
-                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
-                  <span className="font-mono text-[10px] tracking-wider text-muted-foreground">
-                    {item.contribution_label}
-                  </span>
-                  {item.tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="font-mono text-[10px] tracking-wider border border-border px-2 py-0.5 text-muted-foreground"
-                    >
-                      {tag}
-                    </span>
-                  ))}
+                <div className={mosaic.footer}>
+                  <div className={mosaic.counts}>
+                    <span>{item.contribution_label}</span>
+                  </div>
+                  {item.tags.length > 0 ? (
+                    <div className={mosaic.tags}>
+                      {item.tags.map((tag) => (
+                        <span key={tag}>{tag}</span>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               </li>
             ))}
@@ -61,7 +57,7 @@ export function ReusablePostsSection({ data }: { data: APIOverviewPosts }) {
 
         <Link
           href={data.browse_url}
-          className="inline-block mt-10 font-mono text-xs uppercase tracking-wider border border-foreground px-8 py-4 hover:bg-foreground hover:text-background transition-colors"
+          className="group mt-10 inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em] text-foreground transition-colors hover:text-muted-foreground"
         >
           {data.browse_label}
         </Link>

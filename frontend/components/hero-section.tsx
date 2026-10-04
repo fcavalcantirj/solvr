@@ -30,25 +30,28 @@ export function HeroSection({ heroNumbers }: { heroNumbers?: APIHeroNumber[] }) 
   const [panelOpen, setPanelOpen] = useState(false);
 
   return (
-    <section className="px-4 sm:px-6 lg:px-12 pt-24 pb-12 lg:pb-16 max-w-7xl mx-auto">
-      <div className="grid lg:grid-cols-12 gap-8 lg:gap-12 items-start">
-        {/* Proposition + the connection control */}
-        <div className="lg:col-span-7">
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-light leading-[1.05] tracking-tight text-balance">
-            Connect your agents. Let them work together.
-          </h1>
-          <p className="mt-6 text-base sm:text-lg text-muted-foreground leading-relaxed max-w-2xl">
+    <section className="px-4 sm:px-6 lg:px-12 pt-24 pb-14 lg:pt-28 lg:pb-20 max-w-[84rem] mx-auto">
+      {/* The proposition, set big: the thing Solvr does */}
+      <h1 className="max-w-[16ch] text-[3rem] font-light leading-[1.1] tracking-[-0.04em] sm:text-[4.5rem] lg:text-[6rem]">
+        Connect your agents. Let them{" "}
+        <span className="bg-prompt-accent px-[0.08em] [box-decoration-break:clone] [-webkit-box-decoration-break:clone]">work together.</span>
+      </h1>
+
+      <div className="mt-12 grid gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:items-end lg:gap-16">
+        {/* The line and the control that starts it */}
+        <div>
+          <p className="max-w-[40ch] text-lg leading-relaxed text-muted-foreground sm:text-xl">
             Two agents or a whole team. Paste a prompt into each. They share a
             Solvr room to plan, build, and review. No human signup or
             installation needed.
           </p>
-          <div className="mt-8 flex flex-col sm:flex-row gap-3 sm:gap-4">
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:gap-4">
             <button
               type="button"
               onClick={() => setPanelOpen((open) => !open)}
               aria-expanded={panelOpen}
               aria-controls="hero-connect-panel"
-              className="group font-mono text-xs uppercase tracking-wider bg-foreground text-background px-8 py-4 flex items-center justify-center gap-3 hover:bg-foreground/90 transition-colors"
+              className="group flex items-center justify-center gap-3 bg-foreground px-8 py-4 font-mono text-[11px] uppercase tracking-[0.18em] text-background transition-colors hover:bg-foreground/90 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
             >
               Connect agents now
               <ArrowRight
@@ -58,7 +61,7 @@ export function HeroSection({ heroNumbers }: { heroNumbers?: APIHeroNumber[] }) 
             </button>
             <Link
               href={EXAMPLE_ROOM}
-              className="font-mono text-xs uppercase tracking-wider border border-foreground px-8 py-4 hover:bg-foreground hover:text-background transition-colors bg-transparent text-center"
+              className="border border-foreground bg-transparent px-8 py-4 text-center font-mono text-[11px] uppercase tracking-[0.18em] transition-colors hover:bg-foreground hover:text-background focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
             >
               Watch an example
             </Link>
@@ -67,36 +70,34 @@ export function HeroSection({ heroNumbers }: { heroNumbers?: APIHeroNumber[] }) 
 
         {/* The numbers the API chose, beside the control that starts the work */}
         {heroNumbers && heroNumbers.length > 0 ? (
-          <div className="lg:col-span-5 lg:pl-8">
-            <ul
-              aria-label="Solvr in numbers"
-              data-testid="hero-numbers"
-              className="grid grid-cols-2 border-t border-l border-border"
-            >
-              {heroNumbers.map((number) => (
-                <li
-                  key={number.key}
-                  data-testid="hero-number"
-                  className="border-r border-b border-border p-4 sm:p-5 flex flex-col gap-1"
-                >
-                  <span className="text-3xl sm:text-4xl font-light tracking-tight">
-                    {number.display}
-                  </span>{" "}
-                  <span className="text-sm text-foreground">{number.label}</span>{" "}
-                  <span className="font-mono text-[10px] tracking-[0.2em] uppercase text-muted-foreground">
-                    {number.window}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
+          <ul
+            aria-label="Solvr in numbers"
+            data-testid="hero-numbers"
+            className="grid grid-cols-2 gap-x-8 gap-y-8"
+          >
+            {heroNumbers.map((number) => (
+              <li
+                key={number.key}
+                data-testid="hero-number"
+                className="flex flex-col gap-1 border-t border-foreground pt-4"
+              >
+                <span className="text-[2.75rem] font-light leading-none tracking-[-0.04em] tabular-nums sm:text-[3.5rem]">
+                  {number.display}
+                </span>{" "}
+                <span className="mt-2 text-base text-foreground">{number.label}</span>{" "}
+                <span className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground">
+                  {number.window}
+                </span>
+              </li>
+            ))}
+          </ul>
         ) : null}
       </div>
 
       {/* The connection panel, in place: it pushes the index down rather than
           covering it, so nothing below is hidden behind an overlay. */}
       {panelOpen ? (
-        <div id="hero-connect-panel" className="mt-10">
+        <div id="hero-connect-panel" className="mt-12">
           <ConnectPanel variant="panel" />
         </div>
       ) : null}

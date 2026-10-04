@@ -85,17 +85,16 @@ export function RoomActivitySection({ initial }: { initial: APIOverviewActivity 
   return (
     <section
       data-testid="overview-section-activity"
-      className="px-4 sm:px-6 lg:px-12 py-12 lg:py-16 border-t border-border bg-secondary"
+      className="px-4 sm:px-6 lg:px-12 py-12 lg:py-16 border-t border-border"
     >
-      <div className="max-w-7xl mx-auto">
+      <div className="mx-auto max-w-[78rem]">
         <SectionHeading
-          eyebrow="ACTIVITY"
           heading={initial.heading}
           intro={initial.intro}
           definition={initial.definition}
         />
 
-        <p className="mt-4 font-mono text-[10px] leading-relaxed tracking-wider text-muted-foreground max-w-3xl">
+        <p className="mt-4 max-w-[68ch] text-[0.8125rem] leading-relaxed text-muted-foreground">
           {initial.outcome_note}
         </p>
 
@@ -105,7 +104,7 @@ export function RoomActivitySection({ initial }: { initial: APIOverviewActivity 
               type="button"
               data-testid="overview-activity-new"
               onClick={takeNewActivity}
-              className="font-mono text-xs uppercase tracking-wider border border-foreground px-6 py-3 hover:bg-foreground hover:text-background transition-colors"
+              className="font-mono text-[11px] uppercase tracking-[0.18em] border border-foreground px-6 py-3 hover:bg-foreground hover:text-background transition-colors"
             >
               {pending.new_label}
             </button>
@@ -125,17 +124,17 @@ export function RoomActivitySection({ initial }: { initial: APIOverviewActivity 
                 <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                   <Link
                     href={group.room_url}
-                    className="font-mono text-xs tracking-wider underline underline-offset-4 hover:no-underline"
+                    className="font-mono text-[11px] tracking-[0.06em] underline underline-offset-4 hover:no-underline"
                   >
                     {group.room_name}
                   </Link>
-                  <span className="font-mono text-[10px] tracking-wider text-muted-foreground">
+                  <span className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground">
                     {group.count_label} · {group.time_label}
                   </span>
                 </div>
 
                 {group.burst_note ? (
-                  <p className="mt-1 font-mono text-[10px] tracking-wider text-muted-foreground">
+                  <p className="mt-1 font-mono text-[11px] tracking-[0.06em] text-muted-foreground">
                     {group.burst_note}
                   </p>
                 ) : null}
@@ -151,12 +150,12 @@ export function RoomActivitySection({ initial }: { initial: APIOverviewActivity 
         )}
 
         {error ? (
-          <p role="alert" className="mt-6 font-mono text-xs text-muted-foreground">
+          <p role="alert" className="mt-6 text-sm text-muted-foreground">
             {error}
           </p>
         ) : null}
 
-        <p className="mt-6 font-mono text-[10px] leading-relaxed tracking-wider text-muted-foreground max-w-3xl">
+        <p className="mt-6 max-w-[68ch] text-[0.8125rem] leading-relaxed text-muted-foreground">
           {initial.refresh_note}
         </p>
 
@@ -165,7 +164,7 @@ export function RoomActivitySection({ initial }: { initial: APIOverviewActivity 
             type="button"
             onClick={loadMore}
             disabled={loading}
-            className="mt-8 font-mono text-xs uppercase tracking-wider border border-foreground px-8 py-4 hover:bg-foreground hover:text-background transition-colors disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-foreground"
+            className="mt-8 font-mono text-[11px] uppercase tracking-[0.18em] border border-foreground px-8 py-4 hover:bg-foreground hover:text-background transition-colors disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-foreground"
           >
             {initial.load_more_label}
           </button>
@@ -180,14 +179,14 @@ export function RoomActivitySection({ initial }: { initial: APIOverviewActivity 
 function ActivityEntry({ item }: { item: APIOverviewActivityItem }) {
   return (
     <li data-testid="overview-activity-item" className="border-l border-border pl-4 sm:pl-5">
-      <p className="font-mono text-[10px] tracking-wider text-muted-foreground">
+      <p className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground">
         {item.author} · {item.author_label}
         {item.author_note ? (
           <span className="block mt-1 normal-case">{item.author_note}</span>
         ) : null}
       </p>
 
-      <p className="mt-2 font-mono text-xs tracking-wider">{item.action}</p>
+      <p className="mt-2 text-sm">{item.action}</p>
 
       {item.excerpt ? (
         <p className="mt-2 text-sm leading-relaxed whitespace-pre-wrap">{item.excerpt}</p>
@@ -196,18 +195,18 @@ function ActivityEntry({ item }: { item: APIOverviewActivityItem }) {
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
         <time
           dateTime={item.timestamp}
-          className="font-mono text-[10px] tracking-wider text-muted-foreground"
+          className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground"
         >
           {item.time_label}
         </time>
         {item.is_excerpt && item.excerpt_note ? (
-          <span className="font-mono text-[10px] tracking-wider text-muted-foreground">
+          <span className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground">
             {item.excerpt_note}
           </span>
         ) : null}
         <Link
           href={item.link_url}
-          className="font-mono text-[10px] tracking-wider underline underline-offset-4 hover:no-underline"
+          className="font-mono text-[11px] tracking-[0.06em] underline underline-offset-4 hover:no-underline"
         >
           {item.link_label}
         </Link>

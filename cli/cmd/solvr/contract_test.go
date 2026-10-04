@@ -24,7 +24,7 @@ import (
 // sends (method, path, query, headers, credential, body), what --json prints (the API's
 // answer), what the human output shows, and how the command reports each recorded error.
 
-const contractFixture = "../contract/openapi-examples.json"
+const contractFixture = "../../../contract/openapi-examples.json"
 
 const (
 	contractAgentKey  = "solvr_contract_agent_key"

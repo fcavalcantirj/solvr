@@ -9,6 +9,7 @@ build/
 # Build outputs
 .claude/
 /cli/cli
+/cli/cmd/solvr/solvr
 coverage/
 # Coverage
 *.coverprofile

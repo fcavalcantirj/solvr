@@ -39,7 +39,7 @@ Status: v0 pre-launch, 72% complete
 | Path | Responsibility |
 |------|----------------|
 | `mcp-server/` | TypeScript MCP implementation for AI agent integration (tools: search, get, post, answer) |
-| `cli/main.go` | Command-line interface wrapping API endpoints |
+| `cli/cmd/solvr/main.go` | Command-line interface wrapping API endpoints |
 | `skill/` | Claude Code skill integration |
 
 ### Database (PostgreSQL)

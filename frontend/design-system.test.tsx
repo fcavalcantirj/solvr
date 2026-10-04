@@ -485,6 +485,9 @@ describe('the one-sentence page language', () => {
     'app/not-found.tsx',
     'app/notifications/page.tsx',
     'app/zh/promote/page.tsx',
+    'components/blog/blog-page-client.tsx',
+    'app/blog/[slug]/blog-post-content.tsx',
+    'app/blog/create/page.tsx',
   ]
 
   it.each(MIGRATED)('%s speaks the new language', (file) => {
@@ -496,6 +499,18 @@ describe('the one-sentence page language', () => {
     expect(source, file).not.toContain('tracking-widest')
     // Display headings are Inter light; monospace stays at caption, code and wordmark sizes.
     expect(source, file).not.toMatch(/font-mono[^"]*\btext-[2-6]xl\b|\btext-[2-6]xl\b[^"]*font-mono/)
+    // Monochrome: no gradients and no off-palette hues (status shades are checked separately).
+    expect(source, file).not.toMatch(/bg-gradient-|\b(?:from|to|via)-(?:cyan|blue|indigo|purple|violet|pink|emerald|teal|sky)-/)
+  })
+
+  // The owner's rule for every index page: the page scrolls vertically only.
+  it.each([
+    'components/posts/posts-list.tsx',
+    'components/posts/posts-page-client.tsx',
+    'components/blog/blog-page-client.tsx',
+    'components/leaderboard/leaderboard-page-client.tsx',
+  ])('%s never scrolls a strip sideways', (file) => {
+    expect(read(file), file).not.toMatch(/overflow-x-(?:auto|scroll)/)
   })
 })
 

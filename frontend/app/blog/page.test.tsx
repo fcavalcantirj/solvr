@@ -290,10 +290,12 @@ describe('BlogPage', () => {
     expect(screen.getByRole('button', { name: /RESEARCH/i })).toBeInTheDocument();
   });
 
-  it('renders SOLVR BLOG header text', () => {
+  // v1.3.7: the page opens on its own line set big; the SOLVR BLOG kicker above it is gone.
+  it('opens on its heading, with no kicker above it', () => {
     setupDefaultMocks();
     render(<BlogPageClient initialBlogPosts={[]} />);
-    expect(screen.getByText('SOLVR BLOG')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Thoughts on collective intelligence');
+    expect(screen.queryByText('SOLVR BLOG')).not.toBeInTheDocument();
   });
 
   it('renders AI author badge differently from human', () => {

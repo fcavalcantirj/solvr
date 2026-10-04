@@ -39,11 +39,11 @@ export function BlogPostContent({ post }: { post: BlogPostData }) {
       <Header />
 
       <main className="pt-28 sm:pt-32 pb-16 px-4 sm:px-6 lg:px-12">
-        <div className="max-w-3xl mx-auto">
+        <div className="mx-auto max-w-[76rem]">
           {/* Back link */}
           <Link
             href="/blog"
-            className="inline-flex items-center gap-2 font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors mb-8"
+            className="mb-10 inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowLeft size={14} />
             BACK TO BLOG
@@ -51,12 +51,12 @@ export function BlogPostContent({ post }: { post: BlogPostData }) {
 
           <article>
             {/* Tags */}
-            <div className="flex flex-wrap gap-2 mb-4">
+            <div className="mb-6 flex flex-wrap gap-x-5 gap-y-2">
               {post.tags.map((tag) => (
                 <Link
                   key={tag}
                   href={`/blog?tag=${tag}`}
-                  className="font-mono text-[10px] tracking-wider px-2 py-1 border border-border hover:border-foreground transition-colors"
+                  className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
                 >
                   {tag.toUpperCase()}
                 </Link>
@@ -64,18 +64,18 @@ export function BlogPostContent({ post }: { post: BlogPostData }) {
             </div>
 
             {/* Title */}
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-light leading-tight tracking-tight mb-6">
+            <h1 className="mb-10 max-w-[22ch] text-[2.5rem] font-light leading-[1.05] tracking-[-0.04em] sm:text-[3.5rem] lg:text-[4.5rem]">
               {post.title}
             </h1>
 
             {/* Author info and meta */}
-            <div className="flex items-center gap-4 mb-8 pb-6 border-b border-border">
+            <div className="mb-12 flex flex-wrap items-center gap-x-5 gap-y-3 border-y border-border py-4">
               <div className="flex items-center gap-3">
                 <div
                   className={cn(
                     "w-8 h-8 flex items-center justify-center",
                     post.author.type === "ai"
-                      ? "bg-gradient-to-br from-cyan-400 to-blue-500 text-white"
+                      ? "border border-foreground text-foreground"
                       : "bg-foreground text-background"
                   )}
                 >
@@ -93,11 +93,11 @@ export function BlogPostContent({ post }: { post: BlogPostData }) {
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-sm">
+                    <span className="text-base">
                       {post.author.name}
                     </span>
                     {post.author.type === "ai" && (
-                      <span className="font-mono text-[9px] tracking-wider px-1.5 py-0.5 bg-gradient-to-r from-cyan-400/20 to-blue-500/20 text-cyan-400 border border-cyan-400/30">
+                      <span className="border border-foreground px-1.5 py-0.5 font-mono text-[11px] uppercase tracking-[0.18em]">
                         AI
                       </span>
                     )}
@@ -107,17 +107,17 @@ export function BlogPostContent({ post }: { post: BlogPostData }) {
               <span className="text-muted-foreground">·</span>
               <div className="flex items-center gap-1.5 text-muted-foreground">
                 <Calendar size={12} />
-                <span className="font-mono text-xs">{post.publishedAt}</span>
+                <span className="font-mono text-[11px] tracking-[0.06em]">{post.publishedAt}</span>
               </div>
               <div className="flex items-center gap-1.5 text-muted-foreground">
                 <Clock size={12} />
-                <span className="font-mono text-xs">{post.readTime}</span>
+                <span className="font-mono text-[11px] tracking-[0.06em]">{post.readTime}</span>
               </div>
             </div>
 
             {/* Cover image */}
             {post.coverImageUrl && (
-              <div className="aspect-[16/9] mb-8 bg-secondary overflow-hidden">
+              <div className="mb-12 aspect-[16/9] overflow-hidden bg-secondary">
                 <img
                   src={post.coverImageUrl}
                   alt={post.title}
@@ -127,10 +127,12 @@ export function BlogPostContent({ post }: { post: BlogPostData }) {
             )}
 
             {/* Body */}
-            <MarkdownContent content={post.body} className="mb-8" />
+            <div className="max-w-[44rem]">
+              <MarkdownContent content={post.body} className="mb-10 text-[1.0625rem] leading-relaxed" />
+            </div>
 
             {/* Interactive elements */}
-            <div className="pt-6 border-t border-border">
+            <div className="max-w-[44rem] border-t border-border pt-6">
               <BlogPostClient
                 slug={post.slug}
                 initialVoteScore={post.voteScore}

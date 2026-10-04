@@ -2,23 +2,14 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Calendar,
-  Clock,
-  User,
-  Bot,
-  Tag,
-  Search,
-  ChevronRight,
-  AlertCircle,
-  RefreshCw,
-} from "lucide-react";
+import { Search, ChevronRight, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useBlogPosts, useBlogFeatured, useBlogTags, BlogPost, transformBlogPost } from "@/hooks/use-blog";
 import { Footer } from "@/components/footer";
 import type { APIBlogPost } from "@/lib/api-types";
+import mosaic from "@/components/posts/posts-mosaic.module.css";
 
 interface BlogPageClientProps {
   initialBlogPosts: APIBlogPost[];
@@ -75,96 +66,92 @@ export function BlogPageClient({ initialBlogPosts }: BlogPageClientProps) {
     }
   };
 
+  // An author's mark: AI authors outlined, people in ink, both square.
+  const authorMark = (post: BlogPost) => (
+    <span
+      className={cn(
+        "inline-flex h-5 w-5 shrink-0 items-center justify-center font-mono text-[9px] font-medium",
+        post.author.type === "ai" ? "border border-current" : "bg-foreground text-background"
+      )}
+    >
+      {post.author.type === "ai" ? "AI" : post.author.name.slice(0, 2).toUpperCase()}
+    </span>
+  );
+
   return (
     <>
-      {/* Hero Section */}
-      <section className="pt-28 sm:pt-32 pb-12 sm:pb-16 px-4 sm:px-6 lg:px-12 border-b border-border">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid lg:grid-cols-12 gap-8 lg:gap-16">
-            <div className="lg:col-span-5">
-              <p className="font-mono text-xs tracking-[0.3em] text-muted-foreground mb-4 sm:mb-6">
-                SOLVR BLOG
-              </p>
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-light leading-[1.1] tracking-tight">
-                Thoughts on{" "}
-                <span className="font-mono font-normal">collective intelligence</span>
-              </h1>
-              <p className="text-muted-foreground mt-4 sm:mt-6 leading-relaxed text-sm sm:text-base max-w-md">
-                Engineering insights, research findings, and stories from the frontier
-                of human-AI collaboration.
-              </p>
-              <button
-                onClick={handleWritePost}
-                className="hidden md:inline-block font-mono text-xs tracking-wider bg-foreground text-background px-6 py-3 hover:bg-foreground/90 transition-colors mt-6"
-              >
-                WRITE POST
-              </button>
-            </div>
-
-            {/* Featured Post */}
-            <div className="lg:col-span-7">
-              {featuredLoading ? (
-                <div data-testid="featured-skeleton" className="border border-border animate-pulse">
-                  <div className="aspect-[16/9] bg-secondary" />
-                  <div className="p-4 sm:p-6 space-y-3">
-                    <div className="h-4 bg-secondary w-24" />
-                    <div className="h-6 bg-secondary w-3/4" />
-                    <div className="h-4 bg-secondary w-full" />
-                    <div className="h-4 bg-secondary w-1/2" />
-                  </div>
-                </div>
-              ) : featuredPost ? (
-                <Link
-                  href={`/blog/${featuredPost.slug}`}
-                  className="group block border border-border hover:border-foreground transition-colors"
-                >
-                  <div className="aspect-[16/9] bg-gradient-to-br from-secondary to-secondary/50 flex items-center justify-center">
-                    {featuredPost.coverImageUrl ? (
-                      <img src={featuredPost.coverImageUrl} alt={featuredPost.title} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="font-mono text-6xl sm:text-8xl text-muted-foreground/20 font-bold">
-                        {featuredPost.tags[0]?.slice(0, 3).toUpperCase() || "NEW"}
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-4 sm:p-6">
-                    <div className="flex items-center gap-3 mb-3">
-                      <span className="font-mono text-[10px] tracking-wider px-2 py-1 bg-foreground text-background">FEATURED</span>
-                      {featuredPost.tags[0] && (
-                        <span className="font-mono text-[10px] tracking-wider text-muted-foreground">{featuredPost.tags[0].toUpperCase()}</span>
-                      )}
-                    </div>
-                    <h2 className="text-lg sm:text-xl font-medium tracking-tight mb-2 group-hover:underline underline-offset-4">{featuredPost.title}</h2>
-                    <p className="text-sm text-muted-foreground leading-relaxed line-clamp-2">{featuredPost.excerpt}</p>
-                    <div className="flex items-center gap-4 mt-4 pt-4 border-t border-border">
-                      <div className="flex items-center gap-2">
-                        <div className={cn("w-6 h-6 flex items-center justify-center", featuredPost.author.type === "ai" ? "bg-gradient-to-br from-cyan-400 to-blue-500 text-white" : "bg-foreground text-background")}>
-                          {featuredPost.author.avatar ? <img src={featuredPost.author.avatar} alt="" className="w-full h-full object-cover" /> : featuredPost.author.type === "ai" ? <Bot size={12} /> : <User size={12} />}
-                        </div>
-                        <span className="font-mono text-xs text-muted-foreground">{featuredPost.author.name}</span>
-                      </div>
-                      <span className="font-mono text-xs text-muted-foreground">{featuredPost.publishedAt}</span>
-                      <span className="font-mono text-xs text-muted-foreground hidden sm:inline">{featuredPost.readTime}</span>
-                    </div>
-                  </div>
-                </Link>
-              ) : null}
-            </div>
+      {/* Opening: the blog's own line, set big */}
+      <section className="px-4 pb-12 pt-28 sm:px-6 sm:pt-32 lg:px-12">
+        <div className="mx-auto grid max-w-[84rem] gap-8 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:items-end lg:gap-16">
+          <h1 className="text-[3rem] font-light leading-[1.02] tracking-[-0.04em] sm:text-[4.5rem] lg:text-[6rem]">
+            Thoughts on{" "}
+            <span className="bg-prompt-accent px-[0.08em] [box-decoration-break:clone] [-webkit-box-decoration-break:clone]">collective intelligence</span>
+          </h1>
+          <div>
+            <p className="max-w-md text-base leading-relaxed text-muted-foreground sm:text-lg">
+              Engineering insights, research findings, and stories from the frontier
+              of human-AI collaboration.
+            </p>
+            <button
+              onClick={handleWritePost}
+              className="mt-6 hidden bg-foreground px-6 py-3.5 font-mono text-[11px] uppercase tracking-[0.18em] text-background transition-colors hover:bg-foreground/90 md:inline-block focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+            >
+              WRITE POST
+            </button>
           </div>
         </div>
       </section>
 
-      {/* Filters */}
-      <section className="border-b border-border bg-card sticky top-16 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 py-4">
-            <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
+      {/* Featured post: the lead, full width */}
+      <section className="border-t border-border px-4 sm:px-6 lg:px-12">
+        <div className="mx-auto max-w-[84rem]">
+          {featuredLoading ? (
+            <div data-testid="featured-skeleton" className="animate-pulse space-y-4 py-12">
+              <div className="h-4 w-24 bg-secondary" />
+              <div className="h-16 w-3/4 bg-secondary" />
+              <div className="h-4 w-1/2 bg-secondary" />
+            </div>
+          ) : featuredPost ? (
+            <Link href={`/blog/${featuredPost.slug}`} className="group grid gap-8 py-12 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:gap-16 lg:py-16 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground">
+              <div>
+                <div className="mb-6 flex items-center gap-3">
+                  <span className="bg-foreground px-2 py-1 font-mono text-[11px] uppercase tracking-[0.18em] text-background">FEATURED</span>
+                  {featuredPost.tags[0] && (
+                    <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{featuredPost.tags[0].toUpperCase()}</span>
+                  )}
+                </div>
+                <h2 className="text-[2.25rem] font-light leading-[1.08] tracking-[-0.035em] underline-offset-8 group-hover:underline sm:text-[3rem] lg:text-[3.75rem]">{featuredPost.title}</h2>
+              </div>
+              <div className="flex flex-col justify-end">
+                {featuredPost.coverImageUrl ? (
+                  <img src={featuredPost.coverImageUrl} alt={featuredPost.title} className="mb-6 aspect-[16/9] w-full object-cover" />
+                ) : null}
+                <p className="text-base leading-relaxed text-muted-foreground line-clamp-4">{featuredPost.excerpt}</p>
+                <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-border pt-4 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                  <span className="flex items-center gap-2 normal-case tracking-[0.06em]">
+                    {authorMark(featuredPost)}
+                    {featuredPost.author.name}
+                  </span>
+                  <span className="normal-case tracking-[0.06em]">{featuredPost.publishedAt}</span>
+                  <span className="hidden normal-case tracking-[0.06em] sm:inline">{featuredPost.readTime}</span>
+                </div>
+              </div>
+            </Link>
+          ) : null}
+        </div>
+      </section>
+
+      {/* Filters: they wrap, never scroll sideways */}
+      <section className="border-y border-border">
+        <div className="mx-auto max-w-[84rem] px-4 sm:px-6 lg:px-12">
+          <div className="flex flex-col gap-4 py-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-wrap items-center gap-1">
               {categories.map((cat) => (
                 <button
                   key={cat.id}
                   onClick={() => setActiveTag(cat.id === "all" ? null : cat.id)}
                   className={cn(
-                    "font-mono text-xs tracking-wider px-3 sm:px-4 py-2 whitespace-nowrap transition-colors shrink-0",
+                    "font-mono text-[11px] uppercase tracking-[0.18em] px-3 py-2 transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground",
                     (cat.id === "all" && activeTag === null) || cat.id === activeTag
                       ? "bg-foreground text-background"
                       : "text-muted-foreground hover:text-foreground"
@@ -176,13 +163,13 @@ export function BlogPageClient({ initialBlogPosts }: BlogPageClientProps) {
               ))}
             </div>
             <div className="relative">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Search size={14} className="absolute left-0 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <input
                 type="text"
                 placeholder="Search posts..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full sm:w-64 pl-9 pr-4 py-2 bg-secondary border-0 font-mono text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-foreground"
+                className="w-full border-0 border-b border-border bg-transparent py-2 pl-6 pr-2 text-base placeholder:text-muted-foreground focus:border-foreground focus:outline-none lg:w-72"
               />
             </div>
           </div>
@@ -191,17 +178,14 @@ export function BlogPageClient({ initialBlogPosts }: BlogPageClientProps) {
 
       {/* Error State */}
       {hasError && !postsLoading && filteredPosts.length === 0 && (
-        <section className="py-12 sm:py-16 px-4 sm:px-6 lg:px-12">
-          <div className="max-w-7xl mx-auto text-center">
-            <div className="w-12 h-12 mx-auto mb-4 flex items-center justify-center bg-secondary">
-              <AlertCircle size={20} className="text-muted-foreground" />
-            </div>
-            <p className="font-mono text-sm text-muted-foreground mb-4">
+        <section className="px-4 py-12 sm:px-6 sm:py-16 lg:px-12">
+          <div className="mx-auto max-w-[84rem]">
+            <p className="text-lg font-light text-muted-foreground">
               {postsError || featuredError || 'Failed to fetch blog data'}
             </p>
             <button
               onClick={() => refetch()}
-              className="font-mono text-xs tracking-wider px-4 py-2 border border-border hover:border-foreground transition-colors inline-flex items-center gap-2"
+              className="mt-6 inline-flex items-center gap-2 border border-border px-4 py-2.5 font-mono text-[11px] uppercase tracking-[0.18em] transition-colors hover:border-foreground focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
             >
               <RefreshCw size={12} />
               RETRY
@@ -210,97 +194,73 @@ export function BlogPageClient({ initialBlogPosts }: BlogPageClientProps) {
         </section>
       )}
 
-      {/* Posts Grid */}
+      {/* Posts: the mosaic of /posts, by position */}
       {(displayPosts.length > 0 || (postsLoading && displayPosts.length === 0)) && (
-        <section className="py-12 sm:py-16 px-4 sm:px-6 lg:px-12">
-          <div className="max-w-7xl mx-auto">
-            {postsLoading && displayPosts.length === 0 ? (
-              <div data-testid="posts-skeleton" className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="border border-border animate-pulse">
-                    <div className="aspect-[16/10] bg-secondary" />
-                    <div className="p-4 sm:p-5 space-y-3">
-                      <div className="h-5 bg-secondary w-3/4" />
-                      <div className="h-4 bg-secondary w-full" />
-                      <div className="h-4 bg-secondary w-1/2" />
+        <section>
+          {postsLoading && displayPosts.length === 0 ? (
+            <div data-testid="posts-skeleton" className="grid gap-px bg-border sm:grid-cols-2 lg:grid-cols-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="animate-pulse space-y-3 bg-background p-8">
+                  <div className="h-8 w-3/4 bg-secondary" />
+                  <div className="h-4 w-full bg-secondary" />
+                  <div className="h-4 w-1/2 bg-secondary" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <>
+              <div className={mosaic.mosaic}>
+                {filteredPosts.map((post) => (
+                  <article key={post.slug} className={mosaic.tile}>
+                    {post.tags[0] && (
+                      <span className="mb-5 font-mono text-[11px] uppercase tracking-[0.18em] opacity-70">{post.tags[0].toUpperCase()}</span>
+                    )}
+                    <h3 className={mosaic.title}>
+                      <Link href={`/blog/${post.slug}`} className={mosaic.titleLink}>
+                        {post.title}
+                      </Link>
+                    </h3>
+                    <p className={mosaic.excerpt}>{post.excerpt}</p>
+                    <div className={mosaic.footer}>
+                      <div className={mosaic.byline}>
+                        <span className="flex items-center gap-2">
+                          {authorMark(post)}
+                          <span className="truncate">{post.author.name}</span>
+                        </span>
+                        <span className="flex gap-3 opacity-70">
+                          <span className="hidden sm:inline">{post.publishedAt}</span>
+                          <span>{post.readTime}</span>
+                        </span>
+                      </div>
                     </div>
-                  </div>
+                  </article>
                 ))}
               </div>
-            ) : (
-              <>
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-                  {filteredPosts.map((post) => (
-                    <Link
-                      key={post.slug}
-                      href={`/blog/${post.slug}`}
-                      className="group border border-border hover:border-foreground transition-colors flex flex-col"
-                    >
-                      <div className="aspect-[16/10] bg-gradient-to-br from-secondary to-secondary/30 flex items-center justify-center relative overflow-hidden">
-                        {post.coverImageUrl ? (
-                          <img src={post.coverImageUrl} alt={post.title} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="font-mono text-4xl text-muted-foreground/10 font-bold">
-                            {(post.tags[0] || "POST").slice(0, 3).toUpperCase()}
-                          </div>
-                        )}
-                        {post.tags[0] && (
-                          <div className="absolute top-3 left-3">
-                            <span className="font-mono text-[9px] tracking-wider px-2 py-1 bg-background/90 text-foreground">{post.tags[0].toUpperCase()}</span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="p-4 sm:p-5 flex flex-col flex-1">
-                        <h3 className="font-medium tracking-tight mb-2 group-hover:underline underline-offset-4 line-clamp-2 text-sm sm:text-base">{post.title}</h3>
-                        <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed line-clamp-2 flex-1">{post.excerpt}</p>
-                        <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
-                          <div className="flex items-center gap-2">
-                            <div className={cn("w-5 h-5 flex items-center justify-center font-mono text-[8px] font-bold", post.author.type === "ai" ? "bg-gradient-to-br from-cyan-400 to-blue-500 text-white" : "bg-foreground text-background")}>
-                              {post.author.type === "ai" ? "AI" : post.author.name.slice(0, 2).toUpperCase()}
-                            </div>
-                            <span className="font-mono text-[10px] text-muted-foreground truncate max-w-[80px] sm:max-w-[100px]">{post.author.name}</span>
-                          </div>
-                          <div className="flex items-center gap-2 sm:gap-3">
-                            <span className="font-mono text-[10px] text-muted-foreground hidden sm:inline">{post.publishedAt}</span>
-                            <span className="font-mono text-[10px] text-muted-foreground">{post.readTime}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
 
-                {filteredPosts.length === 0 && (
-                  <div className="text-center py-16">
-                    <div className="w-12 h-12 mx-auto mb-4 flex items-center justify-center bg-secondary">
-                      <Search size={20} className="text-muted-foreground" />
-                    </div>
-                    <p className="font-mono text-sm text-muted-foreground">No posts found matching your criteria.</p>
-                    <button
-                      onClick={() => { setActiveTag(null); setSearchQuery(""); }}
-                      className="font-mono text-xs tracking-wider text-foreground underline underline-offset-4 mt-4"
-                    >
-                      Clear filters
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
+              {filteredPosts.length === 0 && (
+                <div className="mx-auto max-w-[84rem] px-4 py-16 sm:px-6 lg:px-12">
+                  <p className="text-lg font-light text-muted-foreground">No posts found matching your criteria.</p>
+                  <button
+                    onClick={() => { setActiveTag(null); setSearchQuery(""); }}
+                    className="mt-4 font-mono text-[11px] uppercase tracking-[0.18em] text-foreground underline underline-offset-4"
+                  >
+                    Clear filters
+                  </button>
+                </div>
+              )}
+            </>
+          )}
         </section>
       )}
 
       {/* Empty state when no posts at all */}
       {!postsLoading && !hasError && filteredPosts.length === 0 && displayPosts.length === 0 && (
-        <section className="py-12 sm:py-16 px-4 sm:px-6 lg:px-12">
-          <div className="max-w-7xl mx-auto text-center py-16">
-            <div className="w-12 h-12 mx-auto mb-4 flex items-center justify-center bg-secondary">
-              <Search size={20} className="text-muted-foreground" />
-            </div>
-            <p className="font-mono text-sm text-muted-foreground">No posts found matching your criteria.</p>
+        <section className="px-4 py-16 sm:px-6 lg:px-12">
+          <div className="mx-auto max-w-[84rem]">
+            <p className="text-lg font-light text-muted-foreground">No posts found matching your criteria.</p>
             <button
               onClick={() => { setActiveTag(null); setSearchQuery(""); }}
-              className="font-mono text-xs tracking-wider text-foreground underline underline-offset-4 mt-4"
+              className="mt-4 font-mono text-[11px] uppercase tracking-[0.18em] text-foreground underline underline-offset-4"
             >
               Clear filters
             </button>
@@ -308,22 +268,19 @@ export function BlogPageClient({ initialBlogPosts }: BlogPageClientProps) {
         </section>
       )}
 
-      {/* Tags Cloud */}
-      <section className="py-12 sm:py-16 px-4 sm:px-6 lg:px-12 border-t border-border">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-            <div>
-              <p className="font-mono text-xs tracking-[0.3em] text-muted-foreground mb-2">EXPLORE BY TOPIC</p>
-              <h3 className="text-xl sm:text-2xl font-light tracking-tight">Popular Tags</h3>
-            </div>
-            <Link href="/blog/tags" className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+      {/* Tags */}
+      <section className="border-t border-border px-4 py-12 sm:px-6 sm:py-16 lg:px-12">
+        <div className="mx-auto grid max-w-[84rem] gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:gap-16">
+          <div>
+            <h3 className="text-2xl font-light tracking-[-0.025em] sm:text-3xl">Popular Tags</h3>
+            <Link href="/blog/tags" className="mt-4 inline-flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground transition-colors hover:text-foreground">
               VIEW ALL TAGS
               <ChevronRight size={12} />
             </Link>
           </div>
-          <div className="flex flex-wrap gap-2 sm:gap-3">
+          <div className="flex flex-wrap gap-x-6 gap-y-3">
             {tags.map((tag) => (
-              <Link key={tag.name} href={`/blog?tag=${tag.name}`} className="font-mono text-xs tracking-wider px-3 sm:px-4 py-2 border border-border hover:border-foreground hover:bg-secondary transition-colors">
+              <Link key={tag.name} href={`/blog?tag=${tag.name}`} className="text-lg font-light underline-offset-4 transition-colors hover:underline">
                 {tag.name}
               </Link>
             ))}
@@ -334,10 +291,10 @@ export function BlogPageClient({ initialBlogPosts }: BlogPageClientProps) {
       <Footer />
 
       {/* Mobile CTA */}
-      <div className="md:hidden fixed bottom-6 left-6 right-6 z-50">
+      <div className="fixed bottom-6 left-6 right-6 z-50 md:hidden">
         <button
           onClick={handleWritePost}
-          className="w-full font-mono text-xs tracking-wider bg-foreground text-background px-6 py-4 hover:bg-foreground/90 transition-colors"
+          className="w-full bg-foreground px-6 py-4 font-mono text-[11px] uppercase tracking-[0.18em] text-background transition-colors hover:bg-foreground/90"
         >
           WRITE POST
         </button>

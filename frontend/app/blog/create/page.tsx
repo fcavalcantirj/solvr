@@ -107,13 +107,13 @@ export default function CreateBlogPostPage() {
           <div className="w-16 h-16 mx-auto mb-6 border border-border flex items-center justify-center">
             <AlertCircle className="w-8 h-8 text-muted-foreground" />
           </div>
-          <h2 className="font-mono text-lg mb-2">Authentication Required</h2>
-          <p className="text-muted-foreground font-mono text-sm mb-6">
+          <h2 className="mb-2 text-[2rem] font-light tracking-[-0.03em]">Authentication Required</h2>
+          <p className="mb-6 text-base text-muted-foreground">
             You need to sign in to create a blog post.
           </p>
           <button
             onClick={() => router.push('/login')}
-            className="px-5 py-2.5 bg-foreground text-background font-mono text-xs tracking-wider hover:bg-foreground/90 transition-colors"
+            className="px-5 py-2.5 bg-foreground text-background font-mono text-[11px] uppercase tracking-[0.18em] hover:bg-foreground/90 transition-colors"
           >
             SIGN IN
           </button>
@@ -126,24 +126,21 @@ export default function CreateBlogPostPage() {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <div className="max-w-2xl mx-auto px-6 lg:px-12 py-12">
-        <p className="font-mono text-[10px] tracking-[0.3em] text-muted-foreground mb-3">
-          NEW BLOG POST
-        </p>
-        <h1 className="text-3xl font-light tracking-tight mb-8">
+      <div className="mx-auto max-w-[52rem] px-4 pb-16 pt-28 sm:px-6 lg:px-12 lg:pt-32">
+        <h1 className="mb-10 text-[2.5rem] font-light leading-[1.05] tracking-[-0.04em] sm:text-[3.5rem]">
           Create Blog Post
         </h1>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {error && (
-            <div className="p-4 border border-red-500/30 bg-red-500/10 text-red-500 font-mono text-sm">
+            <div role="alert" className="border-l border-destructive pl-3 text-sm text-destructive">
               {error}
             </div>
           )}
 
           {/* Title */}
           <div className="space-y-2">
-            <label htmlFor="title" className="font-mono text-xs tracking-wider text-muted-foreground">
+            <label htmlFor="title" className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               TITLE
             </label>
             <Input
@@ -162,7 +159,7 @@ export default function CreateBlogPostPage() {
           {/* Body with preview toggle */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label htmlFor="body" className="font-mono text-xs tracking-wider text-muted-foreground">
+              <label htmlFor="body" className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                 BODY
               </label>
               <div className="flex gap-1">
@@ -209,7 +206,7 @@ export default function CreateBlogPostPage() {
 
           {/* Tags */}
           <div className="space-y-2">
-            <label htmlFor="tags" className="font-mono text-xs tracking-wider text-muted-foreground">
+            <label htmlFor="tags" className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               TAGS (optional, max {MAX_TAGS})
             </label>
             <div className="flex gap-2">
@@ -243,7 +240,7 @@ export default function CreateBlogPostPage() {
                       type="button"
                       data-testid={`remove-tag-${tag}`}
                       onClick={() => removeTag(tag)}
-                      className="hover:text-red-500 transition-colors"
+                      className="hover:text-destructive transition-colors"
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -255,7 +252,7 @@ export default function CreateBlogPostPage() {
 
           {/* Cover Image URL */}
           <div className="space-y-2">
-            <label htmlFor="cover-image" className="font-mono text-xs tracking-wider text-muted-foreground">
+            <label htmlFor="cover-image" className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               COVER IMAGE URL (optional)
             </label>
             <Input
@@ -269,7 +266,7 @@ export default function CreateBlogPostPage() {
 
           {/* Excerpt */}
           <div className="space-y-2">
-            <label htmlFor="excerpt" className="font-mono text-xs tracking-wider text-muted-foreground">
+            <label htmlFor="excerpt" className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               EXCERPT (optional)
             </label>
             <textarea
@@ -284,7 +281,7 @@ export default function CreateBlogPostPage() {
 
           {/* Meta Description */}
           <div className="space-y-2">
-            <label htmlFor="meta-description" className="font-mono text-xs tracking-wider text-muted-foreground">
+            <label htmlFor="meta-description" className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               META DESCRIPTION (optional)
             </label>
             <textarea
@@ -303,7 +300,7 @@ export default function CreateBlogPostPage() {
 
           {/* Status toggle */}
           <div className="space-y-2">
-            <label className="font-mono text-xs tracking-wider text-muted-foreground">STATUS</label>
+            <label className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">STATUS</label>
             <div className="flex gap-3">
               <button
                 type="button"
@@ -335,7 +332,7 @@ export default function CreateBlogPostPage() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full py-3 bg-foreground text-background font-mono text-sm tracking-wider hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full py-3.5 bg-foreground text-background font-mono text-[11px] uppercase tracking-[0.18em] hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {isSubmitting ? (
                 <>

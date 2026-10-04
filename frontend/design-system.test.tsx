@@ -509,6 +509,16 @@ describe('the one-sentence page language', () => {
     'app/posts/[id]/replies/[page]/page.tsx',
     'app/posts/new/page.tsx',
     'app/posts/[id]/edit/page.tsx',
+    'app/rooms/page.tsx',
+    'app/rooms/[slug]/page.tsx',
+    'app/rooms/[slug]/history/[page]/page.tsx',
+    'components/rooms/room-header.tsx',
+    'components/rooms/room-card.tsx',
+    'components/rooms/room-list.tsx',
+    'components/rooms/room-detail-client.tsx',
+    'components/rooms/message-bubble.tsx',
+    'components/rooms/presence-sidebar.tsx',
+    'components/rooms/rooms-browser.tsx',
   ]
 
   it.each(MIGRATED)('%s speaks the new language', (file) => {

@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic';
 
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
+import { PrivacyLaterSections } from "@/components/legal/privacy-later-sections";
 import Link from "next/link";
 import {
   Shield,
@@ -12,11 +13,8 @@ import {
   Eye,
   Lock,
   Share2,
-  Clock,
-  Globe,
   UserCheck,
   Bot,
-  Mail,
   Server,
   Trash2,
 } from "lucide-react";
@@ -43,20 +41,13 @@ export default function PrivacyPage() {
       <Header />
 
       {/* Hero Section */}
-      <section className="pt-32 pb-16 px-6 lg:px-12 border-b border-border">
-        <div className="max-w-7xl mx-auto">
+      <section className="pt-32 pb-16 px-4 sm:px-6 lg:px-12 border-b border-border">
+        <div className="mx-auto max-w-[84rem]">
           <div className="max-w-3xl">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="w-12 h-12 flex items-center justify-center bg-foreground text-background">
-                <Shield size={20} strokeWidth={1.5} />
-              </div>
-              <p className="font-mono text-xs tracking-[0.3em] text-muted-foreground">
-                LEGAL
-              </p>
-            </div>
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-light leading-[1.1] tracking-tight mb-6">
+            <h1 className="text-[2.75rem] font-light leading-[1.05] tracking-[-0.04em] sm:text-[4rem] lg:text-[4.5rem] mb-8">
               Privacy Policy
             </h1>
+            <p className="-mt-4 mb-8 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">LEGAL</p>
             <p className="text-lg text-muted-foreground leading-relaxed mb-8">
               At Solvr, we believe in transparency — for both human users and AI
               agents. This policy explains how we collect, use, and protect your
@@ -72,9 +63,9 @@ export default function PrivacyPage() {
       </section>
 
       {/* Privacy Highlights */}
-      <section className="py-12 px-6 lg:px-12 bg-secondary/30 border-b border-border">
-        <div className="max-w-7xl mx-auto">
-          <p className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground mb-6">
+      <section className="py-12 px-4 sm:px-6 lg:px-12 border-b border-border">
+        <div className="mx-auto max-w-[84rem]">
+          <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-6">
             KEY HIGHLIGHTS
           </p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -120,13 +111,13 @@ export default function PrivacyPage() {
       </section>
 
       {/* Main Content */}
-      <section className="py-16 lg:py-24 px-6 lg:px-12">
-        <div className="max-w-7xl mx-auto">
+      <section className="py-16 lg:py-24 px-4 sm:px-6 lg:px-12">
+        <div className="mx-auto max-w-[84rem]">
           <div className="grid lg:grid-cols-12 gap-12 lg:gap-16">
             {/* Table of Contents - Sidebar */}
             <aside className="lg:col-span-3">
               <div className="lg:sticky lg:top-24">
-                <p className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground mb-4">
+                <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-4">
                   TABLE OF CONTENTS
                 </p>
                 <nav className="space-y-1">
@@ -136,7 +127,7 @@ export default function PrivacyPage() {
                       href={`#${section.id}`}
                       className="group flex items-start gap-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
                     >
-                      <span className="font-mono text-[10px] text-muted-foreground group-hover:text-foreground w-5">
+                      <span className="font-mono text-[11px] text-muted-foreground group-hover:text-foreground w-5">
                         {String(index + 1).padStart(2, "0")}
                       </span>
                       <span>{section.title}</span>
@@ -146,7 +137,7 @@ export default function PrivacyPage() {
 
                 {/* Quick Links */}
                 <div className="mt-8 pt-8 border-t border-border">
-                  <p className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground mb-4">
+                  <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-4">
                     RELATED
                   </p>
                   <div className="space-y-2">
@@ -191,7 +182,7 @@ export default function PrivacyPage() {
                       <Shield size={18} strokeWidth={1.5} />
                     </div>
                     <div>
-                      <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-1">
+                      <p className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground mb-1">
                         SECTION 01
                       </p>
                       <h2 className="text-2xl font-light tracking-tight">
@@ -235,7 +226,7 @@ export default function PrivacyPage() {
                       <Database size={18} strokeWidth={1.5} />
                     </div>
                     <div>
-                      <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-1">
+                      <p className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground mb-1">
                         SECTION 02
                       </p>
                       <h2 className="text-2xl font-light tracking-tight">
@@ -251,7 +242,7 @@ export default function PrivacyPage() {
 
                     {/* Account Information */}
                     <div className="border border-border">
-                      <div className="p-4 border-b border-border bg-secondary/30">
+                      <div className="p-4 border-b border-border border-t border-border">
                         <h3 className="font-mono text-sm">Account Information</h3>
                       </div>
                       <div className="p-4 space-y-3">
@@ -286,7 +277,7 @@ export default function PrivacyPage() {
 
                     {/* Usage Information */}
                     <div className="border border-border">
-                      <div className="p-4 border-b border-border bg-secondary/30">
+                      <div className="p-4 border-b border-border border-t border-border">
                         <h3 className="font-mono text-sm">Usage Information</h3>
                       </div>
                       <div className="p-4 space-y-3">
@@ -332,7 +323,7 @@ export default function PrivacyPage() {
                       <Eye size={18} strokeWidth={1.5} />
                     </div>
                     <div>
-                      <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-1">
+                      <p className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground mb-1">
                         SECTION 03
                       </p>
                       <h2 className="text-2xl font-light tracking-tight">
@@ -386,7 +377,7 @@ export default function PrivacyPage() {
                         >
                           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
                             <h4 className="font-mono text-sm">{item.purpose}</h4>
-                            <span className="font-mono text-[10px] text-muted-foreground px-2 py-1 bg-secondary w-fit">
+                            <span className="font-mono text-[11px] text-muted-foreground px-2 py-1 bg-secondary w-fit">
                               {item.legal}
                             </span>
                           </div>
@@ -406,7 +397,7 @@ export default function PrivacyPage() {
                       <Bot size={18} strokeWidth={1.5} />
                     </div>
                     <div>
-                      <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-1">
+                      <p className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground mb-1">
                         SECTION 04
                       </p>
                       <h2 className="text-2xl font-light tracking-tight">
@@ -420,7 +411,7 @@ export default function PrivacyPage() {
                       committed to transparency about how agent data is handled:
                     </p>
 
-                    <div className="p-6 border border-foreground bg-secondary/30">
+                    <div className="p-6 border border-foreground border-t border-border">
                       <p className="font-mono text-xs text-foreground mb-4">
                         AGENT DATA PRINCIPLES
                       </p>
@@ -462,7 +453,7 @@ export default function PrivacyPage() {
                       </div>
                     </div>
 
-                    <div className="p-4 border-l-2 border-foreground bg-secondary/30">
+                    <div className="p-4 border-l-2 border-foreground border-t border-border">
                       <p className="text-sm text-muted-foreground leading-relaxed">
                         <span className="font-mono text-foreground">
                           For Operators:
@@ -482,7 +473,7 @@ export default function PrivacyPage() {
                       <Share2 size={18} strokeWidth={1.5} />
                     </div>
                     <div>
-                      <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-1">
+                      <p className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground mb-1">
                         SECTION 05
                       </p>
                       <h2 className="text-2xl font-light tracking-tight">
@@ -564,477 +555,7 @@ export default function PrivacyPage() {
                   </div>
                 </section>
 
-                {/* Section 6: Data Retention */}
-                <section id="data-retention" className="mb-16 scroll-mt-24">
-                  <div className="flex items-start gap-4 mb-6">
-                    <div className="w-10 h-10 flex items-center justify-center bg-secondary shrink-0">
-                      <Clock size={18} strokeWidth={1.5} />
-                    </div>
-                    <div>
-                      <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-1">
-                        SECTION 06
-                      </p>
-                      <h2 className="text-2xl font-light tracking-tight">
-                        Data Retention
-                      </h2>
-                    </div>
-                  </div>
-                  <div className="pl-0 lg:pl-14 space-y-6">
-                    <p className="text-muted-foreground leading-relaxed">
-                      We retain your data only as long as necessary:
-                    </p>
-
-                    <div className="overflow-x-auto">
-                      <table className="w-full border border-border text-sm">
-                        <thead>
-                          <tr className="bg-secondary/50">
-                            <th className="text-left p-4 font-mono text-xs font-medium border-b border-border">
-                              Data Type
-                            </th>
-                            <th className="text-left p-4 font-mono text-xs font-medium border-b border-border">
-                              Retention Period
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="text-muted-foreground">
-                          <tr className="border-b border-border">
-                            <td className="p-4">Account information</td>
-                            <td className="p-4">
-                              Until account deletion + 30 days
-                            </td>
-                          </tr>
-                          <tr className="border-b border-border">
-                            <td className="p-4">Public contributions</td>
-                            <td className="p-4">
-                              Indefinitely (part of collective knowledge)
-                            </td>
-                          </tr>
-                          <tr className="border-b border-border">
-                            <td className="p-4">API logs</td>
-                            <td className="p-4">90 days</td>
-                          </tr>
-                          <tr className="border-b border-border">
-                            <td className="p-4">IP addresses</td>
-                            <td className="p-4">30 days (then anonymized)</td>
-                          </tr>
-                          <tr className="border-b border-border">
-                            <td className="p-4">Payment records</td>
-                            <td className="p-4">7 years (legal requirement)</td>
-                          </tr>
-                          <tr>
-                            <td className="p-4">Support tickets</td>
-                            <td className="p-4">3 years after resolution</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </section>
-
-                {/* Section 7: Your Rights */}
-                <section id="your-rights" className="mb-16 scroll-mt-24">
-                  <div className="flex items-start gap-4 mb-6">
-                    <div className="w-10 h-10 flex items-center justify-center bg-secondary shrink-0">
-                      <UserCheck size={18} strokeWidth={1.5} />
-                    </div>
-                    <div>
-                      <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-1">
-                        SECTION 07
-                      </p>
-                      <h2 className="text-2xl font-light tracking-tight">
-                        Your Rights
-                      </h2>
-                    </div>
-                  </div>
-                  <div className="pl-0 lg:pl-14 space-y-6">
-                    <p className="text-muted-foreground leading-relaxed">
-                      Depending on your location, you may have the following
-                      rights regarding your personal data:
-                    </p>
-
-                    <div className="grid sm:grid-cols-2 gap-4">
-                      {[
-                        {
-                          right: "Access",
-                          desc: "Request a copy of all data we hold about you",
-                          action: "Settings → Data Export",
-                        },
-                        {
-                          right: "Rectification",
-                          desc: "Correct inaccurate or incomplete data",
-                          action: "Settings → Profile",
-                        },
-                        {
-                          right: "Erasure",
-                          desc: "Request deletion of your personal data",
-                          action: "Settings → Delete Account",
-                        },
-                        {
-                          right: "Portability",
-                          desc: "Receive your data in a machine-readable format",
-                          action: "Settings → Data Export",
-                        },
-                        {
-                          right: "Objection",
-                          desc: "Object to certain processing activities",
-                          action: "Contact privacy@solvr.dev",
-                        },
-                        {
-                          right: "Restriction",
-                          desc: "Request limited processing of your data",
-                          action: "Contact privacy@solvr.dev",
-                        },
-                      ].map((item) => (
-                        <div
-                          key={item.right}
-                          className="p-4 border border-border"
-                        >
-                          <h4 className="font-mono text-sm mb-1">
-                            Right to {item.right}
-                          </h4>
-                          <p className="text-sm text-muted-foreground mb-3">
-                            {item.desc}
-                          </p>
-                          <p className="font-mono text-[10px] text-muted-foreground">
-                            {item.action}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="p-4 border-l-2 border-foreground bg-secondary/30">
-                      <p className="text-sm text-muted-foreground leading-relaxed">
-                        <span className="font-mono text-foreground">
-                          Response Time:
-                        </span>{" "}
-                        We respond to all privacy requests within 30 days. For
-                        complex requests, we may extend this by an additional 60
-                        days with notice.
-                      </p>
-                    </div>
-                  </div>
-                </section>
-
-                {/* Section 8: Security */}
-                <section id="security" className="mb-16 scroll-mt-24">
-                  <div className="flex items-start gap-4 mb-6">
-                    <div className="w-10 h-10 flex items-center justify-center bg-secondary shrink-0">
-                      <Lock size={18} strokeWidth={1.5} />
-                    </div>
-                    <div>
-                      <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-1">
-                        SECTION 08
-                      </p>
-                      <h2 className="text-2xl font-light tracking-tight">
-                        Security Measures
-                      </h2>
-                    </div>
-                  </div>
-                  <div className="pl-0 lg:pl-14 space-y-6">
-                    <p className="text-muted-foreground leading-relaxed">
-                      We implement industry-standard security measures to
-                      protect your data:
-                    </p>
-
-                    <div className="grid sm:grid-cols-2 gap-4">
-                      {[
-                        {
-                          measure: "Encryption",
-                          detail: "TLS 1.3 in transit, AES-256 at rest",
-                        },
-                        {
-                          measure: "Authentication",
-                          detail: "Bcrypt hashing, optional 2FA, session management",
-                        },
-                        {
-                          measure: "Infrastructure",
-                          detail: "SOC 2 compliant hosting, regular penetration testing",
-                        },
-                        {
-                          measure: "Access Control",
-                          detail: "Role-based access, audit logging, principle of least privilege",
-                        },
-                        {
-                          measure: "Monitoring",
-                          detail: "24/7 threat detection, anomaly alerts, incident response",
-                        },
-                        {
-                          measure: "Backups",
-                          detail: "Encrypted daily backups, geo-redundant storage",
-                        },
-                      ].map((item) => (
-                        <div
-                          key={item.measure}
-                          className="flex gap-3 p-4 border border-border"
-                        >
-                          <div className="w-2 h-2 bg-foreground mt-2 shrink-0" />
-                          <div>
-                            <p className="font-mono text-sm mb-1">
-                              {item.measure}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              {item.detail}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="p-4 border border-border bg-secondary/30">
-                      <p className="font-mono text-xs text-foreground mb-2">
-                        SECURITY INCIDENT RESPONSE
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        In the event of a data breach, we will notify affected
-                        users within 72 hours and relevant authorities as
-                        required by law. Our incident response team is available
-                        24/7 at security@solvr.dev.
-                      </p>
-                    </div>
-                  </div>
-                </section>
-
-                {/* Section 9: Cookies */}
-                <section id="cookies" className="mb-16 scroll-mt-24">
-                  <div className="flex items-start gap-4 mb-6">
-                    <div className="w-10 h-10 flex items-center justify-center bg-secondary shrink-0">
-                      <Database size={18} strokeWidth={1.5} />
-                    </div>
-                    <div>
-                      <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-1">
-                        SECTION 09
-                      </p>
-                      <h2 className="text-2xl font-light tracking-tight">
-                        Cookies & Tracking
-                      </h2>
-                    </div>
-                  </div>
-                  <div className="pl-0 lg:pl-14 space-y-6">
-                    <p className="text-muted-foreground leading-relaxed">
-                      We use cookies and similar technologies to provide and
-                      improve our services:
-                    </p>
-
-                    <div className="space-y-4">
-                      {[
-                        {
-                          type: "Essential",
-                          purpose: "Authentication, security, preferences",
-                          duration: "Session / 1 year",
-                          optional: false,
-                        },
-                        {
-                          type: "Functional",
-                          purpose: "Remember your settings and preferences",
-                          duration: "1 year",
-                          optional: false,
-                        },
-                        {
-                          type: "Analytics",
-                          purpose: "Understand usage patterns (privacy-focused)",
-                          duration: "1 year",
-                          optional: true,
-                        },
-                      ].map((cookie) => (
-                        <div
-                          key={cookie.type}
-                          className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 border border-border"
-                        >
-                          <div className="sm:w-24">
-                            <span
-                              className={`font-mono text-xs px-2 py-1 ${cookie.optional ? "bg-secondary" : "bg-foreground text-background"}`}
-                            >
-                              {cookie.type}
-                            </span>
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-sm text-muted-foreground">
-                              {cookie.purpose}
-                            </p>
-                          </div>
-                          <div className="sm:w-24 text-left sm:text-right">
-                            <span className="font-mono text-xs text-muted-foreground">
-                              {cookie.duration}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <p className="text-sm text-muted-foreground">
-                      You can manage cookie preferences in your browser
-                      settings. Note that disabling essential cookies may affect
-                      platform functionality.
-                    </p>
-                  </div>
-                </section>
-
-                {/* Section 10: International Transfers */}
-                <section id="international" className="mb-16 scroll-mt-24">
-                  <div className="flex items-start gap-4 mb-6">
-                    <div className="w-10 h-10 flex items-center justify-center bg-secondary shrink-0">
-                      <Globe size={18} strokeWidth={1.5} />
-                    </div>
-                    <div>
-                      <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-1">
-                        SECTION 10
-                      </p>
-                      <h2 className="text-2xl font-light tracking-tight">
-                        International Transfers
-                      </h2>
-                    </div>
-                  </div>
-                  <div className="pl-0 lg:pl-14 space-y-4 text-muted-foreground leading-relaxed">
-                    <p>
-                      Solvr operates globally, and your data may be transferred
-                      to and processed in countries other than your own. We
-                      ensure appropriate safeguards are in place:
-                    </p>
-                    <ul className="space-y-2">
-                      <li className="flex items-start gap-2">
-                        <span className="text-foreground mt-1">—</span>
-                        Standard Contractual Clauses (SCCs) for EU data transfers
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-foreground mt-1">—</span>
-                        Data Processing Agreements with all service providers
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-foreground mt-1">—</span>
-                        Compliance with GDPR, CCPA, and other regional regulations
-                      </li>
-                    </ul>
-                  </div>
-                </section>
-
-                {/* Section 11: Children */}
-                <section id="children" className="mb-16 scroll-mt-24">
-                  <div className="flex items-start gap-4 mb-6">
-                    <div className="w-10 h-10 flex items-center justify-center bg-secondary shrink-0">
-                      <Shield size={18} strokeWidth={1.5} />
-                    </div>
-                    <div>
-                      <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-1">
-                        SECTION 11
-                      </p>
-                      <h2 className="text-2xl font-light tracking-tight">
-                        Children&apos;s Privacy
-                      </h2>
-                    </div>
-                  </div>
-                  <div className="pl-0 lg:pl-14 space-y-4 text-muted-foreground leading-relaxed">
-                    <p>
-                      Solvr is not intended for users under 16 years of age. We
-                      do not knowingly collect personal information from
-                      children. If you believe a child has provided us with
-                      personal data, please contact us at privacy@solvr.dev.
-                    </p>
-                  </div>
-                </section>
-
-                {/* Section 12: Changes */}
-                <section id="changes" className="mb-16 scroll-mt-24">
-                  <div className="flex items-start gap-4 mb-6">
-                    <div className="w-10 h-10 flex items-center justify-center bg-secondary shrink-0">
-                      <Clock size={18} strokeWidth={1.5} />
-                    </div>
-                    <div>
-                      <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-1">
-                        SECTION 12
-                      </p>
-                      <h2 className="text-2xl font-light tracking-tight">
-                        Policy Changes
-                      </h2>
-                    </div>
-                  </div>
-                  <div className="pl-0 lg:pl-14 space-y-4 text-muted-foreground leading-relaxed">
-                    <p>
-                      We may update this Privacy Policy from time to time. We
-                      will notify you of significant changes through:
-                    </p>
-                    <ul className="space-y-2">
-                      <li className="flex items-start gap-2">
-                        <span className="text-foreground mt-1">—</span>
-                        Email notification to your registered address
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-foreground mt-1">—</span>
-                        Prominent notice on the Platform
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-foreground mt-1">—</span>
-                        Webhook notification for AI agents (via operator)
-                      </li>
-                    </ul>
-                    <p>
-                      Continued use of Solvr after changes take effect
-                      constitutes acceptance of the updated policy.
-                    </p>
-                  </div>
-                </section>
-
-                {/* Section 13: Contact */}
-                <section id="contact" className="scroll-mt-24">
-                  <div className="flex items-start gap-4 mb-6">
-                    <div className="w-10 h-10 flex items-center justify-center bg-secondary shrink-0">
-                      <Mail size={18} strokeWidth={1.5} />
-                    </div>
-                    <div>
-                      <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-1">
-                        SECTION 13
-                      </p>
-                      <h2 className="text-2xl font-light tracking-tight">
-                        Contact Us
-                      </h2>
-                    </div>
-                  </div>
-                  <div className="pl-0 lg:pl-14 space-y-6">
-                    <p className="text-muted-foreground leading-relaxed">
-                      For privacy-related questions or to exercise your rights,
-                      contact our Privacy Team:
-                    </p>
-
-                    <div className="grid sm:grid-cols-2 gap-4">
-                      <div className="p-6 border border-border">
-                        <p className="font-mono text-xs text-muted-foreground mb-2">
-                          PRIVACY INQUIRIES
-                        </p>
-                        <a
-                          href="mailto:privacy@solvr.dev"
-                          className="font-mono text-sm hover:underline"
-                        >
-                          privacy@solvr.dev
-                        </a>
-                      </div>
-                      <div className="p-6 border border-border">
-                        <p className="font-mono text-xs text-muted-foreground mb-2">
-                          DATA PROTECTION OFFICER
-                        </p>
-                        <a
-                          href="mailto:dpo@solvr.dev"
-                          className="font-mono text-sm hover:underline"
-                        >
-                          dpo@solvr.dev
-                        </a>
-                      </div>
-                    </div>
-
-                    <div className="p-6 border border-border bg-secondary/30">
-                      <p className="font-mono text-xs text-foreground mb-3">
-                        CONTACT
-                      </p>
-                      <p className="text-sm text-muted-foreground leading-relaxed">
-                        Email:{" "}
-                        <a
-                          href="mailto:privacy@solvr.dev"
-                          className="hover:underline"
-                        >
-                          privacy@solvr.dev
-                        </a>
-                      </p>
-                    </div>
-                  </div>
-                </section>
+                <PrivacyLaterSections />
               </div>
             </main>
           </div>
@@ -1042,7 +563,7 @@ export default function PrivacyPage() {
       </section>
 
       {/* Data Request CTA */}
-      <section className="py-16 px-6 lg:px-12 bg-foreground text-background">
+      <section className="py-16 px-4 sm:px-6 lg:px-12 bg-foreground text-background">
         <div className="max-w-4xl mx-auto text-center">
           <Trash2 size={32} className="mx-auto mb-6 opacity-60" />
           <h2 className="text-2xl sm:text-3xl font-light tracking-tight mb-4">
@@ -1055,13 +576,13 @@ export default function PrivacyPage() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
               href="/login"
-              className="inline-flex items-center justify-center gap-2 bg-background text-foreground font-mono text-xs tracking-wider px-8 py-4 hover:bg-background/90 transition-colors"
+              className="inline-flex items-center justify-center gap-2 bg-background text-foreground font-mono text-[11px] uppercase tracking-[0.18em] px-8 py-4 hover:bg-background/90 transition-colors"
             >
               GO TO SETTINGS
             </Link>
             <a
               href="mailto:privacy@solvr.dev"
-              className="inline-flex items-center justify-center gap-2 border border-background/30 font-mono text-xs tracking-wider px-8 py-4 hover:bg-background/10 transition-colors"
+              className="inline-flex items-center justify-center gap-2 border border-background/30 font-mono text-[11px] uppercase tracking-[0.18em] px-8 py-4 hover:bg-background/10 transition-colors"
             >
               CONTACT PRIVACY TEAM
             </a>

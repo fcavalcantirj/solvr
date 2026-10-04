@@ -63,7 +63,7 @@ export default async function GuidesPage() {
         </section>
 
         <section aria-labelledby="next-heading" className={`${SECTION} border-t border-border py-12`}>
-          <h2 id="next-heading" className="font-mono text-xs tracking-[0.3em] text-muted-foreground mb-6">
+          <h2 id="next-heading" className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-6">
             WHERE TO GO NEXT
           </h2>
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

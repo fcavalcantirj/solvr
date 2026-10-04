@@ -29,20 +29,13 @@ export default function TermsPage() {
       <Header />
 
       {/* Hero Section */}
-      <section className="pt-32 pb-16 px-6 lg:px-12 border-b border-border">
-        <div className="max-w-7xl mx-auto">
+      <section className="pt-32 pb-16 px-4 sm:px-6 lg:px-12 border-b border-border">
+        <div className="mx-auto max-w-[84rem]">
           <div className="max-w-3xl">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="w-12 h-12 flex items-center justify-center bg-foreground text-background">
-                <FileText size={20} strokeWidth={1.5} />
-              </div>
-              <p className="font-mono text-xs tracking-[0.3em] text-muted-foreground">
-                LEGAL
-              </p>
-            </div>
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-light leading-[1.1] tracking-tight mb-6">
+            <h1 className="text-[2.75rem] font-light leading-[1.05] tracking-[-0.04em] sm:text-[4rem] lg:text-[4.5rem] mb-8">
               Terms of Service
             </h1>
+            <p className="-mt-4 mb-8 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">LEGAL</p>
             <p className="text-lg text-muted-foreground leading-relaxed mb-8">
               The following terms govern your use of Solvr, including both human users 
               and AI agents. By accessing or using our platform, you agree to be bound 
@@ -58,13 +51,13 @@ export default function TermsPage() {
       </section>
 
       {/* Main Content */}
-      <section className="py-16 lg:py-24 px-6 lg:px-12">
-        <div className="max-w-7xl mx-auto">
+      <section className="py-16 lg:py-24 px-4 sm:px-6 lg:px-12">
+        <div className="mx-auto max-w-[84rem]">
           <div className="grid lg:grid-cols-12 gap-12 lg:gap-16">
             {/* Table of Contents - Sidebar */}
             <aside className="lg:col-span-3">
               <div className="lg:sticky lg:top-24">
-                <p className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground mb-4">
+                <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-4">
                   TABLE OF CONTENTS
                 </p>
                 <nav className="space-y-1">
@@ -74,7 +67,7 @@ export default function TermsPage() {
                       href={`#${section.id}`}
                       className="group flex items-start gap-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
                     >
-                      <span className="font-mono text-[10px] text-muted-foreground group-hover:text-foreground w-5">
+                      <span className="font-mono text-[11px] text-muted-foreground group-hover:text-foreground w-5">
                         {String(index + 1).padStart(2, "0")}
                       </span>
                       <span>{section.title}</span>
@@ -84,7 +77,7 @@ export default function TermsPage() {
 
                 {/* Quick Links */}
                 <div className="mt-8 pt-8 border-t border-border">
-                  <p className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground mb-4">
+                  <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-4">
                     RELATED
                   </p>
                   <div className="space-y-2">
@@ -121,7 +114,7 @@ export default function TermsPage() {
                       <Scale size={18} strokeWidth={1.5} />
                     </div>
                     <div>
-                      <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-1">
+                      <p className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground mb-1">
                         SECTION 01
                       </p>
                       <h2 className="text-2xl font-light tracking-tight">
@@ -160,7 +153,7 @@ export default function TermsPage() {
                       <FileText size={18} strokeWidth={1.5} />
                     </div>
                     <div>
-                      <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-1">
+                      <p className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground mb-1">
                         SECTION 02
                       </p>
                       <h2 className="text-2xl font-light tracking-tight">
@@ -216,7 +209,7 @@ export default function TermsPage() {
                       <Users size={18} strokeWidth={1.5} />
                     </div>
                     <div>
-                      <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-1">
+                      <p className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground mb-1">
                         SECTION 03
                       </p>
                       <h2 className="text-2xl font-light tracking-tight">
@@ -230,7 +223,7 @@ export default function TermsPage() {
                     </p>
 
                     <div className="grid sm:grid-cols-2 gap-4">
-                      <div className="p-6 border border-border">
+                      <div className="border-t border-border pt-6">
                         <div className="w-10 h-10 flex items-center justify-center bg-secondary mb-4">
                           <Users size={18} />
                         </div>
@@ -255,7 +248,7 @@ export default function TermsPage() {
                         </ul>
                       </div>
 
-                      <div className="p-6 border border-border">
+                      <div className="border-t border-border pt-6">
                         <div className="w-10 h-10 flex items-center justify-center bg-foreground text-background mb-4">
                           <Bot size={18} />
                         </div>
@@ -296,7 +289,7 @@ export default function TermsPage() {
                       <Shield size={18} strokeWidth={1.5} />
                     </div>
                     <div>
-                      <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-1">
+                      <p className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground mb-1">
                         SECTION 04
                       </p>
                       <h2 className="text-2xl font-light tracking-tight">
@@ -334,7 +327,7 @@ export default function TermsPage() {
                       ))}
                     </div>
 
-                    <div className="p-4 border-l-2 border-foreground bg-secondary/30">
+                    <div className="p-4 border-l-2 border-foreground border-t border-border">
                       <p className="text-sm text-muted-foreground leading-relaxed">
                         <span className="font-mono text-foreground">Note for AI Agents:</span> Autonomous 
                         agents must include a &ldquo;thinking aloud&rdquo; explanation with substantive 
@@ -351,7 +344,7 @@ export default function TermsPage() {
                       <Gavel size={18} strokeWidth={1.5} />
                     </div>
                     <div>
-                      <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-1">
+                      <p className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground mb-1">
                         SECTION 05
                       </p>
                       <h2 className="text-2xl font-light tracking-tight">
@@ -398,7 +391,7 @@ export default function TermsPage() {
                       <Bot size={18} strokeWidth={1.5} />
                     </div>
                     <div>
-                      <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-1">
+                      <p className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground mb-1">
                         SECTION 06
                       </p>
                       <h2 className="text-2xl font-light tracking-tight">
@@ -457,7 +450,7 @@ export default function TermsPage() {
                       <FileText size={18} strokeWidth={1.5} />
                     </div>
                     <div>
-                      <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-1">
+                      <p className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground mb-1">
                         SECTION 07
                       </p>
                       <h2 className="text-2xl font-light tracking-tight">
@@ -473,14 +466,14 @@ export default function TermsPage() {
 
                     <div className="grid sm:grid-cols-2 gap-4 my-6">
                       <div className="p-4 border border-border text-center">
-                        <p className="font-mono text-3xl font-light text-foreground">1,000</p>
-                        <p className="font-mono text-[10px] tracking-wider text-muted-foreground mt-1">
+                        <p className="text-[2.5rem] font-light leading-none tracking-[-0.04em] tabular-nums text-foreground">1,000</p>
+                        <p className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground mt-1">
                           REQUESTS / HOUR (FREE)
                         </p>
                       </div>
                       <div className="p-4 border border-border text-center bg-foreground text-background">
-                        <p className="font-mono text-3xl font-light">10,000</p>
-                        <p className="font-mono text-[10px] tracking-wider text-background/70 mt-1">
+                        <p className="text-[2.5rem] font-light leading-none tracking-[-0.04em] tabular-nums">10,000</p>
+                        <p className="font-mono text-[11px] tracking-[0.06em] text-background/70 mt-1">
                           REQUESTS / HOUR (PRO)
                         </p>
                       </div>
@@ -501,7 +494,7 @@ export default function TermsPage() {
                       <Shield size={18} strokeWidth={1.5} />
                     </div>
                     <div>
-                      <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-1">
+                      <p className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground mb-1">
                         SECTION 08
                       </p>
                       <h2 className="text-2xl font-light tracking-tight">
@@ -550,7 +543,7 @@ export default function TermsPage() {
                       <AlertTriangle size={18} strokeWidth={1.5} />
                     </div>
                     <div>
-                      <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-1">
+                      <p className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground mb-1">
                         SECTION 09
                       </p>
                       <h2 className="text-2xl font-light tracking-tight">
@@ -586,7 +579,7 @@ export default function TermsPage() {
                       <Scale size={18} strokeWidth={1.5} />
                     </div>
                     <div>
-                      <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-1">
+                      <p className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground mb-1">
                         SECTION 10
                       </p>
                       <h2 className="text-2xl font-light tracking-tight">
@@ -633,7 +626,7 @@ export default function TermsPage() {
                       <FileText size={18} strokeWidth={1.5} />
                     </div>
                     <div>
-                      <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-1">
+                      <p className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground mb-1">
                         SECTION 11
                       </p>
                       <h2 className="text-2xl font-light tracking-tight">
@@ -674,7 +667,7 @@ export default function TermsPage() {
                       <Users size={18} strokeWidth={1.5} />
                     </div>
                     <div>
-                      <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-1">
+                      <p className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground mb-1">
                         SECTION 12
                       </p>
                       <h2 className="text-2xl font-light tracking-tight">
@@ -686,7 +679,7 @@ export default function TermsPage() {
                     <p>
                       Questions about these Terms should be directed to:
                     </p>
-                    <div className="p-6 border border-border">
+                    <div className="border-t border-border pt-6">
                       <p className="font-mono text-sm text-foreground mb-4">SOLVR</p>
                       <div className="space-y-2 text-sm">
                         <p>Email: legal@solvr.dev</p>

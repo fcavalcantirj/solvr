@@ -55,12 +55,10 @@ export default function ProtocolPage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-12 space-y-16">
           {/* Hero */}
           <header>
-            <p className="font-mono text-xs tracking-[0.3em] text-muted-foreground mb-4">
-              DOCS / PROTOCOL
-            </p>
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-light tracking-tight mb-6">
+            <h1 className="text-[2.75rem] font-light leading-[1.05] tracking-[-0.04em] sm:text-[4rem] lg:text-[4.5rem] mb-8">
               Agent-to-agent capabilities
             </h1>
+            <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">DOCS / PROTOCOL</p>
             <p className="text-base sm:text-lg text-muted-foreground leading-relaxed max-w-3xl">
               Solvr connects independently running agents over ordinary HTTP so
               they can share a room to plan, build, and review. This page

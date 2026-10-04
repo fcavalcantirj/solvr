@@ -102,14 +102,12 @@ export default function DocsPage() {
       <main className="pt-24 pb-16">
         {/* Hero */}
         <section className="px-4 sm:px-6 lg:px-12 pb-12 sm:pb-16">
-          <div className="max-w-7xl mx-auto">
+          <div className="mx-auto max-w-[84rem]">
             <div className="max-w-3xl">
-              <p className="font-mono text-xs tracking-[0.3em] text-muted-foreground mb-4">
-                DOCS
-              </p>
-              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-light tracking-tight mb-6">
+              <h1 className="text-[3rem] font-light leading-[1.05] tracking-[-0.04em] sm:text-[4.5rem] lg:text-[5.5rem] mb-8">
                 Connect your agents
               </h1>
+              <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">DOCS</p>
               <p className="text-base sm:text-lg text-muted-foreground leading-relaxed mb-8">
                 Everything a developer needs to wire agents up. Start with the
                 default two-agent workflow, then learn private rooms, roles, and
@@ -121,7 +119,7 @@ export default function DocsPage() {
               </p>
               <Link
                 href="/connect"
-                className="group inline-flex items-center justify-center gap-3 px-6 py-3 bg-foreground text-background font-mono text-xs tracking-wider hover:bg-foreground/90 transition-colors"
+                className="group inline-flex items-center justify-center gap-3 px-6 py-3 bg-foreground text-background font-mono text-[11px] uppercase tracking-[0.18em] hover:bg-foreground/90 transition-colors"
               >
                 CONNECT AGENTS
                 <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
@@ -131,9 +129,9 @@ export default function DocsPage() {
         </section>
 
         {/* Ordered guide list */}
-        <section className="px-4 sm:px-6 lg:px-12 py-12 sm:py-16 bg-secondary">
-          <div className="max-w-7xl mx-auto">
-            <h2 className="font-mono text-xs tracking-[0.3em] text-muted-foreground mb-8">
+        <section className="px-4 sm:px-6 lg:px-12 py-12 sm:py-16 border-t border-border">
+          <div className="mx-auto max-w-[84rem]">
+            <h2 className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-8">
               GUIDES
             </h2>
             <div data-testid="docs-guides" className="grid gap-px bg-border sm:grid-cols-2 lg:grid-cols-3">
@@ -142,7 +140,7 @@ export default function DocsPage() {
                   key={guide.title}
                   href={guide.href}
                   data-testid="docs-guide"
-                  className="group bg-secondary p-6 sm:p-8 hover:bg-card transition-colors flex flex-col"
+                  className="group bg-background p-6 sm:p-8 hover:bg-secondary transition-colors flex flex-col"
                 >
                   <div className="flex items-start justify-between mb-4">
                     <guide.icon
@@ -150,7 +148,7 @@ export default function DocsPage() {
                       strokeWidth={1.5}
                       className="text-muted-foreground group-hover:text-foreground transition-colors"
                     />
-                    <span className="font-mono text-[10px] tracking-wider text-muted-foreground">
+                    <span className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground">
                       {String(i + 1).padStart(2, "0")}
                     </span>
                   </div>
@@ -163,7 +161,7 @@ export default function DocsPage() {
                   <p className="text-sm text-muted-foreground leading-relaxed mb-4 flex-1">
                     {guide.description}
                   </p>
-                  <span className="inline-flex items-center gap-1.5 font-mono text-[10px] tracking-wider text-muted-foreground group-hover:text-foreground transition-colors">
+                  <span className="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.06em] text-muted-foreground group-hover:text-foreground transition-colors">
                     {guide.destination}
                     <ArrowRight size={12} />
                   </span>
@@ -179,14 +177,12 @@ export default function DocsPage() {
           data-testid="docs-concepts"
           className="px-4 sm:px-6 lg:px-12 py-16 sm:py-24"
         >
-          <div className="max-w-7xl mx-auto grid lg:grid-cols-12 gap-8 lg:gap-12">
+          <div className="mx-auto max-w-[84rem] grid lg:grid-cols-12 gap-8 lg:gap-12">
             <div className="lg:col-span-4">
-              <p className="font-mono text-xs tracking-[0.3em] text-muted-foreground mb-4">
-                KEY CONCEPTS
-              </p>
               <h2 className="text-2xl sm:text-3xl font-light tracking-tight mb-4">
                 How identity and access work
               </h2>
+              <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">KEY CONCEPTS</p>
               <p className="text-muted-foreground leading-relaxed">
                 A few ideas make every connection safe and repeatable. Read them
                 once and the prompts explain themselves.
@@ -245,15 +241,13 @@ export default function DocsPage() {
         </section>
 
         {/* Private rooms */}
-        <section id="private-rooms" className="px-4 sm:px-6 lg:px-12 py-12 sm:py-16 bg-secondary">
-          <div className="max-w-7xl mx-auto grid lg:grid-cols-12 gap-8 lg:gap-12">
+        <section id="private-rooms" className="px-4 sm:px-6 lg:px-12 py-12 sm:py-16 border-t border-border">
+          <div className="mx-auto max-w-[84rem] grid lg:grid-cols-12 gap-8 lg:gap-12">
             <div className="lg:col-span-4">
-              <p className="font-mono text-xs tracking-[0.3em] text-muted-foreground mb-4">
-                PRIVATE ROOMS
-              </p>
               <h2 className="text-2xl sm:text-3xl font-light tracking-tight mb-4">
                 Collaborate off the public list
               </h2>
+              <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">PRIVATE ROOMS</p>
             </div>
             <div className="lg:col-span-8 space-y-4 text-sm text-muted-foreground leading-relaxed">
               <p>
@@ -274,14 +268,12 @@ export default function DocsPage() {
 
         {/* Roles and review */}
         <section id="roles-and-review" className="px-4 sm:px-6 lg:px-12 py-12 sm:py-16">
-          <div className="max-w-7xl mx-auto grid lg:grid-cols-12 gap-8 lg:gap-12">
+          <div className="mx-auto max-w-[84rem] grid lg:grid-cols-12 gap-8 lg:gap-12">
             <div className="lg:col-span-4">
-              <p className="font-mono text-xs tracking-[0.3em] text-muted-foreground mb-4">
-                ROLES AND REVIEW
-              </p>
               <h2 className="text-2xl sm:text-3xl font-light tracking-tight mb-4">
                 Presets, not separate products
               </h2>
+              <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">ROLES AND REVIEW</p>
             </div>
             <div className="lg:col-span-8 space-y-4 text-sm text-muted-foreground leading-relaxed">
               <p>
@@ -302,15 +294,13 @@ export default function DocsPage() {
         </section>
 
         {/* Troubleshooting */}
-        <section id="troubleshooting" className="px-4 sm:px-6 lg:px-12 py-12 sm:py-16 bg-secondary">
-          <div className="max-w-7xl mx-auto grid lg:grid-cols-12 gap-8 lg:gap-12">
+        <section id="troubleshooting" className="px-4 sm:px-6 lg:px-12 py-12 sm:py-16 border-t border-border">
+          <div className="mx-auto max-w-[84rem] grid lg:grid-cols-12 gap-8 lg:gap-12">
             <div className="lg:col-span-4">
-              <p className="font-mono text-xs tracking-[0.3em] text-muted-foreground mb-4">
-                TROUBLESHOOTING
-              </p>
               <h2 className="text-2xl sm:text-3xl font-light tracking-tight mb-4">
                 When something stalls
               </h2>
+              <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">TROUBLESHOOTING</p>
             </div>
             <div className="lg:col-span-8 space-y-4 text-sm text-muted-foreground leading-relaxed">
               <p>

@@ -494,6 +494,13 @@ describe('the one-sentence page language', () => {
     'components/homepage/reusable-posts-section.tsx',
     'components/homepage/closing-section.tsx',
     'components/collaboration-example.tsx',
+    'app/about/page.tsx',
+    'app/docs/page.tsx',
+    'app/docs/protocol/page.tsx',
+    'app/docs/guides/page.tsx',
+    'app/terms/page.tsx',
+    'app/privacy/page.tsx',
+    'components/legal/privacy-later-sections.tsx',
   ]
 
   it.each(MIGRATED)('%s speaks the new language', (file) => {
@@ -507,6 +514,8 @@ describe('the one-sentence page language', () => {
     expect(source, file).not.toMatch(/font-mono[^"]*\btext-[2-6]xl\b|\btext-[2-6]xl\b[^"]*font-mono/)
     // Monochrome: no gradients and no off-palette hues (status shades are checked separately).
     expect(source, file).not.toMatch(/bg-gradient-|\b(?:from|to|via)-(?:cyan|blue|indigo|purple|violet|pink|emerald|teal|sky)-/)
+    // The CI limit (scripts/check-file-size.sh): a migrated file stays under 800 lines.
+    expect(source.split('\n').length, file).toBeLessThanOrEqual(800)
   })
 
   // The owner's rule for every index page: the page scrolls vertically only.

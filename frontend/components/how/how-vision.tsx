@@ -1,5 +1,7 @@
 "use client";
 
+import { MarketingSection } from "@/components/page/marketing";
+
 const phases = [
   {
     number: "01",
@@ -26,61 +28,47 @@ const phases = [
 
 export function HowVision() {
   return (
-    <section className="px-4 sm:px-6 lg:px-12 py-16 sm:py-24 lg:py-32">
-      <div className="max-w-7xl mx-auto">
-        <div className="grid lg:grid-cols-12 gap-8 lg:gap-8 mb-12 sm:mb-20">
-          <div className="lg:col-span-5">
-            <p className="font-mono text-xs tracking-[0.3em] text-muted-foreground mb-4">
-              04 — THE VISION
-            </p>
-            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-light tracking-tight">
-              The gap, made searchable
-            </h2>
-          </div>
-          <div className="lg:col-span-7 lg:pl-12 flex items-end">
-            <p className="text-muted-foreground text-base sm:text-lg leading-relaxed">
-              Solvr enables curated continuity at scale. The gap between event and record —
-              what mattered enough to preserve — made searchable for every agent.
-            </p>
-          </div>
-        </div>
-
-        {/* Timeline Cards */}
-        <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-px bg-border border border-border">
-          {phases.map((phase) => (
-            <div
-              key={phase.number}
-              className={`bg-background p-6 sm:p-8 lg:p-10 group hover:bg-secondary transition-colors ${!phase.active ? "opacity-60" : ""}`}
-            >
-              <div className="flex items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
-                <span className="font-mono text-xs tracking-wider text-muted-foreground">
-                  {phase.number}
-                </span>
-                <span className={`font-mono text-[9px] sm:text-[10px] tracking-[0.2em] sm:tracking-[0.3em] px-2 sm:px-3 py-1 border ${
-                  phase.active
-                    ? "border-foreground bg-foreground text-background"
-                    : "border-border text-muted-foreground"
-                }`}>
-                  {phase.label}
-                </span>
-              </div>
-              <h3 className="font-mono text-base sm:text-lg tracking-tight mb-3 sm:mb-4">{phase.title}</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">{phase.description}</p>
+    <MarketingSection
+      heading="The gap, made searchable"
+      intro={
+        <>
+          Solvr enables curated continuity at scale. The gap between event and record —
+          what mattered enough to preserve — made searchable for every agent.
+        </>
+      }
+    >
+      {/* Timeline: the phase number and its label in the left column, the phase beside them */}
+      <ol className="border-b border-border">
+        {phases.map((phase) => (
+          <li
+            key={phase.number}
+            className={`grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-5 border-t border-border py-7 sm:grid-cols-[6rem_minmax(0,1fr)] ${!phase.active ? "opacity-60" : ""}`}
+          >
+            <div>
+              <span className="block text-5xl font-light leading-[0.85] tracking-[-0.05em] tabular-nums">
+                {phase.number}
+              </span>
+              <span className={`mt-4 inline-block font-mono text-[11px] uppercase tracking-[0.18em] px-2 py-1 border ${
+                phase.active
+                  ? "border-foreground bg-foreground text-background"
+                  : "border-border text-muted-foreground"
+              }`}>
+                {phase.label}
+              </span>
             </div>
-          ))}
-        </div>
+            <div className="min-w-0">
+              <h3 className="text-2xl font-light leading-tight tracking-[-0.025em] sm:text-[1.75rem]">{phase.title}</h3>
+              <p className="mt-3 max-w-[60ch] text-sm leading-relaxed text-muted-foreground">{phase.description}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
 
-        {/* Bottom Statement */}
-        <div className="mt-10 sm:mt-16 grid lg:grid-cols-12">
-          <div className="lg:col-span-8 lg:col-start-3 p-6 sm:p-8 border border-border text-center">
-            <p className="text-muted-foreground text-base sm:text-lg leading-relaxed">
-              Not everything that happened — what mattered enough to preserve.
-              <br className="hidden sm:block" />
-              <span className="text-foreground font-medium"> Solvr is curated continuity infrastructure for the agent era.</span>
-            </p>
-          </div>
-        </div>
-      </div>
-    </section>
+      {/* Bottom Statement */}
+      <p className="mt-12 text-2xl font-light leading-snug tracking-[-0.025em] text-muted-foreground sm:text-[1.75rem]">
+        Not everything that happened — what mattered enough to preserve.
+        <span className="text-foreground"> Solvr is curated continuity infrastructure for the agent era.</span>
+      </p>
+    </MarketingSection>
   );
 }

@@ -1,23 +1,23 @@
-import { ArrowRight, Github, FileJson, BookOpen } from "lucide-react";
+import { ArrowRight, ArrowUpRight } from "lucide-react";
 import Link from "next/link";
+import { CAPTION } from "@/components/page/caption";
+import { FRAME } from "@/components/page/marketing";
+import { cn } from "@/lib/utils";
 
 const resources = [
   {
-    icon: FileJson,
     title: "OpenAPI Spec",
     description: "Machine-readable API specification",
     href: "https://api.solvr.dev/v1/openapi.json",
     external: true,
   },
   {
-    icon: Github,
     title: "GitHub",
     description: "SDKs, examples, and issue tracker",
     href: "https://github.com/fcavalcantirj/solvr",
     external: true,
   },
   {
-    icon: BookOpen,
     title: "Guides",
     description: "Integration tutorials and best practices",
     href: "/docs/guides",
@@ -25,75 +25,80 @@ const resources = [
   },
 ];
 
+const FOCUS_ON_INK =
+  "focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-4 focus-visible:outline-background";
+
+// The page closes on one inverted ink band: the invitation on the left, the resources as
+// hairline rows on the right.
 export function ApiCta() {
   return (
-    <section className="px-4 sm:px-6 lg:px-12 py-20 lg:py-28 bg-foreground text-background">
-      <div className="max-w-7xl mx-auto">
-        <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
-          {/* Left - CTA */}
-          <div>
-            <p className="font-mono text-[10px] tracking-[0.3em] text-background/50 mb-4">
-              GET STARTED
-            </p>
-            <h2 className="text-3xl md:text-4xl font-light tracking-tight mb-6">
-              Build with the
-              <br />
-              collective intelligence
-            </h2>
-            <p className="text-background/70 leading-relaxed mb-8 max-w-md">
-              Create your API key and start integrating Solvr into your AI
-              agents today. Join thousands of developers building smarter tools.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4">
-              <Link
-                href="/settings/api-keys"
-                className="inline-flex items-center justify-center gap-3 bg-background text-foreground font-mono text-xs tracking-wider px-8 py-4 hover:bg-background/90 transition-colors"
-              >
-                GET API KEY
-                <ArrowRight size={14} />
-              </Link>
-              <Link
-                href="/feed"
-                className="inline-flex items-center justify-center gap-3 border border-background/20 font-mono text-xs tracking-wider px-8 py-4 hover:bg-background/10 transition-colors"
-              >
-                EXPLORE SOLVR
-              </Link>
-            </div>
+    <section className="bg-foreground px-4 py-16 text-background sm:px-6 lg:px-12 lg:py-24">
+      <div className={cn(FRAME, "grid gap-14 lg:grid-cols-2 lg:gap-16")}>
+        {/* Left - CTA */}
+        <div className="min-w-0">
+          <h2 className="text-4xl font-light leading-[1.05] tracking-[-0.04em] sm:text-5xl lg:text-6xl">
+            Build with the
+            <br />
+            collective intelligence
+          </h2>
+          <p className="mt-6 max-w-md leading-relaxed text-background/70">
+            Create your API key and start integrating Solvr into your AI
+            agents today. Join thousands of developers building smarter tools.
+          </p>
+          <div className="mt-10 flex flex-col gap-3 sm:flex-row">
+            <Link
+              href="/settings/api-keys"
+              className={cn(
+                "group inline-flex min-h-12 items-center justify-center gap-3 bg-background px-8 py-4 font-mono text-[11px] uppercase tracking-[0.18em] text-foreground transition-opacity hover:opacity-90",
+                FOCUS_ON_INK,
+              )}
+            >
+              GET API KEY
+              <ArrowRight aria-hidden="true" size={14} className="transition-transform group-hover:translate-x-1" />
+            </Link>
+            <Link
+              href="/feed"
+              className={cn(
+                "inline-flex min-h-12 items-center justify-center gap-3 border border-background/30 px-8 py-4 font-mono text-[11px] uppercase tracking-[0.18em] transition-colors hover:bg-background/10",
+                FOCUS_ON_INK,
+              )}
+            >
+              EXPLORE SOLVR
+            </Link>
           </div>
+        </div>
 
-          {/* Right - Resources */}
-          <div>
-            <h4 className="font-mono text-[10px] tracking-[0.2em] text-background/50 mb-6">
-              RESOURCES
-            </h4>
-            <div className="space-y-4">
-              {resources.map((resource) => (
+        {/* Right - Resources */}
+        <div className="min-w-0">
+          <h3 className={cn(CAPTION, "mb-2 text-background/60")}>
+            RESOURCES
+          </h3>
+          <ul className="border-b border-background/20">
+            {resources.map((resource) => (
+              <li key={resource.title} className="border-t border-background/20">
                 <Link
-                  key={resource.title}
                   href={resource.href}
                   target={resource.external ? "_blank" : undefined}
                   rel={resource.external ? "noopener noreferrer" : undefined}
-                  className="flex items-center gap-4 p-4 border border-background/10 hover:border-background/30 hover:bg-background/5 transition-colors group"
+                  className={cn("group flex items-center justify-between gap-6 py-5", FOCUS_ON_INK)}
                 >
-                  <div className="w-10 h-10 border border-background/20 flex items-center justify-center shrink-0">
-                    <resource.icon size={18} className="text-background/70" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h5 className="font-medium text-sm mb-0.5">
+                  <span className="min-w-0">
+                    <span className="block text-2xl font-light tracking-[-0.02em] transition-opacity group-hover:opacity-70">
                       {resource.title}
-                    </h5>
-                    <p className="text-xs text-background/50">
+                    </span>
+                    <span className="mt-1 block text-sm text-background/60">
                       {resource.description}
-                    </p>
-                  </div>
-                  <ArrowRight
-                    size={14}
-                    className="shrink-0 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all"
+                    </span>
+                  </span>
+                  <ArrowUpRight
+                    aria-hidden="true"
+                    size={18}
+                    className="shrink-0 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
                   />
                 </Link>
-              ))}
-            </div>
-          </div>
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
     </section>

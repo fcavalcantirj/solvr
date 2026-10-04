@@ -1,7 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Copy, Check } from "lucide-react";
+import { CAPTION } from "@/components/page/caption";
+import { CopyButton } from "@/components/page/copy-button";
+import { CodeTile, MarketingSection } from "@/components/page/marketing";
+import { SegmentedControl } from "@/components/page/segmented-control";
 
 export const sdks = [
   {
@@ -143,96 +146,47 @@ solvr search "query" --json | jq '.data[0]'`,
 
 export function ApiSdks() {
   const [activeTab, setActiveTab] = useState(0);
-  const [copied, setCopied] = useState<string | null>(null);
-
-  const copy = (text: string, key: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(key);
-    setTimeout(() => setCopied(null), 2000);
-  };
 
   return (
-    <section className="px-4 sm:px-6 lg:px-12 py-20 lg:py-28 border-b border-border">
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-12 lg:mb-16">
-          <p className="font-mono text-[10px] tracking-[0.3em] text-muted-foreground mb-4">
-            SDKS & CLI
-          </p>
-          <h2 className="text-3xl md:text-4xl font-light tracking-tight mb-4">
-            Native libraries for every stack
-          </h2>
-          <p className="text-muted-foreground max-w-2xl">
-            Official SDKs with TypeScript definitions, error handling, and automatic retries.
-          </p>
+    <MarketingSection
+      heading="Native libraries for every stack"
+      headingId="sdk-heading"
+      intro="Official SDKs with TypeScript definitions, error handling, and automatic retries."
+    >
+      {/* Language Tabs */}
+      <SegmentedControl
+        labelledBy="sdk-heading"
+        options={sdks.map((sdk, index) => ({ value: String(index), label: sdk.language }))}
+        value={String(activeTab)}
+        onSelect={(value) => setActiveTab(Number(value))}
+        className="grid w-full grid-cols-2 divide-x-0 [&>button:nth-child(even)]:border-l [&>button:nth-child(even)]:border-border [&>button:nth-child(n+3)]:border-t [&>button:nth-child(n+3)]:border-border sm:inline-flex sm:w-auto sm:divide-x sm:[&>button:nth-child(even)]:border-l-0 sm:[&>button:nth-child(n+3)]:border-t-0"
+      />
+
+      {/* Install Command */}
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-border py-2">
+        <div className="flex min-w-0 items-baseline gap-4">
+          <span className={`${CAPTION} shrink-0`}>
+            INSTALL
+          </span>
+          <code className="min-w-0 font-mono text-sm [overflow-wrap:anywhere]">
+            {sdks[activeTab].install}
+          </code>
         </div>
-
-        {/* Language Tabs */}
-        <div className="flex flex-wrap gap-2 mb-6 border-b border-border pb-6">
-          {sdks.map((sdk, index) => (
-            <button
-              key={sdk.language}
-              onClick={() => setActiveTab(index)}
-              className={`font-mono text-xs tracking-wider px-4 py-2 transition-colors ${
-                activeTab === index
-                  ? "bg-foreground text-background"
-                  : "border border-border hover:bg-muted"
-              }`}
-            >
-              {sdk.language}
-            </button>
-          ))}
-        </div>
-
-        {/* Active SDK */}
-        <div className="border border-border">
-          {/* Install Command */}
-          <div className="flex items-center justify-between gap-4 px-4 lg:px-6 py-4 border-b border-border bg-muted/30">
-            <div className="flex items-center gap-4 min-w-0">
-              <span className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground shrink-0">
-                INSTALL
-              </span>
-              <code className="font-mono text-sm truncate">
-                {sdks[activeTab].install}
-              </code>
-            </div>
-            <button
-              onClick={() => copy(sdks[activeTab].install, "install")}
-              className="shrink-0 hover:text-muted-foreground transition-colors"
-            >
-              {copied === "install" ? <Check size={14} /> : <Copy size={14} />}
-            </button>
-          </div>
-
-          {/* Code Example */}
-          <div className="relative group">
-            <button
-              onClick={() => copy(sdks[activeTab].code, "code")}
-              className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity hover:text-background/70 z-10"
-            >
-              {copied === "code" ? (
-                <Check size={14} className="text-background" />
-              ) : (
-                <Copy size={14} className="text-background" />
-              )}
-            </button>
-            <div className="bg-foreground text-background p-6 overflow-x-auto">
-              <pre className="font-mono text-xs md:text-sm leading-relaxed">
-                <code>{sdks[activeTab].code}</code>
-              </pre>
-            </div>
-          </div>
-
-          {/* Package Info */}
-          <div className="flex items-center justify-between px-4 lg:px-6 py-4 border-t border-border bg-muted/30">
-            <code className="font-mono text-sm text-muted-foreground">
-              {sdks[activeTab].package}
-            </code>
-            <span className="font-mono text-[10px] tracking-wider text-muted-foreground">
-              LATEST: v1.0.0
-            </span>
-          </div>
-        </div>
+        <CopyButton text={sdks[activeTab].install} />
       </div>
-    </section>
+
+      {/* Code Example */}
+      <CodeTile code={sdks[activeTab].code} />
+
+      {/* Package Info */}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-border py-4">
+        <code className="font-mono text-sm text-muted-foreground">
+          {sdks[activeTab].package}
+        </code>
+        <span className={CAPTION}>
+          LATEST: v1.0.0
+        </span>
+      </div>
+    </MarketingSection>
   );
 }

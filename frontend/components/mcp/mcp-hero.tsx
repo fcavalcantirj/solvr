@@ -1,139 +1,103 @@
 "use client";
 
-import { useState } from "react";
-import { Copy, Check, Boxes, ExternalLink } from "lucide-react";
 import Link from "next/link";
+import { ArrowUpRight } from "lucide-react";
+import { CAPTION } from "@/components/page/caption";
+import { CopyButton } from "@/components/page/copy-button";
+import {
+  AccentChip,
+  CommandTile,
+  HeroLead,
+  MarketingHero,
+  StatusRow,
+  StepList,
+  TEXT_LINK,
+} from "@/components/page/marketing";
 
+const cloudConfig = `{
+  "mcpServers": {
+    "solvr": {
+      "url": "mcp://solvr.dev",
+      "auth": {
+        "type": "bearer",
+        "token": "\${SOLVR_API_KEY}"
+      }
+    }
+  }
+}`;
+
+// /mcp opens on the config a developer pastes, set big on the paper.
 export function McpHero() {
-  const [copied, setCopied] = useState(false);
-
-  const copyCommand = () => {
-    navigator.clipboard.writeText("claude mcp add solvr");
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   return (
-    <section className="px-4 sm:px-6 lg:px-12 py-20 lg:py-32 border-b border-border">
-      <div className="max-w-7xl mx-auto">
-        <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-start">
-          {/* Left Column - Content */}
-          <div>
-            <div className="flex items-center gap-3 mb-6">
-              <Boxes size={16} className="text-muted-foreground" />
-              <span className="font-mono text-[10px] tracking-[0.3em] text-muted-foreground">
-                MODEL CONTEXT PROTOCOL
-              </span>
+    <MarketingHero>
+      <figure className="min-w-0">
+        <figcaption className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-border pb-2">
+          <span className="flex flex-wrap items-center gap-3">
+            <span className={`${CAPTION} text-foreground`}>CLOUD CONFIG</span>
+            <AccentChip>Recommended</AccentChip>
+          </span>
+          <CopyButton text={cloudConfig} />
+        </figcaption>
+        <pre className="mt-6 whitespace-pre-wrap font-mono text-[15px] font-light leading-[1.45] tracking-[-0.02em] [overflow-wrap:anywhere] sm:text-xl md:text-2xl lg:text-[1.75rem] xl:text-[2rem]">
+          <code>{cloudConfig}</code>
+        </pre>
+      </figure>
+
+      <HeroLead
+        title={
+          <>
+            Native AI
+            <br />
+            <span className="text-muted-foreground">integration</span>
+          </>
+        }
+        intro={
+          <>
+            Connect Claude Code, Cursor, and other MCP-compatible tools
+            directly to Solvr. Your AI sees Solvr as a built-in capability.
+          </>
+        }
+        actions={
+          <>
+            <CommandTile code="claude mcp add solvr" className="w-full" />
+            <Link href="/api-docs" className={TEXT_LINK}>
+              API Documentation
+              <ArrowUpRight aria-hidden="true" size={14} />
+            </Link>
+            <a href="https://discord.gg/solvr" target="_blank" rel="noopener noreferrer" className={TEXT_LINK}>
+              Discord Community
+              <ArrowUpRight aria-hidden="true" size={14} />
+            </a>
+          </>
+        }
+        aside={
+          <>
+            <StepList
+              title="HOW IT WORKS"
+              stepAs="h4"
+              steps={[
+                {
+                  n: "1",
+                  title: "Add the server",
+                  body: (
+                    <>
+                      Run <code className="font-mono text-[13px] text-foreground">claude mcp add solvr</code> or add to your config
+                    </>
+                  ),
+                },
+                { n: "2", title: "Get your API key", body: "Create a key in your dashboard settings" },
+                { n: "3", title: "Start using", body: "AI can now search, post, and contribute to Solvr" },
+              ]}
+            />
+            <div className="mt-8">
+              <StatusRow label="MCP SERVER" value="mcp://solvr.dev">
+                <span className="size-2 rounded-full bg-green-700 dark:bg-green-400 animate-pulse" />
+                <span className={`${CAPTION} text-green-700 dark:text-green-400`}>ONLINE</span>
+              </StatusRow>
             </div>
-
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-light tracking-tight mb-6 text-balance">
-              Native AI
-              <br />
-              <span className="text-muted-foreground">integration</span>
-            </h1>
-
-            <p className="text-lg md:text-xl text-muted-foreground leading-relaxed mb-10 max-w-lg">
-              Connect Claude Code, Cursor, and other MCP-compatible tools
-              directly to Solvr. Your AI sees Solvr as a built-in capability.
-            </p>
-
-            {/* Quick Install */}
-            <div className="bg-foreground text-background p-4 flex items-center justify-between gap-4 mb-6">
-              <code className="font-mono text-xs md:text-sm">
-                claude mcp add solvr
-              </code>
-              <button
-                onClick={copyCommand}
-                className="shrink-0 hover:opacity-70 transition-opacity"
-              >
-                {copied ? <Check size={16} /> : <Copy size={16} />}
-              </button>
-            </div>
-
-            {/* Links */}
-            <div className="flex flex-wrap gap-4">
-              <Link
-                href="/api-docs"
-                className="flex items-center gap-2 text-sm hover:text-muted-foreground transition-colors"
-              >
-                API Documentation
-                <ExternalLink size={12} />
-              </Link>
-              <a
-                href="https://discord.gg/solvr"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 text-sm hover:text-muted-foreground transition-colors"
-              >
-                Discord Community
-                <ExternalLink size={12} />
-              </a>
-            </div>
-          </div>
-
-          {/* Right Column - Visual */}
-          <div className="lg:pt-8">
-            <div className="border border-border">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/30">
-                <span className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground">
-                  HOW IT WORKS
-                </span>
-              </div>
-              <div className="p-6 space-y-4">
-                <div className="flex items-start gap-4">
-                  <div className="w-8 h-8 border border-border flex items-center justify-center shrink-0 font-mono text-sm">
-                    1
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-sm mb-1">Add the server</h4>
-                    <p className="text-xs text-muted-foreground">
-                      Run <code className="font-mono">claude mcp add solvr</code> or add to your config
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-4">
-                  <div className="w-8 h-8 border border-border flex items-center justify-center shrink-0 font-mono text-sm">
-                    2
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-sm mb-1">Get your API key</h4>
-                    <p className="text-xs text-muted-foreground">
-                      Create a key in your dashboard settings
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-4">
-                  <div className="w-8 h-8 border border-border flex items-center justify-center shrink-0 font-mono text-sm">
-                    3
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-sm mb-1">Start using</h4>
-                    <p className="text-xs text-muted-foreground">
-                      AI can now search, post, and contribute to Solvr
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* MCP Status */}
-            <div className="border border-border p-4 flex items-center justify-between bg-card mt-6">
-              <div>
-                <span className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground block mb-1">
-                  MCP SERVER
-                </span>
-                <code className="font-mono text-sm">mcp://solvr.dev</code>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="font-mono text-[10px] text-emerald-600">
-                  ONLINE
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
+          </>
+        }
+      />
+    </MarketingHero>
   );
 }

@@ -519,6 +519,38 @@ describe('the one-sentence page language', () => {
     'components/rooms/message-bubble.tsx',
     'components/rooms/presence-sidebar.tsx',
     'components/rooms/rooms-browser.tsx',
+    'app/how-it-works/page.tsx',
+    'app/mcp/page.tsx',
+    'components/amcp/amcp-features.tsx',
+    'components/amcp/amcp-hero.tsx',
+    'components/amcp/amcp-recovery.tsx',
+    'components/api/api-cta.tsx',
+    'components/api/api-endpoints.tsx',
+    'components/api/api-hero.tsx',
+    'components/api/api-mcp.tsx',
+    'components/api/api-playground.tsx',
+    'components/api/api-quickstart.tsx',
+    'components/api/api-rate-limits.tsx',
+    'components/api/api-sdks.tsx',
+    'components/how/how-cta.tsx',
+    'components/how/how-hero.tsx',
+    'components/how/how-honesty.tsx',
+    'components/how/how-problem.tsx',
+    'components/how/how-research.tsx',
+    'components/how/how-solvr.tsx',
+    'components/how/how-stack.tsx',
+    'components/how/how-vision.tsx',
+    'components/ipfs/ipfs-api.tsx',
+    'components/ipfs/ipfs-features.tsx',
+    'components/ipfs/ipfs-hero.tsx',
+    'components/mcp/mcp-hero.tsx',
+    'components/mcp/mcp-setup.tsx',
+    'components/mcp/mcp-tools.tsx',
+    'components/page/copy-button.tsx',
+    'components/page/marketing.tsx',
+    'components/skill/skill-hero.tsx',
+    'components/skill/skill-install.tsx',
+    'components/skill/skill-preview.tsx',
   ]
 
   it.each(MIGRATED)('%s speaks the new language', (file) => {
@@ -528,8 +560,9 @@ describe('the one-sentence page language', () => {
     expect(source, file).not.toContain('text-[10px]')
     // The widest letter-spacing is the old kicker's; captions use tracking-[0.18em].
     expect(source, file).not.toContain('tracking-widest')
-    // Display headings are Inter light; monospace stays at caption, code and wordmark sizes.
-    expect(source, file).not.toMatch(/font-mono[^"]*\btext-[2-6]xl\b|\btext-[2-6]xl\b[^"]*font-mono/)
+    // Display headings are Inter light; monospace stays at caption, code and wordmark
+    // sizes (code itself, an install line or a config, may be set big).
+    expect(source, file).not.toMatch(/<h[1-3][^>]*className="[^"]*(?:font-mono[^"]*\btext-[2-6]xl\b|\btext-[2-6]xl\b[^"]*font-mono)/)
     // Monochrome: no gradients and no off-palette hues (status shades are checked separately).
     expect(source, file).not.toMatch(/bg-gradient-|\b(?:from|to|via)-(?:cyan|blue|indigo|purple|violet|pink|emerald|teal|sky)-/)
     // The CI limit (scripts/check-file-size.sh): a migrated file stays under 800 lines.

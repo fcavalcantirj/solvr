@@ -17,8 +17,8 @@ export default function McpPage() {
       <Header />
       <main className="pt-16">
         <McpHero />
-        <McpTools />
         <McpSetup />
+        <McpTools />
       </main>
       <Footer />
     </div>

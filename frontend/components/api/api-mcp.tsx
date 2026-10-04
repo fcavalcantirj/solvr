@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Copy, Check, Boxes, Zap, Shield, RefreshCw } from "lucide-react";
+import { CAPTION } from "@/components/page/caption";
+import { CodeTile, MarketingSection, StatusRow } from "@/components/page/marketing";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.solvr.dev";
 
 export function ApiMcp() {
-  const [copied, setCopied] = useState<string | null>(null);
   const [apiOnline, setApiOnline] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -23,12 +23,6 @@ export function ApiMcp() {
     };
     checkHealth();
   }, []);
-
-  const copy = (text: string, key: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(key);
-    setTimeout(() => setCopied(null), 2000);
-  };
 
   const mcpTools = [
     {
@@ -93,182 +87,95 @@ export function ApiMcp() {
 }`;
 
   return (
-    <section className="px-4 sm:px-6 lg:px-12 py-20 lg:py-28 border-b border-border bg-muted/20">
-      <div className="max-w-7xl mx-auto">
-        <div className="grid lg:grid-cols-2 gap-12 lg:gap-20">
-          {/* Left - Info */}
-          <div>
-            <p className="font-mono text-[10px] tracking-[0.3em] text-muted-foreground mb-4">
-              MCP SERVER
-            </p>
-            <h2 className="text-3xl md:text-4xl font-light tracking-tight mb-6">
-              Model Context Protocol
-            </h2>
-            <p className="text-muted-foreground leading-relaxed mb-8">
-              The recommended way to integrate Solvr with Claude Code, Cursor,
-              and other MCP-compatible AI tools. Zero configuration needed.
-            </p>
-
-            {/* Benefits */}
-            <div className="grid sm:grid-cols-2 gap-6 mb-10">
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 border border-border flex items-center justify-center shrink-0">
-                  <Zap size={14} />
-                </div>
-                <div>
-                  <h4 className="font-medium text-sm mb-1">Instant Setup</h4>
-                  <p className="text-xs text-muted-foreground">
-                    One config file, works immediately
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 border border-border flex items-center justify-center shrink-0">
-                  <Shield size={14} />
-                </div>
-                <div>
-                  <h4 className="font-medium text-sm mb-1">Secure</h4>
-                  <p className="text-xs text-muted-foreground">
-                    Token-based auth, no exposed secrets
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 border border-border flex items-center justify-center shrink-0">
-                  <Boxes size={14} />
-                </div>
-                <div>
-                  <h4 className="font-medium text-sm mb-1">Native Tools</h4>
-                  <p className="text-xs text-muted-foreground">
-                    AI sees Solvr as built-in capability
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 border border-border flex items-center justify-center shrink-0">
-                  <RefreshCw size={14} />
-                </div>
-                <div>
-                  <h4 className="font-medium text-sm mb-1">Auto Updates</h4>
-                  <p className="text-xs text-muted-foreground">
-                    New features without config changes
-                  </p>
-                </div>
-              </div>
+    <MarketingSection
+      heading="Model Context Protocol"
+      intro={
+        <>
+          The recommended way to integrate Solvr with Claude Code, Cursor,
+          and other MCP-compatible AI tools. Zero configuration needed.
+        </>
+      }
+      aside={
+        <div className="mt-8">
+          <h3 className={`${CAPTION} mb-2 text-foreground`}>MCP SERVER</h3>
+          {/* Benefits */}
+          <dl className="border-b border-border">
+            <div className="border-t border-border py-3">
+              <dt className="text-lg font-light tracking-[-0.015em]">Instant Setup</dt>
+              <dd className="mt-0.5 text-xs text-muted-foreground">One config file, works immediately</dd>
             </div>
-
-            {/* Available Tools */}
-            <div>
-              <h4 className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground mb-4">
-                AVAILABLE TOOLS
-              </h4>
-              <div className="space-y-3">
-                {mcpTools.map((tool) => (
-                  <div
-                    key={tool.name}
-                    className="flex items-start justify-between gap-4 p-3 border border-border bg-card"
-                  >
-                    <div>
-                      <code className="font-mono text-sm">{tool.name}</code>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {tool.description}
-                      </p>
-                    </div>
-                    <code className="font-mono text-[10px] text-muted-foreground shrink-0">
-                      {tool.params}
-                    </code>
-                  </div>
-                ))}
-              </div>
+            <div className="border-t border-border py-3">
+              <dt className="text-lg font-light tracking-[-0.015em]">Secure</dt>
+              <dd className="mt-0.5 text-xs text-muted-foreground">Token-based auth, no exposed secrets</dd>
             </div>
-          </div>
-
-          {/* Right - Configs */}
-          <div className="space-y-6">
-            {/* Cloud Config */}
-            <div className="border border-border">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/30">
-                <span className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground">
-                  CLOUD CONFIG (RECOMMENDED)
-                </span>
-                <button
-                  onClick={() => copy(cloudConfig, "cloud")}
-                  className="hover:text-muted-foreground transition-colors"
-                >
-                  {copied === "cloud" ? (
-                    <Check size={14} />
-                  ) : (
-                    <Copy size={14} />
-                  )}
-                </button>
-              </div>
-              <div className="bg-foreground text-background p-6 overflow-x-auto">
-                <pre className="font-mono text-xs md:text-sm leading-relaxed">
-                  <code>{cloudConfig}</code>
-                </pre>
-              </div>
+            <div className="border-t border-border py-3">
+              <dt className="text-lg font-light tracking-[-0.015em]">Native Tools</dt>
+              <dd className="mt-0.5 text-xs text-muted-foreground">AI sees Solvr as built-in capability</dd>
             </div>
-
-            {/* Self-hosted Config */}
-            <div className="border border-border">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/30">
-                <span className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground">
-                  SELF-HOSTED CONFIG
-                </span>
-                <button
-                  onClick={() => copy(selfHostedConfig, "selfhosted")}
-                  className="hover:text-muted-foreground transition-colors"
-                >
-                  {copied === "selfhosted" ? (
-                    <Check size={14} />
-                  ) : (
-                    <Copy size={14} />
-                  )}
-                </button>
-              </div>
-              <div className="bg-foreground text-background p-6 overflow-x-auto">
-                <pre className="font-mono text-xs md:text-sm leading-relaxed">
-                  <code>{selfHostedConfig}</code>
-                </pre>
-              </div>
+            <div className="border-t border-border py-3">
+              <dt className="text-lg font-light tracking-[-0.015em]">Auto Updates</dt>
+              <dd className="mt-0.5 text-xs text-muted-foreground">New features without config changes</dd>
             </div>
+          </dl>
+        </div>
+      }
+    >
+      {/* Configs */}
+      <div className="grid gap-4 xl:grid-cols-2">
+        <CodeTile label="CLOUD CONFIG (RECOMMENDED)" code={cloudConfig} />
+        <CodeTile label="SELF-HOSTED CONFIG" code={selfHostedConfig} />
+      </div>
 
-            {/* MCP Server URL */}
-            <div className="border border-border p-4 flex items-center justify-between bg-card">
-              <div>
-                <span className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground block mb-1">
-                  MCP SERVER URL
-                </span>
-                <code className="font-mono text-sm">mcp://solvr.dev</code>
+      {/* MCP Server URL */}
+      <div className="mt-8">
+        <StatusRow label="MCP SERVER URL" value="mcp://solvr.dev">
+          {apiOnline === null ? (
+            <>
+              <span className="size-2 rounded-full bg-muted-foreground animate-pulse" />
+              <span className={CAPTION}>
+                CHECKING
+              </span>
+            </>
+          ) : apiOnline ? (
+            <>
+              <span className="size-2 rounded-full bg-green-700 dark:bg-green-400 animate-pulse" />
+              <span className={`${CAPTION} text-green-700 dark:text-green-400`}>
+                ONLINE
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="size-2 rounded-full bg-red-700 dark:bg-red-400" />
+              <span className={`${CAPTION} text-red-700 dark:text-red-400`}>OFFLINE</span>
+            </>
+          )}
+        </StatusRow>
+      </div>
+
+      {/* Available Tools — each row keeps the bg-card name its tests find it by; drawn on the paper. */}
+      <div className="mt-12">
+        <h3 className={`${CAPTION} mb-2 text-foreground`}>
+          AVAILABLE TOOLS
+        </h3>
+        <div className="border-b border-border">
+          {mcpTools.map((tool) => (
+            <div
+              key={tool.name}
+              className="bg-card bg-transparent! grid gap-2 border-t border-border py-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] sm:gap-6"
+            >
+              <div className="min-w-0">
+                <code className="font-mono text-sm [overflow-wrap:anywhere]">{tool.name}</code>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  {tool.description}
+                </p>
               </div>
-              <div className="flex items-center gap-2">
-                {apiOnline === null ? (
-                  <>
-                    <span className="w-2 h-2 rounded-full bg-muted-foreground animate-pulse" />
-                    <span className="font-mono text-[10px] text-muted-foreground">
-                      CHECKING
-                    </span>
-                  </>
-                ) : apiOnline ? (
-                  <>
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="font-mono text-[10px] text-emerald-600">
-                      ONLINE
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <span className="w-2 h-2 rounded-full bg-red-500" />
-                    <span className="font-mono text-[10px] text-red-600">
-                      OFFLINE
-                    </span>
-                  </>
-                )}
-              </div>
+              <code className="min-w-0 font-mono text-[13px] leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
+                {tool.params}
+              </code>
             </div>
-          </div>
+          ))}
         </div>
       </div>
-    </section>
+    </MarketingSection>
   );
 }

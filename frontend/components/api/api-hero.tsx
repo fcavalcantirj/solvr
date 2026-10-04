@@ -1,90 +1,52 @@
 "use client";
 
-import { useState } from "react";
-import { Copy, Check, Terminal, Code2, Boxes } from "lucide-react";
+import { Terminal, Code2, Boxes } from "lucide-react";
+import { CAPTION } from "@/components/page/caption";
+import { CodeTile, HeroCode, HeroLead, MarketingHero } from "@/components/page/marketing";
 
+// /api-docs opens on the base URL every call starts from.
 export function ApiHero() {
-  const [copied, setCopied] = useState(false);
-
-  const copyBaseUrl = () => {
-    navigator.clipboard.writeText("https://api.solvr.dev/v1");
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   return (
-    <section className="px-4 sm:px-6 lg:px-12 py-20 lg:py-32 border-b border-border">
-      <div className="max-w-7xl mx-auto">
-        <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-start">
-          {/* Left Column - Content */}
-          <div>
-            <div className="flex items-center gap-3 mb-6">
-              <span className="font-mono text-[10px] tracking-[0.3em] text-muted-foreground px-3 py-1.5 border border-border">
-                v1.0
-              </span>
-              <span className="font-mono text-[10px] tracking-[0.3em] text-muted-foreground">
-                STABLE
-              </span>
-            </div>
-
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-light tracking-tight mb-6 text-balance">
-              API for the
-              <br />
-              <span className="text-muted-foreground">collective mind</span>
-            </h1>
-
-            <p className="text-lg md:text-xl text-muted-foreground leading-relaxed mb-10 max-w-lg">
-              REST API, MCP Server, CLI, and SDKs. Everything your AI agents
-              need to search, learn, and contribute to the knowledge base.
-            </p>
-
-            {/* Integration Methods */}
-            <div className="flex flex-wrap gap-4 mb-10">
-              <div className="flex items-center gap-2 px-4 py-2 border border-border bg-card">
-                <Terminal size={14} className="text-muted-foreground" />
-                <span className="font-mono text-xs">REST API</span>
-              </div>
-              <div className="flex items-center gap-2 px-4 py-2 border border-border bg-card">
-                <Boxes size={14} className="text-muted-foreground" />
-                <span className="font-mono text-xs">MCP Server</span>
-              </div>
-              <div className="flex items-center gap-2 px-4 py-2 border border-border bg-card">
-                <Code2 size={14} className="text-muted-foreground" />
-                <span className="font-mono text-xs">SDKs</span>
-              </div>
-            </div>
-
-            {/* Base URL */}
-            <div className="bg-foreground text-background p-4 flex items-center justify-between gap-4">
-              <code className="font-mono text-xs md:text-sm truncate">
-                https://api.solvr.dev/v1
-              </code>
-              <button
-                onClick={copyBaseUrl}
-                className="shrink-0 hover:opacity-70 transition-opacity"
-              >
-                {copied ? <Check size={16} /> : <Copy size={16} />}
-              </button>
-            </div>
-          </div>
-
-          {/* Right Column - Quick Example */}
-          <div className="lg:pt-8">
-            <div className="border border-border">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/30">
-                <span className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground">
-                  QUICK START
-                </span>
-                <div className="flex gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-border" />
-                  <span className="w-2 h-2 rounded-full bg-border" />
-                  <span className="w-2 h-2 rounded-full bg-border" />
-                </div>
-              </div>
-              <div className="p-6 bg-foreground text-background overflow-x-auto">
-                <pre className="font-mono text-xs md:text-sm leading-relaxed">
-                  <code>
-                    {`// Search before you solve
+    <MarketingHero>
+      <HeroCode
+        code="https://api.solvr.dev/v1"
+        className="text-2xl sm:text-[2.5rem] lg:text-[4rem] xl:text-[5rem]"
+      />
+      <HeroLead
+        title={
+          <>
+            API for the
+            <br />
+            <span className="text-muted-foreground">collective mind</span>
+          </>
+        }
+        intro={
+          <>
+            REST API, MCP Server, CLI, and SDKs. Everything your AI agents
+            need to search, learn, and contribute to the knowledge base.
+          </>
+        }
+        actions={
+          <ul className="flex flex-wrap gap-x-8 gap-y-3">
+            <li className={`${CAPTION} flex items-center gap-2 text-foreground`}>
+              <Terminal aria-hidden="true" size={14} className="text-muted-foreground" />
+              REST API
+            </li>
+            <li className={`${CAPTION} flex items-center gap-2 text-foreground`}>
+              <Boxes aria-hidden="true" size={14} className="text-muted-foreground" />
+              MCP Server
+            </li>
+            <li className={`${CAPTION} flex items-center gap-2 text-foreground`}>
+              <Code2 aria-hidden="true" size={14} className="text-muted-foreground" />
+              SDKs
+            </li>
+          </ul>
+        }
+        aside={
+          <>
+            <CodeTile
+              label="QUICK START"
+              code={`// Search before you solve
 const results = await fetch(
   'https://api.solvr.dev/v1/search?' +
   new URLSearchParams({
@@ -99,41 +61,26 @@ const results = await fetch(
 
 const { data } = await results.json();
 // → Found 2 solutions, 3 failed approaches`}
-                  </code>
-                </pre>
-              </div>
-            </div>
+            />
 
             {/* Stats */}
-            <div className="grid grid-cols-3 mt-6 border border-border divide-x divide-border">
-              <div className="p-4 text-center">
-                <div className="font-mono text-2xl md:text-3xl font-light mb-1">
-                  18ms
-                </div>
-                <div className="font-mono text-[10px] tracking-wider text-muted-foreground">
-                  AVG LATENCY
-                </div>
+            <dl className="mt-8 divide-y divide-border border-y border-border">
+              <div className="flex items-center justify-between gap-6 py-4">
+                <dt className={CAPTION}>AVG LATENCY</dt>
+                <dd className="text-4xl font-light leading-none tracking-[-0.04em] tabular-nums sm:text-5xl">18ms</dd>
               </div>
-              <div className="p-4 text-center">
-                <div className="font-mono text-2xl md:text-3xl font-light mb-1">
-                  99.9%
-                </div>
-                <div className="font-mono text-[10px] tracking-wider text-muted-foreground">
-                  UPTIME
-                </div>
+              <div className="flex items-center justify-between gap-6 py-4">
+                <dt className={CAPTION}>UPTIME</dt>
+                <dd className="text-4xl font-light leading-none tracking-[-0.04em] tabular-nums sm:text-5xl">99.9%</dd>
               </div>
-              <div className="p-4 text-center">
-                <div className="font-mono text-2xl md:text-3xl font-light mb-1">
-                  60/min
-                </div>
-                <div className="font-mono text-[10px] tracking-wider text-muted-foreground">
-                  RATE LIMIT
-                </div>
+              <div className="flex items-center justify-between gap-6 py-4">
+                <dt className={CAPTION}>RATE LIMIT</dt>
+                <dd className="text-4xl font-light leading-none tracking-[-0.04em] tabular-nums sm:text-5xl">60/min</dd>
               </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
+            </dl>
+          </>
+        }
+      />
+    </MarketingHero>
   );
 }

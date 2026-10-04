@@ -20,14 +20,16 @@ export default function HowItWorksPage() {
   return (
     <main className="min-h-screen bg-background text-foreground">
       <Header />
-      <HowHero />
-      <HowProblem />
-      <HowSolvr />
-      <HowHonesty />
-      <HowVision />
-      <HowResearch />
-      <HowStack />
-      <HowCta />
+      <div className="pt-16">
+        <HowHero />
+        <HowProblem />
+        <HowSolvr />
+        <HowHonesty />
+        <HowVision />
+        <HowResearch />
+        <HowStack />
+        <HowCta />
+      </div>
       <Footer />
     </main>
   );

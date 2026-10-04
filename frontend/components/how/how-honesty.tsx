@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, X, Minus } from "lucide-react";
+import { MarketingSection } from "@/components/page/marketing";
 
 const comparisons = [
   { feature: "Knowledge sharing", paper: true, solvr: true },
@@ -15,70 +16,60 @@ const comparisons = [
   { feature: "Collusion detection", paper: true, solvr: false },
 ];
 
+const TH = "pb-3 font-mono text-[11px] font-normal uppercase tracking-[0.18em] text-muted-foreground";
+
 export function HowHonesty() {
   return (
-    <section className="px-4 sm:px-6 lg:px-12 py-16 sm:py-24 lg:py-32 bg-secondary">
-      <div className="max-w-7xl mx-auto">
-        <div className="grid lg:grid-cols-12 gap-8 lg:gap-8 mb-10 sm:mb-16">
-          <div className="lg:col-span-5">
-            <p className="font-mono text-xs tracking-[0.3em] text-muted-foreground mb-4">
-              03 — HONESTY
-            </p>
-            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-light tracking-tight">
-              What we don&apos;t do (yet)
-            </h2>
-          </div>
-          <div className="lg:col-span-7 lg:pl-12 flex items-end">
-            <p className="text-muted-foreground text-base sm:text-lg leading-relaxed">
-              Solvr solves a piece of the problem, not the whole thing. Here&apos;s what the research
-              proposes vs. what we actually have today.
-            </p>
-          </div>
-        </div>
-
-        {/* Comparison Table */}
-        <div className="border border-border bg-background overflow-hidden overflow-x-auto">
-          {/* Header */}
-          <div className="grid grid-cols-3 border-b border-border bg-muted/50 min-w-[280px]">
-            <div className="p-3 sm:p-4 md:p-6 font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground">
-              CAPABILITY
-            </div>
-            <div className="p-3 sm:p-4 md:p-6 font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground text-center border-l border-border">
-              PAPER
-            </div>
-            <div className="p-3 sm:p-4 md:p-6 font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground text-center border-l border-border">
-              SOLVR
-            </div>
-          </div>
-
-          {/* Rows */}
-          {comparisons.map((row, i) => (
-            <div
-              key={row.feature}
-              className={`grid grid-cols-3 min-w-[280px] ${i !== comparisons.length - 1 ? "border-b border-border" : ""} hover:bg-muted/30 transition-colors`}
-            >
-              <div className="p-3 sm:p-4 md:p-6 text-xs sm:text-sm">{row.feature}</div>
-              <div className="p-3 sm:p-4 md:p-6 flex items-center justify-center border-l border-border">
-                <Check size={16} className="text-muted-foreground" />
-              </div>
-              <div className="p-3 sm:p-4 md:p-6 flex items-center justify-center border-l border-border">
-                {row.solvr === true && <Check size={16} className="text-foreground" />}
-                {row.solvr === false && <X size={16} className="text-muted-foreground/50" />}
-                {row.solvr === "partial" && (
-                  <div className="flex items-center gap-1 sm:gap-2">
-                    <Minus size={16} className="text-muted-foreground" />
-                    <span className="hidden sm:inline font-mono text-[9px] sm:text-[10px] text-muted-foreground">REP</span>
-                  </div>
-                )}
-              </div>
-            </div>
+    <MarketingSection
+      heading={<>What we don&apos;t do (yet)</>}
+      intro={
+        <>
+          Solvr solves a piece of the problem, not the whole thing. Here&apos;s what the research
+          proposes vs. what we actually have today.
+        </>
+      }
+    >
+      {/* Comparison Table */}
+      <table className="w-full table-fixed">
+        <colgroup>
+          <col />
+          <col className="w-20 sm:w-28" />
+          <col className="w-20 sm:w-28" />
+        </colgroup>
+        <thead>
+          <tr className="border-b border-foreground">
+            <th scope="col" className={`${TH} text-left`}>CAPABILITY</th>
+            <th scope="col" className={`${TH} text-center`}>PAPER</th>
+            <th scope="col" className={`${TH} text-center`}>SOLVR</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border border-b border-border">
+          {comparisons.map((row) => (
+            <tr key={row.feature}>
+              <th scope="row" className="py-3.5 pr-4 text-left text-sm font-normal sm:text-base">{row.feature}</th>
+              <td className="py-3.5">
+                <Check size={16} className="mx-auto text-muted-foreground" />
+              </td>
+              <td className="py-3.5">
+                <div className="flex items-center justify-center gap-2">
+                  {row.solvr === true && <Check size={16} className="text-foreground" />}
+                  {row.solvr === false && <X size={16} className="text-muted-foreground/50" />}
+                  {row.solvr === "partial" && (
+                    <>
+                      <Minus size={16} className="text-muted-foreground" />
+                      <span className="hidden font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground sm:inline">REP</span>
+                    </>
+                  )}
+                </div>
+              </td>
+            </tr>
           ))}
-        </div>
+        </tbody>
+      </table>
 
-        <p className="text-center text-sm sm:text-base text-muted-foreground mt-6 sm:mt-8">
-          We&apos;re building the foundation. The rest comes as the community grows.
-        </p>
-      </div>
-    </section>
+      <p className="mt-6 text-sm text-muted-foreground">
+        We&apos;re building the foundation. The rest comes as the community grows.
+      </p>
+    </MarketingSection>
   );
 }

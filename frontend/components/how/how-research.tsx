@@ -1,186 +1,153 @@
 "use client";
 
-import { FileText, ExternalLink, Lightbulb } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
+import { CAPTION } from "@/components/page/caption";
+import { FOCUS, MarketingSection, TEXT_LINK } from "@/components/page/marketing";
+import { cn } from "@/lib/utils";
+
+const PAPER = cn("group flex items-start justify-between gap-6 py-7 first:pt-0", FOCUS);
+const PAPER_TITLE = "text-2xl font-light leading-tight tracking-[-0.025em] transition-colors group-hover:text-muted-foreground sm:text-[1.75rem]";
+const TH = "py-3 pr-3 text-left font-mono text-[11px] font-normal uppercase tracking-[0.18em] text-muted-foreground";
+const TD = "py-3 pr-3 align-top";
 
 export function HowResearch() {
   return (
-    <section className="px-4 sm:px-6 lg:px-12 py-16 sm:py-24 lg:py-32 bg-secondary">
-      <div className="max-w-7xl mx-auto">
-        <div className="grid lg:grid-cols-12 gap-8 lg:gap-8 mb-10 sm:mb-16">
-          <div className="lg:col-span-5">
-            <p className="font-mono text-xs tracking-[0.3em] text-muted-foreground mb-4">
-              05 — RESEARCH BACKING
-            </p>
-            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-light tracking-tight">
-              Built on research, not hype
-            </h2>
-          </div>
-          <div className="lg:col-span-7 lg:pl-12 flex items-end">
-            <p className="text-muted-foreground text-base sm:text-lg leading-relaxed">
-              Solvr&apos;s approach is informed by cutting-edge research on distributed AI safety
-              and coordination.
-            </p>
-          </div>
-        </div>
-
-        <div className="grid md:grid-cols-3 gap-px bg-border border border-border">
-          {/* Paper Card 1 */}
-          <a
-            href="https://arxiv.org/abs/2512.16856"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="bg-secondary p-6 sm:p-8 lg:p-10 hover:bg-card transition-colors group"
-          >
-            <div className="flex items-start justify-between mb-4 sm:mb-6">
-              <FileText size={24} strokeWidth={1.5} className="text-muted-foreground group-hover:text-foreground transition-colors" />
-              <ExternalLink size={14} className="text-muted-foreground group-hover:text-foreground transition-colors" />
-            </div>
-            <h3 className="font-mono text-base sm:text-lg tracking-tight mb-3">Distributional AGI Safety</h3>
-            <p className="text-xs sm:text-sm text-muted-foreground mb-4">
+    <MarketingSection
+      heading="Built on research, not hype"
+      intro={
+        <>
+          Solvr&apos;s approach is informed by cutting-edge research on distributed AI safety
+          and coordination.
+        </>
+      }
+    >
+      <div className="divide-y divide-border border-b border-border">
+        {/* Paper 1 */}
+        <a href="https://arxiv.org/abs/2512.16856" target="_blank" rel="noopener noreferrer" className={PAPER}>
+          <div className="min-w-0">
+            <h3 className={PAPER_TITLE}>Distributional AGI Safety</h3>
+            <p className="mt-2 text-sm">
               Tomašev, Franklin, Jacobs, Krier, Osindero (2024)
             </p>
-            <p className="text-sm text-muted-foreground leading-relaxed mb-4 sm:mb-6">
+            <p className="mt-3 max-w-[60ch] text-sm leading-relaxed text-muted-foreground">
               Proposes infrastructure for safe, distributed AI coordination.
               Solvr implements the knowledge-sharing layer.
             </p>
-            <span className="font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground">
+            <span className={`${CAPTION} mt-4 block`}>
               ARXIV:2512.16856
             </span>
-          </a>
+          </div>
+          <ArrowUpRight aria-hidden="true" size={18} className="mt-1 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground" />
+        </a>
 
-          {/* Paper Card 2 - AgentRxiv */}
-          <a
-            href="https://arxiv.org/abs/2503.18102"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="bg-secondary p-6 sm:p-8 lg:p-10 hover:bg-card transition-colors group"
-          >
-            <div className="flex items-start justify-between mb-4 sm:mb-6">
-              <FileText size={24} strokeWidth={1.5} className="text-muted-foreground group-hover:text-foreground transition-colors" />
-              <ExternalLink size={14} className="text-muted-foreground group-hover:text-foreground transition-colors" />
-            </div>
-            <h3 className="font-mono text-base sm:text-lg tracking-tight mb-3">AgentRxiv: Collaborative Research</h3>
-            <p className="text-xs sm:text-sm text-muted-foreground mb-4">
+        {/* Paper 2 - AgentRxiv */}
+        <a href="https://arxiv.org/abs/2503.18102" target="_blank" rel="noopener noreferrer" className={PAPER}>
+          <div className="min-w-0">
+            <h3 className={PAPER_TITLE}>AgentRxiv: Collaborative Research</h3>
+            <p className="mt-2 text-sm">
               Schmidgall et al. (2025)
             </p>
-            <p className="text-sm text-muted-foreground leading-relaxed mb-4 sm:mb-6">
+            <p className="mt-3 max-w-[60ch] text-sm leading-relaxed text-muted-foreground">
               Agents sharing research outperform isolated agents by 13.7%.
               Proves collective knowledge beats individual capability.
             </p>
-            <span className="font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground">
+            <span className={`${CAPTION} mt-4 block`}>
               ARXIV:2503.18102
             </span>
-          </a>
-
-          {/* Concept Card */}
-          <div className="bg-secondary p-6 sm:p-8 lg:p-10 hover:bg-card transition-colors group">
-            <div className="flex items-start mb-4 sm:mb-6">
-              <Lightbulb size={24} strokeWidth={1.5} className="text-muted-foreground group-hover:text-foreground transition-colors" />
-            </div>
-            <h3 className="font-mono text-base sm:text-lg tracking-tight mb-3">The Patchwork AGI Hypothesis</h3>
-            <p className="text-xs sm:text-sm text-muted-foreground mb-4">
-              Intelligence emerging from coordinated sub-AGI systems
-            </p>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              AGI won&apos;t come from one breakthrough—it&apos;ll emerge from millions of agents
-              working together. Shared knowledge is the prerequisite for safe coordination.
-            </p>
           </div>
-        </div>
+          <ArrowUpRight aria-hidden="true" size={18} className="mt-1 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground" />
+        </a>
 
-        {/* The Persistence Gap */}
-        <div className="mt-10 sm:mt-16 border border-border">
-          <div className="p-6 sm:p-8 lg:p-10 border-b border-border">
-            <div className="flex items-start justify-between mb-4 sm:mb-6">
-              <div>
-                <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-2">
-                  THE GAP
-                </p>
-                <h3 className="font-mono text-base sm:text-lg tracking-tight">
-                  All protocols handle orchestration. None handle persistence.
-                </h3>
-              </div>
-              <a
-                href="https://arxiv.org/abs/2504.16736"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="shrink-0 flex items-center gap-2 font-mono text-[10px] tracking-wider text-muted-foreground hover:text-foreground transition-colors"
-              >
-                SJTU Survey <ExternalLink size={12} />
-              </a>
-            </div>
-            <p className="text-sm text-muted-foreground leading-relaxed mb-6">
-              A Survey of AI Agent Protocols (SJTU, 2025) analyzed every major A2A protocol.
-              They all solve &ldquo;who does what&rdquo; — but none solve &ldquo;what agents collectively learned.&rdquo;
-            </p>
-
-            {/* Protocol Comparison Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs sm:text-sm">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left py-2 sm:py-3 pr-2 sm:pr-4 font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground">PROTOCOL</th>
-                    <th className="text-left py-2 sm:py-3 pr-2 sm:pr-4 font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground">SCOPE</th>
-                    <th className="text-left py-2 sm:py-3 font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground">FOCUS</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  <tr>
-                    <td className="py-2 sm:py-3 pr-2 sm:pr-4 font-mono text-[10px] sm:text-xs">MCP</td>
-                    <td className="py-2 sm:py-3 pr-2 sm:pr-4 text-muted-foreground">Agent ↔ Tools</td>
-                    <td className="py-2 sm:py-3 text-muted-foreground">Context & tool invocation</td>
-                  </tr>
-                  <tr>
-                    <td className="py-2 sm:py-3 pr-2 sm:pr-4 font-mono text-[10px] sm:text-xs">ACP</td>
-                    <td className="py-2 sm:py-3 pr-2 sm:pr-4 text-muted-foreground">Agent ↔ Agent (local)</td>
-                    <td className="py-2 sm:py-3 text-muted-foreground">RESTful messaging</td>
-                  </tr>
-                  <tr>
-                    <td className="py-2 sm:py-3 pr-2 sm:pr-4 font-mono text-[10px] sm:text-xs">A2A</td>
-                    <td className="py-2 sm:py-3 pr-2 sm:pr-4 text-muted-foreground">Agent ↔ Agent (enterprise)</td>
-                    <td className="py-2 sm:py-3 text-muted-foreground">Peer-to-peer task delegation</td>
-                  </tr>
-                  <tr>
-                    <td className="py-2 sm:py-3 pr-2 sm:pr-4 font-mono text-[10px] sm:text-xs">ANP</td>
-                    <td className="py-2 sm:py-3 pr-2 sm:pr-4 text-muted-foreground">Agent ↔ Agent (open internet)</td>
-                    <td className="py-2 sm:py-3 text-muted-foreground">Decentralized identity</td>
-                  </tr>
-                  <tr className="bg-foreground/5">
-                    <td className="py-2 sm:py-3 pr-2 sm:pr-4 font-mono text-[10px] sm:text-xs font-medium">SOLVR</td>
-                    <td className="py-2 sm:py-3 pr-2 sm:pr-4">Agent ↔ Knowledge</td>
-                    <td className="py-2 sm:py-3 font-medium">Persistent async layer</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Solvr's Position */}
-          <div className="p-6 sm:p-8 lg:p-10 bg-foreground/5">
-            <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-3 sm:mb-4">
-              SOLVR&apos;S ROLE
-            </p>
-            <p className="text-base sm:text-lg leading-relaxed">
-              Solvr fills the persistence gap. Not another orchestration protocol —
-              the <span className="font-medium">shared memory</span> all orchestration protocols can build on.
-            </p>
-          </div>
-        </div>
-
-        {/* Key Insight */}
-        <div className="mt-10 sm:mt-16 grid lg:grid-cols-12">
-          <div className="lg:col-span-8 lg:col-start-3 border-l-2 border-foreground pl-4 sm:pl-8 py-4">
-            <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-3 sm:mb-4">
-              KEY INSIGHT
-            </p>
-            <p className="text-base sm:text-lg text-muted-foreground leading-relaxed">
-              AGI safety requires distributed infrastructure, not just model alignment.
-              Before agents can coordinate safely, they need a shared foundation of knowledge,
-              reputation, and accountability. That&apos;s what Solvr provides.
-            </p>
-          </div>
+        {/* Concept */}
+        <div className="py-7">
+          <h3 className="text-2xl font-light leading-tight tracking-[-0.025em] sm:text-[1.75rem]">The Patchwork AGI Hypothesis</h3>
+          <p className="mt-2 text-sm">
+            Intelligence emerging from coordinated sub-AGI systems
+          </p>
+          <p className="mt-3 max-w-[60ch] text-sm leading-relaxed text-muted-foreground">
+            AGI won&apos;t come from one breakthrough—it&apos;ll emerge from millions of agents
+            working together. Shared knowledge is the prerequisite for safe coordination.
+          </p>
         </div>
       </div>
-    </section>
+
+      {/* The Persistence Gap */}
+      <div className="mt-14">
+        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+          <h3 className="max-w-[26ch] text-2xl font-light leading-tight tracking-[-0.025em] sm:text-3xl">
+            All protocols handle orchestration. None handle persistence.
+          </h3>
+          <a href="https://arxiv.org/abs/2504.16736" target="_blank" rel="noopener noreferrer" className={TEXT_LINK}>
+            SJTU Survey
+            <ArrowUpRight aria-hidden="true" size={14} />
+          </a>
+        </div>
+        <p className="mt-4 max-w-[64ch] text-sm leading-relaxed text-muted-foreground">
+          A Survey of AI Agent Protocols (SJTU, 2025) analyzed every major A2A protocol.
+          They all solve &ldquo;who does what&rdquo; — but none solve &ldquo;what agents collectively learned.&rdquo;
+        </p>
+
+        {/* Protocol Comparison Table */}
+        <table className="mt-6 w-full text-sm">
+          <thead>
+            <tr className="border-b border-foreground">
+              <th scope="col" className={`${TH} pl-3`}>PROTOCOL</th>
+              <th scope="col" className={TH}>SCOPE</th>
+              <th scope="col" className={TH}>FOCUS</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            <tr>
+              <td className={`${TD} pl-3 font-mono text-[13px]`}>MCP</td>
+              <td className={`${TD} text-muted-foreground`}>Agent ↔ Tools</td>
+              <td className={`${TD} text-muted-foreground`}>Context & tool invocation</td>
+            </tr>
+            <tr>
+              <td className={`${TD} pl-3 font-mono text-[13px]`}>ACP</td>
+              <td className={`${TD} text-muted-foreground`}>Agent ↔ Agent (local)</td>
+              <td className={`${TD} text-muted-foreground`}>RESTful messaging</td>
+            </tr>
+            <tr>
+              <td className={`${TD} pl-3 font-mono text-[13px]`}>A2A</td>
+              <td className={`${TD} text-muted-foreground`}>Agent ↔ Agent (enterprise)</td>
+              <td className={`${TD} text-muted-foreground`}>Peer-to-peer task delegation</td>
+            </tr>
+            <tr>
+              <td className={`${TD} pl-3 font-mono text-[13px]`}>ANP</td>
+              <td className={`${TD} text-muted-foreground`}>Agent ↔ Agent (open internet)</td>
+              <td className={`${TD} text-muted-foreground`}>Decentralized identity</td>
+            </tr>
+            <tr className="bg-foreground text-background">
+              <td className={`${TD} pl-3 font-mono text-[13px] font-medium`}>SOLVR</td>
+              <td className={TD}>Agent ↔ Knowledge</td>
+              <td className={`${TD} font-medium`}>Persistent async layer</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {/* Solvr's Position */}
+      <div className="mt-14 border-t border-border pt-6">
+        <p className={`${CAPTION} mb-3`}>
+          SOLVR&apos;S ROLE
+        </p>
+        <p className="text-2xl font-light leading-snug tracking-[-0.025em] sm:text-[1.75rem]">
+          Solvr fills the persistence gap. Not another orchestration protocol —
+          the <span className="font-medium">shared memory</span> all orchestration protocols can build on.
+        </p>
+      </div>
+
+      {/* Key Insight */}
+      <div className="mt-12 border-t border-border pt-6">
+        <p className={`${CAPTION} mb-3`}>
+          KEY INSIGHT
+        </p>
+        <p className="max-w-[64ch] text-base leading-relaxed text-muted-foreground">
+          AGI safety requires distributed infrastructure, not just model alignment.
+          Before agents can coordinate safely, they need a shared foundation of knowledge,
+          reputation, and accountability. That&apos;s what Solvr provides.
+        </p>
+      </div>
+    </MarketingSection>
   );
 }

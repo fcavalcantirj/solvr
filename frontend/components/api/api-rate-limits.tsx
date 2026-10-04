@@ -1,3 +1,9 @@
+import { CAPTION } from "@/components/page/caption";
+import { AccentChip, MarketingSection } from "@/components/page/marketing";
+
+// The two tiers as ledgers: what an operation is on the left, its limit set as a figure.
+const TH = "pb-3 font-mono text-[11px] font-normal uppercase tracking-[0.18em] text-muted-foreground";
+
 export function ApiRateLimits() {
   const limits = [
     {
@@ -54,133 +60,117 @@ export function ApiRateLimits() {
   const proLimits = limits.filter((l) => l.tier === "pro");
 
   return (
-    <section className="px-4 sm:px-6 lg:px-12 py-20 lg:py-28 border-b border-border">
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-12 lg:mb-16">
-          <p className="font-mono text-[10px] tracking-[0.3em] text-muted-foreground mb-4">
-            RATE LIMITS
-          </p>
-          <h2 className="text-3xl md:text-4xl font-light tracking-tight mb-4">
-            Fair usage for all
-          </h2>
-          <p className="text-muted-foreground max-w-2xl">
-            Generous limits for search operations. Best practice: cache results
-            locally with 1-hour TTL.
-          </p>
+    <MarketingSection
+      heading="Fair usage for all"
+      intro={
+        <>
+          Generous limits for search operations. Best practice: cache results
+          locally with 1-hour TTL.
+        </>
+      }
+      aside={<p className={`${CAPTION} mt-6`}>RATE LIMITS</p>}
+    >
+      <div className="grid gap-12 md:grid-cols-2 md:gap-10">
+        {/* Free Tier */}
+        <div className="min-w-0">
+          <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-b border-foreground pb-3">
+            <h3 className="text-2xl font-light tracking-[-0.02em]">FREE TIER</h3>
+            <span className={CAPTION}>
+              DEFAULT
+            </span>
+          </div>
+          <table className="mt-4 w-full">
+            <thead>
+              <tr className="border-b border-border">
+                <th className={`${TH} text-left`}>
+                  OPERATION
+                </th>
+                <th className={`${TH} text-right`}>
+                  LIMIT
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {freeLimits.map((limit, index) => (
+                <tr key={index} className="border-b border-border">
+                  <td className="py-4 pr-4">
+                    <div className="font-mono text-[11px] uppercase tracking-[0.18em]">{limit.operation}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {limit.description}
+                    </div>
+                  </td>
+                  <td className="whitespace-nowrap text-right text-3xl font-light tracking-[-0.04em] tabular-nums lg:text-4xl">{limit.limit}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-8">
-          {/* Free Tier */}
-          <div className="border border-border">
-            <div className="px-6 py-4 border-b border-border bg-muted/30">
-              <div className="flex items-center justify-between">
-                <h3 className="font-mono text-sm tracking-wider">FREE TIER</h3>
-                <span className="font-mono text-[10px] tracking-wider text-muted-foreground px-2 py-1 border border-border">
-                  DEFAULT
-                </span>
-              </div>
+        {/* Pro Tier */}
+        <div className="min-w-0">
+          <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-b border-foreground pb-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <h3 className="text-2xl font-light tracking-[-0.02em]">PRO TIER</h3>
+              <AccentChip>COMING SOON</AccentChip>
             </div>
-            <div className="p-6">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left font-mono text-[10px] tracking-wider text-muted-foreground pb-3">
-                      OPERATION
-                    </th>
-                    <th className="text-right font-mono text-[10px] tracking-wider text-muted-foreground pb-3">
-                      LIMIT
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {freeLimits.map((limit, index) => (
-                    <tr key={index} className="border-b border-border last:border-0">
-                      <td className="py-4">
-                        <div className="font-mono text-sm">{limit.operation}</div>
-                        <div className="text-xs text-muted-foreground mt-1">
-                          {limit.description}
-                        </div>
-                      </td>
-                      <td className="text-right font-mono text-sm">{limit.limit}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <span className={`${CAPTION} text-foreground`}>
+              $9/mo
+            </span>
           </div>
-
-          {/* Pro Tier */}
-          <div className="border border-border">
-            <div className="px-6 py-4 border-b border-border bg-foreground text-background">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <h3 className="font-mono text-sm tracking-wider">PRO TIER</h3>
-                  <span className="font-mono text-[9px] tracking-wider px-2 py-0.5 bg-amber-500 text-black">
-                    COMING SOON
-                  </span>
-                </div>
-                <span className="font-mono text-[10px] tracking-wider px-2 py-1 border border-background/20">
-                  $9/mo
-                </span>
-              </div>
-            </div>
-            <div className="p-6">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left font-mono text-[10px] tracking-wider text-muted-foreground pb-3">
-                      OPERATION
-                    </th>
-                    <th className="text-right font-mono text-[10px] tracking-wider text-muted-foreground pb-3">
-                      LIMIT
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {proLimits.map((limit, index) => (
-                    <tr key={index} className="border-b border-border last:border-0">
-                      <td className="py-4">
-                        <div className="font-mono text-sm">{limit.operation}</div>
-                        <div className="text-xs text-muted-foreground mt-1">
-                          {limit.description}
-                        </div>
-                      </td>
-                      <td className="text-right font-mono text-sm">{limit.limit}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <table className="mt-4 w-full">
+            <thead>
+              <tr className="border-b border-border">
+                <th className={`${TH} text-left`}>
+                  OPERATION
+                </th>
+                <th className={`${TH} text-right`}>
+                  LIMIT
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {proLimits.map((limit, index) => (
+                <tr key={index} className="border-b border-border">
+                  <td className="py-4 pr-4">
+                    <div className="font-mono text-[11px] uppercase tracking-[0.18em]">{limit.operation}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {limit.description}
+                    </div>
+                  </td>
+                  <td className="whitespace-nowrap text-right text-3xl font-light tracking-[-0.04em] text-muted-foreground tabular-nums lg:text-4xl">{limit.limit}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
+      </div>
 
-        {/* Best Practices */}
-        <div className="mt-8 p-6 border border-border bg-muted/20">
-          <h4 className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground mb-4">
-            BEST PRACTICES
-          </h4>
-          <div className="grid md:grid-cols-3 gap-6">
-            <div>
-              <h5 className="font-medium text-sm mb-1">Cache locally</h5>
-              <p className="text-xs text-muted-foreground">
-                Store search results with 1-hour TTL to reduce API calls.
-              </p>
-            </div>
-            <div>
-              <h5 className="font-medium text-sm mb-1">Use webhooks</h5>
-              <p className="text-xs text-muted-foreground">
-                Subscribe to updates instead of polling for changes.
-              </p>
-            </div>
-            <div>
-              <h5 className="font-medium text-sm mb-1">Batch queries</h5>
-              <p className="text-xs text-muted-foreground">
-                Use bulk search endpoint for multiple queries at once.
-              </p>
-            </div>
+      {/* Best Practices */}
+      <div className="mt-12">
+        <h4 className={`${CAPTION} mb-2 text-foreground`}>
+          BEST PRACTICES
+        </h4>
+        <div className="grid border-y border-border sm:grid-cols-3 sm:divide-x sm:divide-border">
+          <div className="border-b border-border py-5 sm:border-b-0 sm:pr-6">
+            <h5 className="text-lg font-light tracking-[-0.015em]">Cache locally</h5>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              Store search results with 1-hour TTL to reduce API calls.
+            </p>
+          </div>
+          <div className="border-b border-border py-5 sm:border-b-0 sm:px-6">
+            <h5 className="text-lg font-light tracking-[-0.015em]">Use webhooks</h5>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              Subscribe to updates instead of polling for changes.
+            </p>
+          </div>
+          <div className="py-5 sm:pl-6">
+            <h5 className="text-lg font-light tracking-[-0.015em]">Batch queries</h5>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              Use bulk search endpoint for multiple queries at once.
+            </p>
           </div>
         </div>
       </div>
-    </section>
+    </MarketingSection>
   );
 }

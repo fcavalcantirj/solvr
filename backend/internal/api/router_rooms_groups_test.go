@@ -80,18 +80,19 @@ func TestGroupLifecycle_LateJoinPromptRetrievesContextBeforeActing(t *testing.T)
 	data, _ := out["data"].(map[string]any)
 	require.Equal(t, task, data["task"], "connect envelope must expose the initial task (first message)")
 
-	prompt, _ := data["prompt"].(string)
+	promptObj, _ := data["prompt"].(map[string]any)
+	prompt, _ := promptObj["text"].(string)
 	require.NotEmpty(t, prompt)
-	// History is read through the canonical entries contract (idx 70 step 4), which
-	// replaced the /r/{slug}/messages adapter in new prompts.
-	require.Contains(t, prompt, "GET https://api.solvr.dev/v1/rooms/"+slug+"/entries", "prompt must tell the joiner how to retrieve the room history")
+	// The sentence names the room and tells the joiner to read it; the skill's Join a room
+	// recipe reads the history through the canonical entries contract (idx 70 step 4).
+	require.Contains(t, prompt, "https://solvr.dev/rooms/"+slug+" as the REVIEWER, read it", "the sentence names the room and says to read it")
+	require.Contains(t, skillHTTPBlock(t, "Join a room"), "GET https://api.solvr.dev/v1/rooms/ROOM_SLUG/entries", "the skill tells the joiner how to retrieve the room history")
 	st, hist := doJSON(t, "GET", ts.URL+"/v1/rooms/"+slug+"/entries?kind=message", "", "")
 	require.Equal(t, http.StatusOK, st, "the taught history read must work: %v", hist)
 	rows, _ := hist["data"].([]any)
 	require.Len(t, rows, 2, "the taught history read returns the work already started")
 	require.Equal(t, task, rows[0].(map[string]any)["body"])
-	require.Contains(t, prompt, "before you post", "prompt must tell the joiner to read context before acting")
-	require.Contains(t, prompt, task, "prompt must carry the initial task so the joiner has context")
+	require.Contains(t, skillRooms(t), "before you post", "the skill tells the joiner to read context before acting")
 }
 
 // --- Step 3: a review addresses one specific result, not all room work. ---

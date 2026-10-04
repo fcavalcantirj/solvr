@@ -8,161 +8,38 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/fcavalcantirj/solvr/internal/api/middleware"
-	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
+	"github.com/fcavalcantirj/solvr/internal/api/middleware"
+	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
-// executorPromptTestRoom builds a minimal room + first message for unit tests.
-func executorPromptTestRoom() (*models.Room, *models.Message) {
-	room := &models.Room{
-		ID:          uuid.New(),
-		Slug:        "tic-tac-toe-planner-exec",
-		DisplayName: "Tic-Tac-Toe Planner/Executor",
-		IsPrivate:   false,
-	}
+// GET /v1/rooms/{slug}/connect serves the sentence for an agent joining a real room, in
+// the same shape as the first agent's: the skill, the room (its title is the intent and
+// its link the place), the role in capitals, and the job.
+
+func connectTestRoom(private bool) (*models.Room, *models.Message) {
+	room := &models.Room{ID: uuid.New(), Slug: "tic-tac-toe-planner-exec", DisplayName: "Ship the signup page", IsPrivate: private}
 	seq := 1
-	msg := &models.Message{
-		ID:          1,
-		RoomID:      room.ID,
-		AgentName:   "raphael_tictactoe_planner",
-		Content:     "Task: Build a tic-tac-toe AI that plays optimally. Directive: implement the minimax algorithm.",
-		SequenceNum: &seq,
-	}
+	msg := &models.Message{ID: 1, RoomID: room.ID, AgentName: "raphael_planner", SequenceNum: &seq,
+		Content: "Task: Build a tic-tac-toe AI that plays optimally. Directive: implement the minimax algorithm."}
 	return room, msg
 }
 
-// TestRoomsConnect_ExecutorPromptNamesActualRoom verifies the executor prompt names
-// the actual room (not the ROOM_SLUG placeholder), the exec role, the expected
-// planner identity, the initial task, and the production endpoints the executor must
-// call — and that it never leaks credentials, never uses shell-template syntax, and
-// never names a localhost endpoint.
-func TestRoomsConnect_ExecutorPromptNamesActualRoom(t *testing.T) {
-	room, firstMsg := executorPromptTestRoom()
-
-	prompt := executorPromptText(room, firstMsg)
-
-	lower := strings.ToLower(prompt)
-
-	// Step 2: names the actual room, executor role, expected planner identity,
-	// initial task.
-	require.Contains(t, prompt, connectAppBaseURL+"/rooms/"+room.Slug,
-		"the prompt must name the REAL room URL, not a placeholder")
-	require.NotContains(t, prompt, "ROOM_SLUG",
-		"the room-specific prompt must not contain the placeholder")
-	require.Contains(t, lower, "executor")
-	require.Contains(t, lower, "planner")
-	require.Contains(t, lower, firstMsg.AgentName,
-		"the prompt must name the expected planner identity (the first author)")
-	require.Contains(t, lower, "minimax",
-		"the prompt must carry the initial task from the first message")
-	require.Contains(t, lower, "retrieve the latest directive")
-
-	// Step 3: names the real production endpoints (with the real slug substituted).
-	require.Contains(t, prompt, connectAPIBaseURL+"/v1/rooms/"+room.Slug+"/handshake")
-	require.Contains(t, prompt, connectAPIBaseURL+"/r/"+room.Slug+"/join")
-	// Messages go through the canonical entries contract (idx 70 step 4).
-	require.Contains(t, prompt, "POST "+connectAPIBaseURL+"/v1/rooms/"+room.Slug+"/entries")
-	require.Contains(t, prompt, "GET "+connectAPIBaseURL+"/v1/rooms/"+room.Slug+"/entries")
-	require.NotContains(t, prompt, "/r/"+room.Slug+"/message")
-	require.Contains(t, lower, "your own identity")
-
-	// No credentials may appear in the executor prompt.
-	require.NotContains(t, lower, "solvr_sk_")
-	require.NotContains(t, lower, "solvr_rt_")
-	require.NotContains(t, lower, "api_key")
-	require.NotContains(t, lower, "room_token")
-
-	// No shell/template substitution.
-	require.NotContains(t, prompt, "$")
-	require.NotContains(t, prompt, "${")
-	require.NotContains(t, prompt, "`")
-
-	// Production endpoints only — no localhost.
-	require.NotContains(t, prompt, "http://localhost")
-
-	// The prompt must tell the executor to report failure as failure.
-	require.Contains(t, lower, "never invent")
-}
-
-// TestRoomsConnect_ExecutorPromptNeverLeaksCredentials covers the same credential
-// guarantees as a standalone assertion list so a regression in any source field is
-// caught explicitly.
-func TestRoomsConnect_ExecutorPromptNeverLeaksCredentials(t *testing.T) {
-	room, firstMsg := executorPromptTestRoom()
-	prompt := executorPromptText(room, firstMsg)
-
-	for _, secret := range []string{"solvr_sk_", "solvr_rt_", "solvr_rm_", "api_key", "room_token"} {
-		require.NotContains(t, prompt, secret,
-			"executor prompt must not leak %q", secret)
-	}
-}
-
-// TestRoomsConnect_PrivateRoomExecutorPromptMentionsPrivateContext verifies the
-// prompt for a private room explains the shared room token context without exposing
-// the token itself.
-func TestRoomsConnect_PrivateRoomExecutorPromptMentionsPrivateContext(t *testing.T) {
-	room := &models.Room{
-		ID:        uuid.New(),
-		Slug:      "private-room-slug",
-		IsPrivate: true,
-	}
-	seq := 1
-	msg := &models.Message{
-		ID:          1,
-		RoomID:      room.ID,
-		AgentName:   "the_planner",
-		Content:     "Task: secure collaboration. Directive: lock it down.",
-		SequenceNum: &seq,
-	}
-
-	prompt := executorPromptText(room, msg)
-
-	require.Contains(t, prompt, room.Slug)
-	require.Contains(t, strings.ToLower(prompt), "private")
-	require.NotContains(t, prompt, "ROOM_SLUG")
-	require.NotContains(t, prompt, "$")
-	require.NotContains(t, prompt, "${")
-}
-
-// TestRoomsConnect_ExecutorPromptForNoFirstMessage degrades gracefully when the room
-// has no messages yet: the prompt must still be valid and contain no placeholder.
-func TestRoomsConnect_ExecutorPromptForNoFirstMessage(t *testing.T) {
-	room := &models.Room{
-		ID:        uuid.New(),
-		Slug:      "empty-room-123",
-		IsPrivate: false,
-	}
-
-	prompt := executorPromptText(room, nil)
-
-	// Even without a first message the prompt names the real room and the executor role.
-	require.Contains(t, prompt, connectAppBaseURL+"/rooms/"+room.Slug)
-	require.NotContains(t, prompt, "ROOM_SLUG")
-	require.Contains(t, strings.ToLower(prompt), "executor")
-	require.NotContains(t, prompt, "$")
-	require.NotContains(t, prompt, "${")
-}
-
-// fakeRoomConnectRooms is a connectRoomLookup fake for unit tests.
 type fakeRoomConnectRooms struct {
-	room  *models.Room
-	err   error
-	asked string
+	room *models.Room
+	err  error
 }
 
-func (f *fakeRoomConnectRooms) GetBySlug(_ context.Context, slug string) (*models.Room, error) {
-	f.asked = slug
+func (f *fakeRoomConnectRooms) GetBySlug(_ context.Context, _ string) (*models.Room, error) {
 	if f.err != nil {
 		return nil, f.err
 	}
 	return f.room, nil
 }
 
-// fakeFirstMessageLookup is a firstMessageLookup fake for unit tests.
 type fakeFirstMessageLookup struct {
 	msg *models.Message
 	err error
@@ -172,238 +49,105 @@ func (f *fakeFirstMessageLookup) GetFirstMessage(_ context.Context, _ uuid.UUID)
 	return f.msg, f.err
 }
 
-// TestRoomsConnect_HandlerServesRoomConnectEnvelope verifies the handler returns the
-// JSON envelope with the executor prompt, room URL, task, and visibility — using
-// fakes so no database is needed.
-func TestRoomsConnect_HandlerServesRoomConnectEnvelope(t *testing.T) {
-	room, firstMsg := executorPromptTestRoom()
-
-	h := &RoomConnectHandler{
-		rooms: &fakeRoomConnectRooms{room: room},
-		msgs:  &fakeFirstMessageLookup{msg: firstMsg},
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/rooms/"+room.Slug+"/connect", nil)
-	w := httptest.NewRecorder()
-	h.GetRoomConnect(w, req)
-
-	require.Equal(t, http.StatusOK, w.Code, "body: %s", w.Body.String())
-
-	var wrapper struct {
-		Data roomConnectEnvelope `json:"data"`
-	}
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper), "body: %s", w.Body.String())
-	resp := wrapper.Data
-
-	require.Equal(t, ConnectInstructionVersion, resp.InstructionVersion)
-	require.Equal(t, room.Slug, resp.RoomSlug)
-	require.Equal(t, connectAppBaseURL+"/rooms/"+room.Slug, resp.RoomURL)
-	require.False(t, resp.Private)
-	require.Contains(t, resp.ExecutorPrompt, room.Slug)
-	require.NotEmpty(t, resp.ExpectedPlanner)
-	require.Equal(t, firstMsg.AgentName, resp.ExpectedPlanner)
-	require.NotEmpty(t, resp.Task)
-	require.Contains(t, resp.Task, "minimax")
-	require.Equal(t, firstMsg.ID, resp.FirstMessageID)
-	require.NotEmpty(t, resp.FirstMessageURL)
-
-	// No credentials in the raw body.
-	lower := strings.ToLower(w.Body.String())
-	for _, secret := range []string{"solvr_sk_", "solvr_rt_", "api_key", "room_token"} {
-		require.NotContains(t, lower, secret, "leaked %q", secret)
-	}
-}
-
-// TestRoomsConnect_Handler404ForNonexistentRoom verifies the handler returns 404
-// when the room does not exist.
-func TestRoomsConnect_Handler404ForNonexistentRoom(t *testing.T) {
-	h := &RoomConnectHandler{
-		rooms: &fakeRoomConnectRooms{err: errRoomNotFound},
-		msgs:  &fakeFirstMessageLookup{},
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/rooms/missing-room/connect", nil)
-	w := httptest.NewRecorder()
-	h.GetRoomConnect(w, req)
-
-	require.Equal(t, http.StatusNotFound, w.Code)
-	require.Contains(t, w.Body.String(), "NOT_FOUND")
-}
-
-// TestRoomsConnect_Handler403ForPrivateRoomWhenUnauthenticated verifies that a
-// private room returns 403 to an anonymous caller (same policy as room reads).
-func TestRoomsConnect_Handler403ForPrivateRoomWhenUnauthenticated(t *testing.T) {
-	privateRoom := &models.Room{
-		ID:        uuid.New(),
-		Slug:      "private-test-room",
-		IsPrivate: true,
-	}
-	h := &RoomConnectHandler{
-		rooms: &fakeRoomConnectRooms{room: privateRoom},
-		msgs:  &fakeFirstMessageLookup{},
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/rooms/private-test-room/connect", nil)
-	w := httptest.NewRecorder()
-	h.GetRoomConnect(w, req)
-
-	require.Equal(t, http.StatusForbidden, w.Code)
-}
-
-// TestRoomsConnect_RoleParameterGeneratesRoleSpecificPrompt verifies that different
-// roles (reviewer, researcher, executor) generate appropriate role-specific join prompts.
-func TestRoomsConnect_RoleParameterGeneratesRoleSpecificPrompt(t *testing.T) {
-	room, firstMsg := executorPromptTestRoom()
-
-	for _, tc := range []struct {
-		name string
-		role string
-		want string
-	}{
-		{"executor", "executor", "executor"},
-		{"reviewer", "reviewer", "reviewer"},
-		{"researcher", "researcher", "researcher"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			prompt := roleSpecificPromptText(room, firstMsg, tc.role)
-			require.Contains(t, strings.ToLower(prompt), tc.want,
-				"prompt for role %q must mention the role", tc.role)
-			require.Contains(t, prompt, connectAppBaseURL+"/rooms/"+room.Slug)
-			require.NotContains(t, prompt, "ROOM_SLUG")
-			require.NotContains(t, prompt, "$")
-			require.NotContains(t, prompt, "${")
-			// Credentials must never appear.
-			require.NotContains(t, prompt, "solvr_sk_")
-			require.NotContains(t, prompt, "solvr_rt_")
-		})
-	}
-}
-
-// TestRoomsConnect_CollaboratorRecruitsIntoExistingRoom verifies the public-room
-// recruit contract (task 26): the default collaborator join prompt tells a NEW
-// agent to self-register and take its OWN room token by handshake, then join the
-// EXISTING room — it never creates a duplicate room and never grants owner rights.
-func TestRoomsConnect_CollaboratorRecruitsIntoExistingRoom(t *testing.T) {
-	room, firstMsg := executorPromptTestRoom()
-
-	prompt := roleSpecificPromptText(room, firstMsg, "collaborator")
-
-	// Names the role and the REAL room, never a placeholder slug.
-	require.Contains(t, prompt, "Collaborator agent joining an existing Solvr room")
-	require.Contains(t, prompt, connectAppBaseURL+"/rooms/"+room.Slug)
-	require.NotContains(t, prompt, "ROOM_SLUG")
-
-	// Self-registers if needed and takes its OWN per-agent room token by handshake.
-	require.Contains(t, prompt, connectAPIBaseURL+"/v1/agents/register")
-	require.Contains(t, prompt, "/rooms/"+room.Slug+"/handshake")
-
-	// Never creates a duplicate room and never claims owner permissions.
-	require.NotContains(t, prompt, "Create the room")
-	require.NotContains(t, prompt, "you will own")
-
-	// Never leaks credentials or impersonates another agent.
-	require.NotContains(t, prompt, "solvr_sk_")
-	require.NotContains(t, prompt, "solvr_rt_")
-	require.Contains(t, prompt, "never impersonate")
-
-	// The handler echoes the collaborator role and returns the same prompt for a
-	// public room to an anonymous caller.
-	h := &RoomConnectHandler{
-		rooms: &fakeRoomConnectRooms{room: room},
-		msgs:  &fakeFirstMessageLookup{msg: firstMsg},
-	}
-	req := httptest.NewRequest(http.MethodGet, "/v1/rooms/"+room.Slug+"/connect?role=collaborator", nil)
-	w := httptest.NewRecorder()
-	h.GetRoomConnect(w, req)
-
-	require.Equal(t, http.StatusOK, w.Code, "body: %s", w.Body.String())
-	var wrapper struct {
-		Data roomConnectEnvelope `json:"data"`
-	}
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper))
-	require.Equal(t, "collaborator", wrapper.Data.Role)
-	require.Contains(t, wrapper.Data.Prompt, "Collaborator agent joining an existing Solvr room")
-}
-
-// TestRoomsConnect_PlannerJoinsFreshlyCreatedRoom verifies the fast direct-create
-// contract (task: "Retain a fast direct-create option for authenticated humans"):
-// a human who makes the room here lands on it and copies planner + executor
-// prompts tied to that room. The room already exists, so the planner prompt is a
-// JOIN prompt for the real room (never a "create the room" prompt), works even
-// while the room is still empty (no first message yet), and leaks no credentials.
-func TestRoomsConnect_PlannerJoinsFreshlyCreatedRoom(t *testing.T) {
-	room, _ := executorPromptTestRoom()
-
-	// A freshly created room is empty: no first message yet.
-	prompt := roleSpecificPromptText(room, nil, "planner")
-
-	// Names the planner role and the REAL room, never a placeholder slug.
-	require.Contains(t, prompt, "Planner agent joining an existing Solvr room")
-	require.Contains(t, prompt, connectAppBaseURL+"/rooms/"+room.Slug)
-	require.NotContains(t, prompt, "ROOM_SLUG")
-
-	// Self-registers if needed and takes its OWN per-agent room token by handshake.
-	require.Contains(t, prompt, connectAPIBaseURL+"/v1/agents/register")
-	require.Contains(t, prompt, "/rooms/"+room.Slug+"/handshake")
-
-	// The room already exists — this is a join, never a second create.
-	require.NotContains(t, prompt, "Create the room")
-	require.NotContains(t, prompt, "you will own")
-
-	// Never leaks credentials or impersonates another agent.
-	require.NotContains(t, prompt, "solvr_sk_")
-	require.NotContains(t, prompt, "solvr_rt_")
-	require.Contains(t, prompt, "never impersonate")
-
-	// The handler echoes the planner role and serves the planner prompt in the
-	// .prompt field (executor goes through .executor_prompt).
-	h := &RoomConnectHandler{
-		rooms: &fakeRoomConnectRooms{room: room},
-		msgs:  &fakeFirstMessageLookup{msg: nil},
-	}
-	req := httptest.NewRequest(http.MethodGet, "/v1/rooms/"+room.Slug+"/connect?role=planner", nil)
-	w := httptest.NewRecorder()
-	h.GetRoomConnect(w, req)
-
-	require.Equal(t, http.StatusOK, w.Code, "body: %s", w.Body.String())
-	var wrapper struct {
-		Data roomConnectEnvelope `json:"data"`
-	}
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper))
-	require.Equal(t, "planner", wrapper.Data.Role)
-	require.Contains(t, wrapper.Data.Prompt, "Planner agent joining an existing Solvr room")
-}
-
-// errRoomNotFound is returned by fakes to simulate a missing room.
-var errRoomNotFound = db.ErrRoomNotFound
-
-// TestRoomsConnect_PrivateRoomServedOnlyWhenGuardAdmittedThatRoom pins the private-room
-// rule: the prompt is served when RoomAccessGuard admitted THIS room, and refused when
-// the context carries a different room (admission never transfers between rooms).
-func TestRoomsConnect_PrivateRoomServedOnlyWhenGuardAdmittedThatRoom(t *testing.T) {
-	privateRoom := &models.Room{ID: uuid.New(), Slug: "private-test-room", IsPrivate: true}
-	h := &RoomConnectHandler{
-		rooms: &fakeRoomConnectRooms{room: privateRoom},
-		msgs:  &fakeFirstMessageLookup{},
-	}
-
-	serve := func(admitted *models.Room) *httptest.ResponseRecorder {
-		req := httptest.NewRequest(http.MethodGet, "/v1/rooms/private-test-room/connect?role=collaborator", nil)
+// serveRoomConnect calls the handler; admitted, when set, is the room RoomAccessGuard let in.
+func serveRoomConnect(room *models.Room, msg *models.Message, query string, admitted *models.Room) *httptest.ResponseRecorder {
+	h := &RoomConnectHandler{rooms: &fakeRoomConnectRooms{room: room}, msgs: &fakeFirstMessageLookup{msg: msg}}
+	req := httptest.NewRequest(http.MethodGet, "/v1/rooms/"+room.Slug+"/connect"+query, nil)
+	if admitted != nil {
 		req = req.WithContext(context.WithValue(req.Context(), middleware.RoomContextKey, admitted))
-		w := httptest.NewRecorder()
-		h.GetRoomConnect(w, req)
-		return w
 	}
+	w := httptest.NewRecorder()
+	h.GetRoomConnect(w, req)
+	return w
+}
 
-	w := serve(privateRoom)
+func roomEnvelope(t *testing.T, w *httptest.ResponseRecorder) roomConnectEnvelope {
+	t.Helper()
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	var env struct {
+	var wrapper struct {
 		Data roomConnectEnvelope `json:"data"`
 	}
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &env))
-	require.True(t, env.Data.Private)
-	require.Contains(t, env.Data.Prompt, "/v1/rooms/private-test-room/handshake")
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper), w.Body.String())
+	return wrapper.Data
+}
+
+func TestRoomsConnect_ServesTheJoiningAgentsSentence(t *testing.T) {
+	room, msg := connectTestRoom(false)
+	w := serveRoomConnect(room, msg, "", nil)
+	env := roomEnvelope(t, w)
+
+	require.Equal(t, ConnectInstructionVersion, env.InstructionVersion)
+	require.Equal(t, room.Slug, env.RoomSlug)
+	require.Equal(t, "https://solvr.dev/rooms/"+room.Slug, env.RoomURL)
+	require.False(t, env.Private)
+	require.Equal(t, "executor", env.Role, "executor is the default role")
+	require.Equal(t, msg.Content, env.Task, "the room's first message is the task")
+	require.Equal(t,
+		`Learn Solvr from https://solvr.dev/skill.md. Join the public Solvr room "Ship the signup page" at https://solvr.dev/rooms/tic-tac-toe-planner-exec as the EXECUTOR, read it, and follow the orders pinned there, post your doubts, and post a summary when you're done.`,
+		env.Prompt.Text)
+	require.Equal(t, env.Prompt.Text, joined(env.Prompt))
+	require.Less(t, env.Prompt.WordCount, 120)
+	require.Equal(t, []PromptSegment{{Kind: SegmentRole, Text: "EXECUTOR", Side: "b"}}, segmentsOf(env.Prompt, SegmentRole))
+	require.Equal(t, "Ship the signup page", segmentsOf(env.Prompt, SegmentIntent)[0].Text)
+	links := segmentsOf(env.Prompt, SegmentLink)
+	require.Len(t, links, 2)
+	require.Equal(t, "https://solvr.dev/skill.md", links[0].Text)
+	require.Equal(t, "https://solvr.dev/rooms/"+room.Slug, links[1].Text)
+
+	body := strings.ToLower(w.Body.String())
+	for _, gone := range []string{`"executor_prompt"`, `"expected_planner_identity"`, `"first_message_id"`, "api.solvr.dev",
+		"solvr_sk_", "solvr_rt_", "api_key", "room_token"} {
+		require.NotContains(t, body, gone)
+	}
+}
+
+func TestRoomsConnect_EachRoleGetsItsJob(t *testing.T) {
+	room, msg := connectTestRoom(false)
+	for role, job := range map[string]string{
+		"reviewer":     "review and test each change posted there, and approve or reject it",
+		"expert":       "answer everything you're asked there until the asker can work on it alone",
+		"planner":      "post the plan there, pin it as the directive, and direct the work",
+		"collaborator": "help with the work pinned there, and post what you did",
+		"researcher":   "do that job there, and post what you did",
+	} {
+		env := roomEnvelope(t, serveRoomConnect(room, msg, "?role="+role, nil))
+		require.Equal(t, role, env.Role)
+		require.Contains(t, env.Prompt.Text, " as the "+strings.ToUpper(role)+", read it, and "+job+".", role)
+	}
+}
+
+func TestRoomsConnect_RefusesARoleThatCannotBePutInASentence(t *testing.T) {
+	room, msg := connectTestRoom(false)
+	for _, role := range []string{"Reviewer", "a", "rev%20iewer", "x--------------------------y", "rm$x"} {
+		w := serveRoomConnect(room, msg, "?role="+role, nil)
+		require.Equal(t, http.StatusBadRequest, w.Code, role)
+		require.Contains(t, w.Body.String(), "INVALID_ROLE", role)
+	}
+}
+
+func TestRoomsConnect_APrivateRoomsSentenceAsksForTheAgentsIDFirst(t *testing.T) {
+	room, msg := connectTestRoom(true)
+	env := roomEnvelope(t, serveRoomConnect(room, msg, "?role=collaborator", room))
+	require.True(t, env.Private)
+	require.Contains(t, env.Prompt.Text, "Join the private Solvr room")
+	require.True(t, strings.HasSuffix(env.Prompt.Text, " It's private, so give me your agent id first and I'll get you admitted."))
 
 	other := &models.Room{ID: uuid.New(), Slug: "other-room", IsPrivate: true}
-	require.Equal(t, http.StatusForbidden, serve(other).Code)
+	require.Equal(t, http.StatusForbidden, serveRoomConnect(room, msg, "", other).Code, "admitted to another room only")
+	require.Equal(t, http.StatusForbidden, serveRoomConnect(room, msg, "", nil).Code, "no guard, no private sentence")
+}
+
+func TestRoomsConnect_ARoomWithNoMessagesStillHasItsSentence(t *testing.T) {
+	room, _ := connectTestRoom(false)
+	env := roomEnvelope(t, serveRoomConnect(room, nil, "", nil))
+	require.Empty(t, env.Task)
+	require.Contains(t, env.Prompt.Text, "https://solvr.dev/rooms/"+room.Slug)
+}
+
+func TestRoomsConnect_Handler404ForNonexistentRoom(t *testing.T) {
+	h := &RoomConnectHandler{rooms: &fakeRoomConnectRooms{err: db.ErrRoomNotFound}, msgs: &fakeFirstMessageLookup{}}
+	w := httptest.NewRecorder()
+	h.GetRoomConnect(w, httptest.NewRequest(http.MethodGet, "/v1/rooms/missing-room/connect", nil))
+	require.Equal(t, http.StatusNotFound, w.Code)
+	require.Contains(t, w.Body.String(), "NOT_FOUND")
 }

@@ -47,15 +47,21 @@ func TestRoomPrivateConnect_OwnerGetsHandshakePrompt(t *testing.T) {
 			Private  bool   `json:"private"`
 			RoomSlug string `json:"room_slug"`
 			Role     string `json:"role"`
-			Prompt   string `json:"prompt"`
+			Prompt   struct {
+				Text string `json:"text"`
+			} `json:"prompt"`
 		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(raw, &env))
 	assert.True(t, env.Data.Private)
 	assert.Equal(t, slug, env.Data.RoomSlug)
 	assert.Equal(t, "collaborator", env.Data.Role)
-	assert.Contains(t, env.Data.Prompt, "/v1/rooms/"+slug+"/handshake")
-	assert.NotContains(t, env.Data.Prompt, "solvr_rm_", "the prompt must never carry a shared room token")
+	// The sentence sends the agent to the skill, whose Join a room recipe is the per-agent
+	// handshake (TestPublishedSkill_EachAgentTakesItsOwnRoomTokenByHandshake).
+	assert.Contains(t, env.Data.Prompt.Text, "Learn Solvr from https://solvr.dev/skill.md. Join the private Solvr room")
+	assert.Contains(t, env.Data.Prompt.Text, "https://solvr.dev/rooms/"+slug+" as the COLLABORATOR")
+	assert.Contains(t, env.Data.Prompt.Text, "give me your agent id first")
+	assert.NotContains(t, env.Data.Prompt.Text, "solvr_rm_", "the prompt must never carry a shared room token")
 
 	// Following the prompt: the owner's own claimed agent handshakes with its OWN key
 	// (family scope) and receives an individual solvr_rt_ — no shared token involved.

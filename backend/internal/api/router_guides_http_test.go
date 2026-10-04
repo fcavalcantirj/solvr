@@ -3,35 +3,39 @@ package api
 import (
 	"fmt"
 	"net/http"
-	"net/url"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 )
 
-// Task idx 84: the three published guides are evidence-backed. Each test is the guide's
-// workflow run over plain HTTP by agents that have nothing but net/http and the prompt
-// text the real router serves (router_connect_http_only_test.go's harness), following
-// it literally. A guide states only what these tests run; named CLI clients are not
-// claimed until they are tested live.
+// The published guides are evidence-backed (task idx 84, v1.3.5). Each guide shows one
+// example sentence from GET /v1/connect/examples; each test is that guide run over plain
+// HTTP by fresh agents that have nothing but net/http, the sentence, and the skill's
+// recipes (router_connect_http_only_test.go's harness), following them literally. A
+// guide states only what these tests run; named CLI clients are not claimed until they
+// are tested live.
 
-// guideStart reads GET /v1/connect for a preset and returns its first prompt's text.
-func guideStart(t *testing.T, base, preset string) string {
+// guideSentence is a guide's example sentence, as GET /v1/connect/examples serves it.
+func guideSentence(t *testing.T, base, preset string) sentence {
 	t.Helper()
-	start := httpOnlyGet(t, base+"/v1/connect?preset="+preset+"&visibility=public")
-	selected, _ := start["selected"].(map[string]any)
-	require.Equal(t, preset, selected["preset"])
-	prompt, _ := start["prompt"].(map[string]any)
-	text, _ := prompt["text"].(string)
-	require.NotEmpty(t, text)
-	return text
+	examples := httpOnlyGet(t, base+"/v1/connect/examples")
+	presets, _ := examples["presets"].([]any)
+	for _, raw := range presets {
+		p, _ := raw.(map[string]any)
+		if p["value"] == preset {
+			return decodeSentence(t, p["prompt"])
+		}
+	}
+	t.Fatalf("no example sentence for %s", preset)
+	return sentence{}
 }
 
 // roomMessages reads a room's message bodies in timeline order.
-func roomMessages(t *testing.T, base, slug string) []string {
+func roomMessages(t *testing.T, base, slug, credential string) []string {
 	t.Helper()
-	status, out := doJSON(t, http.MethodGet, base+"/v1/rooms/"+slug+"/entries?kind=message&limit=100", "", "")
+	status, out := doJSON(t, http.MethodGet, base+"/v1/rooms/"+slug+"/entries?kind=message&limit=100", credential, "")
 	require.Equal(t, http.StatusOK, status, "entries: %v", out)
 	rows, _ := out["data"].([]any)
 	bodies := []string{}
@@ -43,68 +47,98 @@ func roomMessages(t *testing.T, base, slug string) []string {
 	return bodies
 }
 
-// Guide: connect a planner and an executor (preset plan-and-build).
+// Guide: connect a planner and an executor (Plan & execute).
 func TestGuide_PlannerAndExecutor(t *testing.T) {
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
 	roomPreCleanup(t, pool)
 	n := time.Now().UnixNano() % 100000000
 
+	s := guideSentence(t, ts.URL, "plan-and-build")
+	require.Equal(t, "ship the signup page", s.segment("intent"))
 	planner := newHTTPOnlyAgent(fmt.Sprintf("roomtest_gp%d", n), fmt.Sprintf("test guide planner %d", n))
-	planner.follow(t, ts.URL, guideStart(t, ts.URL, "plan-and-build"))
+	planner.startRoom(t, ts.URL, s)
 	slug := planner.vars["ROOM_SLUG"]
-	require.Equal(t, []string{
-		"POST /v1/agents/register", "POST /v1/rooms", "POST /v1/rooms/" + slug + "/handshake",
-		"POST /r/" + slug + "/join", "POST /v1/rooms/" + slug + "/entries",
-		"POST /v1/rooms/" + slug + "/entries/" + planner.vars["ENTRY_ID"] + "/pin", "GET /v1/rooms/" + slug + "/entries",
-	}, planner.calls, "the planner's steps (the plan is pinned as the directive)")
+	require.Equal(t, startCalls(planner), planner.calls, "the planner's steps (the plan is pinned as the directive)")
 
 	executor := newHTTPOnlyAgent(fmt.Sprintf("roomtest_ge%d", n), "")
-	executor.follow(t, ts.URL, httpOnlyGet(t, ts.URL+"/v1/rooms/"+slug+"/connect")["prompt"].(string))
-	require.Contains(t, executor.calls, "POST /v1/rooms/"+slug+"/handshake")
-	require.Contains(t, executor.calls, "GET /v1/rooms/"+slug+"/entries", "the executor reads the planner's message")
-	require.Contains(t, executor.calls, "POST /v1/rooms/"+slug+"/entries", "the executor replies")
-	requireAuthoredEntries(t, ts.URL, slug, planner, executor)
+	executor.joinRoom(t, ts.URL, roomSentence(t, ts.URL, slug, "executor", ""))
+	require.Contains(t, executor.seen, planner.message, "the executor reads the planner's message")
+	planner.read(t, ts.URL)
+	require.Contains(t, planner.seen, executor.message, "the planner reads the executor's reply")
+	requireAuthoredEntries(t, ts.URL, slug, "", planner, executor)
 }
 
-// Guide: connect a builder and a reviewer (preset build-and-review, reviewer role).
+// Guide: connect a builder and a reviewer (Build & review).
 func TestGuide_BuilderAndReviewer(t *testing.T) {
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
 	roomPreCleanup(t, pool)
 	n := time.Now().UnixNano() % 100000000
 
+	s := guideSentence(t, ts.URL, "build-and-review")
+	require.Equal(t, "add API rate limiting", s.segment("intent"))
 	builder := newHTTPOnlyAgent(fmt.Sprintf("roomtest_gb%d", n), fmt.Sprintf("test guide builder %d", n))
-	builder.follow(t, ts.URL, guideStart(t, ts.URL, "build-and-review"))
+	builder.startRoom(t, ts.URL, s)
 	slug := builder.vars["ROOM_SLUG"]
 	require.NotEmpty(t, slug)
 
 	reviewer := newHTTPOnlyAgent(fmt.Sprintf("roomtest_gr%d", n), "")
-	reviewer.follow(t, ts.URL, httpOnlyGet(t, ts.URL+"/v1/rooms/"+slug+"/connect?role=reviewer")["prompt"].(string))
-	require.Contains(t, reviewer.calls, "GET /v1/rooms/"+slug+"/entries", "the reviewer reads the builder's work")
-	require.Contains(t, reviewer.calls, "POST /v1/rooms/"+slug+"/entries", "the reviewer posts its review")
-	requireAuthoredEntries(t, ts.URL, slug, builder, reviewer)
+	reviewer.joinRoom(t, ts.URL, roomSentence(t, ts.URL, slug, "reviewer", ""))
+	require.Contains(t, reviewer.seen, builder.message, "the reviewer reads the builder's work")
+	builder.read(t, ts.URL)
+	require.Contains(t, builder.seen, reviewer.message, "the builder reads the review")
+	requireAuthoredEntries(t, ts.URL, slug, "", builder, reviewer)
 }
 
-// Guide: resume collaboration across two CLIs. The executor's CLI exits; while it is
-// away the planner keeps posting; a second CLI starts over from the room's prompt, as
-// the prompt's RESUMING section says, reads the room, finds the messages it missed and
-// continues after them.
+// Guide: share context between two agents (Share context, a private room). The learner
+// follows the example sentence; the expert gives its id to the human, who relays it; the
+// learner admits it; the expert reads the question and answers.
+func TestGuide_ShareContext(t *testing.T) {
+	ts, pool, cleanup := setupRoomTestServer(t)
+	defer cleanup()
+	roomPreCleanup(t, pool)
+	n := time.Now().UnixNano() % 100000000
+
+	s := guideSentence(t, ts.URL, "collaborate")
+	require.Equal(t, "learn our billing code", s.segment("intent"))
+	require.Equal(t, "private", s.segment("visibility"))
+	learner := newHTTPOnlyAgent(fmt.Sprintf("roomtest_gs%d", n), fmt.Sprintf("test guide share %d", n))
+	learner.startRoom(t, ts.URL, s)
+	slug := learner.vars["ROOM_SLUG"]
+	require.Equal(t, startCalls(learner), learner.calls, "the learner's steps (the question is pinned as the directive)")
+
+	expertSentence := roomSentence(t, ts.URL, slug, "expert", learner.vars["YOUR_AGENT_API_KEY"])
+	expert := newHTTPOnlyAgent(fmt.Sprintf("roomtest_gt%d", n), "")
+	expert.register(t, ts.URL)
+	learner.admit(t, ts.URL, expert.id)
+	expert.joinRoom(t, ts.URL, expertSentence)
+	require.Contains(t, expert.seen, learner.message, "the expert reads the question")
+	learner.read(t, ts.URL)
+	require.Contains(t, learner.seen, expert.message, "the learner reads the answer")
+	requireAuthoredEntries(t, ts.URL, slug, learner.vars["YOUR_ROOM_TOKEN"], learner, expert)
+}
+
+// Guide: resume collaboration across two CLIs. The executor's CLI exits; while it is away
+// the planner keeps posting; a second CLI starts over from the room's sentence, as the
+// skill's RESUMING step says, reads the room, finds the messages it missed and continues
+// after them.
 func TestGuide_ResumeAcrossTwoCLIs(t *testing.T) {
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
 	roomPreCleanup(t, pool)
 	n := time.Now().UnixNano() % 100000000
 
+	resuming := skillRooms(t)[strings.Index(skillRooms(t), "RESUMING"):]
+	require.Contains(t, resuming, "start over from your prompt and read the room to catch up", "the skill teaches the resume")
+
 	planner := newHTTPOnlyAgent(fmt.Sprintf("roomtest_gq%d", n), fmt.Sprintf("test guide resume %d", n))
-	planner.follow(t, ts.URL, guideStart(t, ts.URL, "plan-and-build"))
+	planner.startRoom(t, ts.URL, guideSentence(t, ts.URL, "plan-and-build"))
 	slug := planner.vars["ROOM_SLUG"]
-	roomPrompt := httpOnlyGet(t, ts.URL+"/v1/rooms/"+slug+"/connect")["prompt"].(string)
-	require.Contains(t, roomPrompt, "RESUMING", "the prompt itself teaches the resume")
-	require.Contains(t, roomPrompt, "start over from this prompt and read the room to catch up")
+	roomPrompt := roomSentence(t, ts.URL, slug, "executor", "")
 
 	first := newHTTPOnlyAgent(fmt.Sprintf("roomtest_gx%d", n), "")
-	first.follow(t, ts.URL, roomPrompt)
+	first.joinRoom(t, ts.URL, roomPrompt)
 
 	// The first CLI exits. The planner posts while it is away.
 	missed := fmt.Sprintf("step two while you were away %d", n)
@@ -113,51 +147,13 @@ func TestGuide_ResumeAcrossTwoCLIs(t *testing.T) {
 	require.NoError(t, err)
 	require.Less(t, status, 300)
 
-	// A second CLI starts over from the same prompt.
+	// A second CLI starts over from the same sentence.
 	second := newHTTPOnlyAgent(fmt.Sprintf("roomtest_gy%d", n), "")
 	second.message = fmt.Sprintf("resumed after step two %d", n)
-	second.follow(t, ts.URL, roomPrompt)
-	require.Contains(t, second.calls, "GET /v1/rooms/"+slug+"/entries", "the second CLI reads the room to catch up")
+	second.joinRoom(t, ts.URL, roomPrompt)
+	require.Contains(t, second.seen, missed, "the second CLI reads the room to catch up")
 
-	bodies := roomMessages(t, ts.URL, slug)
+	bodies := roomMessages(t, ts.URL, slug, "")
 	require.Equal(t, []string{planner.message, first.message, missed, second.message}, bodies,
 		"the room carries the missed message before the resumed reply, nothing repeated")
-}
-
-// shareContextExample is the example instruction the share-context guide and the
-// homepage use case give (frontend lib/docs/use-cases.ts): the agent that needs to
-// learn is told to ask; the agent that knows is told to teach.
-const shareContextExample = "My other agent knows this codebase and you do not. Ask it how authentication works here, one question at a time, until you can explain it back, then post a summary of what you learned in the room."
-
-// Guide: share context between two agents (preset collaborate). The agent that needs
-// to learn follows the served first prompt, with the example instruction as its task;
-// the agent that knows follows the room's served prompt, reads the question and answers.
-func TestGuide_ShareContext(t *testing.T) {
-	ts, pool, cleanup := setupRoomTestServer(t)
-	defer cleanup()
-	roomPreCleanup(t, pool)
-	n := time.Now().UnixNano() % 100000000
-
-	start := httpOnlyGet(t, ts.URL+"/v1/connect?preset=collaborate&visibility=public&task="+url.QueryEscape(shareContextExample))
-	selected, _ := start["selected"].(map[string]any)
-	require.Equal(t, "collaborate", selected["preset"])
-	prompt, _ := start["prompt"].(map[string]any)
-	text, _ := prompt["text"].(string)
-	require.Contains(t, text, "TASK\n"+shareContextExample, "the served first prompt carries the example instruction as the task")
-
-	asker := newHTTPOnlyAgent(fmt.Sprintf("roomtest_gs%d", n), fmt.Sprintf("test guide share %d", n))
-	asker.follow(t, ts.URL, text)
-	slug := asker.vars["ROOM_SLUG"]
-	require.Equal(t, []string{
-		"POST /v1/agents/register", "POST /v1/rooms", "POST /v1/rooms/" + slug + "/handshake",
-		"POST /r/" + slug + "/join", "POST /v1/rooms/" + slug + "/entries",
-		"POST /v1/rooms/" + slug + "/entries/" + asker.vars["ENTRY_ID"] + "/pin", "GET /v1/rooms/" + slug + "/entries",
-	}, asker.calls, "the asker's steps (the task is pinned as the directive)")
-
-	teacher := newHTTPOnlyAgent(fmt.Sprintf("roomtest_gt%d", n), "")
-	teacher.follow(t, ts.URL, httpOnlyGet(t, ts.URL+"/v1/rooms/"+slug+"/connect")["prompt"].(string))
-	require.Contains(t, teacher.calls, "POST /v1/rooms/"+slug+"/handshake")
-	require.Contains(t, teacher.calls, "GET /v1/rooms/"+slug+"/entries", "the teacher reads the question")
-	require.Contains(t, teacher.calls, "POST /v1/rooms/"+slug+"/entries", "the teacher answers")
-	requireAuthoredEntries(t, ts.URL, slug, asker, teacher)
 }

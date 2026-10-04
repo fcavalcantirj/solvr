@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -212,9 +211,10 @@ func mustUUID(t *testing.T, s string) uuid.UUID {
 	return id
 }
 
-// A room-bound prompt carries the directive in force, so an agent that resumes follows the
-// current instruction rather than the first message (idx 92 step 1: resume instructions).
-func TestRoomConnect_ThePromptCarriesTheDirectiveInForce(t *testing.T) {
+// The room connect envelope names the directive in force, followed to its newest pin, so a
+// page can show it; the joining agent's sentence never repeats it, because the skill tells
+// the agent to follow the room's latest_pinned (idx 92 step 1, v1.3.5).
+func TestRoomConnect_TheEnvelopeNamesTheDirectiveInForce(t *testing.T) {
 	f := newPinFixture(t)
 	defer f.cleanup()
 	f.post(t, `{"body":"Build the board","client_entry_id":"rc-1"}`)
@@ -228,25 +228,22 @@ func TestRoomConnect_ThePromptCarriesTheDirectiveInForce(t *testing.T) {
 			Data map[string]interface{} `json:"data"`
 		}
 		require.NoError(t, json.Unmarshal(raw, &env))
-		return env.Data["prompt"].(string), env.Data
+		return env.Data["prompt"].(map[string]interface{})["text"].(string), env.Data
 	}
 
-	prompt, data := connect()
-	require.NotContains(t, prompt, "CURRENT DIRECTIVE", "no pin, no directive section")
-	require.Nil(t, data["current_directive"])
+	before, data := connect()
+	require.Nil(t, data["current_directive"], "no pin, no directive")
 
 	d := f.post(t, `{"body":"Directive: ship the scoreboard first","client_entry_id":"rc-2"}`)
 	resp := doRoomRequest(t, "POST", fmt.Sprintf("%s/v1/rooms/%s/entries/%d/pin", f.ts.URL, f.slug, d), "", f.owner)
 	resp.Body.Close()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	prompt, data = connect()
-	idx := strings.Index(prompt, "CURRENT DIRECTIVE")
-	require.GreaterOrEqual(t, idx, 0)
-	section := prompt[idx:]
-	require.Contains(t, section, "Directive: ship the scoreboard first")
-	require.Contains(t, section, fmt.Sprintf("https://api.solvr.dev/v1/rooms/%s/entries/%d", f.slug, d))
-	require.Less(t, idx, strings.Index(prompt, "WHEN THE WORK IS DONE"), "the directive comes before the completion step")
+	after, data := connect()
 	cd := data["current_directive"].(map[string]interface{})
 	require.Equal(t, float64(d), cd["id"])
+	require.Equal(t, "Directive: ship the scoreboard first", cd["body"])
+	require.Equal(t, fmt.Sprintf("https://api.solvr.dev/v1/rooms/%s/entries/%d", f.slug, d), cd["url"])
+	require.Equal(t, before, after, "the sentence is the same before and after the pin")
+	require.NotContains(t, after, "scoreboard", "the agent reads the directive in the room, not in the sentence")
 }

@@ -5,20 +5,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
 	"github.com/fcavalcantirj/solvr/internal/api/handlers"
 	"github.com/fcavalcantirj/solvr/internal/db"
-	"github.com/fcavalcantirj/solvr/internal/hub"
 	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
@@ -29,69 +25,43 @@ import (
 // proven here is true of both surfaces.
 
 type connectContract struct {
-	Heading   string `json:"heading"`
-	Intro     string `json:"intro"`
-	PageURL   string `json:"page_url"`
-	PageLabel string `json:"page_label"`
-	TaskField struct {
+	InstructionVersion string `json:"instruction_version"`
+	Heading            string `json:"heading"`
+	IntentField        struct {
 		Label    string `json:"label"`
-		Optional bool   `json:"optional"`
-		Note     string `json:"note"`
 		MaxChars int    `json:"max_chars"`
-	} `json:"task_field"`
+	} `json:"intent_field"`
 	Presets []struct {
-		Value       string `json:"value"`
-		Label       string `json:"label"`
-		Description string `json:"description"`
-		Selected    bool   `json:"selected"`
+		Value    string `json:"value"`
+		Label    string `json:"label"`
+		Selected bool   `json:"selected"`
+		Next     string `json:"next"`
+		Prompt   struct {
+			Text string `json:"text"`
+		} `json:"prompt"`
 	} `json:"presets"`
-	VisibilityOptions []struct {
-		Value       string `json:"value"`
-		Label       string `json:"label"`
-		Description string `json:"description"`
-		Selected    bool   `json:"selected"`
-	} `json:"visibility_options"`
 	Selected struct {
-		Task       string `json:"task"`
+		Intent     string `json:"intent"`
 		Preset     string `json:"preset"`
 		Visibility string `json:"visibility"`
+		FlowID     string `json:"flow_id"`
 	} `json:"selected"`
 	Prompt struct {
-		Key         string `json:"key"`
-		Label       string `json:"label"`
-		CopiedLabel string `json:"copied_label"`
-		Instruction string `json:"instruction"`
-		NextStep    string `json:"next_step"`
-		Text        string `json:"text"`
+		Text      string `json:"text"`
+		WordCount int    `json:"word_count"`
+		Segments  []struct {
+			Kind string `json:"kind"`
+			Text string `json:"text"`
+		} `json:"segments"`
 	} `json:"prompt"`
-	AddAgent struct {
-		Label           string `json:"label"`
-		Detail          string `json:"detail"`
-		SlugPlaceholder string `json:"slug_placeholder"`
-		RolePrompt      string `json:"role_prompt"`
-	} `json:"add_agent"`
-	Customize struct {
-		Key                  string   `json:"key"`
-		Label                string   `json:"label"`
-		Detail               string   `json:"detail"`
-		ApiExamples          []string `json:"api_examples"`
-		AdvancedInstructions []string `json:"advanced_instructions"`
-	} `json:"customize"`
-	Steps []struct {
-		Number int    `json:"number"`
-		Label  string `json:"label"`
-		Detail string `json:"detail"`
-	} `json:"steps"`
+	Next    string `json:"next"`
 	Example struct {
-		Kind   string `json:"kind"`
-		URL    string `json:"url"`
-		Label  string `json:"label"`
-		Detail string `json:"detail"`
+		Kind  string `json:"kind"`
+		URL   string `json:"url"`
+		Label string `json:"label"`
 	} `json:"example"`
-	Note string `json:"note"`
 }
 
-// getConnectContract calls the endpoint with no credentials at all.
 func getConnectContract(t *testing.T, baseURL, query string) (connectContract, string) {
 	t.Helper()
 	url := baseURL + "/v1/connect"
@@ -118,24 +88,19 @@ func TestConnectEndpoint_ServesTheWholeStartContractToALoggedOutVisitor(t *testi
 
 	contract, body := getConnectContract(t, ts.URL, "")
 
-	require.NotEmpty(t, contract.Heading, "body: %s", body)
-	require.NotEmpty(t, contract.Intro)
-	require.Equal(t, "/connect", contract.PageURL)
-	require.NotEmpty(t, contract.PageLabel)
-	require.NotEmpty(t, contract.TaskField.Label)
-	require.True(t, contract.TaskField.Optional)
-	require.Greater(t, contract.TaskField.MaxChars, 0)
+	require.Equal(t, handlers.ConnectInstructionVersion, contract.InstructionVersion, "body: %s", body)
+	require.Equal(t, "Connect your agents", contract.Heading)
+	require.NotEmpty(t, contract.IntentField.Label)
+	require.Greater(t, contract.IntentField.MaxChars, 0)
 	require.Len(t, contract.Presets, 3)
-	require.Len(t, contract.VisibilityOptions, 2)
-	require.Len(t, contract.Steps, 2)
 	require.Equal(t, "plan-and-build", contract.Selected.Preset)
 	require.Equal(t, "public", contract.Selected.Visibility)
-	require.Equal(t, "planner", contract.Prompt.Key)
-	require.Equal(t,
-		"Paste this into your planner. It will give you the prompt for your executor.",
-		contract.Prompt.Instruction)
-	require.NotEmpty(t, contract.Prompt.Text)
-	require.NotEmpty(t, contract.Note)
+	require.True(t, strings.HasPrefix(contract.Prompt.Text, "Learn Solvr from https://solvr.dev/skill.md. Create a public Solvr room"))
+	require.Contains(t, contract.Prompt.Text, "join it as the PLANNER, and answer me with a prompt for the EXECUTOR")
+	require.Less(t, contract.Prompt.WordCount, 120)
+	require.NotEmpty(t, contract.Prompt.Segments)
+	require.NotEmpty(t, contract.Next)
+	require.NotContains(t, contract.Prompt.Text, contract.Selected.FlowID)
 
 	// No credential, identifier or private detail may ride along with a public
 	// contract.
@@ -145,16 +110,16 @@ func TestConnectEndpoint_ServesTheWholeStartContractToALoggedOutVisitor(t *testi
 	}
 }
 
-func TestConnectEndpoint_CarriesTheTypedTaskAndTheChosenVisibilityIntoThePrompt(t *testing.T) {
+func TestConnectEndpoint_CarriesTheTypedIntentAndTheChosenVisibilityIntoTheSentence(t *testing.T) {
 	ts, _, cleanup := setupRoomTestServer(t)
 	defer cleanup()
 
-	contract, body := getConnectContract(t, ts.URL, "task=Port+the+billing+job+to+the+new+queue&visibility=private")
+	contract, body := getConnectContract(t, ts.URL, "intent=Port+the+billing+job+to+the+new+queue&visibility=private")
 
-	require.Equal(t, "Port the billing job to the new queue", contract.Selected.Task, "body: %s", body)
-	require.Contains(t, contract.Prompt.Text, "Port the billing job to the new queue")
+	require.Equal(t, "Port the billing job to the new queue", contract.Selected.Intent, "body: %s", body)
+	require.Contains(t, contract.Prompt.Text, "Create a private Solvr room to Port the billing job to the new queue, join it")
 	require.Equal(t, "private", contract.Selected.Visibility)
-	require.Contains(t, contract.Prompt.Text, `"is_private": true`)
+	require.Contains(t, contract.Prompt.Text, "It's private, so the EXECUTOR gives me its agent id for you to admit.")
 }
 
 func TestConnectEndpoint_RefusesAnUnknownPresetOrVisibility(t *testing.T) {
@@ -171,7 +136,7 @@ func TestConnectEndpoint_RefusesAnUnknownPresetOrVisibility(t *testing.T) {
 }
 
 func TestConnectEndpoint_BuildAndReviewPresetServesBuilderReviewerContract(t *testing.T) {
-	ts, pool, cleanup := setupRoomTestServer(t)
+	ts, _, cleanup := setupRoomTestServer(t)
 	defer cleanup()
 
 	contract, body := getConnectContract(t, ts.URL, "preset=build-and-review&visibility=public")
@@ -179,37 +144,17 @@ func TestConnectEndpoint_BuildAndReviewPresetServesBuilderReviewerContract(t *te
 	require.Equal(t, "build-and-review", contract.Selected.Preset, "body: %s", body)
 	require.Len(t, contract.Presets, 3, "three presets must be advertised")
 
-	// The prompt key and label reflect builder/reviewer, not planner/executor.
-	require.Contains(t, strings.ToLower(contract.Prompt.Label), "builder")
-	promptLower := strings.ToLower(contract.Prompt.Text)
-	require.Contains(t, promptLower, "builder")
-	require.Contains(t, promptLower, "reviewer")
-	require.NotContains(t, promptLower, "planner")
-	require.NotContains(t, promptLower, "executor")
+	// The sentence names a builder and a reviewer, not a planner and an executor.
+	text := contract.Prompt.Text
+	require.Contains(t, text, "join it as the BUILDER, and answer me with a prompt for the REVIEWER")
+	require.Contains(t, text, "review and test each change you post, and approve or reject it.")
+	lower := strings.ToLower(text)
+	require.NotContains(t, lower, "planner")
+	require.NotContains(t, lower, "executor")
 
-	// The add-agent role for build-and-review is a reviewer.
-	require.Contains(t, strings.ToLower(contract.AddAgent.RolePrompt), "reviewer")
-
-	// No shell/template placeholders and no localhost.
-	require.NotContains(t, contract.Prompt.Text, "$")
-	require.NotContains(t, contract.Prompt.Text, "${")
-	require.NotContains(t, contract.Prompt.Text, "http://localhost")
-
-	// Every production URL in the prompt must be a route the API actually serves.
-	registry := hub.NewPresenceRegistry()
-	hubMgr := hub.NewHubManager(context.Background(), registry, slog.Default(), 0)
-	router := NewRouter(pool, hubMgr, registry)
-	served := map[string]bool{}
-	require.NoError(t, chi.Walk(router, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
-		served[method+" "+strings.TrimSuffix(route, "/")] = true
-		return nil
-	}))
-	for _, m := range promptEndpointRE.FindAllStringSubmatch(contract.Prompt.Text, -1) {
-		method, path := m[1], m[2]
-		path = strings.ReplaceAll(path, "ROOM_SLUG", "{slug}")
-		path = strings.ReplaceAll(path, "ENTRY_ID", "{entry_id}") // the pin step names the posted entry
-		require.True(t, served[method+" "+strings.TrimSuffix(path, "/")],
-			"build-and-review prompt tells the agent to call %s, which this API does not serve", method+" "+path)
+	// No endpoint, no shell/template placeholder and no localhost: the skill teaches the calls.
+	for _, banned := range []string{"api.solvr.dev", "$", "${", "http://localhost"} {
+		require.NotContains(t, text, banned)
 	}
 }
 
@@ -263,7 +208,7 @@ func TestConnectEndpoint_PlannerPromptRunsEndToEndWithoutAHumanAccount(t *testin
 	})
 
 	// Step 1 of the prompt: the agent gets the contract. No Authorization header.
-	contract, _ := getConnectContract(t, ts.URL, "task=Build+a+tic-tac-toe+AI")
+	contract, _ := getConnectContract(t, ts.URL, "intent=Build+a+tic-tac-toe+AI")
 	require.NotEmpty(t, contract.Prompt.Text)
 
 	// Step 2: IDENTITY — self-register (no existing identity, no human account).
@@ -353,11 +298,11 @@ type roomConnectContract struct {
 	RoomSlug           string `json:"room_slug"`
 	RoomURL            string `json:"room_url"`
 	Private            bool   `json:"private"`
+	Role               string `json:"role"`
 	Task               string `json:"task"`
-	ExpectedPlanner    string `json:"expected_planner_identity"`
-	ExecutorPrompt     string `json:"executor_prompt"`
-	FirstMessageID     int64  `json:"first_message_id"`
-	FirstMessageURL    string `json:"first_message_url"`
+	Prompt             struct {
+		Text string `json:"text"`
+	} `json:"prompt"`
 }
 
 // getRoomConnectContract calls the room-specific connect endpoint with no credentials.
@@ -450,14 +395,11 @@ func TestConnectEndpoint_RoomInstructionsEndpoint(t *testing.T) {
 	require.Equal(t, roomSlug, contract.RoomSlug)
 	require.Equal(t, "https://solvr.dev/rooms/"+roomSlug, contract.RoomURL)
 	require.False(t, contract.Private)
-	require.NotEmpty(t, contract.ExecutorPrompt)
-	require.Contains(t, contract.ExecutorPrompt, roomSlug, "prompt must contain the real slug")
-	require.NotContains(t, contract.ExecutorPrompt, "ROOM_SLUG", "prompt must not contain the placeholder")
-	require.Equal(t, agentName, contract.ExpectedPlanner, "expected planner = first message author")
+	require.Equal(t, "executor", contract.Role)
+	require.Contains(t, contract.Prompt.Text, "https://solvr.dev/rooms/"+roomSlug+" as the EXECUTOR", "the sentence names the real room")
+	require.NotContains(t, contract.Prompt.Text, "ROOM_SLUG", "the sentence must not contain the placeholder")
 	require.Contains(t, contract.Task, "distributed key-value store")
 	require.Contains(t, contract.Task, "sharding strategy")
-	require.Greater(t, contract.FirstMessageID, int64(0))
-	require.Contains(t, contract.FirstMessageURL, roomSlug)
 
 	// No credentials in the raw response body.
 	lower := strings.ToLower(body)
@@ -534,9 +476,8 @@ func TestConnectEndpoint_ExecutorPromptEndToEnd(t *testing.T) {
 	contract, conBody := getRoomConnectContract(t, ts.URL, roomSlug)
 	require.NotEmpty(t, conBody)
 	require.Equal(t, roomSlug, contract.RoomSlug)
-	require.Equal(t, plannerName, contract.ExpectedPlanner)
-	require.Contains(t, contract.ExecutorPrompt, roomSlug)
-	require.NotContains(t, contract.ExecutorPrompt, "ROOM_SLUG")
+	require.Contains(t, contract.Prompt.Text, "https://solvr.dev/rooms/"+roomSlug)
+	require.NotContains(t, contract.Prompt.Text, "ROOM_SLUG")
 
 	// --- EXECUTOR side: follow the prompt — self-register, handshake, join, post plan ---
 	execName := fmt.Sprintf("task19exe%d", time.Now().UnixNano()%1000000000)
@@ -593,104 +534,8 @@ func TestConnectEndpoint_ExecutorPromptEndToEnd(t *testing.T) {
 		"executor can read the planner's directive")
 }
 
-// TestConnectEndpoint_ExecutorPromptNamesOnlyRealRoutes verifies that every production
-// URL named in the executor prompt is a route the API actually serves (walks the chi
-// router to build the served set, same pattern as
-// TestConnectEndpoint_PromptsOnlyNameRoutesThisAPIActuallyServes).
-func TestConnectEndpoint_ExecutorPromptNamesOnlyRealRoutes(t *testing.T) {
-	ts, pool, cleanup := setupRoomTestServer(t)
-	defer cleanup()
-	roomPreCleanup(t, pool)
-	t.Cleanup(func() {
-		pool.Exec(context.Background(), "DELETE FROM agents WHERE id LIKE 'agent_task19%'")
-	})
-
-	agentName := fmt.Sprintf("task19routecheck%d", time.Now().UnixNano()%1000000000)
-	_, agentKey := registerTestAgent(t, ts, agentName)
-
-	createBody := fmt.Sprintf(`{"display_name":"Route check room %d"}`, time.Now().UnixNano()%1000000000)
-	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/v1/rooms", strings.NewReader(createBody))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+agentKey)
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	respBody, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
-	require.Equal(t, http.StatusCreated, resp.StatusCode, string(respBody))
-
-	slug := extractRoomSlug(t, string(respBody))
-	_, roomToken := handshake(t, ts.URL, slug, agentKey, "")
-	doJSON(t, http.MethodPost, ts.URL+"/r/"+slug+"/join", roomToken, fmt.Sprintf(`{"agent_name":"%s"}`, agentName))
-	st, _ := doJSON(t, http.MethodPost, ts.URL+"/r/"+slug+"/message", roomToken,
-		fmt.Sprintf(`{"agent_name":"%s","content":"Task: route check directive."}`, agentName))
-	require.Equal(t, http.StatusCreated, st)
-
-	// Fetch the room connect endpoint and extract the executor prompt.
-	contract, _ := getRoomConnectContract(t, ts.URL, slug)
-	require.Contains(t, contract.ExecutorPrompt, slug)
-
-	// Walk the real router to get all served routes.
-	registry := hub.NewPresenceRegistry()
-	hubMgr := hub.NewHubManager(context.Background(), registry, slog.Default(), 0)
-	router := NewRouter(pool, hubMgr, registry)
-	served := map[string]bool{}
-	require.NoError(t, chi.Walk(router, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
-		served[method+" "+strings.TrimSuffix(route, "/")] = true
-		return nil
-	}))
-
-	matches := promptEndpointRE.FindAllStringSubmatch(contract.ExecutorPrompt, -1)
-	require.NotEmpty(t, matches, "executor prompt names no endpoint at all")
-	for _, m := range matches {
-		method, path := m[1], m[2]
-		// The executor prompt names the REAL slug; chi reports the route template
-		// with {slug}, so substitute before matching.
-		path = strings.ReplaceAll(path, slug, "{slug}")
-		require.True(t, served[method+" "+strings.TrimSuffix(path, "/")],
-			"executor prompt tells the agent to call %s %s, which this API does not serve", method, path)
-	}
-}
-
-var promptEndpointRE = regexp.MustCompile(`(GET|POST) https://api\.solvr\.dev(/[A-Za-z0-9_/{}.-]+)`)
-
-func TestConnectEndpoint_PromptsOnlyNameRoutesThisAPIActuallyServes(t *testing.T) {
-	ts, pool, cleanup := setupRoomTestServer(t)
-	defer cleanup()
-
-	// The routes are walked on a router built exactly like the one under test,
-	// hub included: without the hub the room transport routes are not mounted
-	// at all and the walk would prove nothing.
-	registry := hub.NewPresenceRegistry()
-	hubMgr := hub.NewHubManager(context.Background(), registry, slog.Default(), 0)
-	router := NewRouter(pool, hubMgr, registry)
-
-	// Every route the router really serves, method by method.
-	served := map[string]bool{}
-	require.NoError(t, chi.Walk(router, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
-		served[method+" "+strings.TrimSuffix(route, "/")] = true
-		return nil
-	}))
-
-	for _, query := range []string{"", "preset=collaborate", "visibility=private"} {
-		contract, _ := getConnectContract(t, ts.URL, query)
-		matches := promptEndpointRE.FindAllStringSubmatch(contract.Prompt.Text, -1)
-		require.NotEmpty(t, matches, "the prompt names no endpoint at all (query %q)", query)
-
-		for _, m := range matches {
-			method, path := m[1], m[2]
-			// The prompt's ROOM_SLUG placeholder maps to the router's {slug} parameter.
-			path = strings.ReplaceAll(path, "ROOM_SLUG", "{slug}")
-			// ENTRY_ID, the id the prompt's own post returned, maps to {entry_id} (the pin step).
-			path = strings.ReplaceAll(path, "ENTRY_ID", "{entry_id}")
-			key := method + " " + strings.TrimSuffix(path, "/")
-			require.True(t, served[key],
-				"prompt (query %q) tells the agent to call %s, which this API does not serve", query, key)
-		}
-	}
-}
-
 // TestConnectEndpoint_MultipleAgentsCanJoinViaAddAgentPrompt verifies that N agents
-// can join the same room via the add_agent prompt pattern. Each agent establishes its
+// can join the same room by role (GET /v1/rooms/{slug}/connect?role=). Each agent establishes its
 // own identity and presence without overwriting a fixed executor slot. This is the
 // behavioral requirement of task 15, step 3: agents must be able to reuse the generic
 // join prompt without fixed slots.
@@ -733,8 +578,8 @@ func TestConnectEndpoint_MultipleAgentsCanJoinViaAddAgentPrompt(t *testing.T) {
 		fmt.Sprintf(`{"agent_name":"%s"}`, plannerName))
 	require.Equal(t, http.StatusOK, status)
 
-	// Now register and join N executors via the add_agent prompt pattern.
-	// The add_agent prompt tells each agent to:
+	// Now register and join N executors, each by its role sentence.
+	// The skill tells each agent to:
 	// 1. Register (if needed)
 	// 2. POST /v1/rooms/{slug}/handshake to get its own per-agent token
 	// 3. POST /r/{slug}/join to establish presence

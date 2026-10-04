@@ -454,6 +454,7 @@ var RouteFamilies = []RouteFamily{
 		Disposition: DispositionKeep,
 		Routes: []string{
 			"GET /v1/connect",
+			"GET /v1/connect/examples",
 			"POST /v1/mcp",
 			"GET /v1/openapi.json",
 			"GET /v1/openapi.yaml",

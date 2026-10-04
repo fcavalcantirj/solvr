@@ -141,11 +141,11 @@ func TestRoomSecrets_NoRoomSurfaceRevealsCredentials(t *testing.T) {
 			}
 			require.Greater(t, served, len(surfaces), "the sweep read real bodies, not only refusals")
 
-			// A connect prompt served to the owner is a default prompt: it names the per-agent
-			// handshake and never embeds a credential of its own.
+			// A connect sentence served to the owner sends the agent to the skill, whose recipe
+			// is the per-agent handshake, and never embeds a credential of its own.
 			status, body := getRaw(t, r+"/connect?role=executor", room.ownerJWT)
 			require.Equal(t, http.StatusOK, status, body)
-			require.Contains(t, body, "/handshake", "the prompt tells the agent to take its own room token")
+			require.Contains(t, body, "Learn Solvr from https://solvr.dev/skill.md.", "the sentence sends the agent to the skill")
 			require.NotRegexp(t, `solvr_(rt|rm|sk)_[A-Za-z0-9]{8,}`, body, "no concrete token in the prompt")
 		})
 	}

@@ -94,8 +94,8 @@ func TestConnect_SeededFromPublishedPost(t *testing.T) {
 
 	sel, _ := data["selected"].(map[string]interface{})
 	require.NotNil(t, sel)
-	task, _ := sel["task"].(string)
-	assert.Contains(t, task, "Ship a rate limiter", "the seeded task references the post")
+	intent, _ := sel["intent"].(string)
+	assert.Equal(t, "build on the Solvr post https://solvr.dev/posts/"+postID, intent, "the seeded intent links the post")
 
 	// The ordinary start flow survives: a copyable prompt is still present.
 	prompt, _ := data["prompt"].(map[string]interface{})

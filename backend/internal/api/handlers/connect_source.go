@@ -3,20 +3,20 @@ package handlers
 import (
 	"context"
 	"regexp"
-	"strings"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
 // "Try this workflow" — a public room seeds a FRESH start flow (idx 88).
 //
-// GET /v1/connect?from_room=<slug> reads the room's public task structure through
-// FindPublicRoomTemplate, which answers only for a public, existing room. The
-// structure's text is scrubbed here before it reaches the contract: credential-shaped
-// strings and links to rooms that are not public are removed. The prompt then carries
-// the source slug into the create-room body, so the new room records where it came
-// from, and tells the agent the room starts fresh — no members, credentials, approvals,
-// reviews or results of the source room carry over.
+// GET /v1/connect?from_room=<slug> reads the room through FindPublicRoomTemplate, which
+// answers only for a public, existing room. The sentence's intent then names that room's
+// public link ("run your own version of the Solvr room https://solvr.dev/rooms/<slug>"),
+// and the skill tells the agent to carry the slug into its create call as source_room,
+// so the new room records where it came from and starts fresh: no members, credentials,
+// approvals, reviews or results of the source room carry over. The room's title is
+// scrubbed here before it reaches the contract: credential-shaped strings and links to
+// rooms that are not public are removed.
 
 // connectRoomSourceLookup is the slice of the room repository a source-room start needs.
 type connectRoomSourceLookup interface {
@@ -33,8 +33,8 @@ func (h *ConnectHandler) SetRoomSourceLookup(rooms connectRoomSourceLookup) {
 // connectSourceRoomFresh is what every prompt seeded from a room says about the new room.
 const connectSourceRoomFresh = "This room starts fresh: no earlier members, credentials, approvals, reviews or results carry over."
 
-// resolveRoomSource returns the source and the scrubbed task it seeds, only for a public
-// room. Anything else returns nil so nothing about a protected room leaks.
+// resolveRoomSource returns the source and the intent it seeds, only for a public room.
+// Anything else returns nil so nothing about a protected room leaks.
 func (h *ConnectHandler) resolveRoomSource(ctx context.Context, slug string) (*ConnectSource, string) {
 	if h.roomSources == nil || slug == "" {
 		return nil, ""
@@ -49,27 +49,9 @@ func (h *ConnectHandler) resolveRoomSource(ctx context.Context, slug string) (*C
 		RoomSlug: tmpl.Slug,
 		Title:    publicTemplateText(ctx, tmpl.DisplayName, h.roomSources),
 		URL:      url,
-		Detail:   "This collaboration reuses the public task of a Solvr room. Only the task travels; " + connectSourceRoomFresh,
+		Detail:   "This collaboration reuses a public Solvr room. Only its link travels; " + connectSourceRoomFresh,
 	}
-
-	task := truncateRunes(publicTemplateText(ctx, strings.TrimSpace(tmpl.InitialTask), h.roomSources), ConnectTaskMaxChars)
-	if task == "" {
-		task = "Run your own version of the work in the public Solvr room \"" + src.Title + "\" (" +
-			connectAppBaseURL + url + "). Read it first, then plan the work."
-	}
-	return src, task
-}
-
-// promptSourceSection names a room source in a starter prompt, right under the task:
-// where the task came from and that nothing else of that room carries over. Empty for
-// every other flow.
-func promptSourceSection(sel ConnectSelection) string {
-	if sel.SourceRoom == "" {
-		return ""
-	}
-	return "\n\nSOURCE\n" +
-		"This task reuses the public task structure of the Solvr room " + connectAppBaseURL + "/rooms/" + sel.SourceRoom + ".\n" +
-		connectSourceRoomFresh
+	return src, "run your own version of the Solvr room " + connectAppBaseURL + url
 }
 
 var (

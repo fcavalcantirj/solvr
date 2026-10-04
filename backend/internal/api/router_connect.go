@@ -9,14 +9,14 @@ import (
 
 // mountConnectRoutes registers the public start-flow contract.
 //
-//	GET /v1/connect -- everything a surface needs to start a connection: the
-//	                   field, the presets, the visibilities and their meaning,
-//	                   the copy control, and the prompt itself. Public, no auth:
-//	                   the whole point is that a visitor with no account can
-//	                   copy a working prompt.
+//	GET /v1/connect          -- the sentence a visitor copies (text and segments) for
+//	                            every use case, with the intent and visibility chosen.
+//	GET /v1/connect/examples -- the three example sentences the guides and the home
+//	                            page show. Both public, no auth: a visitor with no
+//	                            account copies a working sentence.
 //
-// The compact panel on the index and the full /connect page read this same
-// endpoint, which is what keeps them from drifting apart.
+// /connect, the index panel, the guides and the home cards read these endpoints, which
+// is what keeps them from drifting apart.
 //
 // Kept out of router.go, which is already over the file-size limit.
 func mountConnectRoutes(r chi.Router, pool *db.Pool) {
@@ -32,4 +32,5 @@ func mountConnectRoutes(r chi.Router, pool *db.Pool) {
 	// is read, and it is scrubbed of credentials and private-room links before it is served.
 	connectHandler.SetRoomSourceLookup(db.NewRoomRepository(pool))
 	r.Get("/v1/connect", connectHandler.GetConnect)
+	r.Get("/v1/connect/examples", connectHandler.GetConnectExamples)
 }

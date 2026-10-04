@@ -24,11 +24,15 @@ func TestRoomConnectPrompt_CanonicalEntriesFlowWorksAsTaught(t *testing.T) {
 
 	status, out := doJSON(t, "GET", ts.URL+"/v1/rooms/"+slug+"/connect?role=executor", "", "")
 	require.Equal(t, http.StatusOK, status, "connect prompt: %v", out)
-	prompt, _ := entryData(t, out)["prompt"].(string)
-	const prod = "https://api.solvr.dev"
-	require.Contains(t, prompt, "POST "+prod+"/v1/rooms/"+slug+"/entries")
-	require.Contains(t, prompt, "GET "+prod+"/v1/rooms/"+slug+"/entries")
-	require.NotContains(t, prompt, "/r/"+slug+"/message")
+	promptObj, _ := entryData(t, out)["prompt"].(map[string]any)
+	prompt, _ := promptObj["text"].(string)
+	require.Contains(t, prompt, "Learn Solvr from https://solvr.dev/skill.md. Join the public Solvr room")
+	require.Contains(t, prompt, "https://solvr.dev/rooms/"+slug+" as the EXECUTOR")
+	// The skill's Join a room recipe is the canonical entries contract it teaches.
+	join := skillHTTPBlock(t, "Join a room")
+	require.Contains(t, join, "POST https://api.solvr.dev/v1/rooms/ROOM_SLUG/entries")
+	require.Contains(t, join, "GET https://api.solvr.dev/v1/rooms/ROOM_SLUG/entries")
+	require.NotContains(t, join, "/message")
 
 	// Step by step, as the prompt teaches: own key -> handshake -> join -> post entry.
 	executorID, executorKey := registerRoomTestAgent(t, ts)

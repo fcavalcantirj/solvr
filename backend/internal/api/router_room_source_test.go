@@ -150,7 +150,7 @@ func TestTryThisWorkflow_AFinishedPublicRoomSeedsAFreshRoomEndToEnd(t *testing.T
 	var start struct {
 		Data struct {
 			Selected struct {
-				Task       string `json:"task"`
+				Intent     string `json:"intent"`
 				SourceRoom string `json:"source_room"`
 			} `json:"selected"`
 			Source *struct {
@@ -166,9 +166,9 @@ func TestTryThisWorkflow_AFinishedPublicRoomSeedsAFreshRoomEndToEnd(t *testing.T
 	require.NotNil(t, start.Data.Source)
 	require.Equal(t, "room", start.Data.Source.Kind)
 	require.Equal(t, srcSlug, start.Data.Selected.SourceRoom)
-	require.Contains(t, start.Data.Selected.Task, "Build tic-tac-toe")
+	require.Equal(t, "run your own version of the Solvr room https://solvr.dev/rooms/"+srcSlug, start.Data.Selected.Intent)
 	require.NotContains(t, string(raw), "solvr_rt_abcdefghijklmnopqrstuvwx")
-	require.Contains(t, start.Data.Prompt.Text, fmt.Sprintf(`"source_room": %q`, srcSlug))
+	require.Contains(t, start.Data.Prompt.Text, "Solvr room to run your own version of the Solvr room https://solvr.dev/rooms/"+srcSlug+",")
 
 	_, agentKey := registerRoomTestAgent(t, ts)
 	code, env = createSourceTestRoom(t, ts, agentKey, fmt.Sprintf(

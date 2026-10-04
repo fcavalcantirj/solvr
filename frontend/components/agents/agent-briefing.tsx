@@ -2,10 +2,6 @@
 
 import Link from "next/link";
 import {
-  Inbox,
-  AlertCircle,
-  Zap,
-  Target,
   TrendingUp,
   TrendingDown,
   Bell,
@@ -14,7 +10,6 @@ import {
   HelpCircle,
   Lightbulb,
   ArrowRight,
-  Tag,
 } from "lucide-react";
 import type {
   BriefingInbox,
@@ -30,6 +25,16 @@ import type {
   BriefingRecommendedPost,
 } from "@/lib/api-types";
 import { AgentBriefingPlatform } from "./agent-briefing-platform";
+import {
+  BriefingBlock,
+  BRIEFING_EMPTY,
+  BRIEFING_ROW,
+  BRIEFING_LINK_ROW,
+  BRIEFING_LINK_BLOCK,
+  BRIEFING_TITLE,
+  BRIEFING_META,
+  BRIEFING_TAG,
+} from "./briefing-block";
 
 export interface AgentBriefingProps {
   inbox: BriefingInbox | null;
@@ -91,86 +96,72 @@ function getOpenItemIcon(type: string) {
 function InboxSection({ inbox }: { inbox: BriefingInbox | null }) {
   if (!inbox || inbox.items.length === 0) {
     return (
-      <div className="border border-border p-4 mb-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Inbox className="w-5 h-5 text-muted-foreground" />
-          <h3 className="font-mono text-sm font-semibold uppercase tracking-wider">Inbox</h3>
-        </div>
-        <p className="text-sm text-muted-foreground">No unread notifications</p>
-      </div>
+      <BriefingBlock title="Inbox">
+        <p className={BRIEFING_EMPTY}>No unread notifications</p>
+      </BriefingBlock>
     );
   }
 
   return (
-    <div className="border border-border p-4 mb-4">
-      <div className="flex items-center gap-2 mb-3">
-        <Inbox className="w-5 h-5 text-muted-foreground" />
-        <h3 className="font-mono text-sm font-semibold uppercase tracking-wider">Inbox</h3>
-        <span className="px-2 py-0.5 bg-primary text-primary-foreground text-xs font-mono rounded-full">
+    <BriefingBlock
+      title="Inbox"
+      extra={
+        <span className="bg-foreground px-2 py-0.5 font-mono text-[11px] text-background tabular-nums">
           {inbox.unread_count}
         </span>
-      </div>
-      <div className="space-y-2">
+      }
+    >
+      <div>
         {inbox.items.map((item, index) => (
           <Link
             key={`inbox-${index}`}
             href={item.link}
-            className="flex items-start gap-3 p-2 hover:bg-secondary/50 transition-colors rounded-none"
+            className={BRIEFING_LINK_ROW}
           >
-            <div className="mt-0.5 text-muted-foreground">
+            <div className="mt-1 text-muted-foreground">
               {getNotificationIcon(item.type)}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium line-clamp-1">{item.title}</p>
-              <p className="text-xs text-muted-foreground line-clamp-1">
+              <p className={BRIEFING_TITLE}>{item.title}</p>
+              <p className="mt-1 text-sm text-muted-foreground line-clamp-1">
                 {item.body_preview}
               </p>
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="mt-1.5 font-mono text-[11px] text-muted-foreground">
                 {formatRelativeTime(item.created_at)}
               </p>
             </div>
           </Link>
         ))}
       </div>
-    </div>
+    </BriefingBlock>
   );
 }
 
 function OpenItemsSection({ openItems }: { openItems: BriefingOpenItems | null }) {
   if (!openItems || (openItems.posts_no_replies === 0 && openItems.items.length === 0)) {
     return (
-      <div className="border border-border p-4 mb-4">
-        <div className="flex items-center gap-2 mb-3">
-          <AlertCircle className="w-5 h-5 text-muted-foreground" />
-          <h3 className="font-mono text-sm font-semibold uppercase tracking-wider">Open Items</h3>
-        </div>
-        <p className="text-sm text-muted-foreground">No open items needing attention</p>
-      </div>
+      <BriefingBlock title="Open Items">
+        <p className={BRIEFING_EMPTY}>No open items needing attention</p>
+      </BriefingBlock>
     );
   }
 
   return (
-    <div className="border border-border p-4 mb-4">
-      <div className="flex items-center gap-2 mb-3">
-        <AlertCircle className="w-5 h-5 text-muted-foreground" />
-        <h3 className="font-mono text-sm font-semibold uppercase tracking-wider">Open Items</h3>
-      </div>
-      <div className="grid grid-cols-1 gap-3 mb-3">
-        <div className="text-center p-2 bg-secondary/50 rounded-none">
-          <p className="text-lg font-mono font-bold">{openItems.posts_no_replies}</p>
-          <p className="text-xs text-muted-foreground">Posts without replies</p>
-        </div>
+    <BriefingBlock title="Open Items">
+      <div className="mb-4 flex items-baseline justify-between gap-4">
+        <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Posts without replies</p>
+        <p className="text-5xl font-light leading-none tracking-[-0.05em] tabular-nums">{openItems.posts_no_replies}</p>
       </div>
       {openItems.items.length > 0 && (
-        <div className="space-y-2">
+        <div className="border-t border-border pt-3">
           {openItems.items.map((item) => (
-            <div key={item.id} className="flex items-center gap-3 p-2 hover:bg-secondary/50 transition-colors rounded-none">
-              <div className="text-muted-foreground">
+            <div key={item.id} className={BRIEFING_ROW}>
+              <div className="mt-0.5 text-muted-foreground">
                 {getOpenItemIcon(item.type)}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium line-clamp-1">{item.title}</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-base leading-snug line-clamp-1">{item.title}</p>
+                <p className="mt-1 font-mono text-[11px] text-muted-foreground">
                   {item.status} &middot; {formatAge(item.age_hours)}
                 </p>
               </div>
@@ -178,85 +169,73 @@ function OpenItemsSection({ openItems }: { openItems: BriefingOpenItems | null }
           ))}
         </div>
       )}
-    </div>
+    </BriefingBlock>
   );
 }
 
 function SuggestedActionsSection({ actions }: { actions: BriefingSuggestedAction[] | null }) {
   if (!actions || actions.length === 0) {
     return (
-      <div className="border border-border p-4 mb-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Zap className="w-5 h-5 text-muted-foreground" />
-          <h3 className="font-mono text-sm font-semibold uppercase tracking-wider">Suggested Actions</h3>
-        </div>
-        <p className="text-sm text-muted-foreground">No suggested actions</p>
-      </div>
+      <BriefingBlock title="Suggested Actions">
+        <p className={BRIEFING_EMPTY}>No suggested actions</p>
+      </BriefingBlock>
     );
   }
 
   return (
-    <div className="border border-border p-4 mb-4">
-      <div className="flex items-center gap-2 mb-3">
-        <Zap className="w-5 h-5 text-muted-foreground" />
-        <h3 className="font-mono text-sm font-semibold uppercase tracking-wider">Suggested Actions</h3>
-      </div>
-      <div className="space-y-2">
+    <BriefingBlock title="Suggested Actions">
+      <div>
         {actions.map((action, index) => (
-          <div key={`action-${index}`} className="flex items-start gap-3 p-2 hover:bg-secondary/50 transition-colors rounded-none">
-            <ArrowRight className="w-4 h-4 mt-0.5 text-muted-foreground" />
+          <div key={`action-${index}`} className={BRIEFING_ROW}>
+            <ArrowRight className="w-4 h-4 mt-1 shrink-0 text-muted-foreground" />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium line-clamp-1">{action.target_title}</p>
-              <p className="text-xs text-muted-foreground">{action.reason}</p>
+              <p className="text-base leading-snug line-clamp-1">{action.target_title}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{action.reason}</p>
             </div>
           </div>
         ))}
       </div>
-    </div>
+    </BriefingBlock>
   );
 }
 
 function OpportunitiesSection({ opportunities }: { opportunities: BriefingOpportunities | null }) {
   if (!opportunities || opportunities.items.length === 0) {
     return (
-      <div className="border border-border p-4 mb-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Target className="w-5 h-5 text-muted-foreground" />
-          <h3 className="font-mono text-sm font-semibold uppercase tracking-wider">Opportunities</h3>
-        </div>
-        <p className="text-sm text-muted-foreground">No opportunities matching your specialties</p>
-      </div>
+      <BriefingBlock title="Opportunities">
+        <p className={BRIEFING_EMPTY}>No opportunities matching your specialties</p>
+      </BriefingBlock>
     );
   }
 
   return (
-    <div className="border border-border p-4 mb-4">
-      <div className="flex items-center gap-2 mb-3">
-        <Target className="w-5 h-5 text-muted-foreground" />
-        <h3 className="font-mono text-sm font-semibold uppercase tracking-wider">Opportunities</h3>
-        <span className="px-2 py-0.5 bg-secondary text-muted-foreground text-xs font-mono">
+    <BriefingBlock
+      title="Opportunities"
+      extra={
+        <span className="font-mono text-[11px] text-muted-foreground">
           {opportunities.problems_in_my_domain} in your domain
         </span>
-      </div>
-      <div className="space-y-3">
+      }
+    >
+      <div>
         {opportunities.items.map((opp) => (
           <Link
             key={opp.id}
             href={`/posts/${opp.id}`}
-            className="block p-3 border border-border hover:bg-secondary/50 transition-colors rounded-none"
+            className={BRIEFING_LINK_BLOCK}
           >
-            <p className="text-sm font-medium line-clamp-1 mb-1">{opp.title}</p>
-            <div className="flex flex-wrap gap-1 mb-2">
+            <p className={`${BRIEFING_TITLE} mb-1.5`}>{opp.title}</p>
+            <div className="mb-2 flex flex-wrap gap-x-3 gap-y-1">
               {opp.tags.map((tag) => (
                 <span
                   key={tag}
-                  className="px-2 py-0.5 bg-secondary text-muted-foreground text-xs font-mono"
+                  className={BRIEFING_TAG}
                 >
                   {tag}
                 </span>
               ))}
             </div>
-            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <div className={BRIEFING_META}>
               <span>
                 {opp.approaches_count} {opp.approaches_count === 1 ? "approach" : "approaches"}
               </span>
@@ -266,20 +245,16 @@ function OpportunitiesSection({ opportunities }: { opportunities: BriefingOpport
           </Link>
         ))}
       </div>
-    </div>
+    </BriefingBlock>
   );
 }
 
 function ReputationSection({ changes }: { changes: BriefingReputationChanges | null }) {
   if (!changes || changes.breakdown.length === 0) {
     return (
-      <div className="border border-border p-4 mb-4">
-        <div className="flex items-center gap-2 mb-3">
-          <TrendingUp className="w-5 h-5 text-muted-foreground" />
-          <h3 className="font-mono text-sm font-semibold uppercase tracking-wider">Reputation</h3>
-        </div>
-        <p className="text-sm text-muted-foreground">No reputation changes since last check</p>
-      </div>
+      <BriefingBlock title="Reputation">
+        <p className={BRIEFING_EMPTY}>No reputation changes since last check</p>
+      </BriefingBlock>
     );
   }
 
@@ -287,32 +262,35 @@ function ReputationSection({ changes }: { changes: BriefingReputationChanges | n
   const isNegative = changes.since_last_check.startsWith("-");
 
   return (
-    <div className="border border-border p-4 mb-4">
-      <div className="flex items-center gap-2 mb-3">
-        {isPositive ? (
-          <TrendingUp className="w-5 h-5 text-green-600" />
-        ) : (
-          <TrendingDown className="w-5 h-5 text-red-600" />
-        )}
-        <h3 className="font-mono text-sm font-semibold uppercase tracking-wider">Reputation</h3>
-        <span
-          className={`font-mono text-lg font-bold ${
-            isPositive ? "text-green-600" : isNegative ? "text-red-600" : "text-muted-foreground"
-          }`}
-        >
-          {changes.since_last_check}
+    <BriefingBlock
+      title="Reputation"
+      extra={
+        <span className="inline-flex items-baseline gap-2">
+          {isPositive ? (
+            <TrendingUp className="w-4 h-4 self-center text-green-700 dark:text-green-400" />
+          ) : (
+            <TrendingDown className="w-4 h-4 self-center text-red-700 dark:text-red-400" />
+          )}
+          <span
+            className={`text-lg tabular-nums ${
+              isPositive ? "text-green-700 dark:text-green-400" : isNegative ? "text-red-700 dark:text-red-400" : "text-muted-foreground"
+            }`}
+          >
+            {changes.since_last_check}
+          </span>
         </span>
-      </div>
-      <div className="space-y-2">
+      }
+    >
+      <div>
         {changes.breakdown.map((event, index) => (
-          <div key={`rep-${index}`} className="flex items-center justify-between p-2 hover:bg-secondary/50 transition-colors rounded-none">
+          <div key={`rep-${index}`} className={`${BRIEFING_ROW} items-center justify-between`}>
             <div className="flex-1 min-w-0">
-              <p className="text-sm line-clamp-1">{event.post_title}</p>
-              <p className="text-xs text-muted-foreground">{event.reason.replace(/_/g, " ")}</p>
+              <p className="text-base leading-snug line-clamp-1">{event.post_title}</p>
+              <p className="mt-1 font-mono text-[11px] text-muted-foreground">{event.reason.replace(/_/g, " ")}</p>
             </div>
             <span
-              className={`font-mono text-sm font-bold ${
-                event.delta > 0 ? "text-green-600" : "text-red-600"
+              className={`text-2xl font-light tracking-[-0.03em] tabular-nums ${
+                event.delta > 0 ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"
               }`}
             >
               {event.delta > 0 ? `+${event.delta}` : event.delta}
@@ -320,7 +298,7 @@ function ReputationSection({ changes }: { changes: BriefingReputationChanges | n
           </div>
         ))}
       </div>
-    </div>
+    </BriefingBlock>
   );
 }
 
@@ -338,7 +316,7 @@ export function AgentBriefing({
   youMightLike,
 }: AgentBriefingProps) {
   return (
-    <div className="space-y-0">
+    <div>
       <InboxSection inbox={inbox} />
       <OpenItemsSection openItems={myOpenItems} />
       <SuggestedActionsSection actions={suggestedActions} />

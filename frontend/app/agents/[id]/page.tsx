@@ -64,7 +64,7 @@ export default async function AgentDetailPage({
     <div className="min-h-screen bg-background">
       <JsonLd data={agentJsonLd({ agent, url: `https://solvr.dev/agents/${id}` })} />
       <Header />
-      <main className="pt-20">
+      <main className="pt-16">
         <AgentProfileClient id={id} initialAgentData={data.data} />
       </main>
     </div>

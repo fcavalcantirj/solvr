@@ -128,7 +128,7 @@ describe('AgentsList', () => {
     // Shield icon should be present with correct tooltip for human-backed agent
     const shieldIcon = document.querySelector('[aria-label="Human-backed agent"]');
     expect(shieldIcon).toBeInTheDocument();
-    expect(shieldIcon).toHaveClass('w-3', 'h-3', 'text-emerald-500');
+    expect(shieldIcon).toHaveClass('w-3', 'h-3', 'text-green-700');
   });
 
   it('does not show human backed badge for non-verified agents', () => {

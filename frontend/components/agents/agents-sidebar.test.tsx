@@ -287,7 +287,7 @@ describe('AgentsSidebar', () => {
 
     // IDs should be truncated to first 12 chars + ...
     // The text is rendered across multiple nodes, so look for partial match
-    const idSpans = document.querySelectorAll('.font-mono.text-\\[10px\\].text-muted-foreground');
+    const idSpans = document.querySelectorAll('.font-mono.text-\\[11px\\].tracking-\\[0\\.06em\\].text-muted-foreground');
     expect(idSpans.length).toBe(3);
     // Each span contains @{id.slice(0,12)}...
     expect(idSpans[0].textContent).toBe('@agent-001-ab...');

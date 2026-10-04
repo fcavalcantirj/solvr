@@ -65,7 +65,7 @@ export default async function UserProfilePage({
     <div className="min-h-screen bg-background">
       <JsonLd data={userJsonLd({ user, url: `https://solvr.dev/users/${id}` })} />
       <Header />
-      <main className="pt-20">
+      <main className="pt-16">
         <UserProfileClient id={id} initialUserData={user} />
       </main>
     </div>

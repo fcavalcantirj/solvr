@@ -1,18 +1,11 @@
 "use client";
 
 import Link from 'next/link';
-import { Loader2, MessageSquare, ArrowRight } from 'lucide-react';
+import { Loader2, MessageSquare, ArrowUpRight } from 'lucide-react';
 import { useContributions } from '@/hooks/use-contributions';
+import { CAPTION } from '@/components/page/caption';
+import { LINE_BUTTON } from '@/components/page/controls';
 import { cn } from '@/lib/utils';
-
-function getBadgeStyle(legacyType: string | null): string {
-  switch (legacyType) {
-    case 'answer': return 'bg-emerald-500/10 text-emerald-500';
-    case 'approach': return 'bg-blue-500/10 text-blue-500';
-    case 'response': return 'bg-purple-500/10 text-purple-500';
-    default: return 'bg-muted text-muted-foreground';
-  }
-}
 
 interface ContributionsListProps {
   userId: string;
@@ -26,62 +19,57 @@ export function ContributionsList({ userId }: ContributionsListProps) {
     <div>
       {/* Loading state */}
       {loading && contributions.length === 0 && (
-        <div className="border border-dashed border-border p-12 text-center">
-          <Loader2 size={24} className="animate-spin mx-auto mb-3 text-muted-foreground" />
-          <p className="font-mono text-sm text-muted-foreground">Loading contributions...</p>
+        <div className="flex items-center gap-3 border-t border-border py-12">
+          <Loader2 size={18} className="animate-spin text-muted-foreground" />
+          <p className={CAPTION}>Loading contributions...</p>
         </div>
       )}
 
       {/* Error state */}
       {error && (
-        <div className="border border-destructive/50 bg-destructive/5 p-8 text-center">
-          <p className="font-mono text-sm text-destructive">{error}</p>
+        <div className="border-t border-border py-12">
+          <p className="text-sm text-destructive">{error}</p>
         </div>
       )}
 
       {/* Empty state */}
       {!loading && !error && contributions.length === 0 && (
-        <div className="border border-dashed border-border p-12 text-center">
-          <MessageSquare size={32} className="mx-auto mb-4 text-muted-foreground" />
-          <p className="font-mono text-sm text-muted-foreground">No contributions yet</p>
+        <div className="border-t border-border py-16">
+          <MessageSquare size={32} strokeWidth={1} className="mb-6 text-muted-foreground" />
+          <p className="text-3xl font-light tracking-[-0.025em]">No contributions yet</p>
         </div>
       )}
 
       {/* Contributions list */}
       {contributions.length > 0 && (
-        <div className="space-y-3">
+        <div className="border-t border-border">
           {contributions.map((contribution) => (
             <Link
               key={contribution.id}
               href={`/posts/${contribution.postId}#${contribution.id}`}
-              className="block border border-border p-4 hover:bg-secondary/50 transition-colors group"
+              className="group grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-x-6 border-b border-border py-6 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-4 focus-visible:outline-foreground"
             >
-              <div className="flex items-start gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className={cn(
-                      "inline-block px-2 py-0.5 font-mono text-[10px] tracking-wider",
-                      getBadgeStyle(contribution.legacyType)
-                    )}>
-                      {(contribution.legacyType ?? 'reply').toUpperCase()}
-                    </span>
-                    <span className="font-mono text-[10px] text-muted-foreground ml-auto">
-                      {contribution.timestamp}
-                    </span>
-                  </div>
-
-                  <p className="font-mono text-xs text-muted-foreground mb-1">Replied to:</p>
-                  <h3 className="font-mono text-sm font-medium truncate group-hover:text-foreground">
-                    {contribution.postTitle}
-                  </h3>
-
-                  <p className="font-mono text-xs text-muted-foreground mt-2 line-clamp-2">
-                    {contribution.body}
-                  </p>
+              <div className="min-w-0">
+                <div className="mb-3 flex flex-wrap items-center gap-x-5 gap-y-1">
+                  <span className={cn(CAPTION, "text-foreground")}>
+                    {(contribution.legacyType ?? 'reply').toUpperCase()}
+                  </span>
+                  <span className={CAPTION}>
+                    {contribution.timestamp}
+                  </span>
                 </div>
 
-                <ArrowRight size={14} className="text-muted-foreground mt-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                <p className="text-sm text-muted-foreground">Replied to:</p>
+                <h3 className="mt-1 truncate text-xl font-light tracking-[-0.02em] underline decoration-transparent decoration-1 underline-offset-[5px] transition-colors group-hover:decoration-current sm:text-2xl">
+                  {contribution.postTitle}
+                </h3>
+
+                <p className="mt-3 max-w-[70ch] text-sm leading-relaxed text-muted-foreground line-clamp-2">
+                  {contribution.body}
+                </p>
               </div>
+
+              <ArrowUpRight aria-hidden="true" strokeWidth={1} className="mt-1 size-5 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground" />
             </Link>
           ))}
         </div>
@@ -89,15 +77,14 @@ export function ContributionsList({ userId }: ContributionsListProps) {
 
       {/* Load more button */}
       {hasMore && (
-        <div className="mt-6 text-center">
-          <button
-            onClick={loadMore}
-            disabled={loading}
-            className="font-mono text-xs tracking-wider bg-foreground text-background px-6 py-2.5 hover:bg-foreground/90 transition-colors disabled:opacity-50"
-          >
-            {loading ? 'LOADING...' : 'LOAD MORE'}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={loadMore}
+          disabled={loading}
+          className={cn(LINE_BUTTON, "mt-10 w-full py-5")}
+        >
+          {loading ? 'LOADING...' : 'LOAD MORE'}
+        </button>
       )}
     </div>
   );

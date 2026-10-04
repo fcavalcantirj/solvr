@@ -2,6 +2,7 @@
 
 import { useIPFSHealth } from "@/hooks/use-ipfs-health";
 import { HardDrive } from "lucide-react";
+import { CAPTION } from "@/components/page/caption";
 
 function truncatePeerId(peerId: string): string {
   if (peerId.length <= 12) return peerId;
@@ -41,60 +42,58 @@ export function IPFSStatusIndicator({
 
   const dotColorClass =
     status.color === "emerald"
-      ? "bg-emerald-500"
+      ? "bg-green-700 dark:bg-green-400"
       : status.color === "yellow"
-        ? "bg-yellow-500"
-        : "bg-red-500";
+        ? "bg-amber-700 dark:bg-amber-400"
+        : "bg-red-700 dark:bg-red-400";
 
   return (
-    <div className="border border-border p-6">
+    <div className="min-w-0">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-foreground flex items-center justify-center">
-            <HardDrive className="w-4 h-4 text-background" />
-          </div>
-          <h3 className="font-mono text-xs tracking-wider text-muted-foreground">
-            IPFS NODE
-          </h3>
-        </div>
-        <div className="flex items-center gap-2">
-          <div
-            data-testid="ipfs-status-dot"
-            className={`w-2 h-2 rounded-full ${dotColorClass}`}
-          />
-          <span className="font-mono text-xs tracking-wider">
-            {status.label}
-          </span>
-        </div>
+      <div className="flex items-center gap-3">
+        <HardDrive aria-hidden="true" className="w-4 h-4 text-muted-foreground" />
+        <h3 className={CAPTION}>
+          IPFS NODE
+        </h3>
+      </div>
+
+      {/* The state itself, set big */}
+      <div className="mt-6 flex min-w-0 items-center gap-4">
+        <div
+          data-testid="ipfs-status-dot"
+          className={`size-3 shrink-0 rounded-full ${dotColorClass}`}
+        />
+        <span className="text-[clamp(2.75rem,6vw,5.5rem)] font-light leading-none tracking-[-0.05em] [overflow-wrap:anywhere]">
+          {status.label}
+        </span>
       </div>
 
       {/* Details */}
       {status.detail && (
-        <div className="mb-4 bg-destructive/10 border border-destructive px-4 py-2">
-          <span className="font-mono text-xs text-destructive">
+        <div className="mt-6 border-y border-destructive py-3">
+          <span className="font-mono text-xs text-destructive [overflow-wrap:anywhere]">
             {status.detail}
           </span>
         </div>
       )}
 
       {data?.connected && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between py-2 border-b border-border">
-            <span className="font-mono text-[10px] tracking-wider text-muted-foreground">
+        <dl className="mt-10 border-t border-border">
+          <div className="flex items-center justify-between gap-6 border-b border-border py-5">
+            <dt className={CAPTION}>
               PEER ID
-            </span>
-            <span className="font-mono text-xs">
+            </dt>
+            <dd className="font-mono text-sm">
               {truncatePeerId(data.peer_id)}
-            </span>
+            </dd>
           </div>
-          <div className="flex items-center justify-between py-2 border-b border-border">
-            <span className="font-mono text-[10px] tracking-wider text-muted-foreground">
+          <div className="flex items-center justify-between gap-6 border-b border-border py-5">
+            <dt className={CAPTION}>
               VERSION
-            </span>
-            <span className="font-mono text-xs">{data.version}</span>
+            </dt>
+            <dd className="font-mono text-sm [overflow-wrap:anywhere]">{data.version}</dd>
           </div>
-        </div>
+        </dl>
       )}
     </div>
   );

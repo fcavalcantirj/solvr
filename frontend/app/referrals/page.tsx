@@ -6,7 +6,12 @@ import { Header } from '@/components/header';
 import { useAuth } from '@/hooks/use-auth';
 import { api } from '@/lib/api';
 import type { APIReferralResponse } from '@/lib/api-types';
-import { Share2, Copy, Check, ExternalLink } from 'lucide-react';
+import { Copy, Check, ExternalLink } from 'lucide-react';
+import { CAPTION } from '@/components/page/caption';
+import { PageHeading } from '@/components/page/page-header';
+import { PageSection, SECTION } from '@/components/page/page-section';
+import { INK_BUTTON, LINE_BUTTON } from '@/components/page/controls';
+import { cn } from '@/lib/utils';
 
 export default function ReferralsPage() {
   const router = useRouter();
@@ -83,163 +88,134 @@ export default function ReferralsPage() {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <main className="pt-20">
-        {/* Page Header */}
-        <div className="border-b border-border">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-foreground flex items-center justify-center">
-                <Share2 className="w-5 h-5 text-background" />
-              </div>
-              <span className="font-mono text-xs tracking-wider text-muted-foreground">
-                REFERRAL DASHBOARD
-              </span>
+      <main className="pt-16 pb-16">
+        <PageHeading
+          title="REFERRALS"
+          lede="Share Solvr with your network and track your referrals."
+        />
+
+        {/* Skeleton Loading */}
+        {showSkeleton && (
+          <div aria-busy="true">
+            <div className={SECTION}>
+              <div className="h-8 w-48 bg-muted animate-pulse" />
+              <div className="h-28 w-4/5 bg-muted animate-pulse" />
             </div>
-            <h1 className="font-mono text-3xl sm:text-4xl md:text-5xl font-medium tracking-tight text-foreground">
-              REFERRALS
-            </h1>
-            <p className="font-mono text-xs sm:text-sm text-muted-foreground mt-3 max-w-2xl">
-              Share Solvr with your network and track your referrals.
-            </p>
+            <div className={SECTION}>
+              <div className="h-8 w-24 bg-muted animate-pulse" />
+              <div className="h-20 w-24 bg-muted animate-pulse" />
+            </div>
+            <div className={SECTION}>
+              <div className="h-8 w-32 bg-muted animate-pulse" />
+              <div className="flex gap-3">
+                <div className="h-11 w-36 bg-muted animate-pulse" />
+                <div className="h-11 w-48 bg-muted animate-pulse" />
+              </div>
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Content */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-          {/* Skeleton Loading */}
-          {showSkeleton && (
-            <div className="space-y-6">
-              <div className="border border-border p-6 animate-pulse">
-                <div className="h-4 bg-muted w-32 mb-4" />
-                <div className="h-10 bg-muted w-64" />
-              </div>
-              <div className="border border-border p-6 animate-pulse">
-                <div className="h-4 bg-muted w-24 mb-4" />
-                <div className="h-8 bg-muted w-16" />
-              </div>
-              <div className="border border-border p-6 animate-pulse">
-                <div className="h-4 bg-muted w-40 mb-4" />
-                <div className="flex gap-3">
-                  <div className="h-10 bg-muted w-32" />
-                  <div className="h-10 bg-muted w-40" />
-                </div>
-              </div>
-            </div>
-          )}
+        {/* Error State */}
+        {!showSkeleton && fetchError && (
+          <div className="border-t border-border px-4 py-16 sm:px-6 lg:px-12">
+            <p className="mb-8 text-3xl font-light tracking-[-0.025em] text-red-700 dark:text-red-400">{fetchError}</p>
+            <button
+              onClick={handleRetry}
+              className={INK_BUTTON}
+            >
+              RETRY
+            </button>
+          </div>
+        )}
 
-          {/* Error State */}
-          {!showSkeleton && fetchError && (
-            <div className="border border-red-500 p-8 text-center">
-              <p className="font-mono text-sm text-red-500 mb-4">{fetchError}</p>
-              <button
-                onClick={handleRetry}
-                className="font-mono text-xs px-4 py-2 bg-foreground text-background hover:bg-foreground/90 transition-colors"
+        {/* Success State */}
+        {!showSkeleton && !fetchError && referral && (
+          <div>
+            {/* Referral Code: the page's thing, set big */}
+            <PageSection heading="YOUR REFERRAL CODE">
+              <span
+                className="block text-[clamp(3.25rem,11vw,10rem)] font-light leading-none tracking-[-0.02em] text-foreground tabular-nums [overflow-wrap:anywhere]"
+                data-testid="referral-code"
               >
-                RETRY
+                {referral.referral_code}
+              </span>
+              <button
+                onClick={handleCopyCode}
+                aria-label="Copy referral code"
+                className={cn(LINE_BUTTON, "mt-8")}
+              >
+                {copiedCode ? (
+                  <>
+                    <Check />
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <Copy />
+                    COPY CODE
+                  </>
+                )}
               </button>
-            </div>
-          )}
+            </PageSection>
 
-          {/* Success State */}
-          {!showSkeleton && !fetchError && referral && (
-            <div className="space-y-6">
-              {/* Referral Code Card */}
-              <div className="border border-border p-6">
-                <h2 className="font-mono text-xs tracking-wider text-muted-foreground mb-4">
-                  YOUR REFERRAL CODE
-                </h2>
-                <div className="flex items-center gap-4">
-                  <span
-                    className="font-mono text-2xl font-medium text-foreground tracking-widest"
-                    data-testid="referral-code"
-                  >
-                    {referral.referral_code}
-                  </span>
+            {/* Stats */}
+            <PageSection heading="STATS">
+              <div className="flex flex-col">
+                <span
+                  className="text-[clamp(5rem,12vw,11rem)] font-light leading-none tracking-[-0.06em] tabular-nums"
+                  data-testid="referral-count"
+                >
+                  {referral.referral_count}
+                </span>
+                <span className={cn(CAPTION, "mt-5")}>
+                  successful referral{referral.referral_count !== 1 ? 's' : ''}
+                </span>
+              </div>
+            </PageSection>
+
+            {/* Share Section */}
+            <PageSection heading="SHARE">
+              <div className="space-y-8">
+                {/* Tweet link */}
+                <a
+                  href={tweetLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-testid="tweet-link"
+                  className={INK_BUTTON}
+                >
+                  <ExternalLink />
+                  SHARE ON X
+                </a>
+
+                {/* Copy referral link */}
+                <div className="border-t border-border pt-8">
+                  <p className="mb-5 text-sm text-muted-foreground [overflow-wrap:anywhere]">
+                    Your referral link:{' '}
+                    <span className="font-mono text-xs text-foreground">{referralUrl}</span>
+                  </p>
                   <button
-                    onClick={handleCopyCode}
-                    aria-label="Copy referral code"
-                    className="flex items-center gap-2 font-mono text-xs px-3 py-2 border border-border hover:border-foreground transition-colors text-muted-foreground hover:text-foreground"
+                    onClick={handleCopyLink}
+                    aria-label="Copy referral link"
+                    className={LINE_BUTTON}
                   >
-                    {copiedCode ? (
+                    {copiedLink ? (
                       <>
-                        <Check className="w-3.5 h-3.5" />
+                        <Check />
                         Copied!
                       </>
                     ) : (
                       <>
-                        <Copy className="w-3.5 h-3.5" />
-                        COPY CODE
+                        <Copy />
+                        COPY REFERRAL LINK
                       </>
                     )}
                   </button>
                 </div>
               </div>
-
-              {/* Stats Card */}
-              <div className="border border-border p-6">
-                <h2 className="font-mono text-xs tracking-wider text-muted-foreground mb-4">
-                  STATS
-                </h2>
-                <div className="flex items-baseline gap-3">
-                  <span
-                    className="font-mono text-4xl font-medium text-emerald-500"
-                    data-testid="referral-count"
-                  >
-                    {referral.referral_count}
-                  </span>
-                  <span className="font-mono text-sm text-muted-foreground">
-                    successful referral{referral.referral_count !== 1 ? 's' : ''}
-                  </span>
-                </div>
-              </div>
-
-              {/* Share Section */}
-              <div className="border border-border p-6">
-                <h2 className="font-mono text-xs tracking-wider text-muted-foreground mb-4">
-                  SHARE
-                </h2>
-                <div className="space-y-3">
-                  {/* Tweet link */}
-                  <a
-                    href={tweetLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    data-testid="tweet-link"
-                    className="inline-flex items-center gap-2 font-mono text-xs px-4 py-2.5 bg-foreground text-background hover:bg-foreground/90 transition-colors"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    SHARE ON X
-                  </a>
-
-                  {/* Copy referral link */}
-                  <div>
-                    <p className="font-mono text-xs text-muted-foreground mb-2">
-                      Your referral link:{' '}
-                      <span className="text-foreground">{referralUrl}</span>
-                    </p>
-                    <button
-                      onClick={handleCopyLink}
-                      aria-label="Copy referral link"
-                      className="inline-flex items-center gap-2 font-mono text-xs px-4 py-2.5 border border-border hover:border-foreground transition-colors text-muted-foreground hover:text-foreground"
-                    >
-                      {copiedLink ? (
-                        <>
-                          <Check className="w-3.5 h-3.5" />
-                          Copied!
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5" />
-                          COPY REFERRAL LINK
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+            </PageSection>
+          </div>
+        )}
       </main>
     </div>
   );

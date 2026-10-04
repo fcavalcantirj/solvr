@@ -10,8 +10,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useProfileEdit } from "@/hooks/use-profile-edit";
 import { useAuthMethods } from "@/hooks/use-auth-methods";
 import { SettingsLayout } from "@/components/settings/settings-layout";
-import { Button } from "@/components/ui/button";
-import { Loader2, Check, AlertCircle, User, Trash2, AlertTriangle } from "lucide-react";
+import { Loader2, Check, AlertCircle, Trash2, AlertTriangle } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,6 +23,13 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { api } from "@/lib/api";
+import { cn } from "@/lib/utils";
+import { CAPTION } from "@/components/page/caption";
+import { PageSection } from "@/components/page/page-section";
+import { DANGER_BUTTON, FIELD, INK_BUTTON, LINE_BUTTON } from "@/components/page/controls";
+
+// A read-only ledger row: its caption on the left, its value on the right.
+const ROW = "grid gap-2 border-b border-border py-5 sm:grid-cols-[12rem_minmax(0,1fr)] sm:items-baseline sm:gap-6";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -100,229 +106,219 @@ export default function SettingsPage() {
 
   return (
     <SettingsLayout>
-      {/* Profile Information Card */}
-      <div className="border border-border p-8 mb-6">
-        <h2 className="font-mono text-xs tracking-wider text-muted-foreground mb-6">
-          PROFILE INFORMATION
-        </h2>
-        <div className="flex items-start gap-6">
-          <div className="w-20 h-20 bg-foreground text-background flex items-center justify-center flex-shrink-0">
-            <span className="font-mono text-2xl font-bold">
+      {/* Profile Information: the person, set big */}
+      <PageSection heading="PROFILE INFORMATION">
+        <div className="flex min-w-0 flex-col gap-6 sm:flex-row sm:items-end sm:gap-8">
+          <div className="flex size-16 shrink-0 items-center justify-center bg-foreground text-background sm:size-20">
+            <span className="font-mono text-lg">
               {user?.displayName?.slice(0, 2).toUpperCase() || "??"}
             </span>
           </div>
-          <div className="flex-1 min-w-0">
-            <h3 className="font-mono text-2xl tracking-tight truncate">
+          <div className="min-w-0">
+            <h3 className="text-[clamp(2.75rem,6vw,6rem)] font-light leading-none tracking-[-0.055em] [overflow-wrap:anywhere]">
               {user?.displayName || "Unknown User"}
             </h3>
-            <p className="font-mono text-sm text-muted-foreground mt-1">
-              @{user?.id?.slice(0, 8) || "unknown"}
-            </p>
-            <p className="font-mono text-xs text-muted-foreground mt-2">
-              Member since {new Date().toLocaleDateString("en-US", { month: "short", year: "numeric" })}
-            </p>
+            <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2">
+              <p className="font-mono text-[11px] text-muted-foreground">
+                @{user?.id?.slice(0, 8) || "unknown"}
+              </p>
+              <p className={CAPTION}>
+                Member since {new Date().toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+              </p>
+            </div>
           </div>
         </div>
-      </div>
+      </PageSection>
 
       {/* Edit Profile Form */}
-      <div className="border border-border p-8 mb-6">
-        <h2 className="font-mono text-xs tracking-wider text-muted-foreground mb-6">
-          EDIT PROFILE
-        </h2>
-
+      <PageSection heading="EDIT PROFILE">
         {error && (
-          <div className="flex items-center gap-2 bg-destructive/10 border border-destructive text-destructive px-4 py-3 mb-6">
+          <div className="mb-6 flex items-center gap-2 border-y border-destructive py-3 text-destructive">
             <AlertCircle size={16} />
-            <span className="font-mono text-xs">{error}</span>
+            <span className="text-sm">{error}</span>
           </div>
         )}
 
         {success && (
-          <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500 text-emerald-600 px-4 py-3 mb-6">
+          <div className="mb-6 flex items-center gap-2 border-y border-border py-3 text-green-700 dark:text-green-400">
             <Check size={16} />
-            <span className="font-mono text-xs">Profile updated successfully</span>
+            <span className="text-sm">Profile updated successfully</span>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="max-w-2xl space-y-8">
           <div>
-            <label className="font-mono text-xs tracking-wider text-muted-foreground block mb-2">
+            <label htmlFor="settings-display-name" className={cn(CAPTION, "mb-3 block")}>
               DISPLAY NAME
             </label>
             <input
+              id="settings-display-name"
               type="text"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               maxLength={50}
-              className="w-full bg-secondary/50 border border-border px-4 py-3 font-mono text-sm focus:outline-none focus:border-foreground placeholder:text-muted-foreground"
+              className={FIELD}
               placeholder="Your display name"
             />
-            <p className="font-mono text-[10px] text-muted-foreground mt-1">
+            <p className={cn(CAPTION, "mt-2 normal-case tracking-normal")}>
               {displayName.length}/50 characters
             </p>
           </div>
 
           <div>
-            <label className="font-mono text-xs tracking-wider text-muted-foreground block mb-2">
+            <label htmlFor="settings-bio" className={cn(CAPTION, "mb-3 block")}>
               BIO
             </label>
             <textarea
+              id="settings-bio"
               value={bio}
               onChange={(e) => setBio(e.target.value)}
               maxLength={500}
               rows={4}
-              className="w-full bg-secondary/50 border border-border px-4 py-3 font-mono text-sm resize-none focus:outline-none focus:border-foreground placeholder:text-muted-foreground"
+              className={cn(FIELD, "resize-none")}
               placeholder="Tell us about yourself..."
             />
-            <p className="font-mono text-[10px] text-muted-foreground mt-1">
+            <p className={cn(CAPTION, "mt-2 normal-case tracking-normal")}>
               {bio.length}/500 characters
             </p>
           </div>
 
-          <div className="flex justify-end">
-            <Button
+          <div>
+            <button
               type="submit"
               disabled={!hasChanges || saving}
-              className="font-mono text-xs tracking-wider"
+              className={INK_BUTTON}
             >
-              {saving && <Loader2 className="w-3 h-3 mr-2 animate-spin" />}
+              {saving && <Loader2 className="animate-spin" />}
               {saving ? "SAVING..." : "SAVE CHANGES"}
-            </Button>
+            </button>
           </div>
         </form>
-      </div>
+      </PageSection>
 
       {/* Account Details (Read-only) */}
-      <div className="border border-border p-8 mb-6">
-        <h2 className="font-mono text-xs tracking-wider text-muted-foreground mb-6">
-          ACCOUNT DETAILS
-        </h2>
-        <div className="space-y-4">
-          <div className="flex items-center justify-between py-3 border-b border-border">
-            <span className="font-mono text-xs tracking-wider text-muted-foreground">
+      <PageSection heading="ACCOUNT DETAILS">
+        <dl className="border-t border-border">
+          <div className={ROW}>
+            <dt className={CAPTION}>
               EMAIL
-            </span>
-            <span className="font-mono text-sm">
+            </dt>
+            <dd className="text-base [overflow-wrap:anywhere] sm:text-right">
               {user?.email || "Not set"}
-            </span>
+            </dd>
           </div>
-          <div className="flex items-center justify-between py-3 border-b border-border">
-            <span className="font-mono text-xs tracking-wider text-muted-foreground">
+          <div className={ROW}>
+            <dt className={CAPTION}>
               ACCOUNT TYPE
-            </span>
-            <span className="font-mono text-sm uppercase">
+            </dt>
+            <dd className="text-base uppercase sm:text-right">
               {user?.type || "Unknown"}
-            </span>
+            </dd>
           </div>
-          <div className="py-3 border-b border-border">
-            <span className="font-mono text-xs tracking-wider text-muted-foreground block mb-3">
+          <div className={ROW}>
+            <dt className={CAPTION}>
               LINKED ACCOUNTS
-            </span>
-            {authMethodsLoading ? (
-              <span className="font-mono text-xs text-muted-foreground">Loading...</span>
-            ) : authMethods.length === 0 ? (
-              <span className="font-mono text-xs text-muted-foreground">No authentication methods found</span>
-            ) : (
-              <div className="space-y-2">
-                {authMethods.map((method, index) => {
-                  const providerName = method.provider === 'google' ? 'Google'
-                    : method.provider === 'github' ? 'GitHub'
-                    : method.provider === 'email' ? 'Email/Password'
-                    : method.provider;
+            </dt>
+            <dd className="sm:text-right">
+              {authMethodsLoading ? (
+                <span className="text-sm text-muted-foreground">Loading...</span>
+              ) : authMethods.length === 0 ? (
+                <span className="text-sm text-muted-foreground">No authentication methods found</span>
+              ) : (
+                <div className="space-y-2">
+                  {authMethods.map((method, index) => {
+                    const providerName = method.provider === 'google' ? 'Google'
+                      : method.provider === 'github' ? 'GitHub'
+                      : method.provider === 'email' ? 'Email/Password'
+                      : method.provider;
 
-                  const linkedDate = new Date(method.linked_at).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric'
-                  });
+                    const linkedDate = new Date(method.linked_at).toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric'
+                    });
 
-                  return (
-                    <div key={index} className="font-mono text-sm text-foreground">
-                      • {providerName} - Linked {linkedDate}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                    return (
+                      <div key={index} className="text-base text-foreground">
+                        • {providerName} - Linked {linkedDate}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </dd>
           </div>
-          <div className="flex items-center justify-between py-3">
-            <span className="font-mono text-xs tracking-wider text-muted-foreground">
+          <div className={ROW}>
+            <dt className={CAPTION}>
               USER ID
-            </span>
-            <span className="font-mono text-xs text-muted-foreground">
+            </dt>
+            <dd className="font-mono text-xs text-muted-foreground [overflow-wrap:anywhere] sm:text-right">
               {user?.id || "Unknown"}
-            </span>
+            </dd>
           </div>
-        </div>
-      </div>
+        </dl>
+      </PageSection>
 
       {/* Danger Zone */}
-      <div className="border border-destructive p-8 bg-destructive/5">
-        <div className="flex items-start gap-3 mb-6">
-          <AlertTriangle className="text-destructive mt-0.5" size={16} />
-          <div>
-            <h2 className="font-mono text-xs tracking-wider text-destructive mb-2">
-              DANGER ZONE
-            </h2>
-            <p className="font-mono text-xs text-muted-foreground">
-              Deleting your account is permanent and cannot be undone.
-            </p>
-          </div>
-        </div>
+      <PageSection
+        heading="DANGER ZONE"
+        headingClassName="text-destructive"
+        intro="Deleting your account is permanent and cannot be undone."
+      >
+        <div className="border-t border-destructive pt-8">
+          {deleteError && (
+            <div className="mb-6 flex items-center gap-2 text-destructive">
+              <AlertCircle size={16} />
+              <span className="text-sm">{deleteError}</span>
+            </div>
+          )}
 
-        {deleteError && (
-          <div className="flex items-center gap-2 bg-destructive/10 border border-destructive text-destructive px-4 py-3 mb-6">
-            <AlertCircle size={16} />
-            <span className="font-mono text-xs">{deleteError}</span>
-          </div>
-        )}
-
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button
-              variant="destructive"
-              className="font-mono text-xs tracking-wider"
-              disabled={isDeleting}
-            >
-              {isDeleting ? (
-                <>
-                  <Loader2 className="w-3 h-3 mr-2 animate-spin" />
-                  DELETING...
-                </>
-              ) : (
-                <>
-                  <Trash2 className="w-3 h-3 mr-2" />
-                  DELETE MY ACCOUNT
-                </>
-              )}
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent className="font-mono">
-            <AlertDialogHeader>
-              <AlertDialogTitle className="flex items-center gap-2">
-                <AlertTriangle className="text-destructive" size={20} />
-                Are you sure?
-              </AlertDialogTitle>
-              <AlertDialogDescription className="text-sm leading-relaxed">
-                This will permanently delete your account. Your posts and contributions
-                will remain visible but anonymized. This action cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel className="font-mono text-xs">
-                Cancel
-              </AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleDeleteAccount}
-                className="bg-destructive hover:bg-destructive/90 font-mono text-xs"
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <button
+                type="button"
+                className={DANGER_BUTTON}
+                disabled={isDeleting}
               >
-                Yes, delete my account
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </div>
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="animate-spin" />
+                    DELETING...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 />
+                    DELETE MY ACCOUNT
+                  </>
+                )}
+              </button>
+            </AlertDialogTrigger>
+            <AlertDialogContent className="border-foreground p-8 shadow-none">
+              <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-3 text-2xl font-light tracking-[-0.025em]">
+                  <AlertTriangle className="text-destructive" size={20} />
+                  Are you sure?
+                </AlertDialogTitle>
+                <AlertDialogDescription className="text-sm leading-relaxed">
+                  This will permanently delete your account. Your posts and contributions
+                  will remain visible but anonymized. This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel className={cn(LINE_BUTTON, "h-auto")}>
+                  Cancel
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDeleteAccount}
+                  className={cn(DANGER_BUTTON, "h-auto bg-destructive text-destructive-foreground hover:bg-destructive/90")}
+                >
+                  Yes, delete my account
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      </PageSection>
     </SettingsLayout>
   );
 }

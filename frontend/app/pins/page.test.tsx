@@ -405,7 +405,7 @@ describe('PinsPage', () => {
     expect(screen.getByText('agent_id: claudius')).toBeInTheDocument();
   });
 
-  it('renders system meta keys with emerald badge style', () => {
+  it('renders system meta keys as ink badges, like the agent profile', () => {
     const pinWithSystemMeta = {
       requestid: 'pin-sys-1',
       status: 'pinned' as const,
@@ -426,7 +426,8 @@ describe('PinsPage', () => {
     render(<PinsPage />);
 
     const badge = screen.getByText('type: amcp_checkpoint');
-    expect(badge.className).toContain('bg-emerald-500/20');
+    expect(badge.className).toContain('bg-foreground');
+    expect(badge.className).toContain('text-background');
   });
 
   it('renders user-defined meta keys with secondary badge style', () => {

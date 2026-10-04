@@ -1,10 +1,15 @@
 "use client";
 
+import { cn } from "@/lib/utils";
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Users, Bot, Loader2 } from "lucide-react";
+import { Users, Loader2 } from "lucide-react";
 import { useUsers, UseUsersOptions, UserListItem, transformUser } from "@/hooks/use-users";
-import { Button } from "@/components/ui/button";
+import { CollectionHeader } from "@/components/page/page-header";
+import { Caption, CAPTION } from "@/components/page/caption";
+import { SegmentedControl } from "@/components/page/segmented-control";
+import { LINE_BUTTON } from "@/components/page/controls";
+import styles from "@/components/page/roster.module.css";
 import type { APIUserListItem } from "@/lib/api-types";
 
 function formatNumber(num: number): string {
@@ -21,58 +26,53 @@ function formatReputation(rep: number): string {
   return rep.toString();
 }
 
+const SORT_OPTIONS = [
+  { value: 'newest', label: 'NEWEST' },
+  { value: 'reputation', label: 'REP' },
+  { value: 'agents', label: 'AGENTS' },
+];
+
+const FIGURE = "text-5xl font-light leading-none tracking-[-0.05em] tabular-nums sm:text-7xl";
+
+// One roster row: the person's mark and place, their name as the row's headline,
+// their reputation as the figure. Position in the API's list sets the scale.
 function UserCard({ user, rank }: { user: UserListItem; rank?: number }) {
   return (
-    <Link
-      href={`/users/${user.id}`}
-      className="block border border-border bg-card hover:border-foreground/20 transition-all duration-200"
-    >
-      <div className="p-5">
-        <div className="flex items-start gap-4">
-          <div className="relative">
-            <div className="w-12 h-12 bg-foreground text-background flex items-center justify-center font-mono text-sm font-medium">
-              {user.avatarUrl ? (
-                <img src={user.avatarUrl} alt={user.displayName} className="w-full h-full object-cover" />
-              ) : (
-                user.initials
-              )}
-            </div>
-            {rank && rank <= 10 && (
-              <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-amber-500 text-background flex items-center justify-center font-mono text-[10px] font-bold">
-                #{rank}
-              </div>
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="font-mono text-sm font-medium truncate">
-                {user.displayName}
-              </h3>
-            </div>
-            <p className="font-mono text-[10px] text-muted-foreground mb-3">
-              @{user.username}
-            </p>
-            <div className="flex items-center gap-4 text-xs text-muted-foreground">
-              <div className="flex items-center gap-1">
-                <Bot className="w-3 h-3" />
-                <span>{user.agentsCount} agent{user.agentsCount !== 1 ? 's' : ''}</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="font-mono text-[10px] tracking-wider text-muted-foreground/70">
-                  {user.createdAt}
-                </span>
-              </div>
-            </div>
-          </div>
-          <div className="flex flex-col items-center">
-            <div className="font-mono text-lg font-medium text-emerald-500">
-              +{formatReputation(user.reputation)}
-            </div>
-            <span className="font-mono text-[9px] tracking-wider text-muted-foreground">
-              REP
-            </span>
-          </div>
+    <Link href={`/users/${user.id}`} className={styles.entry}>
+      <div className={styles.mark}>
+        <div className={styles.avatar}>
+          {user.avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={user.avatarUrl} alt={user.displayName} className="h-full w-full object-cover" />
+          ) : (
+            user.initials
+          )}
         </div>
+        {rank && rank <= 10 && (
+          <span className={styles.rank}>
+            #{rank}
+          </span>
+        )}
+      </div>
+      <div className={styles.body}>
+        <h3 className={styles.name}>
+          {user.displayName}
+        </h3>
+        <p className={styles.handle}>
+          @{user.username}
+        </p>
+        <div className={styles.meta}>
+          <span>{user.agentsCount} agent{user.agentsCount !== 1 ? 's' : ''}</span>
+          <span>{user.createdAt}</span>
+        </div>
+      </div>
+      <div className={styles.figure}>
+        <span className={styles.value}>
+          +{formatReputation(user.reputation)}
+        </span>
+        <span className={styles.unit}>
+          REP
+        </span>
       </div>
     </Link>
   );
@@ -86,15 +86,15 @@ function UsersList({ options = {}, initialUsers }: { options?: UseUsersOptions; 
 
   if (isInitialLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      <div className="flex items-center border-t border-border py-12">
+        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   if (error && displayUsers.length === 0) {
     return (
-      <div className="border border-destructive/20 bg-destructive/5 p-6 text-center">
+      <div className="border-t border-border py-12">
         <p className="text-sm text-destructive">{error}</p>
       </div>
     );
@@ -102,10 +102,10 @@ function UsersList({ options = {}, initialUsers }: { options?: UseUsersOptions; 
 
   if (displayUsers.length === 0) {
     return (
-      <div className="border border-border bg-card p-12 text-center">
-        <Users className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-        <h3 className="font-mono text-sm font-medium mb-2">No users found</h3>
-        <p className="text-xs text-muted-foreground">
+      <div className="border-t border-border py-16">
+        <Users aria-hidden="true" strokeWidth={1} className="mb-6 size-8 text-muted-foreground" />
+        <h3 className="text-3xl font-light tracking-[-0.025em]">No users found</h3>
+        <p className="mt-3 text-sm text-muted-foreground">
           Be the first to join Solvr.
         </p>
       </div>
@@ -113,31 +113,33 @@ function UsersList({ options = {}, initialUsers }: { options?: UseUsersOptions; 
   }
 
   return (
-    <div className="space-y-4">
-      {displayUsers.map((user, index) => (
-        <UserCard
-          key={user.id}
-          user={user}
-          rank={options.sort === 'reputation' ? index + 1 : undefined}
-        />
-      ))}
+    <div>
+      <div className={styles.roster}>
+        {displayUsers.map((user, index) => (
+          <UserCard
+            key={user.id}
+            user={user}
+            rank={options.sort === 'reputation' ? index + 1 : undefined}
+          />
+        ))}
+      </div>
 
       {hasMore && (
-        <Button
-          variant="outline"
-          className="w-full font-mono text-xs tracking-wider"
+        <button
+          type="button"
+          className={cn(LINE_BUTTON, "mt-10 w-full py-5")}
           onClick={loadMore}
           disabled={loading}
         >
           {loading ? (
             <>
-              <Loader2 className="w-3 h-3 mr-2 animate-spin" />
+              <Loader2 className="animate-spin" />
               LOADING...
             </>
           ) : (
             `LOAD MORE (${users.length > 0 ? users.length : displayUsers.length} of ${total})`
           )}
-        </Button>
+        </button>
       )}
     </div>
   );
@@ -147,6 +149,8 @@ interface UsersPageClientProps {
   initialUserData: APIUserListItem[];
 }
 
+// /users opens on the collection's name, set big, with the API's two counts under it
+// as one hairline row; the roster of people takes the page from there.
 export function UsersPageClient({ initialUserData }: UsersPageClientProps) {
   const initialUsers = useMemo(() => initialUserData.map(transformUser), [initialUserData]);
 
@@ -155,74 +159,52 @@ export function UsersPageClient({ initialUserData }: UsersPageClientProps) {
   const { users, loading, total, totalBackedAgents } = useUsers(options);
 
   return (
-    <>
-      {/* Page Header */}
-      <div className="border-b border-border overflow-hidden">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-foreground flex items-center justify-center shrink-0">
-                  <Users className="w-5 h-5 text-background" />
-                </div>
-                <span className="font-mono text-xs tracking-wider text-muted-foreground">
-                  HUMAN PARTICIPANTS
-                </span>
-              </div>
-              <h1 className="font-mono text-3xl sm:text-4xl md:text-5xl font-medium tracking-tight text-foreground">
-                USERS
-              </h1>
-              <p className="font-mono text-xs sm:text-sm text-muted-foreground mt-3 max-w-xl">
-                Human developers collaborating on Solvr. Back AI agents, post problems, and earn reputation.
-              </p>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="font-mono text-xs text-muted-foreground">SORT BY</span>
-              <select
-                value={sort}
-                onChange={(e) => setSort(e.target.value as 'newest' | 'reputation' | 'agents')}
-                className="font-mono text-xs bg-background border border-border px-3 py-2 focus:outline-none focus:ring-1 focus:ring-foreground"
-              >
-                <option value="newest">NEWEST</option>
-                <option value="reputation">REP</option>
-                <option value="agents">AGENTS</option>
-              </select>
-            </div>
-          </div>
+    <div className="w-full pb-16">
+      <CollectionHeader
+        title="USERS"
+        lede="Human developers collaborating on Solvr. Back AI agents, post problems, and earn reputation."
+      />
 
-          {/* Quick Stats */}
-          <div className="grid grid-cols-2 sm:flex sm:items-center gap-4 sm:gap-8 mt-8 pt-6 border-t border-border">
-            {loading && users.length === 0 ? (
-              <div className="flex items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                <span className="font-mono text-xs text-muted-foreground">Loading stats...</span>
-              </div>
-            ) : (
-              <>
-                <div className="flex flex-col sm:flex-row sm:items-baseline">
-                  <span className="font-mono text-xl sm:text-2xl font-medium text-foreground">
-                    {formatNumber(total)}
-                  </span>
-                  <span className="font-mono text-[10px] sm:text-xs text-muted-foreground sm:ml-2">TOTAL USERS</span>
-                </div>
-                <div className="flex flex-col sm:flex-row sm:items-baseline">
-                  <span className="font-mono text-xl sm:text-2xl font-medium text-blue-600">
-                    {formatNumber(totalBackedAgents)}
-                  </span>
-                  <span className="font-mono text-[10px] sm:text-xs text-muted-foreground sm:ml-2">BACKED AGENTS</span>
-                </div>
-              </>
-            )}
+      {/* Quick Stats */}
+      <div className="mx-4 border-t border-border sm:mx-6 lg:mx-12">
+        {loading && users.length === 0 ? (
+          <div className="flex items-center gap-3 py-8">
+            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+            <span className={CAPTION}>Loading stats...</span>
           </div>
-        </div>
+        ) : (
+          <dl className="grid grid-cols-2 divide-x divide-border lg:grid-cols-3">
+            <div className="flex min-w-0 flex-col py-8 pr-4">
+              <Caption as="dt" className="order-last mt-4">TOTAL USERS</Caption>
+              <dd className={FIGURE}>
+                {formatNumber(total)}
+              </dd>
+            </div>
+            <div className="flex min-w-0 flex-col py-8 pl-4 sm:pl-8">
+              <Caption as="dt" className="order-last mt-4">BACKED AGENTS</Caption>
+              <dd className={FIGURE}>
+                {formatNumber(totalBackedAgents)}
+              </dd>
+            </div>
+          </dl>
+        )}
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-        <div className="max-w-3xl">
-          <UsersList options={options} initialUsers={initialUsers} />
-        </div>
+      {/* Sort */}
+      <div className="mx-4 flex flex-wrap items-center justify-between gap-4 border-t border-border py-4 sm:mx-6 lg:mx-12">
+        <Caption as="span" id="users-sort-label">SORT BY</Caption>
+        <SegmentedControl
+          labelledBy="users-sort-label"
+          options={SORT_OPTIONS}
+          value={sort}
+          onSelect={(value) => setSort(value as 'newest' | 'reputation' | 'agents')}
+        />
       </div>
-    </>
+
+      {/* Roster */}
+      <div className="px-4 sm:px-6 lg:px-12">
+        <UsersList options={options} initialUsers={initialUsers} />
+      </div>
+    </div>
   );
 }

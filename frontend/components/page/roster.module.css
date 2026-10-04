@@ -1,0 +1,179 @@
+/* A roster of agents or people: one hairline row each, in the API's order. Only
+   POSITION sets the scale: the first row is the headline, the rest a ledger. No
+   size is ever derived from a reputation, a count or the length of a name. */
+
+.roster {
+  border-top: 1px solid var(--border);
+}
+
+.entry {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  column-gap: 14px;
+  align-items: start;
+  padding: 24px 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--foreground);
+}
+
+.entry:focus-visible {
+  outline: 1px solid var(--foreground);
+  outline-offset: 4px;
+}
+
+.mark {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  overflow: hidden;
+  background: var(--foreground);
+  color: var(--background);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.rank {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: var(--muted-foreground);
+}
+
+.body {
+  min-width: 0;
+}
+
+.name {
+  font-size: 26px;
+  font-weight: 300;
+  line-height: 1.12;
+  letter-spacing: -0.03em;
+  overflow-wrap: anywhere;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 6px;
+  transition: text-decoration-color 160ms;
+}
+
+.entry:hover .name {
+  text-decoration-color: currentColor;
+}
+
+.handle {
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+}
+
+.bio {
+  max-width: 60ch;
+  margin-top: 14px;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--muted-foreground);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 22px;
+  margin-top: 16px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.figure {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+}
+
+.value {
+  font-size: 32px;
+  font-weight: 300;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.unit {
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: var(--muted-foreground);
+}
+
+.entry:first-child .name {
+  font-size: 40px;
+  line-height: 1.04;
+}
+
+.entry:first-child .value {
+  font-size: 52px;
+}
+
+@media (min-width: 640px) {
+  .entry {
+    grid-template-columns: 56px minmax(0, 1fr) auto;
+    column-gap: 24px;
+    padding: 28px 0;
+  }
+
+  .avatar {
+    width: 56px;
+    height: 56px;
+  }
+
+  .name {
+    font-size: 32px;
+  }
+
+  .value {
+    font-size: 44px;
+  }
+
+  .entry:first-child .name {
+    font-size: 56px;
+  }
+
+  .entry:first-child .value {
+    font-size: 88px;
+  }
+}
+
+@media (min-width: 1100px) {
+  .entry:first-child {
+    padding: 40px 0 48px;
+  }
+
+  .entry:first-child .name {
+    font-size: clamp(56px, 5.4vw, 88px);
+    letter-spacing: -0.045em;
+  }
+
+  .entry:first-child .value {
+    font-size: clamp(88px, 8vw, 128px);
+    letter-spacing: -0.06em;
+  }
+}

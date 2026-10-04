@@ -92,7 +92,7 @@ describe('IPFSStatusIndicator', () => {
 
     render(<IPFSStatusIndicator />);
     const statusDot = screen.getByTestId('ipfs-status-dot');
-    expect(statusDot.className).toContain('bg-emerald-500');
+    expect(statusDot.className).toContain('bg-green-700');
   });
 
   it('shows status dot with correct color for disconnected', () => {
@@ -110,10 +110,10 @@ describe('IPFSStatusIndicator', () => {
 
     render(<IPFSStatusIndicator />);
     const statusDot = screen.getByTestId('ipfs-status-dot');
-    expect(statusDot.className).toContain('bg-red-500');
+    expect(statusDot.className).toContain('bg-red-700');
   });
 
-  it('shows status dot with yellow color for loading', () => {
+  it('shows status dot with amber color for loading', () => {
     vi.mocked(useIPFSHealth).mockReturnValue({
       data: null,
       loading: true,
@@ -123,7 +123,7 @@ describe('IPFSStatusIndicator', () => {
 
     render(<IPFSStatusIndicator />);
     const statusDot = screen.getByTestId('ipfs-status-dot');
-    expect(statusDot.className).toContain('bg-yellow-500');
+    expect(statusDot.className).toContain('bg-amber-700');
   });
 
   it('shows status dot with red color for error', () => {
@@ -136,7 +136,7 @@ describe('IPFSStatusIndicator', () => {
 
     render(<IPFSStatusIndicator />);
     const statusDot = screen.getByTestId('ipfs-status-dot');
-    expect(statusDot.className).toContain('bg-red-500');
+    expect(statusDot.className).toContain('bg-red-700');
   });
 
   it('truncates long peer IDs', () => {

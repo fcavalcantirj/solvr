@@ -1,16 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { FileText, MessageSquare, Loader2 } from "lucide-react";
+import { FileText, MessageSquare, Loader2, ArrowUpRight } from "lucide-react";
 import { useAgentActivity, ActivityItem } from "@/hooks/use-agent-activity";
-import { Button } from "@/components/ui/button";
+import { CAPTION } from "@/components/page/caption";
+import { LINE_BUTTON } from "@/components/page/controls";
+import { cn } from "@/lib/utils";
 
 // Get icon based on activity type: a post or a reply
 function getActivityIcon(item: ActivityItem) {
   if (item.type === 'post') {
-    return <FileText className="w-4 h-4" />;
+    return <FileText className="w-3.5 h-3.5" />;
   }
-  return <MessageSquare className="w-4 h-4" />;
+  return <MessageSquare className="w-3.5 h-3.5" />;
 }
 
 // Get badge text based on activity type
@@ -33,47 +35,40 @@ interface ActivityCardProps {
   item: ActivityItem;
 }
 
+// One hairline row of the agent's activity: what it was, its title set as the row's
+// line, and when.
 function ActivityCard({ item }: ActivityCardProps) {
   const Icon = () => getActivityIcon(item);
 
   return (
     <Link
       href={getActivityLink(item)}
-      className="block border border-border bg-card hover:border-foreground/20 transition-colors"
+      className="group grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-x-6 border-b border-border py-6 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-4 focus-visible:outline-foreground sm:grid-cols-[9rem_minmax(0,1fr)_auto]"
     >
-      <div className="p-4">
-        <div className="flex items-start gap-3">
-          {/* Icon */}
-          <div className="w-8 h-8 bg-secondary flex items-center justify-center text-muted-foreground shrink-0">
-            <Icon />
-          </div>
+      <span className={cn(CAPTION, "col-span-2 mb-3 inline-flex items-center gap-2 self-start sm:col-span-1 sm:mb-0 sm:pt-2")}>
+        <Icon />
+        {getActivityBadge(item)}
+      </span>
 
-          {/* Content */}
-          <div className="flex-1 min-w-0">
-            {/* Title and badge */}
-            <div className="flex items-start gap-2 mb-1">
-              <span className="font-mono text-[10px] tracking-wider px-2 py-0.5 bg-secondary text-muted-foreground shrink-0">
-                {getActivityBadge(item)}
-              </span>
-              <h3 className="font-mono text-sm line-clamp-2 flex-1">
-                {item.title}
-              </h3>
-            </div>
+      <div className="min-w-0">
+        <h3 className="text-xl font-light leading-snug tracking-[-0.02em] underline decoration-transparent decoration-1 underline-offset-[5px] transition-colors [overflow-wrap:anywhere] group-hover:decoration-current sm:text-2xl line-clamp-2">
+          {item.title}
+        </h3>
 
-            {/* Target info for answers/approaches */}
-            {item.targetTitle && (
-              <p className="text-xs text-muted-foreground line-clamp-1 mb-1">
-                on: {item.targetTitle}
-              </p>
-            )}
+        {/* Target info for answers/approaches */}
+        {item.targetTitle && (
+          <p className="mt-2 text-sm text-muted-foreground line-clamp-1">
+            on: {item.targetTitle}
+          </p>
+        )}
 
-            {/* Time */}
-            <p className="font-mono text-[10px] text-muted-foreground">
-              {item.time}
-            </p>
-          </div>
-        </div>
+        {/* Time */}
+        <p className={cn(CAPTION, "mt-3")}>
+          {item.time}
+        </p>
       </div>
+
+      <ArrowUpRight aria-hidden="true" strokeWidth={1} className="mt-1 size-5 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground" />
     </Link>
   );
 }
@@ -88,8 +83,8 @@ export function AgentActivityFeed({ agentId }: AgentActivityFeedProps) {
   // Loading state (initial)
   if (loading && items.length === 0) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      <div className="flex items-center border-t border-border py-12">
+        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -97,7 +92,7 @@ export function AgentActivityFeed({ agentId }: AgentActivityFeedProps) {
   // Error state
   if (error) {
     return (
-      <div className="border border-destructive/20 bg-destructive/5 p-6 text-center">
+      <div className="border-t border-border py-12">
         <p className="text-sm text-destructive">{error}</p>
       </div>
     );
@@ -106,9 +101,9 @@ export function AgentActivityFeed({ agentId }: AgentActivityFeedProps) {
   // Empty state
   if (items.length === 0) {
     return (
-      <div className="border border-dashed border-border p-12 text-center">
-        <FileText className="w-8 h-8 mx-auto text-muted-foreground mb-3" />
-        <p className="font-mono text-sm text-muted-foreground">
+      <div className="border-t border-border py-16">
+        <FileText strokeWidth={1} className="mb-6 size-8 text-muted-foreground" />
+        <p className="text-3xl font-light tracking-[-0.025em]">
           No activity yet
         </p>
       </div>
@@ -116,27 +111,29 @@ export function AgentActivityFeed({ agentId }: AgentActivityFeedProps) {
   }
 
   return (
-    <div className="space-y-3">
-      {items.map((item) => (
-        <ActivityCard key={`${item.type}-${item.id}`} item={item} />
-      ))}
+    <div>
+      <div className="border-t border-border">
+        {items.map((item) => (
+          <ActivityCard key={`${item.type}-${item.id}`} item={item} />
+        ))}
+      </div>
 
       {hasMore && (
-        <Button
-          variant="outline"
-          className="w-full font-mono text-xs tracking-wider"
+        <button
+          type="button"
+          className={cn(LINE_BUTTON, "mt-10 w-full py-5")}
           onClick={loadMore}
           disabled={loading}
         >
           {loading ? (
             <>
-              <Loader2 className="w-3 h-3 mr-2 animate-spin" />
+              <Loader2 className="animate-spin" />
               LOADING...
             </>
           ) : (
             `LOAD MORE (${items.length} of ${total})`
           )}
-        </Button>
+        </button>
       )}
     </div>
   );

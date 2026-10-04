@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { X, Loader2, AlertCircle } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { CAPTION } from "@/components/page/caption";
+import { FIELD, ICON_BUTTON, INK_BUTTON, LINE_BUTTON } from "@/components/page/controls";
+import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import type { APIAgent } from "@/lib/api-types";
 
@@ -47,7 +49,7 @@ export function EditAgentModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-background/80 backdrop-blur-sm"
@@ -55,71 +57,74 @@ export function EditAgentModal({
       />
 
       {/* Modal */}
-      <div className="relative bg-background border border-border p-6 w-full max-w-md mx-4">
+      <div className="relative w-full max-w-md border border-foreground bg-background">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="font-mono text-lg font-medium">Edit Agent</h2>
+        <div className="flex items-center justify-between gap-4 border-b border-border px-6 py-5">
+          <h2 className="text-2xl font-light tracking-[-0.025em]">Edit Agent</h2>
           <button
             onClick={handleClose}
-            className="text-muted-foreground hover:text-foreground transition-colors"
+            className={ICON_BUTTON}
             aria-label="Close"
           >
-            <X size={20} />
+            <X size={18} />
           </button>
         </div>
 
-        {/* Agent Name */}
-        <p className="font-mono text-sm text-muted-foreground mb-4">
-          {agent.display_name}
-        </p>
-
-        {/* Error Message */}
-        {error && (
-          <div className="flex items-center gap-2 bg-destructive/10 border border-destructive text-destructive px-3 py-2 mb-4">
-            <AlertCircle size={14} />
-            <span className="font-mono text-xs">{error}</span>
-          </div>
-        )}
-
-        {/* Model Input */}
-        <div className="mb-6">
-          <label
-            htmlFor="model-input"
-            className="font-mono text-xs tracking-wider text-muted-foreground block mb-2"
-          >
-            MODEL
-          </label>
-          <input
-            id="model-input"
-            type="text"
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-            placeholder="e.g., claude-opus-4, gpt-4o"
-            className="w-full bg-secondary/50 border border-border px-4 py-3 font-mono text-sm focus:outline-none focus:border-foreground placeholder:text-muted-foreground"
-          />
-          <p className="font-mono text-[10px] text-muted-foreground mt-1">
-            The AI model this agent uses
+        <div className="px-6 py-6">
+          {/* Agent Name */}
+          <p className="mb-6 text-base [overflow-wrap:anywhere]">
+            {agent.display_name}
           </p>
+
+          {/* Error Message */}
+          {error && (
+            <div className="mb-6 flex items-center gap-2 border-y border-destructive py-3 text-destructive">
+              <AlertCircle size={14} />
+              <span className="text-sm">{error}</span>
+            </div>
+          )}
+
+          {/* Model Input */}
+          <div>
+            <label
+              htmlFor="model-input"
+              className={cn(CAPTION, "mb-3 block")}
+            >
+              MODEL
+            </label>
+            <input
+              id="model-input"
+              type="text"
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              placeholder="e.g., claude-opus-4, gpt-4o"
+              className={FIELD}
+            />
+            <p className="mt-2 text-xs text-muted-foreground">
+              The AI model this agent uses
+            </p>
+          </div>
         </div>
 
         {/* Actions */}
-        <div className="flex items-center justify-end gap-3">
-          <Button
-            variant="outline"
+        <div className="flex items-center justify-end gap-3 border-t border-border px-6 py-5">
+          <button
+            type="button"
             onClick={handleClose}
             disabled={saving}
-            className="font-mono text-xs tracking-wider"
+            className={LINE_BUTTON}
           >
             CANCEL
-          </Button>
-          <Button
+          </button>
+          <button
+            type="button"
             onClick={handleSave}
             disabled={saving}
-            className="font-mono text-xs tracking-wider"
+            className={INK_BUTTON}
           >
-            {saving && <Loader2 className="w-3 h-3 mr-2 animate-spin" />}
+            {saving && <Loader2 className="animate-spin" />}
             {saving ? "SAVING..." : "SAVE"}
-          </Button>
+          </button>
         </div>
       </div>
     </div>

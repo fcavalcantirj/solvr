@@ -10,6 +10,8 @@ import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { Loader2, Bot, LogIn } from "lucide-react";
 import Link from "next/link";
+import { PageHeading } from "@/components/page/page-header";
+import { INK_BUTTON } from "@/components/page/controls";
 import type { APIAgent, APIAgentBriefingData, APIPinsListResponse } from "@/lib/api-types";
 
 interface StorageData {
@@ -96,32 +98,28 @@ export default function DashboardPage() {
   return (
     <>
       <Header />
-      <main className="min-h-screen bg-background pt-24 pb-16">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="mb-8">
-            <h1 className="font-mono text-2xl font-bold tracking-tight">
-              AGENT DASHBOARD
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Briefings for your claimed agents
-            </p>
-          </div>
+      <main className="min-h-screen bg-background pt-16 pb-16">
+        <PageHeading
+          title="AGENT DASHBOARD"
+          lede="Briefings for your claimed agents"
+        />
 
+        <div className="px-4 sm:px-6 lg:px-12">
           {(authLoading || loading) && (
-            <div className="flex items-center justify-center py-20">
-              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            <div className="flex items-center border-t border-border py-20">
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
             </div>
           )}
 
           {!authLoading && !loading && !isAuthenticated && (
-            <div className="border border-border p-8 text-center">
-              <LogIn className="w-8 h-8 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground mb-4">
+            <div className="border-t border-border py-16">
+              <LogIn strokeWidth={1} className="mb-6 w-8 h-8 text-muted-foreground" />
+              <p className="mb-8 text-3xl font-light tracking-[-0.025em]">
                 Log in to view your agents&apos; briefings
               </p>
               <Link
                 href="/login"
-                className="font-mono text-xs tracking-wider bg-foreground text-background px-5 py-2.5 hover:bg-foreground/90 transition-colors"
+                className={INK_BUTTON}
               >
                 LOG IN
               </Link>
@@ -129,14 +127,14 @@ export default function DashboardPage() {
           )}
 
           {!authLoading && !loading && isAuthenticated && agents.length === 0 && !error && (
-            <div className="border border-border p-8 text-center">
-              <Bot className="w-8 h-8 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground mb-2">
+            <div className="border-t border-border py-16">
+              <Bot strokeWidth={1} className="mb-6 w-8 h-8 text-muted-foreground" />
+              <p className="text-3xl font-light tracking-[-0.025em]">
                 No claimed agents yet
               </p>
-              <p className="text-xs text-muted-foreground mb-4">
+              <p className="mt-3 text-sm text-muted-foreground">
                 Claim an agent in{" "}
-                <Link href="/settings/agents" className="underline hover:text-foreground">
+                <Link href="/settings/agents" className="underline underline-offset-4 hover:text-foreground focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground">
                   Settings &gt; My Agents
                 </Link>{" "}
                 to see their briefings here.
@@ -145,42 +143,41 @@ export default function DashboardPage() {
           )}
 
           {!authLoading && !loading && error && (
-            <div className="border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive mb-4">
+            <div className="mb-4 border-y border-destructive py-4 text-sm text-destructive">
               {error}
             </div>
           )}
 
           {!authLoading && !loading && agents.length > 0 && (
-          <div data-testid="agents-grid" className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div data-testid="agents-grid" className="grid grid-cols-1 gap-x-16 lg:grid-cols-2">
           {agents.map(({ agent, briefing, pins, storage, error: briefingError }) => (
-            <div key={agent.id}>
-              <div className="border border-border p-4 mb-0">
-                <div className="flex items-center gap-3">
-                  <Bot className="w-5 h-5 text-muted-foreground" />
-                  <div className="flex-1">
-                    <Link
-                      href={`/agents/${agent.id}`}
-                      className="font-mono text-sm font-semibold hover:underline"
-                    >
-                      {agent.display_name}
-                    </Link>
-                    <p className="text-xs text-muted-foreground">
-                      rep {agent.reputation}
-                      {agent.model && <> &middot; {agent.model}</>}
-                    </p>
-                  </div>
+            <div key={agent.id} className="min-w-0 border-t border-foreground pt-8 pb-12">
+              {/* The agent itself, set big */}
+              <div className="flex items-start gap-4">
+                <Bot strokeWidth={1} className="mt-2 w-6 h-6 shrink-0 text-muted-foreground" />
+                <div className="min-w-0 flex-1">
+                  <Link
+                    href={`/agents/${agent.id}`}
+                    className="text-[clamp(2.5rem,4.2vw,4.5rem)] font-light leading-none tracking-[-0.05em] underline decoration-transparent decoration-1 underline-offset-8 transition-colors [overflow-wrap:anywhere] hover:decoration-current focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-4 focus-visible:outline-foreground"
+                  >
+                    {agent.display_name}
+                  </Link>
+                  <p className="mt-4 font-mono text-[11px] text-muted-foreground">
+                    rep {agent.reputation}
+                    {agent.model && <> &middot; {agent.model}</>}
+                  </p>
                 </div>
               </div>
 
               {(storage || pins) && (
-                <div className="border border-border border-t-0 p-3 flex gap-6 text-xs text-muted-foreground">
+                <div className="mt-6 flex flex-wrap gap-x-8 gap-y-2 border-t border-border pt-4 text-xs text-muted-foreground">
                   {storage && (
                     <span>
                       Storage: {formatBytes(storage.used)} / {formatBytes(storage.quota)} ({storage.percentage.toFixed(1)}%)
                     </span>
                   )}
                   {pins && (
-                    <Link href={`/pins?agent=${agent.id}`} className="underline hover:text-foreground">
+                    <Link href={`/pins?agent=${agent.id}`} className="underline underline-offset-4 hover:text-foreground focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground">
                       {pins.count} pins
                     </Link>
                   )}
@@ -188,12 +185,13 @@ export default function DashboardPage() {
               )}
 
               {briefingError && (
-                <div className="border border-destructive/50 bg-destructive/10 p-3 text-xs text-destructive">
+                <div className="mt-6 border-y border-destructive py-3 text-xs text-destructive">
                   {briefingError}
                 </div>
               )}
 
               {briefing && (
+                <div className="mt-8">
                 <AgentBriefing
                   inbox={briefing.inbox}
                   myOpenItems={briefing.my_open_items}
@@ -207,6 +205,7 @@ export default function DashboardPage() {
                   recentVictories={briefing.recent_victories}
                   youMightLike={briefing.you_might_like}
                 />
+                </div>
               )}
             </div>
           ))}

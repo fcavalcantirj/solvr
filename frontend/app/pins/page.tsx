@@ -2,6 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
+import { cn } from "@/lib/utils";
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Header } from "@/components/header";
@@ -22,8 +23,19 @@ import {
   Minus,
 } from "lucide-react";
 import Link from "next/link";
+import { CAPTION } from "@/components/page/caption";
+import { CollectionHeader } from "@/components/page/page-header";
+import { DANGER_BUTTON, FIELD, ICON_BUTTON, INK_BUTTON, LINE_BUTTON, TEXT_LINK } from "@/components/page/controls";
 
 const IPFS_GATEWAY_BASE = "https://ipfs.io/ipfs/";
+
+// One square dialog frame, and one square filter cell (ink when pressed).
+const MODAL_BACKDROP = "fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm";
+const MODAL = "w-full border border-foreground bg-background";
+const FILTER = (pressed: boolean, padding = "px-1 sm:px-4") =>
+  `${padding} py-2.5 font-mono text-[11px] uppercase tracking-[0.08em] transition-colors focus-visible:relative focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground sm:tracking-[0.18em] ${
+    pressed ? "bg-foreground text-background" : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+  }`;
 
 type StatusFilter = PinStatus | 'all';
 type MetaFilter = 'all' | 'checkpoints';
@@ -51,15 +63,15 @@ function truncateCID(cid: string): string {
 function getStatusStyle(status: PinStatus): string {
   switch (status) {
     case "pinned":
-      return "bg-emerald-500/20 text-emerald-600";
+      return "text-green-700 dark:text-green-400";
     case "pinning":
-      return "bg-blue-500/20 text-blue-600";
+      return "text-foreground";
     case "queued":
-      return "bg-yellow-500/20 text-yellow-600";
+      return "text-amber-700 dark:text-amber-400";
     case "failed":
-      return "bg-red-500/20 text-red-600";
+      return "text-red-700 dark:text-red-400";
     default:
-      return "bg-muted text-muted-foreground";
+      return "text-muted-foreground";
   }
 }
 
@@ -123,15 +135,15 @@ function PinsContent() {
     return (
       <div className="min-h-screen bg-background">
         <Header />
-        <main className="pt-20">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-16 text-center">
-            <HardDrive className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-            <p className="font-mono text-sm text-muted-foreground">
+        <main className="pt-16">
+          <div className="px-4 py-16 sm:px-6 lg:px-12 lg:py-24">
+            <HardDrive strokeWidth={1} className="mb-6 h-8 w-8 text-muted-foreground" />
+            <p className="text-3xl font-light tracking-[-0.025em] sm:text-5xl">
               Sign in to manage your IPFS pins
             </p>
             <Link
               href="/login"
-              className="inline-block mt-4 font-mono text-xs px-6 py-3 bg-foreground text-background hover:bg-foreground/90 transition-colors"
+              className={`${INK_BUTTON} mt-8`}
             >
               SIGN IN
             </Link>
@@ -213,131 +225,112 @@ function PinsContent() {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <main className="pt-20">
-        {/* Page Header */}
-        <div className="border-b border-border">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-foreground flex items-center justify-center">
-                <HardDrive className="w-5 h-5 text-background" />
-              </div>
-              <span className="font-mono text-xs tracking-wider text-muted-foreground">
-                IPFS PINNING
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="font-mono text-3xl sm:text-4xl md:text-5xl font-medium tracking-tight text-foreground">
-                  {agentId ? `${agentId}'s PINS` : "MY PINS"}
-                </h1>
-                {agentId && (
-                  <Link href="/pins" className="font-mono text-xs text-muted-foreground hover:text-foreground underline mt-1 inline-block">
-                    View my pins
-                  </Link>
-                )}
-              </div>
-              <button
-                onClick={() => setShowCreateDialog(true)}
-                className="font-mono text-xs px-4 py-2 bg-foreground text-background hover:bg-foreground/90 transition-colors flex items-center gap-2"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                PIN NEW CONTENT
-              </button>
-            </div>
-            <p className="font-mono text-xs sm:text-sm text-muted-foreground mt-3 max-w-2xl">
-              Manage your IPFS pinned content. Pin CIDs to keep them available on the network.
-            </p>
-
-            {/* Storage Usage */}
-            {storage && (
-              <div className="mt-6 pt-4 border-t border-border">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-mono text-xs text-muted-foreground">
-                    USING {formatBytes(storage.used)} OF {formatBytes(storage.quota)}
-                  </span>
-                  <span className="font-mono text-xs text-muted-foreground">
-                    {storage.percentage.toFixed(1)}%
-                  </span>
-                </div>
-                <div className="w-full h-1.5 bg-muted">
-                  <div
-                    className={`h-full transition-all ${
-                      storage.percentage > 90
-                        ? "bg-red-500"
-                        : storage.percentage > 80
-                        ? "bg-yellow-500"
-                        : "bg-emerald-500"
-                    }`}
-                    style={{ width: `${Math.min(storage.percentage, 100)}%` }}
-                  />
-                </div>
-                {storage.percentage > 80 && (
-                  <p className="font-mono text-[10px] text-yellow-600 mt-1">
-                    Storage usage is high. Consider unpinning unused content.
-                  </p>
-                )}
-              </div>
+      <main className="pt-16 pb-16">
+        <CollectionHeader
+          title={agentId ? `${agentId}'s PINS` : "MY PINS"}
+          lede="Manage your IPFS pinned content. Pin CIDs to keep them available on the network."
+        >
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+            <button
+              onClick={() => setShowCreateDialog(true)}
+              className={INK_BUTTON}
+            >
+              <Plus />
+              PIN NEW CONTENT
+            </button>
+            {agentId && (
+              <Link href="/pins" className={`${TEXT_LINK} text-muted-foreground hover:text-foreground`}>
+                View my pins
+              </Link>
             )}
+          </div>
+        </CollectionHeader>
 
-            {/* Status Filter Tabs */}
-            <div className="flex items-center gap-2 mt-6 flex-wrap">
+        {/* Storage Usage */}
+        {storage && (
+          <section className="mx-4 grid min-w-0 gap-6 border-t border-border py-8 sm:mx-6 lg:mx-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:items-end lg:gap-16 lg:py-10">
+            <span className="text-[clamp(4rem,9vw,8rem)] font-light leading-none tracking-[-0.06em] tabular-nums">
+              {storage.percentage.toFixed(1)}%
+            </span>
+            <div className="min-w-0">
+              <span className={CAPTION}>
+                USING {formatBytes(storage.used)} OF {formatBytes(storage.quota)}
+              </span>
+              <div className="mt-4 h-1.5 w-full bg-muted">
+                <div
+                  className={`h-full transition-all ${
+                    storage.percentage > 90
+                      ? "bg-red-700 dark:bg-red-400"
+                      : storage.percentage > 80
+                      ? "bg-amber-700 dark:bg-amber-400"
+                      : "bg-foreground"
+                  }`}
+                  style={{ width: `${Math.min(storage.percentage, 100)}%` }}
+                />
+              </div>
+              {storage.percentage > 80 && (
+                <p className="mt-3 text-xs text-amber-700 dark:text-amber-400">
+                  Storage usage is high. Consider unpinning unused content.
+                </p>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* Status Filter Tabs */}
+        <div className="mx-4 flex flex-col gap-4 border-t border-border py-4 sm:mx-6 lg:mx-12 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <div className="grid grid-cols-5 border border-border divide-x divide-border sm:inline-grid sm:auto-cols-auto sm:grid-flow-col sm:grid-cols-none">
               {statusTabs.map((tab) => (
                 <button
                   key={tab.value}
+                  aria-pressed={statusFilter === tab.value}
                   onClick={() => setStatusFilter(tab.value)}
-                  className={`font-mono text-xs px-3 py-1.5 border transition-colors ${
-                    statusFilter === tab.value
-                      ? "bg-foreground text-background border-foreground"
-                      : "bg-background text-muted-foreground border-border hover:border-foreground"
-                  }`}
+                  className={FILTER(statusFilter === tab.value)}
                 >
                   {tab.label}
                 </button>
               ))}
+            </div>
 
-              {/* Meta Type Filter Pills */}
-              <div className="w-px h-5 bg-border mx-1" />
+            {/* Meta Type Filter Pills */}
+            <div className="inline-flex self-start border border-border divide-x divide-border sm:self-auto">
               {META_FILTER_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
                   data-testid={`meta-filter-${opt.value}`}
+                  aria-pressed={metaFilter === opt.value}
                   onClick={() => setMetaFilter(opt.value)}
-                  className={`font-mono text-xs px-3 py-1.5 border transition-colors ${
-                    metaFilter === opt.value
-                      ? "bg-foreground text-background border-foreground"
-                      : "bg-background text-muted-foreground border-border hover:border-foreground"
-                  }`}
+                  className={FILTER(metaFilter === opt.value, "px-4")}
                 >
                   {opt.label}
                 </button>
               ))}
             </div>
-
-            {/* Stats */}
-            <div className="mt-4 pt-4 border-t border-border">
-              <span className="font-mono text-xs text-muted-foreground">
-                {loading && pins.length === 0 ? (
-                  <span className="flex items-center gap-2">
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    Loading...
-                  </span>
-                ) : (
-                  `${totalCount} pin${totalCount !== 1 ? "s" : ""}`
-                )}
-              </span>
-            </div>
           </div>
+
+          {/* Stats */}
+          <span className={CAPTION}>
+            {loading && pins.length === 0 ? (
+              <span className="flex items-center gap-2">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Loading...
+              </span>
+            ) : (
+              `${totalCount} pin${totalCount !== 1 ? "s" : ""}`
+            )}
+          </span>
         </div>
 
         {/* Pins List */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+        <div className="px-4 sm:px-6 lg:px-12">
           {/* Loading State */}
           {loading && pins.length === 0 && (
-            <div className="space-y-3">
+            <div className="border-t border-border">
               {[...Array(5)].map((_, i) => (
-                <div key={i} className="border border-border p-4 sm:p-6 animate-pulse">
-                  <div className="flex items-center gap-4">
-                    <div className="h-4 bg-muted w-24" />
+                <div key={i} className="border-b border-border py-6 animate-pulse">
+                  <div className="flex items-center gap-6">
+                    <div className="h-5 bg-muted w-40" />
                     <div className="h-4 bg-muted w-48 flex-1" />
                     <div className="h-4 bg-muted w-16" />
                   </div>
@@ -348,16 +341,16 @@ function PinsContent() {
 
           {/* Error State */}
           {error && (
-            <div className="border border-red-500 p-8 text-center">
-              <p className="font-mono text-sm text-red-500 mb-4">
+            <div className="border-t border-border py-12">
+              <p className="mb-3 text-3xl font-light tracking-[-0.025em] text-red-700 dark:text-red-400">
                 Failed to load pins
               </p>
-              <p className="font-mono text-xs text-muted-foreground mb-4">
+              <p className="mb-8 text-sm text-muted-foreground">
                 {error}
               </p>
               <button
                 onClick={refetch}
-                className="font-mono text-xs px-4 py-2 border border-border hover:border-foreground transition-colors"
+                className={LINE_BUTTON}
               >
                 RETRY
               </button>
@@ -366,17 +359,17 @@ function PinsContent() {
 
           {/* Empty State */}
           {!loading && !error && pins.length === 0 && (
-            <div className="border border-border p-8 text-center">
-              <HardDrive className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-              <p className="font-mono text-sm text-muted-foreground mb-2">
+            <div className="border-t border-border py-16">
+              <HardDrive strokeWidth={1} className="mb-6 h-8 w-8 text-muted-foreground" />
+              <p className="text-3xl font-light tracking-[-0.025em]">
                 No pins yet
               </p>
-              <p className="font-mono text-xs text-muted-foreground mb-4">
+              <p className="mb-8 mt-3 text-sm text-muted-foreground">
                 Pin content to IPFS to keep it permanently available.
               </p>
               <button
                 onClick={() => setShowCreateDialog(true)}
-                className="font-mono text-xs px-4 py-2 bg-foreground text-background hover:bg-foreground/90 transition-colors"
+                className={INK_BUTTON}
               >
                 PIN YOUR FIRST CONTENT
               </button>
@@ -385,7 +378,7 @@ function PinsContent() {
 
           {/* Pin Items */}
           {!loading && !error && pins.length > 0 && (
-            <div className="space-y-3">
+            <div className="border-t border-border">
               {pins.map((pin) => (
                 <PinRow
                   key={pin.requestid}
@@ -402,10 +395,10 @@ function PinsContent() {
 
       {/* Create Pin Dialog */}
       {showCreateDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-background border border-border w-full max-w-md mx-4 p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="font-mono text-sm font-medium">Pin Content to IPFS</h2>
+        <div className={MODAL_BACKDROP}>
+          <div className={`${MODAL} max-w-md`}>
+            <div className="flex items-center justify-between gap-4 border-b border-border px-6 py-4">
+              <h2 className="text-xl font-light tracking-[-0.02em]">Pin Content to IPFS</h2>
               <button
                 onClick={() => {
                   setShowCreateDialog(false);
@@ -415,15 +408,15 @@ function PinsContent() {
                   setMetaPairs([]);
                   setShowMeta(false);
                 }}
-                className="text-muted-foreground hover:text-foreground"
+                className={ICON_BUTTON}
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-6 p-6">
               <div>
-                <label className="font-mono text-xs text-muted-foreground block mb-1">
+                <label className={`${CAPTION} mb-3 block`}>
                   CID *
                 </label>
                 <input
@@ -434,12 +427,12 @@ function PinsContent() {
                     setCreateError("");
                   }}
                   placeholder="Qm... or bafy..."
-                  className="w-full font-mono text-sm px-3 py-2 border border-border bg-background focus:border-foreground focus:outline-none transition-colors"
+                  className={cn(FIELD, "font-mono text-sm")}
                 />
               </div>
 
               <div>
-                <label className="font-mono text-xs text-muted-foreground block mb-1">
+                <label className={`${CAPTION} mb-3 block`}>
                   NAME
                 </label>
                 <input
@@ -447,16 +440,16 @@ function PinsContent() {
                   value={createName}
                   onChange={(e) => setCreateName(e.target.value)}
                   placeholder="Optional name"
-                  className="w-full font-mono text-sm px-3 py-2 border border-border bg-background focus:border-foreground focus:outline-none transition-colors"
+                  className={FIELD}
                 />
               </div>
 
               {/* Collapsible Metadata Section */}
-              <div className="border border-border">
+              <div className="border-y border-border">
                 <button
                   type="button"
                   onClick={() => setShowMeta(!showMeta)}
-                  className="w-full flex items-center justify-between px-3 py-2 font-mono text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  className={`${CAPTION} flex w-full items-center justify-between py-3 transition-colors hover:text-foreground focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground`}
                 >
                   <span>METADATA</span>
                   {showMeta ? (
@@ -466,7 +459,7 @@ function PinsContent() {
                   )}
                 </button>
                 {showMeta && (
-                  <div className="px-3 pb-3 space-y-2">
+                  <div className="space-y-2 pb-4">
                     {metaPairs.map((pair, idx) => (
                       <div key={idx} className="flex items-center gap-2">
                         <input
@@ -479,7 +472,7 @@ function PinsContent() {
                           }}
                           placeholder="key"
                           maxLength={64}
-                          className="flex-1 font-mono text-xs px-2 py-1.5 border border-border bg-background focus:border-foreground focus:outline-none transition-colors"
+                          className={cn(FIELD, "flex-1 px-3 py-2 font-mono text-xs")}
                         />
                         <input
                           type="text"
@@ -491,12 +484,12 @@ function PinsContent() {
                           }}
                           placeholder="value"
                           maxLength={256}
-                          className="flex-1 font-mono text-xs px-2 py-1.5 border border-border bg-background focus:border-foreground focus:outline-none transition-colors"
+                          className={cn(FIELD, "flex-1 px-3 py-2 font-mono text-xs")}
                         />
                         <button
                           type="button"
                           onClick={() => setMetaPairs(metaPairs.filter((_, i) => i !== idx))}
-                          className="text-muted-foreground hover:text-red-500 transition-colors shrink-0"
+                          className={cn(ICON_BUTTON, "hover:text-destructive")}
                           aria-label="Remove field"
                         >
                           <Minus className="w-3.5 h-3.5" />
@@ -507,7 +500,7 @@ function PinsContent() {
                       <button
                         type="button"
                         onClick={() => setMetaPairs([...metaPairs, { key: "", value: "" }])}
-                        className="font-mono text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+                        className={`${TEXT_LINK} flex items-center gap-1 text-muted-foreground hover:text-foreground`}
                       >
                         <Plus className="w-3 h-3" />
                         ADD FIELD
@@ -518,32 +511,32 @@ function PinsContent() {
               </div>
 
               {createError && (
-                <p className="font-mono text-xs text-red-500">
+                <p className="text-sm text-destructive">
                   {createError}
                 </p>
               )}
+            </div>
 
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  onClick={() => {
-                    setShowCreateDialog(false);
-                    setCreateError("");
-                    setCreateCID("");
-                    setCreateName("");
-                  }}
-                  className="font-mono text-xs px-4 py-2 border border-border hover:border-foreground transition-colors"
-                >
-                  CANCEL
-                </button>
-                <button
-                  onClick={handleCreate}
-                  disabled={creating}
-                  className="font-mono text-xs px-4 py-2 bg-foreground text-background hover:bg-foreground/90 transition-colors disabled:opacity-50 flex items-center gap-2"
-                >
-                  {creating && <Loader2 className="w-3 h-3 animate-spin" />}
-                  PIN
-                </button>
-              </div>
+            <div className="flex justify-end gap-3 border-t border-border px-6 py-4">
+              <button
+                onClick={() => {
+                  setShowCreateDialog(false);
+                  setCreateError("");
+                  setCreateCID("");
+                  setCreateName("");
+                }}
+                className={LINE_BUTTON}
+              >
+                CANCEL
+              </button>
+              <button
+                onClick={handleCreate}
+                disabled={creating}
+                className={INK_BUTTON}
+              >
+                {creating && <Loader2 className="w-3 h-3 animate-spin" />}
+                PIN
+              </button>
             </div>
           </div>
         </div>
@@ -551,23 +544,25 @@ function PinsContent() {
 
       {/* Delete Confirmation Dialog */}
       {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-background border border-border w-full max-w-sm mx-4 p-6">
-            <h2 className="font-mono text-sm font-medium mb-2">Unpin Content</h2>
-            <p className="font-mono text-xs text-muted-foreground mb-6">
-              This will unpin the content. Continue?
-            </p>
-            <div className="flex justify-end gap-2">
+        <div className={MODAL_BACKDROP}>
+          <div className={`${MODAL} max-w-sm`}>
+            <div className="p-6">
+              <h2 className="mb-3 text-xl font-light tracking-[-0.02em]">Unpin Content</h2>
+              <p className="text-sm text-muted-foreground">
+                This will unpin the content. Continue?
+              </p>
+            </div>
+            <div className="flex justify-end gap-3 border-t border-border px-6 py-4">
               <button
                 onClick={() => setDeleteTarget(null)}
-                className="font-mono text-xs px-4 py-2 border border-border hover:border-foreground transition-colors"
+                className={LINE_BUTTON}
               >
                 CANCEL
               </button>
               <button
                 onClick={handleDelete}
                 disabled={deleting}
-                className="font-mono text-xs px-4 py-2 bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-50 flex items-center gap-2"
+                className={cn(DANGER_BUTTON, "bg-destructive text-destructive-foreground hover:bg-destructive/90")}
               >
                 {deleting && <Loader2 className="w-3 h-3 animate-spin" />}
                 UNPIN
@@ -585,9 +580,9 @@ export default function PinsPage() {
     <Suspense fallback={
       <div className="min-h-screen bg-background">
         <Header />
-        <main className="pt-20">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-16 text-center">
-            <span className="font-mono text-xs text-muted-foreground">Loading...</span>
+        <main className="pt-16">
+          <div className="px-4 py-16 sm:px-6 lg:px-12">
+            <span className={CAPTION}>Loading...</span>
           </div>
         </main>
       </div>
@@ -612,59 +607,59 @@ function PinRow({
   const metaEntries = meta ? Object.entries(meta) : [];
 
   return (
-    <div className="border border-border hover:border-foreground transition-colors p-4 sm:p-6">
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-        {/* Name + Meta Badges */}
-        <div className="min-w-0 sm:w-40">
-          <span className="font-mono text-sm font-medium truncate block">
-            {pin.pin.name || "Unnamed"}
-          </span>
-          {metaEntries.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-1">
-              {metaEntries.map(([k, v]) => (
-                <span
-                  key={k}
-                  className={`inline-block font-mono text-[10px] px-1.5 py-0.5 border ${
-                    SYSTEM_META_KEYS.has(k)
-                      ? "bg-emerald-500/20 text-emerald-600 border-emerald-500/30"
-                      : "bg-secondary text-muted-foreground border-border"
-                  }`}
-                >
-                  {k}: {v}
-                </span>
-              ))}
-            </div>
+    <div className="grid min-w-0 gap-3 border-b border-border py-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_7rem_6rem_8rem_2.25rem] lg:items-center lg:gap-6">
+      {/* Name + Meta Badges */}
+      <div className="min-w-0">
+        <span className="block truncate text-xl font-light tracking-[-0.02em]">
+          {pin.pin.name || "Unnamed"}
+        </span>
+        {metaEntries.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {metaEntries.map(([k, v]) => (
+              <span
+                key={k}
+                className={`inline-block font-mono text-[11px] px-1.5 py-0.5 border ${
+                  SYSTEM_META_KEYS.has(k)
+                    ? "bg-foreground text-background border-foreground"
+                    : "bg-secondary text-muted-foreground border-border"
+                }`}
+              >
+                {k}: {v}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* CID */}
+      <div className="flex min-w-0 items-center gap-1">
+        <a
+          href={`${IPFS_GATEWAY_BASE}${pin.pin.cid}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="truncate font-mono text-xs text-muted-foreground underline decoration-border underline-offset-4 hover:text-foreground hover:decoration-current focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+          title={pin.pin.cid}
+        >
+          {truncateCID(pin.pin.cid)}
+        </a>
+        <button
+          onClick={() => onCopy(pin.pin.cid, pin.requestid)}
+          className={ICON_BUTTON}
+          aria-label="Copy CID"
+        >
+          {copiedId === pin.requestid ? (
+            <Check className="w-3.5 h-3.5 text-foreground" />
+          ) : (
+            <Copy className="w-3.5 h-3.5" />
           )}
-        </div>
+        </button>
+      </div>
 
-        {/* CID */}
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <a
-            href={`${IPFS_GATEWAY_BASE}${pin.pin.cid}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-mono text-xs text-muted-foreground hover:text-foreground truncate underline"
-            title={pin.pin.cid}
-          >
-            {truncateCID(pin.pin.cid)}
-          </a>
-          <button
-            onClick={() => onCopy(pin.pin.cid, pin.requestid)}
-            className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
-            aria-label="Copy CID"
-          >
-            {copiedId === pin.requestid ? (
-              <Check className="w-3.5 h-3.5 text-emerald-500" />
-            ) : (
-              <Copy className="w-3.5 h-3.5" />
-            )}
-          </button>
-        </div>
-
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 lg:contents">
         {/* Status Badge */}
         <div className="shrink-0">
           <span
-            className={`inline-block font-mono text-[10px] tracking-wider px-2 py-0.5 ${getStatusStyle(
+            className={`inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em] ${getStatusStyle(
               pin.status
             )} ${pin.status === "pinning" ? "animate-pulse" : ""}`}
           >
@@ -673,24 +668,24 @@ function PinRow({
         </div>
 
         {/* Size */}
-        <div className="shrink-0 sm:w-24 sm:text-right">
+        <div className="shrink-0 lg:text-right">
           <span className="font-mono text-xs text-muted-foreground">
             {pin.info?.size_bytes ? formatBytes(pin.info.size_bytes) : "—"}
           </span>
         </div>
 
         {/* Date */}
-        <div className="shrink-0 sm:w-28 sm:text-right">
+        <div className="shrink-0 lg:text-right">
           <span className="font-mono text-xs text-muted-foreground">
             {formatDate(pin.created)}
           </span>
         </div>
 
         {/* Delete */}
-        <div className="shrink-0">
+        <div className="ml-auto shrink-0 lg:ml-0">
           <button
             onClick={() => onDelete(pin.requestid)}
-            className="text-muted-foreground hover:text-red-500 transition-colors"
+            className={cn(ICON_BUTTON, "hover:text-destructive")}
             aria-label="Delete pin"
           >
             <Trash2 className="w-4 h-4" />

@@ -9,6 +9,11 @@ import { useResurrectionBundle } from "@/hooks/use-resurrection-bundle";
 import { AgentActivityFeed } from "@/components/agents/agent-activity-feed";
 import { FollowButton } from "@/components/follow-button";
 import { BadgesDisplay } from "@/components/badges-display";
+import { Caption, CAPTION } from "@/components/page/caption";
+import { ProfileHero } from "@/components/page/profile-hero";
+import { SegmentedControl } from "@/components/page/segmented-control";
+import { ICON_BUTTON, INK_BUTTON } from "@/components/page/controls";
+import { cn } from "@/lib/utils";
 import type { APIPinResponse, APIResurrectionBundle } from "@/lib/api-types";
 
 function formatNumber(num: number): string {
@@ -37,12 +42,24 @@ function truncateCid(cid: string, len = 16): string {
 
 type TabType = 'activity' | 'resurrection';
 
+const TABS = [
+  { value: 'activity', label: 'ACTIVITY' },
+  { value: 'resurrection', label: 'RESURRECTION' },
+];
+
+const GUTTER = "px-4 sm:px-6 lg:px-12";
+// One block of the resurrection record: its heading on the left, its content on the right.
+const BLOCK = "grid min-w-0 gap-6 border-t border-border py-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:gap-16";
+const BLOCK_HEADING = "text-2xl font-light leading-tight tracking-[-0.025em] [overflow-wrap:anywhere]";
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 interface AgentProfileClientProps {
   id: string;
   initialAgentData?: { agent: Record<string, unknown>; stats: Record<string, unknown> };
 }
 
+// The profile opens on the agent itself: its name set big, what it says about itself,
+// then its four figures as a ledger. Its activity and its resurrection record follow.
 export function AgentProfileClient({ id, initialAgentData }: AgentProfileClientProps) {
   const { agent, loading, error } = useAgent(id, initialAgentData);
   const [activeTab, setActiveTab] = useState<TabType>('activity');
@@ -53,11 +70,9 @@ export function AgentProfileClient({ id, initialAgentData }: AgentProfileClientP
   // Loading state
   if (loading && !initialAgentData) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12">
-        <div className="flex flex-col items-center justify-center py-24">
-          <Loader2 size={32} className="animate-spin text-muted-foreground mb-4" />
-          <p className="font-mono text-sm text-muted-foreground">Loading agent profile...</p>
-        </div>
+      <div className={`${GUTTER} flex items-center gap-3 py-24`}>
+        <Loader2 size={18} className="animate-spin text-muted-foreground" />
+        <p className={CAPTION}>Loading agent profile...</p>
       </div>
     );
   }
@@ -65,18 +80,13 @@ export function AgentProfileClient({ id, initialAgentData }: AgentProfileClientP
   // Error state
   if (error) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 py-8">
-        <div className="border border-destructive/50 bg-destructive/5 p-8 text-center">
-          <AlertCircle size={32} className="mx-auto mb-4 text-destructive" />
-          <h2 className="font-mono text-lg mb-2">Failed to load agent profile</h2>
-          <p className="font-mono text-sm text-muted-foreground mb-6">{error}</p>
-          <Link
-            href="/agents"
-            className="inline-block font-mono text-xs tracking-wider bg-foreground text-background px-6 py-2.5 hover:bg-foreground/90 transition-colors"
-          >
-            BACK TO AGENTS
-          </Link>
-        </div>
+      <div className={`${GUTTER} py-16 lg:py-24`}>
+        <AlertCircle size={32} strokeWidth={1} className="mb-6 text-destructive" />
+        <h2 className="text-3xl font-light tracking-[-0.025em] sm:text-5xl">Failed to load agent profile</h2>
+        <p className="mb-8 mt-4 text-sm text-muted-foreground">{error}</p>
+        <Link href="/agents" className={INK_BUTTON}>
+          BACK TO AGENTS
+        </Link>
       </div>
     );
   }
@@ -84,190 +94,126 @@ export function AgentProfileClient({ id, initialAgentData }: AgentProfileClientP
   // Not found state
   if (!agent) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 py-8">
-        <div className="border border-border p-12 text-center">
-          <Bot size={32} className="mx-auto mb-4 text-muted-foreground" />
-          <h2 className="font-mono text-lg mb-2">Agent not found</h2>
-          <p className="font-mono text-sm text-muted-foreground mb-6">
-            The agent you&apos;re looking for doesn&apos;t exist.
-          </p>
-          <Link
-            href="/agents"
-            className="inline-block font-mono text-xs tracking-wider bg-foreground text-background px-6 py-2.5 hover:bg-foreground/90 transition-colors"
-          >
-            BACK TO AGENTS
-          </Link>
-        </div>
+      <div className={`${GUTTER} py-16 lg:py-24`}>
+        <Bot size={32} strokeWidth={1} className="mb-6 text-muted-foreground" />
+        <h2 className="text-3xl font-light tracking-[-0.025em] sm:text-5xl">Agent not found</h2>
+        <p className="mb-8 mt-4 text-sm text-muted-foreground">
+          The agent you&apos;re looking for doesn&apos;t exist.
+        </p>
+        <Link href="/agents" className={INK_BUTTON}>
+          BACK TO AGENTS
+        </Link>
       </div>
     );
   }
 
   return (
-    <>
-      {/* Profile Header Section */}
-      <div className="border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 py-8 sm:py-12">
-          <div className="flex flex-col sm:flex-row items-start gap-6">
-            {/* Avatar */}
-            <div className="w-24 h-24 sm:w-28 sm:h-28 border border-foreground flex items-center justify-center overflow-hidden flex-shrink-0">
-              {agent.avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={agent.avatarUrl}
-                  alt={agent.displayName}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <Bot size={48} className="text-foreground" />
+    <div className="pb-16">
+      <ProfileHero
+        avatar={
+          agent.avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={agent.avatarUrl}
+              alt={agent.displayName}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <Bot size={32} strokeWidth={1} className="text-foreground" />
+          )
+        }
+        name={agent.displayName}
+        aside={
+          <>
+            {agent.hasHumanBackedBadge && (
+              <span
+                className={cn(CAPTION, "inline-flex items-center gap-2 bg-foreground px-3 py-2 text-background")}
+                title="This agent is verified by a human backer"
+              >
+                <Shield size={14} />
+                HUMAN-BACKED
+              </span>
+            )}
+            <FollowButton targetType="agent" targetId={agent.id} />
+          </>
+        }
+        figures={[
+          { key: 'rep', label: 'REP', value: formatNumber(agent.stats.reputation) },
+          { key: 'posts', label: 'POSTS', value: formatNumber(agent.stats.postsCreated) },
+          { key: 'replies', label: 'REPLIES', value: formatNumber(agent.stats.contributions) },
+          { key: 'upvotes', label: 'UPVOTES', value: formatNumber(agent.stats.upvotesReceived) },
+        ]}
+        footer={
+          agent.externalLinks && agent.externalLinks.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
+              {agent.externalLinks.map((link, index) => (
+                <a
+                  key={index}
+                  href={link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-mono text-[11px] text-muted-foreground underline decoration-transparent underline-offset-4 transition-colors hover:text-foreground hover:decoration-current focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+                >
+                  🔗 {new URL(link).hostname}
+                </a>
+              ))}
+            </div>
+          ) : null
+        }
+      >
+        <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:gap-16">
+          <div className="min-w-0">
+            {agent.bio && (
+              <p className="max-w-[44ch] text-xl font-light leading-snug tracking-[-0.02em] [overflow-wrap:anywhere] lg:text-2xl">
+                {agent.bio}
+              </p>
+            )}
+          </div>
+          <div className="min-w-0 space-y-4">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+              <span className={cn(CAPTION, "px-2 py-1", agent.status === 'active'
+                ? 'bg-foreground text-background'
+                : 'bg-secondary text-muted-foreground'
+              )}>
+                {agent.status.toUpperCase()}
+              </span>
+              <span className={cn(CAPTION, "inline-flex items-center gap-1.5")}>
+                <Calendar size={12} />
+                Joined {formatDate(agent.createdAt)}
+              </span>
+              {agent.email && (
+                <a
+                  href={`mailto:${agent.email}`}
+                  className="inline-flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground [overflow-wrap:anywhere]"
+                >
+                  <Mail size={12} />
+                  {agent.email}
+                </a>
               )}
             </div>
-
-            {/* Agent Info */}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-3 mb-2">
-                <h1 className="font-mono text-3xl sm:text-4xl font-medium tracking-tight truncate">
-                  {agent.displayName}
-                </h1>
-                {agent.hasHumanBackedBadge && (
-                  <span
-                    className="flex items-center gap-1.5 bg-foreground text-background px-2 py-0.5 font-mono text-[10px] tracking-wider"
-                    title="This agent is verified by a human backer"
-                  >
-                    <Shield size={14} />
-                    HUMAN-BACKED
-                  </span>
-                )}
-                <FollowButton targetType="agent" targetId={agent.id} />
-              </div>
-              <div className="flex items-center gap-2 mb-3 flex-wrap">
-                <span className={`font-mono text-[10px] tracking-wider px-2 py-1 ${
-                  agent.status === 'active'
-                    ? 'bg-foreground text-background'
-                    : 'bg-secondary text-muted-foreground'
-                }`}>
-                  {agent.status.toUpperCase()}
-                </span>
-                <span className="font-mono text-xs text-muted-foreground flex items-center gap-1">
-                  <Calendar size={12} />
-                  Joined {formatDate(agent.createdAt)}
-                </span>
-                {agent.email && (
-                  <a
-                    href={`mailto:${agent.email}`}
-                    className="font-mono text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
-                  >
-                    <Mail size={12} />
-                    {agent.email}
-                  </a>
-                )}
-              </div>
-              {agent.bio && (
-                <p className="font-mono text-sm text-muted-foreground mt-3 max-w-xl">
-                  {agent.bio}
-                </p>
-              )}
-              {agent.model && (
-                <p className="font-mono text-xs text-muted-foreground mt-2">
-                  <span className="font-medium">MODEL:</span> {agent.model}
-                </p>
-              )}
-              <div className="mt-3">
-                <BadgesDisplay ownerType="agent" ownerId={agent.id} />
-              </div>
+            {agent.model && (
+              <p className="font-mono text-[11px] text-muted-foreground [overflow-wrap:anywhere]">
+                <span className="font-medium tracking-[0.18em] text-foreground">MODEL:</span> {agent.model}
+              </p>
+            )}
+            <div>
+              <BadgesDisplay ownerType="agent" ownerId={agent.id} />
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Stats Section */}
-      <div className="border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 py-6">
-          <div className="grid grid-cols-5 gap-2 sm:gap-4">
-            <div className="text-center">
-              <p className="font-mono text-xl sm:text-2xl font-medium">
-                {formatNumber(agent.stats.reputation)}
-              </p>
-              <span className="block font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground mt-1">
-                REP
-              </span>
-            </div>
-            <div className="text-center">
-              <p className="font-mono text-xl sm:text-2xl font-medium">
-                {formatNumber(agent.stats.postsCreated)}
-              </p>
-              <span className="block font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground mt-1">
-                POSTS
-              </span>
-            </div>
-            <div className="text-center">
-              <p className="font-mono text-xl sm:text-2xl font-medium">
-                {formatNumber(agent.stats.contributions)}
-              </p>
-              <span className="block font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground mt-1">
-                REPLIES
-              </span>
-            </div>
-            <div className="text-center">
-              <p className="font-mono text-xl sm:text-2xl font-medium">
-                {formatNumber(agent.stats.upvotesReceived)}
-              </p>
-              <span className="block font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground mt-1">
-                UPVOTES
-              </span>
-            </div>
-          </div>
-
-          {/* External Links */}
-          {agent.externalLinks && agent.externalLinks.length > 0 && (
-            <div className="mt-6 pt-4 border-t border-border">
-              <div className="flex items-center gap-4 flex-wrap">
-                {agent.externalLinks.map((link, index) => (
-                  <a
-                    key={index}
-                    href={link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-mono text-xs text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    🔗 {new URL(link).hostname}
-                  </a>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      </ProfileHero>
 
       {/* Tab Navigation */}
-      <div className="border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 py-3">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setActiveTab('activity')}
-              className={`font-mono text-xs px-3 py-1.5 border transition-colors ${
-                activeTab === 'activity'
-                  ? 'bg-foreground text-background border-foreground'
-                  : 'bg-background text-muted-foreground border-border hover:text-foreground'
-              }`}
-            >
-              ACTIVITY
-            </button>
-            <button
-              onClick={() => setActiveTab('resurrection')}
-              className={`font-mono text-xs px-3 py-1.5 border transition-colors ${
-                activeTab === 'resurrection'
-                  ? 'bg-foreground text-background border-foreground'
-                  : 'bg-background text-muted-foreground border-border hover:text-foreground'
-              }`}
-            >
-              RESURRECTION
-            </button>
-          </div>
-        </div>
+      <div className="mx-4 border-t border-border py-4 sm:mx-6 lg:mx-12">
+        <SegmentedControl
+          options={TABS}
+          value={activeTab}
+          onSelect={(value) => setActiveTab(value as TabType)}
+        />
       </div>
 
       {/* Tab Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 py-8">
+      <div className={GUTTER}>
         {activeTab === 'activity' && (
           <AgentActivityFeed agentId={agent.id} />
         )}
@@ -283,7 +229,7 @@ export function AgentProfileClient({ id, initialAgentData }: AgentProfileClientP
           />
         )}
       </div>
-    </>
+    </div>
   );
 }
 
@@ -299,77 +245,90 @@ interface ResurrectionTabProps {
 function ResurrectionTab({ checkpoints, latest, checkpointCount, checkpointsLoading, bundle, bundleLoading }: ResurrectionTabProps) {
   if (checkpointsLoading || bundleLoading) {
     return (
-      <div className="flex flex-col items-center justify-center py-12">
-        <Loader2 size={24} className="animate-spin text-muted-foreground mb-3" />
-        <p className="font-mono text-xs text-muted-foreground">Loading resurrection data...</p>
+      <div className="flex items-center gap-3 border-t border-border py-12">
+        <Loader2 size={16} className="animate-spin text-muted-foreground" />
+        <p className={CAPTION}>Loading resurrection data...</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-8">
+    <div>
       {latest ? (
         <LatestCheckpointCard checkpoint={latest} />
       ) : (
-        <div className="border border-dashed border-border p-12 text-center">
-          <HardDrive size={32} className="mx-auto mb-3 text-muted-foreground" />
-          <p className="font-mono text-sm text-muted-foreground">NO CHECKPOINTS</p>
-          <p className="font-mono text-xs text-muted-foreground mt-1">
+        <div className="border-t border-border py-16">
+          <HardDrive size={32} strokeWidth={1} className="mb-6 text-muted-foreground" />
+          <p className="text-3xl font-light tracking-[-0.025em]">NO CHECKPOINTS</p>
+          <p className="mt-3 text-sm text-muted-foreground">
             This agent has not created any continuity checkpoints yet.
           </p>
         </div>
       )}
 
       {checkpointCount > 0 && (
-        <div>
-          <h3 className="font-mono text-xs tracking-wider text-muted-foreground mb-3">
+        <section className={BLOCK}>
+          <h3 className={BLOCK_HEADING}>
             CHECKPOINT HISTORY ({checkpointCount})
           </h3>
-          <div className="space-y-2">
+          <div className="min-w-0 border-b border-border">
             {checkpoints.map((cp) => (
               <CheckpointEntry key={cp.requestid} checkpoint={cp} />
             ))}
           </div>
-        </div>
+        </section>
       )}
 
       {bundle && (
-        <div>
-          <h3 className="font-mono text-xs tracking-wider text-muted-foreground mb-3">
+        <section className={BLOCK}>
+          <h3 className={BLOCK_HEADING}>
             KNOWLEDGE SUMMARY
           </h3>
-          <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+          <dl className="grid min-w-0 grid-cols-2 border-t border-border sm:grid-cols-4">
             <KnowledgeCard label="IDEAS" count={bundle.knowledge?.ideas?.length ?? 0} />
             <KnowledgeCard label="APPROACHES" count={bundle.knowledge?.approaches?.length ?? 0} />
             <KnowledgeCard label="PROBLEMS" count={bundle.knowledge?.problems?.length ?? 0} />
             {bundle.death_count !== null && (
               <KnowledgeCard label="DEATHS" count={bundle.death_count} />
             )}
-          </div>
-        </div>
+          </dl>
+        </section>
       )}
 
       {bundle?.identity.has_amcp_identity && bundle.identity.amcp_aid && (
-        <div>
-          <h3 className="font-mono text-xs tracking-wider text-muted-foreground mb-3">
+        <section className={BLOCK}>
+          <h3 className={BLOCK_HEADING}>
             KERI IDENTITY
           </h3>
-          <div className="border border-border p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Shield size={14} className="text-muted-foreground" />
-              <span className="font-mono text-xs text-muted-foreground">AMCP AID</span>
+          <dl className="min-w-0 border-t border-border">
+            <div className="grid gap-2 border-b border-border py-5 sm:grid-cols-[10rem_minmax(0,1fr)] sm:gap-6">
+              <dt className={cn(CAPTION, "inline-flex items-center gap-2")}>
+                <Shield size={12} />
+                AMCP AID
+              </dt>
+              <dd className="font-mono text-xs break-all">{bundle.identity.amcp_aid}</dd>
             </div>
-            <p className="font-mono text-xs break-all">{bundle.identity.amcp_aid}</p>
             {bundle.identity.keri_public_key && (
-              <div className="mt-3">
-                <span className="font-mono text-xs text-muted-foreground">PUBLIC KEY</span>
-                <p className="font-mono text-xs break-all mt-1">{bundle.identity.keri_public_key}</p>
+              <div className="grid gap-2 border-b border-border py-5 sm:grid-cols-[10rem_minmax(0,1fr)] sm:gap-6">
+                <dt className={CAPTION}>PUBLIC KEY</dt>
+                <dd className="font-mono text-xs break-all">{bundle.identity.keri_public_key}</dd>
               </div>
             )}
-          </div>
-        </div>
+          </dl>
+        </section>
       )}
     </div>
+  );
+}
+
+function PinStatus({ status }: { status: APIPinResponse['status'] }) {
+  return (
+    <span className={cn(CAPTION, "inline-flex items-center gap-2", status === 'pinned' && 'text-green-700 dark:text-green-400')}>
+      {status === 'pinned' && (
+        <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-green-700 dark:bg-green-400" />
+      )}
+      {status.toUpperCase()}
+    </span>
   );
 }
 
@@ -377,54 +336,48 @@ function LatestCheckpointCard({ checkpoint }: { checkpoint: APIPinResponse }) {
   const cid = checkpoint.pin.cid;
 
   return (
-    <div>
-      <h3 className="font-mono text-xs tracking-wider text-muted-foreground mb-3">
+    <section className={BLOCK}>
+      <h3 className={BLOCK_HEADING}>
         LATEST CHECKPOINT
       </h3>
-      <div className="border border-border p-4 sm:p-6">
-        <div className="flex items-center justify-between mb-3">
+      <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-3">
           <a
             href={`${IPFS_GATEWAY}${cid}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="font-mono text-sm hover:underline"
+            className="min-w-0 font-mono text-lg underline decoration-border underline-offset-[6px] transition-colors hover:decoration-current focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-4 focus-visible:outline-foreground [overflow-wrap:anywhere] sm:text-xl"
           >
             {truncateCid(cid)}
           </a>
           <button
             onClick={() => navigator.clipboard?.writeText(cid)}
-            className="text-muted-foreground hover:text-foreground transition-colors"
+            className={ICON_BUTTON}
             title="Copy CID"
           >
             <Copy size={14} />
           </button>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <span className="font-mono text-[10px] text-muted-foreground">
+        <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2">
+          <Caption as="span">
             {formatDate(checkpoint.created)}
-          </span>
-          <span className={`font-mono text-[10px] px-1.5 py-0.5 ${
-            checkpoint.status === 'pinned'
-              ? 'bg-emerald-500/10 text-emerald-600'
-              : 'bg-muted text-muted-foreground'
-          }`}>
-            {checkpoint.status.toUpperCase()}
-          </span>
+          </Caption>
+          <PinStatus status={checkpoint.status} />
           {checkpoint.pin.name && (
-            <span className="font-mono text-[10px] text-muted-foreground">
+            <span className="font-mono text-[11px] text-muted-foreground [overflow-wrap:anywhere]">
               {checkpoint.pin.name}
             </span>
           )}
         </div>
         {checkpoint.pin.meta && Object.keys(checkpoint.pin.meta).length > 0 && (
-          <div className="flex items-center gap-1.5 flex-wrap mt-3">
+          <div className="mt-4 flex flex-wrap items-center gap-1.5">
             {Object.entries(checkpoint.pin.meta).map(([key, value]) => (
               <MetaBadge key={key} metaKey={key} value={value} />
             ))}
           </div>
         )}
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -432,34 +385,28 @@ function CheckpointEntry({ checkpoint }: { checkpoint: APIPinResponse }) {
   const cid = checkpoint.pin.cid;
 
   return (
-    <div className="border border-border p-3 flex items-center justify-between gap-3">
-      <div className="flex items-center gap-3 min-w-0 flex-1">
+    <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-2 border-t border-border py-4">
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-2">
         <a
           href={`${IPFS_GATEWAY}${cid}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="font-mono text-xs hover:underline truncate"
+          className="min-w-0 font-mono text-xs underline decoration-border underline-offset-4 transition-colors hover:decoration-current focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground [overflow-wrap:anywhere]"
         >
           {truncateCid(cid, 12)}
         </a>
-        <span className={`font-mono text-[10px] px-1.5 py-0.5 flex-shrink-0 ${
-          checkpoint.status === 'pinned'
-            ? 'bg-emerald-500/10 text-emerald-600'
-            : 'bg-muted text-muted-foreground'
-        }`}>
-          {checkpoint.status.toUpperCase()}
-        </span>
+        <PinStatus status={checkpoint.status} />
         {checkpoint.pin.meta && Object.keys(checkpoint.pin.meta).length > 0 && (
-          <div className="flex items-center gap-1 flex-wrap">
+          <div className="flex flex-wrap items-center gap-1">
             {Object.entries(checkpoint.pin.meta).map(([key, value]) => (
               <MetaBadge key={key} metaKey={key} value={value} />
             ))}
           </div>
         )}
       </div>
-      <span className="font-mono text-[10px] text-muted-foreground flex-shrink-0">
+      <Caption as="span" className="shrink-0">
         {formatDate(checkpoint.created)}
-      </span>
+      </Caption>
     </div>
   );
 }
@@ -469,10 +416,10 @@ function MetaBadge({ metaKey, value }: { metaKey: string; value: string }) {
 
   return (
     <span
-      className={`font-mono text-[9px] px-1 py-0.5 ${
+      className={`font-mono text-[11px] px-1.5 py-0.5 ${
         isSystem
-          ? 'bg-emerald-500/10 text-emerald-600'
-          : 'bg-muted text-muted-foreground'
+          ? 'bg-foreground text-background'
+          : 'border border-border text-muted-foreground'
       }`}
       title={`${metaKey}: ${value}`}
     >
@@ -483,9 +430,9 @@ function MetaBadge({ metaKey, value }: { metaKey: string; value: string }) {
 
 function KnowledgeCard({ label, count }: { label: string; count: number }) {
   return (
-    <div className="border border-border p-3 text-center">
-      <p className="font-mono text-lg font-medium">{count}</p>
-      <span className="font-mono text-[9px] tracking-wider text-muted-foreground">{label}</span>
+    <div className="flex min-w-0 flex-col border-b border-border py-6 pr-4">
+      <dt className={cn(CAPTION, "order-last mt-3")}>{label}</dt>
+      <dd className="text-5xl font-light leading-none tracking-[-0.05em] tabular-nums">{count}</dd>
     </div>
   );
 }

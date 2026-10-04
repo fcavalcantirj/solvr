@@ -1,9 +1,11 @@
 "use client";
 
+import { cn } from "@/lib/utils";
 import Link from "next/link";
-import { Bot, FileText, Shield, Loader2 } from "lucide-react";
+import { Bot, Shield, Loader2 } from "lucide-react";
 import { useAgents, UseAgentsOptions, AgentListItem } from "@/hooks/use-agents";
-import { Button } from "@/components/ui/button";
+import { LINE_BUTTON } from "@/components/page/controls";
+import styles from "@/components/page/roster.module.css";
 
 function formatReputation(rep: number): string {
   if (rep >= 1000) {
@@ -17,82 +19,61 @@ interface AgentCardProps {
   rank?: number;
 }
 
+// One roster row: the agent's mark and place, its name set as the row's headline,
+// and its reputation as the figure. Position in the API's list sets the scale.
 function AgentCard({ agent, rank }: AgentCardProps) {
   return (
-    <Link
-      href={`/agents/${agent.id}`}
-      className="block border border-border bg-card hover:border-foreground/20 transition-all duration-200"
-    >
-      <div className="p-5">
-        <div className="flex items-start gap-4">
-          {/* Avatar with rank badge */}
-          <div className="relative">
-            <div className="w-12 h-12 bg-foreground text-background flex items-center justify-center font-mono text-sm font-medium">
-              {agent.avatarUrl ? (
-                <img src={agent.avatarUrl} alt={agent.displayName} className="w-full h-full object-cover" />
-              ) : (
-                agent.initials
-              )}
-            </div>
-            {rank && rank <= 10 && (
-              <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-amber-500 text-background flex items-center justify-center font-mono text-[10px] font-bold">
-                #{rank}
-              </div>
-            )}
-          </div>
-
-          {/* Agent info */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="font-mono text-sm font-medium truncate">
-                {agent.displayName}
-              </h3>
-              {agent.hasHumanBackedBadge && (
-                <Shield className="w-3 h-3 text-emerald-500 flex-shrink-0" aria-label="Human-backed agent" />
-              )}
-            </div>
-            <p className="font-mono text-[10px] text-muted-foreground mb-2">
-              @{agent.id}
-            </p>
-            {agent.bio && (
-              <p className="text-xs text-muted-foreground line-clamp-2 mb-3">
-                {agent.bio}
-              </p>
-            )}
-
-            {/* Stats row */}
-            <div className="flex items-center gap-4 text-xs text-muted-foreground">
-              <div className="flex items-center gap-1">
-                <FileText className="w-3 h-3" />
-                <span>{agent.postCount} posts</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="font-mono text-[10px] tracking-wider text-muted-foreground/70">
-                  {agent.createdAt}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Reputation badge */}
-          <div className="flex flex-col items-center">
-            <div className="font-mono text-lg font-medium text-emerald-500">
-              +{formatReputation(agent.reputation)}
-            </div>
-            <span className="font-mono text-[9px] tracking-wider text-muted-foreground">
-              REP
-            </span>
-          </div>
+    <Link href={`/agents/${agent.id}`} className={styles.entry}>
+      <div className={styles.mark}>
+        <div className={styles.avatar}>
+          {agent.avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={agent.avatarUrl} alt={agent.displayName} className="h-full w-full object-cover" />
+          ) : (
+            agent.initials
+          )}
         </div>
+        {rank && rank <= 10 && (
+          <span className={styles.rank}>
+            #{rank}
+          </span>
+        )}
+      </div>
 
-        {/* Status badge */}
-        {agent.status === 'pending' && (
-          <div className="mt-3 pt-3 border-t border-border">
-            <span className="font-mono text-[10px] tracking-wider px-2 py-1 bg-amber-500/10 text-amber-500 border border-amber-500/20">
+      <div className={styles.body}>
+        <h3 className={styles.name}>
+          {agent.displayName}
+        </h3>
+        <p className={styles.handle}>
+          @{agent.id}
+        </p>
+        {agent.bio && (
+          <p className={`${styles.bio} line-clamp-2`}>
+            {agent.bio}
+          </p>
+        )}
+        <div className={styles.meta}>
+          <span>{agent.postCount} posts</span>
+          <span>{agent.createdAt}</span>
+          {agent.hasHumanBackedBadge && (
+            <Shield className="w-3 h-3 text-green-700 dark:text-green-400 flex-shrink-0" aria-label="Human-backed agent" />
+          )}
+          {agent.status === 'pending' && (
+            <span className="inline-flex items-center gap-2 text-amber-700 dark:text-amber-400">
+              <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-amber-700 dark:bg-amber-400" />
               PENDING VERIFICATION
             </span>
-          </div>
-        )}
+          )}
+        </div>
+      </div>
+
+      <div className={styles.figure}>
+        <span className={styles.value}>
+          +{formatReputation(agent.reputation)}
+        </span>
+        <span className={styles.unit}>
+          REP
+        </span>
       </div>
     </Link>
   );
@@ -112,15 +93,15 @@ export function AgentsList({ options = {}, initialAgents }: AgentsListProps) {
 
   if (isInitialLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      <div className="flex items-center border-t border-border py-12">
+        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   if (error && displayAgents.length === 0) {
     return (
-      <div className="border border-destructive/20 bg-destructive/5 p-6 text-center">
+      <div className="border-t border-border py-12">
         <p className="text-sm text-destructive">{error}</p>
       </div>
     );
@@ -128,10 +109,10 @@ export function AgentsList({ options = {}, initialAgents }: AgentsListProps) {
 
   if (displayAgents.length === 0) {
     return (
-      <div className="border border-border bg-card p-12 text-center">
-        <Bot className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-        <h3 className="font-mono text-sm font-medium mb-2">No agents found</h3>
-        <p className="text-xs text-muted-foreground">
+      <div className="border-t border-border py-16">
+        <Bot aria-hidden="true" strokeWidth={1} className="mb-6 size-8 text-muted-foreground" />
+        <h3 className="text-3xl font-light tracking-[-0.025em]">No agents found</h3>
+        <p className="mt-3 text-sm text-muted-foreground">
           Be the first to register your AI agent on Solvr.
         </p>
       </div>
@@ -139,31 +120,33 @@ export function AgentsList({ options = {}, initialAgents }: AgentsListProps) {
   }
 
   return (
-    <div className="space-y-4">
-      {displayAgents.map((agent, index) => (
-        <AgentCard
-          key={agent.id}
-          agent={agent}
-          rank={options.sort === 'reputation' ? index + 1 : undefined}
-        />
-      ))}
+    <div>
+      <div className={styles.roster}>
+        {displayAgents.map((agent, index) => (
+          <AgentCard
+            key={agent.id}
+            agent={agent}
+            rank={options.sort === 'reputation' ? index + 1 : undefined}
+          />
+        ))}
+      </div>
 
       {hasMore && (
-        <Button
-          variant="outline"
-          className="w-full font-mono text-xs tracking-wider"
+        <button
+          type="button"
+          className={cn(LINE_BUTTON, "mt-10 w-full py-5")}
           onClick={loadMore}
           disabled={loading}
         >
           {loading ? (
             <>
-              <Loader2 className="w-3 h-3 mr-2 animate-spin" />
+              <Loader2 className="animate-spin" />
               LOADING...
             </>
           ) : (
             `LOAD MORE (${agents.length} of ${total})`
           )}
-        </Button>
+        </button>
       )}
     </div>
   );

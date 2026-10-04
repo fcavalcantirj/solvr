@@ -7,7 +7,10 @@ import { useState } from "react";
 import Link from "next/link";
 import { useAPIKeys } from "@/hooks/use-api-keys";
 import { SettingsLayout } from "@/components/settings/settings-layout";
-import { Button } from "@/components/ui/button";
+import { CAPTION } from "@/components/page/caption";
+import { PageSection } from "@/components/page/page-section";
+import { DANGER_BUTTON, FIELD, ICON_BUTTON, INK_BUTTON, LINE_BUTTON, TEXT_LINK } from "@/components/page/controls";
+import { cn } from "@/lib/utils";
 import {
   Key,
   Plus,
@@ -20,6 +23,16 @@ import {
   X
 } from "lucide-react";
 import { formatRelativeTime } from "@/lib/api";
+
+const UNLOCK_ROW = "grid grid-cols-[2.5rem_minmax(0,1fr)] items-baseline gap-4 border-b border-border py-5";
+const UNLOCK_LINK = "text-2xl font-light tracking-[-0.025em] underline decoration-transparent decoration-1 underline-offset-[5px] transition-colors hover:decoration-current focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-4 focus-visible:outline-foreground";
+
+// One square dialog for every key action: hairline frame, title, body, actions.
+const MODAL_BACKDROP = "fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm";
+const MODAL = "w-full border border-foreground bg-background";
+const MODAL_HEAD = "flex items-center justify-between gap-4 border-b border-border px-6 py-4";
+const MODAL_TITLE = "text-xl font-light tracking-[-0.02em]";
+const MODAL_FOOT = "flex flex-wrap justify-end gap-3 border-t border-border px-6 py-4";
 
 export default function APIKeysPage() {
   const { keys, loading, error, createKey, revokeKey, regenerateKey } = useAPIKeys();
@@ -95,217 +108,207 @@ export default function APIKeysPage() {
 
   return (
     <SettingsLayout>
-      {/* Header */}
-      <div className="border border-border p-8 mb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="font-mono text-xs tracking-wider text-muted-foreground mb-2">
-              API KEYS
-            </h2>
-            <p className="font-mono text-sm text-muted-foreground">
-              Create and manage API keys for programmatic access to Solvr.
-            </p>
-          </div>
-          <Button
+      {/* API keys: the keys themselves are the ledger */}
+      <PageSection
+        heading="API KEYS"
+        intro="Create and manage API keys for programmatic access to Solvr."
+        aside={
+          <button
+            type="button"
             onClick={() => setShowCreateModal(true)}
-            className="font-mono text-xs tracking-wider"
+            className={INK_BUTTON}
           >
-            <Plus className="w-3 h-3 mr-2" />
+            <Plus />
             CREATE KEY
-          </Button>
-        </div>
-      </div>
-
-      {/* What your key unlocks */}
-      <div className="border border-border p-6 mb-6 bg-muted/20">
-        <p className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground mb-4">
-          WHAT YOUR KEY UNLOCKS
-        </p>
-        <div className="grid sm:grid-cols-3 gap-4">
-          <div className="flex items-start gap-3">
-            <span className="font-mono text-xs text-muted-foreground mt-0.5">1</span>
-            <div>
-              <Link href="/api-docs" className="text-sm font-medium hover:underline">
-                Solvr API
-              </Link>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Search, post, contribute
-              </p>
-            </div>
+          </button>
+        }
+      >
+        {/* Error State */}
+        {error && (
+          <div className="mb-6 border-y border-destructive py-3 text-destructive">
+            <span className="text-sm">{error}</span>
           </div>
-          <div className="flex items-start gap-3">
-            <span className="font-mono text-xs text-muted-foreground mt-0.5">2</span>
-            <div>
-              <Link href="/ipfs" className="text-sm font-medium hover:underline">
-                IPFS Pinning
-              </Link>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Upload &amp; pin up to 1 GB free
-              </p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <span className="font-mono text-xs text-muted-foreground mt-0.5">3</span>
-            <div>
-              <Link href="/mcp" className="text-sm font-medium hover:underline">
-                MCP Server
-              </Link>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Connect AI tools directly
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+        )}
 
-      {/* Error State */}
-      {error && (
-        <div className="border border-destructive bg-destructive/10 text-destructive px-4 py-3 mb-6">
-          <span className="font-mono text-xs">{error}</span>
-        </div>
-      )}
-
-      {/* Loading State */}
-      {loading ? (
-        <div className="border border-border p-12 flex items-center justify-center">
-          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-        </div>
-      ) : keys.length === 0 ? (
-        /* Empty State */
-        <div className="border border-dashed border-border p-12 text-center">
-          <Key size={32} className="mx-auto mb-4 text-muted-foreground" />
-          <p className="font-mono text-sm mb-2">No API keys yet</p>
-          <p className="font-mono text-xs text-muted-foreground mb-6">
-            Create your first API key to start using the Solvr API
-          </p>
-          <Button
-            onClick={() => setShowCreateModal(true)}
-            variant="outline"
-            className="font-mono text-xs tracking-wider"
-          >
-            <Plus className="w-3 h-3 mr-2" />
-            CREATE YOUR FIRST KEY
-          </Button>
-        </div>
-      ) : (
-        /* Keys List */
-        <div className="space-y-4">
-          {keys.map((key) => (
-            <div key={key.id} className="border border-border p-6">
-              <div className="flex items-start justify-between">
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-mono text-sm font-medium truncate">
+        {/* Loading State */}
+        {loading ? (
+          <div className="flex items-center border-t border-border py-12">
+            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : keys.length === 0 ? (
+          /* Empty State */
+          <div className="border-t border-border py-12">
+            <Key size={32} strokeWidth={1} className="mb-6 text-muted-foreground" />
+            <p className="text-3xl font-light tracking-[-0.025em]">No API keys yet</p>
+            <p className="mb-8 mt-3 text-sm text-muted-foreground">
+              Create your first API key to start using the Solvr API
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowCreateModal(true)}
+              className={LINE_BUTTON}
+            >
+              <Plus />
+              CREATE YOUR FIRST KEY
+            </button>
+          </div>
+        ) : (
+          /* Keys List */
+          <div className="border-t border-border">
+            {keys.map((key) => (
+              <div key={key.id} className="grid min-w-0 gap-5 border-b border-border py-6 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+                <div className="min-w-0">
+                  <h3 className="truncate text-2xl font-light tracking-[-0.025em] sm:text-3xl">
                     {key.name}
                   </h3>
-                  <p className="font-mono text-xs text-muted-foreground mt-1">
+                  <p className="mt-2 font-mono text-xs text-muted-foreground [overflow-wrap:anywhere]">
                     {key.key_preview}
                   </p>
-                  <div className="flex items-center gap-4 mt-3">
-                    <span className="font-mono text-[10px] text-muted-foreground">
+                  <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-1">
+                    <span className={CAPTION}>
                       Created: {formatRelativeTime(key.created_at)}
                     </span>
-                    <span className="font-mono text-[10px] text-muted-foreground">
+                    <span className={CAPTION}>
                       Last used: {key.last_used_at ? formatRelativeTime(key.last_used_at) : "Never"}
                     </span>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 ml-4">
-                  <Button
-                    variant="outline"
-                    size="sm"
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
                     onClick={() => setShowRegenerateModal(key.id)}
-                    className="font-mono text-[10px] tracking-wider"
+                    className={cn(LINE_BUTTON, "px-4 py-2.5")}
                   >
-                    <RefreshCw className="w-3 h-3 mr-1" />
+                    <RefreshCw />
                     REGENERATE
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setShowRevokeModal(key.id)}
-                    className="font-mono text-[10px] tracking-wider text-destructive border-destructive hover:bg-destructive hover:text-destructive-foreground"
+                    className={cn(DANGER_BUTTON, "px-4 py-2.5")}
                   >
-                    <Trash2 className="w-3 h-3 mr-1" />
+                    <Trash2 />
                     REVOKE
-                  </Button>
+                  </button>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
 
-      {/* API Documentation Link */}
-      <div className="mt-8 pt-8 border-t border-border">
-        <p className="font-mono text-xs text-muted-foreground">
-          Learn how to use your API keys in the documentation.
-        </p>
-        <Link
-          href="/api"
-          className="inline-block mt-2 font-mono text-xs tracking-wider text-foreground hover:underline"
-        >
-          View API Documentation →
-        </Link>
-      </div>
+        {/* API Documentation Link */}
+        <div className="mt-10">
+          <p className="text-sm text-muted-foreground">
+            Learn how to use your API keys in the documentation.
+          </p>
+          <Link
+            href="/api"
+            className={cn(TEXT_LINK, "mt-3 inline-block text-foreground")}
+          >
+            View API Documentation →
+          </Link>
+        </div>
+      </PageSection>
+
+      {/* What your key unlocks */}
+      <PageSection heading="WHAT YOUR KEY UNLOCKS">
+        <ol className="border-t border-border">
+          <li className={UNLOCK_ROW}>
+            <span className={CAPTION}>1</span>
+            <div>
+              <Link href="/api-docs" className={UNLOCK_LINK}>
+                Solvr API
+              </Link>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Search, post, contribute
+              </p>
+            </div>
+          </li>
+          <li className={UNLOCK_ROW}>
+            <span className={CAPTION}>2</span>
+            <div>
+              <Link href="/ipfs" className={UNLOCK_LINK}>
+                IPFS Pinning
+              </Link>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Upload &amp; pin up to 1 GB free
+              </p>
+            </div>
+          </li>
+          <li className={UNLOCK_ROW}>
+            <span className={CAPTION}>3</span>
+            <div>
+              <Link href="/mcp" className={UNLOCK_LINK}>
+                MCP Server
+              </Link>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Connect AI tools directly
+              </p>
+            </div>
+          </li>
+        </ol>
+      </PageSection>
 
       {/* Create Key Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-background border border-border w-full max-w-md">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-              <h3 className="font-mono text-sm tracking-wider">CREATE API KEY</h3>
+        <div className={MODAL_BACKDROP}>
+          <div className={cn(MODAL, "max-w-md")}>
+            <div className={MODAL_HEAD}>
+              <h3 className={MODAL_TITLE}>CREATE API KEY</h3>
               <button
                 onClick={() => {
                   setShowCreateModal(false);
                   setNewKeyName("");
                   setActionError(null);
                 }}
-                className="text-muted-foreground hover:text-foreground"
+                className={ICON_BUTTON}
               >
                 <X size={16} />
               </button>
             </div>
             <div className="p-6">
               {actionError && (
-                <div className="bg-destructive/10 border border-destructive text-destructive px-4 py-2 mb-4">
-                  <span className="font-mono text-xs">{actionError}</span>
+                <div className="mb-4 border-y border-destructive py-2 text-destructive">
+                  <span className="text-sm">{actionError}</span>
                 </div>
               )}
-              <label className="font-mono text-xs tracking-wider text-muted-foreground block mb-2">
+              <label htmlFor="api-key-name" className={cn(CAPTION, "mb-3 block")}>
                 KEY NAME
               </label>
               <input
+                id="api-key-name"
                 type="text"
                 value={newKeyName}
                 onChange={(e) => setNewKeyName(e.target.value)}
                 placeholder="e.g., Production, Development"
                 maxLength={100}
-                className="w-full bg-secondary/50 border border-border px-4 py-3 font-mono text-sm focus:outline-none focus:border-foreground placeholder:text-muted-foreground"
+                className={FIELD}
               />
-              <p className="font-mono text-[10px] text-muted-foreground mt-2">
+              <p className="mt-2 text-xs text-muted-foreground">
                 Give your key a name to identify it later
               </p>
             </div>
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-border">
-              <Button
-                variant="outline"
+            <div className={MODAL_FOOT}>
+              <button
+                type="button"
                 onClick={() => {
                   setShowCreateModal(false);
                   setNewKeyName("");
                   setActionError(null);
                 }}
-                className="font-mono text-xs tracking-wider"
+                className={LINE_BUTTON}
               >
                 CANCEL
-              </Button>
-              <Button
+              </button>
+              <button
+                type="button"
                 onClick={handleCreateKey}
                 disabled={!newKeyName.trim() || isCreating}
-                className="font-mono text-xs tracking-wider"
+                className={INK_BUTTON}
               >
-                {isCreating && <Loader2 className="w-3 h-3 mr-2 animate-spin" />}
+                {isCreating && <Loader2 className="animate-spin" />}
                 {isCreating ? "CREATING..." : "CREATE KEY"}
-              </Button>
+              </button>
             </div>
           </div>
         </div>
@@ -313,62 +316,64 @@ export default function APIKeysPage() {
 
       {/* Key Created Modal */}
       {showKeyCreatedModal && createdKey && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-background border border-border w-full max-w-lg">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-              <h3 className="font-mono text-sm tracking-wider">KEY CREATED</h3>
+        <div className={MODAL_BACKDROP}>
+          <div className={cn(MODAL, "max-w-lg")}>
+            <div className={MODAL_HEAD}>
+              <h3 className={MODAL_TITLE}>KEY CREATED</h3>
               <button
                 onClick={() => {
                   setShowKeyCreatedModal(false);
                   setCreatedKey(null);
                   setCopied(false);
                 }}
-                className="text-muted-foreground hover:text-foreground"
+                className={ICON_BUTTON}
               >
                 <X size={16} />
               </button>
             </div>
             <div className="p-6">
-              <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500 text-amber-600 px-4 py-3 mb-6">
-                <AlertTriangle size={16} />
-                <span className="font-mono text-xs">
+              <div className="mb-6 flex items-start gap-2 border-y border-border py-3 text-amber-700 dark:text-amber-400">
+                <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+                <span className="text-sm">
                   Copy your API key now. You won&apos;t be able to see it again!
                 </span>
               </div>
-              <label className="font-mono text-xs tracking-wider text-muted-foreground block mb-2">
+              <label htmlFor="api-key-created" className={cn(CAPTION, "mb-3 block normal-case tracking-normal")}>
                 {createdKeyName}
               </label>
               <div className="relative">
                 <input
+                  id="api-key-created"
                   type="text"
                   value={createdKey}
                   readOnly
-                  className="w-full bg-foreground text-background px-4 py-3 pr-12 font-mono text-xs focus:outline-none"
+                  className="w-full bg-foreground text-background px-4 py-3 pr-12 font-mono text-xs focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
                 />
                 <button
                   onClick={() => copyToClipboard(createdKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-background hover:text-background/70"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-background hover:text-background/70 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-background"
                 >
                   {copied ? <Check size={16} /> : <Copy size={16} />}
                 </button>
               </div>
               {copied && (
-                <p className="font-mono text-[10px] text-emerald-600 mt-2">
+                <p className="mt-2 text-xs text-green-700 dark:text-green-400">
                   Copied to clipboard!
                 </p>
               )}
             </div>
-            <div className="flex justify-end px-6 py-4 border-t border-border">
-              <Button
+            <div className={MODAL_FOOT}>
+              <button
+                type="button"
                 onClick={() => {
                   setShowKeyCreatedModal(false);
                   setCreatedKey(null);
                   setCopied(false);
                 }}
-                className="font-mono text-xs tracking-wider"
+                className={INK_BUTTON}
               >
                 DONE
-              </Button>
+              </button>
             </div>
           </div>
         </div>
@@ -376,53 +381,54 @@ export default function APIKeysPage() {
 
       {/* Revoke Confirmation Modal */}
       {showRevokeModal && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-background border border-border w-full max-w-md">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-              <h3 className="font-mono text-sm tracking-wider text-destructive">REVOKE KEY</h3>
+        <div className={MODAL_BACKDROP}>
+          <div className={cn(MODAL, "max-w-md")}>
+            <div className={MODAL_HEAD}>
+              <h3 className={cn(MODAL_TITLE, "text-destructive")}>REVOKE KEY</h3>
               <button
                 onClick={() => {
                   setShowRevokeModal(null);
                   setActionError(null);
                 }}
-                className="text-muted-foreground hover:text-foreground"
+                className={ICON_BUTTON}
               >
                 <X size={16} />
               </button>
             </div>
             <div className="p-6">
               {actionError && (
-                <div className="bg-destructive/10 border border-destructive text-destructive px-4 py-2 mb-4">
-                  <span className="font-mono text-xs">{actionError}</span>
+                <div className="mb-4 border-y border-destructive py-2 text-destructive">
+                  <span className="text-sm">{actionError}</span>
                 </div>
               )}
-              <div className="flex items-center gap-2 text-destructive mb-4">
+              <div className="mb-4 flex items-center gap-2 text-destructive">
                 <AlertTriangle size={16} />
-                <span className="font-mono text-xs">This action cannot be undone</span>
+                <span className="text-sm">This action cannot be undone</span>
               </div>
-              <p className="font-mono text-sm text-muted-foreground">
+              <p className="text-sm leading-relaxed text-muted-foreground">
                 Any applications using this key will no longer be able to access the API.
               </p>
             </div>
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-border">
-              <Button
-                variant="outline"
+            <div className={MODAL_FOOT}>
+              <button
+                type="button"
                 onClick={() => {
                   setShowRevokeModal(null);
                   setActionError(null);
                 }}
-                className="font-mono text-xs tracking-wider"
+                className={LINE_BUTTON}
               >
                 CANCEL
-              </Button>
-              <Button
+              </button>
+              <button
+                type="button"
                 onClick={() => handleRevokeKey(showRevokeModal)}
                 disabled={isRevoking}
-                className="font-mono text-xs tracking-wider bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                className={cn(DANGER_BUTTON, "bg-destructive text-destructive-foreground hover:bg-destructive/90")}
               >
-                {isRevoking && <Loader2 className="w-3 h-3 mr-2 animate-spin" />}
+                {isRevoking && <Loader2 className="animate-spin" />}
                 {isRevoking ? "REVOKING..." : "REVOKE KEY"}
-              </Button>
+              </button>
             </div>
           </div>
         </div>
@@ -430,53 +436,54 @@ export default function APIKeysPage() {
 
       {/* Regenerate Confirmation Modal */}
       {showRegenerateModal && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-background border border-border w-full max-w-md">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-              <h3 className="font-mono text-sm tracking-wider">REGENERATE KEY</h3>
+        <div className={MODAL_BACKDROP}>
+          <div className={cn(MODAL, "max-w-md")}>
+            <div className={MODAL_HEAD}>
+              <h3 className={MODAL_TITLE}>REGENERATE KEY</h3>
               <button
                 onClick={() => {
                   setShowRegenerateModal(null);
                   setActionError(null);
                 }}
-                className="text-muted-foreground hover:text-foreground"
+                className={ICON_BUTTON}
               >
                 <X size={16} />
               </button>
             </div>
             <div className="p-6">
               {actionError && (
-                <div className="bg-destructive/10 border border-destructive text-destructive px-4 py-2 mb-4">
-                  <span className="font-mono text-xs">{actionError}</span>
+                <div className="mb-4 border-y border-destructive py-2 text-destructive">
+                  <span className="text-sm">{actionError}</span>
                 </div>
               )}
-              <div className="flex items-center gap-2 text-amber-600 mb-4">
+              <div className="mb-4 flex items-center gap-2 text-amber-700 dark:text-amber-400">
                 <AlertTriangle size={16} />
-                <span className="font-mono text-xs">The old key will be invalidated</span>
+                <span className="text-sm">The old key will be invalidated</span>
               </div>
-              <p className="font-mono text-sm text-muted-foreground">
+              <p className="text-sm leading-relaxed text-muted-foreground">
                 A new key will be generated. Any applications using the old key will need to be updated.
               </p>
             </div>
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-border">
-              <Button
-                variant="outline"
+            <div className={MODAL_FOOT}>
+              <button
+                type="button"
                 onClick={() => {
                   setShowRegenerateModal(null);
                   setActionError(null);
                 }}
-                className="font-mono text-xs tracking-wider"
+                className={LINE_BUTTON}
               >
                 CANCEL
-              </Button>
-              <Button
+              </button>
+              <button
+                type="button"
                 onClick={() => handleRegenerateKey(showRegenerateModal)}
                 disabled={isRegenerating}
-                className="font-mono text-xs tracking-wider"
+                className={INK_BUTTON}
               >
-                {isRegenerating && <Loader2 className="w-3 h-3 mr-2 animate-spin" />}
+                {isRegenerating && <Loader2 className="animate-spin" />}
                 {isRegenerating ? "REGENERATING..." : "REGENERATE KEY"}
-              </Button>
+              </button>
             </div>
           </div>
         </div>

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import type { APIPost, APISearchReplyMatch } from "@/lib/api-types";
 import { PostCard } from "./post-card";
+import styles from "./posts-mosaic.module.css";
 
 const PER_PAGE = 20;
 
@@ -54,12 +55,12 @@ export function PostsList({ initialPosts = [], searchQuery, sort }: PostsListPro
 
   if (error) {
     return (
-      <div className="py-12 text-center">
-        <p className="font-mono text-sm text-muted-foreground">{error}</p>
+      <div className="border-t border-border px-4 py-24 text-center">
+        <p className="text-base text-muted-foreground">{error}</p>
         <button
           type="button"
           onClick={() => fetchPage(1, true)}
-          className="mt-4 font-mono text-xs tracking-wider border border-border px-4 py-2 hover:bg-foreground hover:text-background transition-colors"
+          className="mt-6 font-mono text-[11px] uppercase tracking-[0.18em] border border-border px-6 py-3 hover:bg-foreground hover:text-background transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
         >
           RETRY
         </button>
@@ -69,26 +70,26 @@ export function PostsList({ initialPosts = [], searchQuery, sort }: PostsListPro
 
   if (!loading && posts.length === 0) {
     return (
-      <div className="py-12 text-center">
-        <p className="font-mono text-sm text-muted-foreground">No posts found.</p>
+      <div className="border-t border-border px-4 py-24 text-center">
+        <p className="text-base text-muted-foreground">No posts found.</p>
       </div>
     );
   }
 
   return (
     <div>
-      <div className="flex flex-col gap-4">
+      <div className={styles.mosaic}>
         {posts.map((post) => (
           <PostCard key={post.id} post={post} matchedReplies={post.matched_replies} />
         ))}
       </div>
       {hasMore && (
-        <div className="mt-6 text-center">
+        <div className="px-4 pt-10 text-center sm:px-6 lg:px-12">
           <button
             type="button"
             onClick={() => fetchPage(page + 1, false)}
             disabled={loading}
-            className="font-mono text-xs tracking-wider border border-border px-6 py-3 hover:bg-foreground hover:text-background disabled:opacity-50 transition-colors"
+            className="w-full font-mono text-[11px] uppercase tracking-[0.18em] border border-border px-8 py-5 hover:bg-foreground hover:text-background disabled:opacity-50 transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
           >
             {loading ? "LOADING…" : "LOAD MORE"}
           </button>

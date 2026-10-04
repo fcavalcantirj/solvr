@@ -469,6 +469,9 @@ describe('the one-sentence page language', () => {
     'components/homepage/community-totals-section.tsx',
     'components/page/caption.tsx',
     'components/page/segmented-control.tsx',
+    'components/posts/posts-page-client.tsx',
+    'components/posts/posts-list.tsx',
+    'components/posts/post-card.tsx',
   ]
 
   it.each(MIGRATED)('%s speaks the new language', (file) => {
@@ -476,5 +479,63 @@ describe('the one-sentence page language', () => {
     expect(source, file).not.toContain('tracking-[0.3em]')
     expect(source, file).not.toContain('max-w-7xl')
     expect(source, file).not.toContain('text-[10px]')
+  })
+})
+
+describe('the posts mosaic', () => {
+  // v1.3.7: /posts uses the whole width as a mosaic. Its rhythm of tile sizes is
+  // a fixed pattern by position, written in CSS, so no tile size is ever computed
+  // from a score, a count or a text length.
+  const MOSAIC_CSS = 'components/posts/posts-mosaic.module.css'
+
+  it('lays the posts out over the full width, never in the old narrow strip', () => {
+    for (const file of ['components/posts/posts-page-client.tsx', 'components/posts/posts-list.tsx']) {
+      const source = read(file)
+      expect(source, file).not.toMatch(/max-w-(?:2xl|3xl|4xl)/)
+    }
+  })
+
+  it('sets the tile sizes by position in CSS', () => {
+    const css = read(MOSAIC_CSS)
+    expect(css).toMatch(/nth-child\(10n \+ 1\)/)
+    expect(css).toContain('grid-template-columns: repeat(12')
+    for (const file of ['components/posts/posts-list.tsx', 'components/posts/post-card.tsx']) {
+      // Showing a count is fine; branching a tile's size on one is not.
+      expect(read(file), file).not.toMatch(
+        /(?:vote_score|reply_count|upvotes|view_count)\s*[<>]=?|(?:title|description)\.length/,
+      )
+    }
+  })
+})
+
+describe('square corners and tokens in CSS modules', () => {
+  // The radius scan above reads .ts and .tsx only. A CSS module is held to the
+  // same rules: no rounded corners and no colour that is not a token.
+  function cssModules(dir: string): string[] {
+    const found: string[] = []
+    const walk = (rel: string) => {
+      for (const entry of fs.readdirSync(path.join(ROOT, rel), { withFileTypes: true })) {
+        const child = `${rel}/${entry.name}`
+        if (entry.isDirectory()) {
+          if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue
+          walk(child)
+        } else if (entry.name.endsWith('.module.css')) {
+          found.push(child)
+        }
+      }
+    }
+    walk(dir)
+    return found
+  }
+  const MODULES = [...cssModules('app'), ...cssModules('components')]
+
+  it('finds the CSS modules it is meant to be checking', () => {
+    expect(MODULES.length).toBeGreaterThan(0)
+  })
+
+  it.each(MODULES)('%s rounds no corner and paints only with tokens', (file) => {
+    const css = read(file)
+    expect(css, file).not.toMatch(/border-radius\s*:\s*(?!0[;\s]|0px)/)
+    expect(css, file).not.toMatch(/#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(|\boklch\(/)
   })
 })

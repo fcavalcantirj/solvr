@@ -1,0 +1,183 @@
+.mosaic {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  border-top: 1px solid var(--border);
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 28px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--background);
+  color: var(--foreground);
+  overflow-wrap: anywhere;
+}
+
+.title {
+  font-size: 28px;
+  font-weight: 300;
+  line-height: 1.16;
+  letter-spacing: -0.035em;
+}
+
+.titleLink {
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 5px;
+  transition: text-decoration-color 160ms;
+}
+
+.titleLink:hover {
+  text-decoration-color: currentColor;
+}
+
+.tile a:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 5px;
+}
+
+.arrow {
+  display: inline-block;
+  width: 0.65em;
+  height: 0.65em;
+  margin-left: 0.3em;
+  vertical-align: baseline;
+}
+
+.excerpt {
+  max-width: 60ch;
+  margin-top: 20px;
+  font-size: 14px;
+  line-height: 1.7;
+  opacity: 0.7;
+}
+
+.footer {
+  margin-top: auto;
+  padding-top: 32px;
+}
+
+.byline {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 20px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.counts,
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.6;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+}
+
+.counts {
+  margin-top: 14px;
+}
+
+.tags {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid currentColor;
+  border-color: color-mix(in oklch, currentColor 20%, transparent);
+  gap: 2px 14px;
+  opacity: 0.7;
+}
+
+/* A fixed ten-post composition; API order and content never affect tile size. */
+.tile:nth-child(10n + 2),
+.tile:nth-child(10n + 10) {
+  background: var(--foreground);
+  color: var(--background);
+}
+
+.tile:nth-child(10n + 6) {
+  background: var(--secondary);
+}
+
+.tile:nth-child(10n + 1) .title {
+  font-size: 36px;
+}
+
+@media (min-width: 640px) {
+  .mosaic {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tile {
+    padding: 32px 24px;
+    border-right: 1px solid var(--border);
+  }
+
+  .tile:nth-child(10n + 1),
+  .tile:nth-child(10n + 10) {
+    grid-column: span 2;
+  }
+
+  .tile:nth-child(10n + 1) .title {
+    font-size: 48px;
+  }
+}
+
+@media (min-width: 1100px) {
+  .mosaic {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+
+  .tile {
+    grid-column: span 3;
+    min-height: 320px;
+    padding: 32px;
+  }
+
+  .tile:nth-child(10n + 1) {
+    grid-column: span 6;
+    grid-row: span 2;
+    padding: 40px 48px;
+  }
+
+  .tile:nth-child(10n + 1) .title {
+    font-size: clamp(48px, 4.3vw, 80px);
+    line-height: 1.06;
+    letter-spacing: -0.04em;
+  }
+
+  .tile:nth-child(10n + 1) .excerpt {
+    margin-top: 32px;
+    font-size: 17px;
+  }
+
+  .tile:nth-child(10n + 4),
+  .tile:nth-child(10n + 10) {
+    grid-column: span 6;
+    padding: 36px 40px;
+  }
+
+  .tile:nth-child(10n + 4) .title,
+  .tile:nth-child(10n + 10) .title {
+    font-size: clamp(36px, 3vw, 56px);
+  }
+
+  .tile:nth-child(10n + 5),
+  .tile:nth-child(10n + 6),
+  .tile:nth-child(10n + 7) {
+    grid-column: span 4;
+    padding: 36px;
+  }
+
+  .tile:nth-child(10n + 5) .title,
+  .tile:nth-child(10n + 6) .title,
+  .tile:nth-child(10n + 7) .title {
+    font-size: 34px;
+  }
+}

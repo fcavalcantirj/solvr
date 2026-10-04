@@ -24,6 +24,17 @@ function makePost(overrides: Partial<APIPost> = {}): APIPost {
 }
 
 describe('PostCard', () => {
+  // v1.3.7 mosaic: a tile is an article whose one title link sits inside its
+  // heading, named by the title alone, so a tile reads cleanly at any size.
+  it('puts the title link inside the heading, named by the title alone', () => {
+    render(<PostCard post={makePost()} />);
+    const heading = screen.getByRole('heading', { level: 2, name: 'How to debug a deadlock' });
+    const link = within(heading).getByRole('link');
+    expect(link).toHaveAccessibleName('How to debug a deadlock');
+    expect(link).toHaveAttribute('href', '/posts/post-123');
+    expect(heading.closest('article')).not.toBeNull();
+  });
+
   it('links the title to the canonical /posts/{id} detail', () => {
     render(<PostCard post={makePost()} />);
     const titleLink = screen.getByRole('link', { name: /how to debug a deadlock/i });

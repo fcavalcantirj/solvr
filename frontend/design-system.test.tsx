@@ -619,6 +619,12 @@ describe('the one-sentence page language', () => {
     expect(source.split('\n').length, file).toBeLessThanOrEqual(800)
   })
 
+  // The homepage activity stream sits beside its heading as ledger rows (v1.3.9), not in a
+  // boxed card that leaves most of the width empty.
+  it('lays the public room activity out as rows, never in a boxed card', () => {
+    expect(read('components/homepage/room-activity-section.tsx')).not.toContain('border border-border bg-background')
+  })
+
   // The owner's rule for every index page: the page scrolls vertically only.
   it.each([
     'components/posts/posts-list.tsx',

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { ArrowUpRight } from 'lucide-react';
 import { api } from '@/lib/api';
 import type {
   APIOverviewActivity,
@@ -87,129 +88,139 @@ export function RoomActivitySection({ initial }: { initial: APIOverviewActivity 
       data-testid="overview-section-activity"
       className="px-4 sm:px-6 lg:px-12 py-12 lg:py-16 border-t border-border"
     >
-      <div className="mx-auto max-w-[78rem]">
-        <SectionHeading
-          heading={initial.heading}
-          intro={initial.intro}
-          definition={initial.definition}
-        />
+      <div className="mx-auto grid max-w-[78rem] gap-12 lg:grid-cols-12 lg:gap-16">
+        {/* What the stream is, and the controls that change it, beside it */}
+        <div className="min-w-0 lg:col-span-4">
+          <SectionHeading
+            heading={initial.heading}
+            intro={initial.intro}
+            definition={initial.definition}
+          />
 
-        <p className="mt-4 max-w-[68ch] text-[0.8125rem] leading-relaxed text-muted-foreground">
-          {initial.outcome_note}
-        </p>
+          <p className="mt-4 max-w-[52ch] text-[0.8125rem] leading-relaxed text-muted-foreground">
+            {initial.outcome_note}
+          </p>
 
-        <div aria-live="polite" className="mt-8 min-h-[1px]">
-          {pending?.new_label ? (
+          <div aria-live="polite" className="mt-8 min-h-[1px]">
+            {pending?.new_label ? (
+              <button
+                type="button"
+                data-testid="overview-activity-new"
+                onClick={takeNewActivity}
+                className="font-mono text-[11px] uppercase tracking-[0.18em] border border-foreground px-6 py-3 hover:bg-foreground hover:text-background transition-colors"
+              >
+                {pending.new_label}
+              </button>
+            ) : null}
+          </div>
+
+          <p className="mt-6 max-w-[52ch] text-[0.8125rem] leading-relaxed text-muted-foreground">
+            {initial.refresh_note}
+          </p>
+
+          {hasMore ? (
             <button
               type="button"
-              data-testid="overview-activity-new"
-              onClick={takeNewActivity}
-              className="font-mono text-[11px] uppercase tracking-[0.18em] border border-foreground px-6 py-3 hover:bg-foreground hover:text-background transition-colors"
+              onClick={loadMore}
+              disabled={loading}
+              className="mt-8 font-mono text-[11px] uppercase tracking-[0.18em] border border-foreground px-8 py-4 hover:bg-foreground hover:text-background transition-colors disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-foreground"
             >
-              {pending.new_label}
+              {initial.load_more_label}
             </button>
+          ) : null}
+
+          {error ? (
+            <p role="alert" className="mt-6 text-sm text-muted-foreground">
+              {error}
+            </p>
           ) : null}
         </div>
 
-        {groups.length === 0 ? (
-          <p className="mt-8 text-sm text-muted-foreground">{initial.empty_note}</p>
-        ) : (
-          <ul className="mt-4 border border-border bg-background divide-y divide-border">
-            {groups.map((group, index) => (
-              <li
-                key={`${group.room_slug}-${group.items[0]?.id ?? index}`}
-                data-testid="overview-activity-group"
-                className="p-5 sm:p-6"
-              >
-                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                  <Link
-                    href={group.room_url}
-                    className="font-mono text-[11px] tracking-[0.06em] underline underline-offset-4 hover:no-underline"
-                  >
-                    {group.room_name}
-                  </Link>
-                  <span className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground">
-                    {group.count_label} · {group.time_label}
-                  </span>
-                </div>
+        {/* The stream itself: one block per room, one row per entry */}
+        <div className="min-w-0 lg:col-span-8">
+          {groups.length === 0 ? (
+            <p className="border-t border-foreground pt-6 text-sm text-muted-foreground">{initial.empty_note}</p>
+          ) : (
+            <ul className="border-t border-foreground">
+              {groups.map((group, index) => (
+                <li
+                  key={`${group.room_slug}-${group.items[0]?.id ?? index}`}
+                  data-testid="overview-activity-group"
+                  className="border-b border-border py-8 first:pt-6"
+                >
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
+                    <Link
+                      href={group.room_url}
+                      className="group inline-flex min-w-0 items-start gap-2 text-2xl font-light leading-tight tracking-[-0.025em] [overflow-wrap:anywhere]"
+                    >
+                      <span className="underline decoration-transparent decoration-1 underline-offset-[5px] transition-colors group-hover:decoration-current">
+                        {group.room_name}
+                      </span>
+                      <ArrowUpRight size={16} aria-hidden="true" className="mt-1.5 shrink-0" />
+                    </Link>
+                    <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                      {group.count_label} · {group.time_label}
+                    </span>
+                  </div>
 
-                {group.burst_note ? (
-                  <p className="mt-1 font-mono text-[11px] tracking-[0.06em] text-muted-foreground">
-                    {group.burst_note}
-                  </p>
-                ) : null}
+                  {group.burst_note ? (
+                    <p className="mt-2 font-mono text-[11px] tracking-[0.06em] text-muted-foreground">
+                      {group.burst_note}
+                    </p>
+                  ) : null}
 
-                <ul className="mt-4 space-y-5 sm:space-y-6">
-                  {group.items.map((item) => (
-                    <ActivityEntry key={item.id} item={item} />
-                  ))}
-                </ul>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {error ? (
-          <p role="alert" className="mt-6 text-sm text-muted-foreground">
-            {error}
-          </p>
-        ) : null}
-
-        <p className="mt-6 max-w-[68ch] text-[0.8125rem] leading-relaxed text-muted-foreground">
-          {initial.refresh_note}
-        </p>
-
-        {hasMore ? (
-          <button
-            type="button"
-            onClick={loadMore}
-            disabled={loading}
-            className="mt-8 font-mono text-[11px] uppercase tracking-[0.18em] border border-foreground px-8 py-4 hover:bg-foreground hover:text-background transition-colors disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-foreground"
-          >
-            {initial.load_more_label}
-          </button>
-        ) : null}
+                  <ul className="mt-6 divide-y divide-border border-t border-border">
+                    {group.items.map((item) => (
+                      <ActivityEntry key={item.id} item={item} />
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </section>
   );
 }
 
-// One entry: who posted it, what they said they were doing, the part of it the
-// API chose to show, and where it opens.
+// One entry: who posted it and what they said they were doing on the left, the
+// part of it the API chose to show on the right, and where it opens.
 function ActivityEntry({ item }: { item: APIOverviewActivityItem }) {
   return (
-    <li data-testid="overview-activity-item" className="border-l border-border pl-4 sm:pl-5">
-      <p className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground">
-        {item.author} · {item.author_label}
-        {item.author_note ? (
-          <span className="block mt-1 normal-case">{item.author_note}</span>
-        ) : null}
-      </p>
-
-      <p className="mt-2 text-sm">{item.action}</p>
-
-      {item.excerpt ? (
-        <p className="mt-2 text-sm leading-relaxed whitespace-pre-wrap">{item.excerpt}</p>
-      ) : null}
-
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
-        <time
-          dateTime={item.timestamp}
-          className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground"
-        >
+    <li data-testid="overview-activity-item" className="grid gap-3 py-5 sm:grid-cols-[13rem_minmax(0,1fr)] sm:gap-8">
+      <div className="min-w-0 font-mono text-[11px] tracking-[0.06em] text-muted-foreground">
+        <p className="[overflow-wrap:anywhere]">
+          {item.author} · {item.author_label}
+          {item.author_note ? (
+            <span className="block mt-1 normal-case">{item.author_note}</span>
+          ) : null}
+        </p>
+        <p className="mt-2 text-foreground">{item.action}</p>
+        <time dateTime={item.timestamp} className="mt-2 block">
           {item.time_label}
         </time>
-        {item.is_excerpt && item.excerpt_note ? (
-          <span className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground">
-            {item.excerpt_note}
-          </span>
+      </div>
+
+      <div className="min-w-0">
+        {item.excerpt ? (
+          <p className="text-base font-light leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere] sm:text-lg">
+            {item.excerpt}
+          </p>
         ) : null}
-        <Link
-          href={item.link_url}
-          className="font-mono text-[11px] tracking-[0.06em] underline underline-offset-4 hover:no-underline"
-        >
-          {item.link_label}
-        </Link>
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+          {item.is_excerpt && item.excerpt_note ? (
+            <span className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground">
+              {item.excerpt_note}
+            </span>
+          ) : null}
+          <Link
+            href={item.link_url}
+            className="font-mono text-[11px] tracking-[0.06em] underline decoration-border underline-offset-4 transition-colors hover:decoration-foreground"
+          >
+            {item.link_label}
+          </Link>
+        </div>
       </div>
     </li>
   );

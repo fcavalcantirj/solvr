@@ -51,8 +51,8 @@ function UnsubscribeContent() {
 
         {status === "success" && (
           <div className="mt-8 border border-border p-8">
-            <CheckCircle2 className="w-12 h-12 mx-auto text-green-500 mb-4" />
-            <h2 className="font-mono text-lg mb-2">Unsubscribed</h2>
+            <CheckCircle2 strokeWidth={1} className="w-12 h-12 mx-auto text-green-700 dark:text-green-400 mb-4" />
+            <h2 className="mb-2 text-2xl font-light tracking-[-0.02em]">Unsubscribed</h2>
             <p className="text-sm text-muted-foreground">{message}</p>
             <p className="text-xs text-muted-foreground mt-4">
               You will no longer receive broadcast emails from Solvr.
@@ -63,7 +63,7 @@ function UnsubscribeContent() {
         {status === "error" && (
           <div className="mt-8 border border-border p-8">
             <XCircle className="w-12 h-12 mx-auto text-destructive mb-4" />
-            <h2 className="font-mono text-lg mb-2">Error</h2>
+            <h2 className="mb-2 text-2xl font-light tracking-[-0.02em]">Error</h2>
             <p className="text-sm text-muted-foreground">{message}</p>
           </div>
         )}

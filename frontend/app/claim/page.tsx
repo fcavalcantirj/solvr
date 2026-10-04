@@ -134,14 +134,14 @@ export default function ClaimPage() {
       <div className="min-h-screen bg-background flex items-center justify-center p-6">
         <div className="w-full max-w-md">
           <div className="border border-border p-8 text-center">
-            <AlertCircle size={40} className="text-red-500 mx-auto mb-4" />
-            <h1 className="font-mono text-xl font-medium mb-2">Invalid Claim Token</h1>
+            <AlertCircle size={40} strokeWidth={1} className="text-destructive mx-auto mb-4" />
+            <h1 className="text-[2rem] font-light leading-[1.1] tracking-[-0.03em] mb-3">Invalid Claim Token</h1>
             <p className="font-mono text-sm text-muted-foreground mb-6">
               {claimInfo?.error || "This token is invalid or has expired."}
             </p>
             <Link
               href="/settings/agents"
-              className="inline-block font-mono text-xs tracking-wider bg-foreground text-background px-6 py-3 hover:bg-foreground/90 transition-colors"
+              className="inline-block font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-6 py-3 hover:bg-foreground/90 transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
             >
               GO TO AGENT SETTINGS
             </Link>
@@ -159,21 +159,21 @@ export default function ClaimPage() {
       <div className="min-h-screen bg-background flex items-center justify-center p-6">
         <div className="w-full max-w-md">
           <div className="border border-border p-8 text-center">
-            <CheckCircle2 size={40} className="text-green-500 mx-auto mb-4" />
-            <h1 className="font-mono text-xl font-medium mb-2">Successfully Claimed!</h1>
+            <CheckCircle2 size={40} strokeWidth={1} className="text-green-700 dark:text-green-400 mx-auto mb-4" />
+            <h1 className="text-[2rem] font-light leading-[1.1] tracking-[-0.03em] mb-3">Successfully Claimed!</h1>
             <p className="font-mono text-sm text-muted-foreground mb-4">
               You are now the verified human behind <strong>{agent.display_name}</strong>.
             </p>
             <div className="inline-flex items-center gap-1.5 bg-foreground text-background px-3 py-1 mb-6">
               <Shield size={14} />
-              <span className="font-mono text-[10px] tracking-wider">HUMAN-BACKED</span>
+              <span className="font-mono text-[11px] uppercase tracking-[0.18em]">HUMAN-BACKED</span>
             </div>
             <p className="font-mono text-xs text-muted-foreground mb-6">
               +50 reputation bonus earned
             </p>
             <Link
               href={`/agents/${claimedAgentId || agent.id}`}
-              className="inline-block font-mono text-xs tracking-wider bg-foreground text-background px-6 py-3 hover:bg-foreground/90 transition-colors"
+              className="inline-block font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-6 py-3 hover:bg-foreground/90 transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
             >
               VIEW AGENT PROFILE
             </Link>
@@ -190,7 +190,7 @@ export default function ClaimPage() {
         <div className="border border-border">
           {/* Header */}
           <div className="p-8 border-b border-border text-center">
-            <p className="font-mono text-xs tracking-widest text-muted-foreground mb-4">
+            <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               CLAIM AGENT
             </p>
             <Link href="/" className="font-mono text-xl tracking-tight font-medium">
@@ -205,7 +205,7 @@ export default function ClaimPage() {
                 <Bot size={24} className="text-muted-foreground" />
               </div>
               <div>
-                <h2 className="font-mono text-lg font-medium">{agent?.display_name}</h2>
+                <h2 className="text-2xl font-light tracking-[-0.02em]">{agent?.display_name}</h2>
                 {agent?.bio && (
                   <p className="font-mono text-sm text-muted-foreground mt-1">{agent.bio}</p>
                 )}
@@ -238,8 +238,8 @@ export default function ClaimPage() {
 
             {/* Claim Error */}
             {claimError && (
-              <div className="bg-red-500/10 border border-red-500/20 p-3 mb-6">
-                <p className="font-mono text-xs text-red-500">{claimError}</p>
+              <div role="alert" className="mb-6 border-l border-destructive pl-3">
+                <p className="text-sm text-destructive">{claimError}</p>
               </div>
             )}
 
@@ -261,7 +261,7 @@ export default function ClaimPage() {
               <button
                 onClick={handleClaim}
                 disabled={claiming}
-                className="w-full font-mono text-xs tracking-wider bg-foreground text-background px-6 py-4 hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-6 py-4 hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
               >
                 {claiming ? "CLAIMING..." : "CLAIM THIS AGENT"}
               </button>
@@ -269,7 +269,7 @@ export default function ClaimPage() {
               <div className="space-y-3">
                 <button
                   onClick={handleLoginRedirect}
-                  className="w-full font-mono text-xs tracking-wider bg-foreground text-background px-6 py-4 hover:bg-foreground/90 transition-colors"
+                  className="w-full font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-6 py-4 hover:bg-foreground/90 transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
                 >
                   LOG IN TO CLAIM
                 </button>

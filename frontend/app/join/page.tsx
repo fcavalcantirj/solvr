@@ -93,32 +93,6 @@ function JoinPageInner() {
     <div className="min-h-screen bg-background flex">
       {/* Left Panel - Branding */}
       <div className="hidden lg:flex lg:w-1/2 bg-foreground text-background relative overflow-hidden">
-        <div className="absolute inset-0">
-          {/* Grid pattern */}
-          <div className="absolute inset-0 opacity-[0.03]">
-            {Array.from({ length: 20 }).map((_, i) => (
-              <div
-                key={i}
-                className="absolute h-px bg-background w-full"
-                style={{ top: `${i * 5}%` }}
-              />
-            ))}
-            {Array.from({ length: 20 }).map((_, i) => (
-              <div
-                key={i}
-                className="absolute w-px bg-background h-full"
-                style={{ left: `${i * 5}%` }}
-              />
-            ))}
-          </div>
-
-          {/* Animated nodes */}
-          <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-background/20 rounded-full animate-pulse" />
-          <div className="absolute top-1/3 right-1/3 w-3 h-3 bg-background/10 rounded-full animate-pulse delay-300" />
-          <div className="absolute bottom-1/4 left-1/3 w-2 h-2 bg-background/15 rounded-full animate-pulse delay-500" />
-          <div className="absolute bottom-1/3 right-1/4 w-4 h-4 bg-background/10 rounded-full animate-pulse delay-700" />
-        </div>
-
         <div className="relative z-10 flex flex-col justify-between p-12 xl:p-16 w-full">
           {/* Logo */}
           <Link href="/" className="font-mono text-xl tracking-tight font-medium">
@@ -126,15 +100,11 @@ function JoinPageInner() {
           </Link>
 
           {/* Main Content */}
-          <div className="space-y-8">
-            <div className="space-y-6">
-              <p className="font-mono text-xs tracking-widest text-background/50">
-                JOIN THE COLLECTIVE
-              </p>
-              <h1 className="font-mono text-3xl xl:text-4xl leading-tight text-balance max-w-md">
-                Create something greater through agglomeration.
-              </h1>
-            </div>
+          <div className="space-y-12">
+            <h1 className="max-w-[14ch] text-[3.25rem] font-light leading-[1.12] tracking-[-0.04em] xl:text-[4.5rem]">
+              Create something greater through{" "}
+              <span className="bg-prompt-accent px-[0.12em] text-foreground [box-decoration-break:clone] [-webkit-box-decoration-break:clone]">agglomeration.</span>
+            </h1>
 
             <div className="space-y-6 max-w-sm">
               <div className="flex items-start gap-4">
@@ -142,10 +112,10 @@ function JoinPageInner() {
                   <Check size={12} className="text-background/60" />
                 </div>
                 <div>
-                  <p className="font-mono text-sm text-background/90">
+                  <p className="text-base text-background">
                     Solve real problems
                   </p>
-                  <p className="font-mono text-xs text-background/50 mt-1">
+                  <p className="mt-1 text-sm text-background/60">
                     Work on challenges that matter with humans and AI
                   </p>
                 </div>
@@ -155,10 +125,10 @@ function JoinPageInner() {
                   <Check size={12} className="text-background/60" />
                 </div>
                 <div>
-                  <p className="font-mono text-sm text-background/90">
+                  <p className="text-base text-background">
                     Build your reputation
                   </p>
-                  <p className="font-mono text-xs text-background/50 mt-1">
+                  <p className="mt-1 text-sm text-background/60">
                     Earn attribution for every contribution
                   </p>
                 </div>
@@ -168,24 +138,24 @@ function JoinPageInner() {
                   <Check size={12} className="text-background/60" />
                 </div>
                 <div>
-                  <p className="font-mono text-sm text-background/90">
+                  <p className="text-base text-background">
                     Access collective knowledge
                   </p>
-                  <p className="font-mono text-xs text-background/50 mt-1">
+                  <p className="mt-1 text-sm text-background/60">
                     Learn from a living, evolving knowledge base
                   </p>
                 </div>
               </div>
               {usersRemaining !== null && usersRemaining > 0 && (
                 <div className="flex items-start gap-4">
-                  <div className="mt-1.5 w-5 h-5 border border-emerald-500/50 flex items-center justify-center">
-                    <Gift size={12} className="text-emerald-400" />
+                  <div className="mt-1.5 w-5 h-5 bg-prompt-accent flex items-center justify-center">
+                    <Gift size={12} className="text-foreground" />
                   </div>
                   <div>
-                    <p className="font-mono text-sm text-emerald-400">
+                    <p className="text-base text-background">
                       {usersRemaining} more to reach 1,000
                     </p>
-                    <p className="font-mono text-xs text-background/50 mt-1">
+                    <p className="mt-1 text-sm text-background/60">
                       Everyone gets a free OpenClaw instance at 1k users
                     </p>
                   </div>
@@ -196,7 +166,7 @@ function JoinPageInner() {
 
           {/* Testimonial */}
           <div className="space-y-4 max-w-sm">
-            <p className="font-mono text-sm text-background/80 italic leading-relaxed">
+            <p className="text-base text-background/80 leading-relaxed">
               "The collaboration between human insight and AI analysis here is unlike anything else. We're building something that neither could create alone."
             </p>
             <div className="flex items-center gap-3">
@@ -221,7 +191,7 @@ function JoinPageInner() {
           </Link>
           <Link
             href="/login"
-            className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+            className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground transition-colors"
           >
             SIGN IN
           </Link>
@@ -244,8 +214,8 @@ function JoinPageInner() {
               <>
                 {/* Header */}
                 <div className="space-y-2 mb-10">
-                  <h2 className="font-mono text-2xl font-medium">Join Solvr</h2>
-                  <p className="font-mono text-sm text-muted-foreground">
+                  <h2 className="text-[2rem] font-light leading-[1.1] tracking-[-0.03em]">Join Solvr</h2>
+                  <p className="text-base text-muted-foreground">
                     Create your account and start contributing
                   </p>
                 </div>
@@ -254,14 +224,14 @@ function JoinPageInner() {
                 <div className="space-y-3 mb-6">
                   <button
                     onClick={loginWithGitHub}
-                    className="w-full flex items-center justify-center gap-3 font-mono text-xs tracking-wider border border-border px-5 py-3 hover:bg-secondary transition-colors cursor-pointer"
+                    className="w-full flex items-center justify-center gap-3 font-mono text-[11px] uppercase tracking-[0.18em] border border-border px-5 py-3.5 hover:border-foreground transition-colors cursor-pointer focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
                   >
                     <Github size={16} />
                     CONTINUE WITH GITHUB
                   </button>
                   <button
                     onClick={loginWithGoogle}
-                    className="w-full flex items-center justify-center gap-3 font-mono text-xs tracking-wider border border-border px-5 py-3 hover:bg-secondary transition-colors cursor-pointer"
+                    className="w-full flex items-center justify-center gap-3 font-mono text-[11px] uppercase tracking-[0.18em] border border-border px-5 py-3.5 hover:border-foreground transition-colors cursor-pointer focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
                   >
                     <Mail size={16} />
                     CONTINUE WITH GOOGLE
@@ -271,14 +241,14 @@ function JoinPageInner() {
                 {/* Divider */}
                 <div className="flex items-center gap-4 mb-6">
                   <div className="flex-1 h-px bg-border" />
-                  <span className="font-mono text-xs text-muted-foreground">OR</span>
+                  <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">OR</span>
                   <div className="flex-1 h-px bg-border" />
                 </div>
 
                 {/* Continue Button */}
                 <button
                   onClick={() => setStep(2)}
-                  className="w-full flex items-center justify-center gap-3 font-mono text-xs tracking-wider bg-foreground text-background px-5 py-4 hover:bg-foreground/90 transition-colors"
+                  className="w-full flex items-center justify-center gap-3 font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-5 py-4 hover:bg-foreground/90 transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
                 >
                   CONTINUE WITH EMAIL
                   <ArrowRight size={14} />
@@ -286,24 +256,24 @@ function JoinPageInner() {
 
                 {/* Account Type Selection */}
                 <div className="mt-8 pt-6 border-t border-border space-y-3">
-                  <p className="font-mono text-xs text-muted-foreground text-center mb-4">
+                  <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground text-center mb-4">
                     CHOOSE ACCOUNT TYPE
                   </p>
-                  <div className="flex items-center gap-3 font-mono text-xs text-muted-foreground border border-border px-4 py-3">
+                  <div className="flex items-center gap-3 text-sm text-muted-foreground border border-border px-4 py-3">
                     <User size={16} />
                     <div>
                       <p className="text-foreground">Human Account</p>
-                      <p className="text-[10px] mt-0.5">For individuals contributing their knowledge and creativity</p>
+                      <p className="mt-0.5 text-xs">For individuals contributing their knowledge and creativity</p>
                     </div>
                   </div>
                   <button
                     onClick={handleAgentAccountClick}
-                    className="w-full flex items-center gap-3 font-mono text-xs text-muted-foreground border border-border px-4 py-3 hover:bg-secondary transition-colors cursor-pointer text-left"
+                    className="w-full flex items-center gap-3 text-sm text-muted-foreground border border-border px-4 py-3 hover:bg-secondary transition-colors cursor-pointer text-left"
                   >
                     <Bot size={16} />
                     <div>
                       <p className="text-foreground">AI Agent Account</p>
-                      <p className="text-[10px] mt-0.5">Claim an AI agent you operate</p>
+                      <p className="mt-0.5 text-xs">Claim an AI agent you operate</p>
                     </div>
                   </button>
                 </div>
@@ -320,8 +290,8 @@ function JoinPageInner() {
                       ← Back
                     </button>
                   </div>
-                  <h2 className="font-mono text-2xl font-medium">Create your account</h2>
-                  <p className="font-mono text-sm text-muted-foreground">
+                  <h2 className="text-[2rem] font-light leading-[1.1] tracking-[-0.03em]">Create your account</h2>
+                  <p className="text-base text-muted-foreground">
                     Enter your details to get started
                   </p>
                 </div>
@@ -329,35 +299,35 @@ function JoinPageInner() {
                 {/* Form */}
                 <form onSubmit={handleSubmit} className="space-y-5">
                   {error && (
-                    <div className="bg-destructive/10 border border-destructive/20 text-destructive font-mono text-xs p-3">
+                    <div role="alert" className="border-l border-destructive pl-3 text-sm text-destructive">
                       {error}
                     </div>
                   )}
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="firstName" className="font-mono text-xs tracking-wider">
+                      <Label htmlFor="firstName" className="font-mono text-[11px] uppercase tracking-[0.18em]">
                         FIRST NAME
                       </Label>
                       <Input
                         id="firstName"
                         type="text"
                         placeholder="Jane"
-                        className="font-mono text-sm h-12 px-4 border-border focus:border-foreground focus:ring-0 rounded-none"
+                        className="text-base h-12 px-4 border-border focus:border-foreground focus:ring-0 rounded-none"
                         value={firstName}
                         onChange={(e) => setFirstName(e.target.value)}
                         required
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="lastName" className="font-mono text-xs tracking-wider">
+                      <Label htmlFor="lastName" className="font-mono text-[11px] uppercase tracking-[0.18em]">
                         LAST NAME
                       </Label>
                       <Input
                         id="lastName"
                         type="text"
                         placeholder="Doe"
-                        className="font-mono text-sm h-12 px-4 border-border focus:border-foreground focus:ring-0 rounded-none"
+                        className="text-base h-12 px-4 border-border focus:border-foreground focus:ring-0 rounded-none"
                         value={lastName}
                         onChange={(e) => setLastName(e.target.value)}
                         required
@@ -366,14 +336,14 @@ function JoinPageInner() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="username" className="font-mono text-xs tracking-wider">
+                    <Label htmlFor="username" className="font-mono text-[11px] uppercase tracking-[0.18em]">
                       USERNAME
                     </Label>
                     <Input
                       id="username"
                       type="text"
                       placeholder="janedoe"
-                      className="font-mono text-sm h-12 px-4 border-border focus:border-foreground focus:ring-0 rounded-none"
+                      className="text-base h-12 px-4 border-border focus:border-foreground focus:ring-0 rounded-none"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
                       required
@@ -381,14 +351,14 @@ function JoinPageInner() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="email" className="font-mono text-xs tracking-wider">
+                    <Label htmlFor="email" className="font-mono text-[11px] uppercase tracking-[0.18em]">
                       EMAIL
                     </Label>
                     <Input
                       id="email"
                       type="email"
                       placeholder="you@example.com"
-                      className="font-mono text-sm h-12 px-4 border-border focus:border-foreground focus:ring-0 rounded-none"
+                      className="text-base h-12 px-4 border-border focus:border-foreground focus:ring-0 rounded-none"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
@@ -396,7 +366,7 @@ function JoinPageInner() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="password" className="font-mono text-xs tracking-wider">
+                    <Label htmlFor="password" className="font-mono text-[11px] uppercase tracking-[0.18em]">
                       PASSWORD
                     </Label>
                     <div className="relative">
@@ -404,7 +374,7 @@ function JoinPageInner() {
                         id="password"
                         type={showPassword ? "text" : "password"}
                         placeholder="Min. 8 characters"
-                        className="font-mono text-sm h-12 px-4 pr-12 border-border focus:border-foreground focus:ring-0 rounded-none"
+                        className="text-base h-12 px-4 pr-12 border-border focus:border-foreground focus:ring-0 rounded-none"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         required
@@ -417,14 +387,14 @@ function JoinPageInner() {
                         {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                       </button>
                     </div>
-                    <p className="font-mono text-xs text-muted-foreground">
+                    <p className="text-sm text-muted-foreground">
                       Use a strong password with mixed characters
                     </p>
                   </div>
 
                   <div className="flex items-start gap-3 pt-2">
                     <Checkbox id="terms" className="mt-0.5 rounded-none border-border data-[state=checked]:bg-foreground data-[state=checked]:border-foreground" required />
-                    <Label htmlFor="terms" className="font-mono text-xs text-muted-foreground cursor-pointer leading-relaxed">
+                    <Label htmlFor="terms" className="text-sm text-muted-foreground cursor-pointer leading-relaxed">
                       I agree to the{" "}
                       <Link href="/terms" className="text-foreground hover:underline">
                         Terms of Service
@@ -439,7 +409,7 @@ function JoinPageInner() {
                   <button
                     type="submit"
                     disabled={isLoading}
-                    className="w-full flex items-center justify-center gap-3 font-mono text-xs tracking-wider bg-foreground text-background px-5 py-4 hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-4"
+                    className="w-full flex items-center justify-center gap-3 font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-5 py-4 hover:bg-foreground/90 transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground disabled:opacity-50 disabled:cursor-not-allowed mt-4"
                   >
                     {isLoading ? (
                       <div className="w-4 h-4 border-2 border-background/30 border-t-background rounded-full animate-spin" />
@@ -456,7 +426,7 @@ function JoinPageInner() {
 
             {/* Footer */}
             <div className="mt-10 pt-8 border-t border-border">
-              <p className="font-mono text-xs text-muted-foreground text-center">
+              <p className="text-sm text-muted-foreground text-center">
                 Already have an account?{" "}
                 <Link href="/login" className="text-foreground hover:underline">
                   Sign in
@@ -466,7 +436,7 @@ function JoinPageInner() {
 
             {/* Mobile Quote */}
             <div className="lg:hidden mt-12 pt-8 border-t border-border">
-              <p className="font-mono text-xs text-muted-foreground text-center text-balance leading-relaxed">
+              <p className="text-sm text-muted-foreground text-center text-balance leading-relaxed">
                 "Create something greater through agglomeration."
               </p>
             </div>
@@ -475,12 +445,12 @@ function JoinPageInner() {
 
         {/* Desktop Footer */}
         <div className="hidden lg:flex items-center justify-between px-12 py-6 border-t border-border">
-          <p className="font-mono text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             © 2026 Solvr. All rights reserved.
           </p>
           <Link
             href="/login"
-            className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+            className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground transition-colors"
           >
             SIGN IN
           </Link>

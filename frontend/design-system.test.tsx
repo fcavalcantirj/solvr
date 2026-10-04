@@ -369,6 +369,8 @@ describe('restrained status colour on the room surfaces', () => {
     'components/homepage/room-stats-section.tsx',
     'components/homepage/overview-meta-banner.tsx',
     'app/status/page.tsx',
+    'app/claim/page.tsx',
+    'app/email/unsubscribe/page.tsx',
   ]
   const FAMILY = '(?:green|emerald|amber|red|yellow)'
   const TEXT = new RegExp(`(dark:)?text-(${FAMILY}-\\d{2,3})\\b`, 'g')
@@ -475,6 +477,11 @@ describe('the one-sentence page language', () => {
     'components/posts/post-card.tsx',
     'app/status/page.tsx',
     'components/leaderboard/leaderboard-page-client.tsx',
+    'app/login/page.tsx',
+    'app/join/page.tsx',
+    'app/claim/page.tsx',
+    'app/auth/callback/page.tsx',
+    'app/email/unsubscribe/page.tsx',
   ]
 
   it.each(MIGRATED)('%s speaks the new language', (file) => {
@@ -482,6 +489,8 @@ describe('the one-sentence page language', () => {
     expect(source, file).not.toContain('tracking-[0.3em]')
     expect(source, file).not.toContain('max-w-7xl')
     expect(source, file).not.toContain('text-[10px]')
+    // The widest letter-spacing is the old kicker's; captions use tracking-[0.18em].
+    expect(source, file).not.toContain('tracking-widest')
   })
 })
 

@@ -50,26 +50,6 @@ export default function LoginPage() {
     <div className="min-h-screen bg-background flex">
       {/* Left Panel - Branding */}
       <div className="hidden lg:flex lg:w-1/2 bg-foreground text-background relative overflow-hidden">
-        <div className="absolute inset-0">
-          {/* Grid pattern */}
-          <div className="absolute inset-0 opacity-[0.03]">
-            {Array.from({ length: 20 }).map((_, i) => (
-              <div
-                key={i}
-                className="absolute h-px bg-background w-full"
-                style={{ top: `${i * 5}%` }}
-              />
-            ))}
-            {Array.from({ length: 20 }).map((_, i) => (
-              <div
-                key={i}
-                className="absolute w-px bg-background h-full"
-                style={{ left: `${i * 5}%` }}
-              />
-            ))}
-          </div>
-        </div>
-
         <div className="relative z-10 flex flex-col justify-between p-12 xl:p-16 w-full">
           {/* Logo */}
           <Link href="/" className="font-mono text-xl tracking-tight font-medium">
@@ -77,32 +57,28 @@ export default function LoginPage() {
           </Link>
 
           {/* Main Content */}
-          <div className="space-y-8">
-            <div className="space-y-6">
-              <p className="font-mono text-xs tracking-widest text-background/50">
-                COLLECTIVE INTELLIGENCE
-              </p>
-              <h1 className="font-mono text-3xl xl:text-4xl leading-tight text-balance max-w-md">
-                Several brains operating within the same environment.
-              </h1>
-            </div>
+          <div className="space-y-12">
+            <h1 className="max-w-[14ch] text-[3.25rem] font-light leading-[1.12] tracking-[-0.04em] xl:text-[4.5rem]">
+              Several brains operating within the{" "}
+              <span className="bg-prompt-accent px-[0.12em] text-foreground [box-decoration-break:clone] [-webkit-box-decoration-break:clone]">same environment.</span>
+            </h1>
 
             <div className="space-y-4 max-w-sm">
               <div className="flex items-center gap-4">
-                <div className="w-8 h-px bg-background/30" />
-                <p className="font-mono text-xs text-background/60">
+                <div className="w-8 h-px bg-background/40" />
+                <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-background/70">
                   Human + AI collaboration
                 </p>
               </div>
               <div className="flex items-center gap-4">
-                <div className="w-8 h-px bg-background/30" />
-                <p className="font-mono text-xs text-background/60">
+                <div className="w-8 h-px bg-background/40" />
+                <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-background/70">
                   Open knowledge synthesis
                 </p>
               </div>
               <div className="flex items-center gap-4">
-                <div className="w-8 h-px bg-background/30" />
-                <p className="font-mono text-xs text-background/60">
+                <div className="w-8 h-px bg-background/40" />
+                <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-background/70">
                   Transparent problem-solving
                 </p>
               </div>
@@ -120,7 +96,7 @@ export default function LoginPage() {
           </Link>
           <Link
             href="/join"
-            className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+            className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground transition-colors"
           >
             CREATE ACCOUNT
           </Link>
@@ -130,8 +106,8 @@ export default function LoginPage() {
           <div className="w-full max-w-sm">
             {/* Header */}
             <div className="space-y-2 mb-10">
-              <h2 className="font-mono text-2xl font-medium">Welcome back</h2>
-              <p className="font-mono text-sm text-muted-foreground">
+              <h2 className="text-[2rem] font-light leading-[1.1] tracking-[-0.03em]">Welcome back</h2>
+              <p className="text-base text-muted-foreground">
                 Sign in to continue your work
               </p>
             </div>
@@ -140,14 +116,14 @@ export default function LoginPage() {
             <div className="space-y-3 mb-8">
               <button
                 onClick={loginWithGitHub}
-                className="w-full flex items-center justify-center gap-3 font-mono text-xs tracking-wider border border-border px-5 py-3 hover:bg-secondary transition-colors cursor-pointer"
+                className="w-full flex items-center justify-center gap-3 font-mono text-[11px] uppercase tracking-[0.18em] border border-border px-5 py-3.5 hover:border-foreground transition-colors cursor-pointer focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
               >
                 <Github size={16} />
                 CONTINUE WITH GITHUB
               </button>
               <button
                 onClick={loginWithGoogle}
-                className="w-full flex items-center justify-center gap-3 font-mono text-xs tracking-wider border border-border px-5 py-3 hover:bg-secondary transition-colors cursor-pointer"
+                className="w-full flex items-center justify-center gap-3 font-mono text-[11px] uppercase tracking-[0.18em] border border-border px-5 py-3.5 hover:border-foreground transition-colors cursor-pointer focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
               >
                 <Mail size={16} />
                 CONTINUE WITH GOOGLE
@@ -157,27 +133,27 @@ export default function LoginPage() {
             {/* Divider */}
             <div className="flex items-center gap-4 mb-8">
               <div className="flex-1 h-px bg-border" />
-              <span className="font-mono text-xs text-muted-foreground">OR</span>
+              <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">OR</span>
               <div className="flex-1 h-px bg-border" />
             </div>
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="space-y-6">
               {error && (
-                <div className="bg-destructive/10 border border-destructive/20 text-destructive font-mono text-xs p-3">
+                <div role="alert" className="border-l border-destructive pl-3 text-sm text-destructive">
                   {error}
                 </div>
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="email" className="font-mono text-xs tracking-wider">
+                <Label htmlFor="email" className="font-mono text-[11px] uppercase tracking-[0.18em]">
                   EMAIL
                 </Label>
                 <Input
                   id="email"
                   type="email"
                   placeholder="you@example.com"
-                  className="font-mono text-sm h-12 px-4 border-border focus:border-foreground focus:ring-0 rounded-none"
+                  className="text-base h-12 px-4 border-border focus:border-foreground focus:ring-0 rounded-none"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -186,7 +162,7 @@ export default function LoginPage() {
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="password" className="font-mono text-xs tracking-wider">
+                  <Label htmlFor="password" className="font-mono text-[11px] uppercase tracking-[0.18em]">
                     PASSWORD
                   </Label>
                   <Link
@@ -201,7 +177,7 @@ export default function LoginPage() {
                     id="password"
                     type={showPassword ? "text" : "password"}
                     placeholder="Enter your password"
-                    className="font-mono text-sm h-12 px-4 pr-12 border-border focus:border-foreground focus:ring-0 rounded-none"
+                    className="text-base h-12 px-4 pr-12 border-border focus:border-foreground focus:ring-0 rounded-none"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
@@ -218,7 +194,7 @@ export default function LoginPage() {
 
               <div className="flex items-center gap-3">
                 <Checkbox id="remember" className="rounded-none border-border data-[state=checked]:bg-foreground data-[state=checked]:border-foreground" />
-                <Label htmlFor="remember" className="font-mono text-xs text-muted-foreground cursor-pointer">
+                <Label htmlFor="remember" className="text-sm text-muted-foreground cursor-pointer">
                   Keep me signed in
                 </Label>
               </div>
@@ -226,7 +202,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full flex items-center justify-center gap-3 font-mono text-xs tracking-wider bg-foreground text-background px-5 py-4 hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full flex items-center justify-center gap-3 font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-5 py-4 hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
               >
                 {isLoading ? (
                   <div className="w-4 h-4 border-2 border-background/30 border-t-background rounded-full animate-spin" />
@@ -241,7 +217,7 @@ export default function LoginPage() {
 
             {/* Footer */}
             <div className="mt-10 pt-8 border-t border-border">
-              <p className="font-mono text-xs text-muted-foreground text-center">
+              <p className="text-sm text-muted-foreground text-center">
                 Don't have an account?{" "}
                 <Link href="/join" className="text-foreground hover:underline">
                   Create one
@@ -251,7 +227,7 @@ export default function LoginPage() {
 
             {/* Hidden on desktop, shown on mobile */}
             <div className="lg:hidden mt-12 pt-8 border-t border-border">
-              <p className="font-mono text-xs text-muted-foreground text-center text-balance leading-relaxed">
+              <p className="text-sm text-muted-foreground text-center text-balance leading-relaxed">
                 "Several brains — human and artificial — operating within the same environment."
               </p>
             </div>
@@ -265,7 +241,7 @@ export default function LoginPage() {
           </p>
           <Link
             href="/join"
-            className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+            className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground transition-colors"
           >
             CREATE ACCOUNT
           </Link>

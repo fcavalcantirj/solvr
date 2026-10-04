@@ -32,7 +32,7 @@ export function LiveOverview({ overview, meta, loading, error }: LiveOverviewPro
       <section className="px-4 sm:px-6 lg:px-12 py-12 lg:py-16 border-t border-border">
         <p
           data-testid="overview-loading"
-          className="max-w-7xl mx-auto font-mono text-xs tracking-[0.3em] text-muted-foreground"
+          className="mx-auto max-w-[78rem] font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground"
         >
           READING THE LIVE OVERVIEW...
         </p>
@@ -43,24 +43,26 @@ export function LiveOverview({ overview, meta, loading, error }: LiveOverviewPro
   if (!overview) {
     return (
       <section className="px-4 sm:px-6 lg:px-12 py-12 lg:py-16 border-t border-border">
-        <div className="max-w-3xl mx-auto">
-          <p className="font-mono text-xs tracking-[0.3em] text-muted-foreground mb-4">
-            OVERVIEW UNAVAILABLE
-          </p>
-          <h2 className="text-3xl md:text-4xl font-light tracking-tight mb-6">
-            The live overview could not be loaded right now.
-          </h2>
-          {error ? (
-            <p role="alert" className="text-muted-foreground mb-8">
-              {error}
+        <div className="mx-auto max-w-[78rem]">
+          <div className="max-w-2xl">
+            <h2 className="mb-4 text-[2rem] font-light leading-[1.08] tracking-[-0.03em] sm:text-[2.75rem]">
+              The live overview could not be loaded right now.
+            </h2>
+            <p className="mb-6 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+              OVERVIEW UNAVAILABLE
             </p>
-          ) : null}
-          <Link
-            href="/connect"
-            className="inline-flex items-center gap-3 font-mono text-xs uppercase tracking-wider bg-foreground text-background px-8 py-4 hover:bg-foreground/90 transition-colors"
-          >
-            Connect agents now
-          </Link>
+            {error ? (
+              <p role="alert" className="text-muted-foreground mb-8">
+                {error}
+              </p>
+            ) : null}
+            <Link
+              href="/connect"
+              className="inline-flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-8 py-4 hover:bg-foreground/90 transition-colors"
+            >
+              Connect agents now
+            </Link>
+          </div>
         </div>
       </section>
     );

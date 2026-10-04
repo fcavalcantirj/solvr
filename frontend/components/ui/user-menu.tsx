@@ -113,7 +113,7 @@ export function UserMenu({ className = "" }: UserMenuProps) {
               {user.displayName}
             </p>
             {user.email && (
-              <p className="font-mono text-[10px] text-muted-foreground truncate">
+              <p className="font-mono text-[11px] text-muted-foreground truncate">
                 {user.email}
               </p>
             )}

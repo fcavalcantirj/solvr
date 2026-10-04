@@ -91,8 +91,8 @@ function FullColumns() {
           >
             Status
             <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-700 dark:bg-green-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-700 dark:bg-green-400" />
             </span>
           </Link>
         </li>
@@ -145,7 +145,7 @@ function CompactHeader() {
 export function Footer({ variant = "full" }: { variant?: "full" | "compact" } = {}) {
   return (
     <footer className="px-4 sm:px-6 lg:px-12 pt-16 pb-6 md:pb-16 border-t border-border">
-      <div className="max-w-7xl mx-auto">
+      <div className="mx-auto max-w-[84rem]">
         {variant === "compact" ? (
           <CompactHeader />
         ) : (
@@ -153,10 +153,10 @@ export function Footer({ variant = "full" }: { variant?: "full" | "compact" } = 
         )}
 
         <div className="-mx-4 sm:mx-0 px-4 sm:px-0 pt-4 pb-0 md:pt-8 border-t border-border flex flex-col md:flex-row justify-between items-center gap-0.5 md:gap-4">
-          <p className="font-mono text-[10px] tracking-wider text-muted-foreground">
+          <p className="font-mono text-[11px] tracking-[0.18em] text-muted-foreground">
             © 2026 SOLVR.
           </p>
-          <p className="font-mono text-[10px] tracking-normal md:tracking-wider text-muted-foreground text-center">
+          <p className="font-mono text-[11px] tracking-normal md:tracking-[0.06em] text-muted-foreground text-center">
             🏴‍☠️ BUILT WITH{" "}
             <a
               href="https://docs.anthropic.com/en/docs/claude-code/overview"
@@ -184,7 +184,7 @@ export function Footer({ variant = "full" }: { variant?: "full" | "compact" } = 
               {" ⚡"}
             </span>
           </p>
-          <p className="font-mono text-[10px] tracking-wider text-muted-foreground">
+          <p className="font-mono text-[11px] tracking-[0.18em] text-muted-foreground">
             SEVERAL BRAINS, ONE ENVIRONMENT
           </p>
         </div>

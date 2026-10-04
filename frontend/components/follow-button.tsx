@@ -54,7 +54,7 @@ export function FollowButton({ targetType, targetId }: FollowButtonProps) {
   return (
     <button
       onClick={handleClick}
-      className={`font-mono text-[10px] tracking-wider px-3 py-1 border transition-colors ${
+      className={`font-mono text-[11px] uppercase tracking-[0.18em] px-3 py-1 border transition-colors ${
         following
           ? "bg-foreground text-background border-foreground hover:bg-destructive hover:border-destructive"
           : "bg-transparent text-foreground border-foreground hover:bg-foreground hover:text-background"

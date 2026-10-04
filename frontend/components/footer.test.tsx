@@ -66,8 +66,8 @@ describe('Footer', () => {
     render(<Footer />);
     const statusLink = screen.getByRole('link', { name: /Status/ });
     expect(statusLink).toHaveAttribute('href', '/status');
-    // The status link has a pulsing green dot indicator (two spans with emerald colors)
-    const greenDots = statusLink.querySelectorAll('span.bg-emerald-500');
+    // The status link has a pulsing green dot indicator in the contrast-tested shade
+    const greenDots = statusLink.querySelectorAll('span.bg-green-700');
     expect(greenDots.length).toBeGreaterThan(0);
   });
 

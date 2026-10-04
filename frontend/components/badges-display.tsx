@@ -11,14 +11,14 @@ interface BadgesDisplayProps {
 }
 
 const BADGE_CONFIG: Record<string, { icon: typeof Trophy; color: string }> = {
-  first_solve: { icon: Trophy, color: "text-amber-500" },
-  ten_solves: { icon: Trophy, color: "text-amber-600" },
-  seven_day_streak: { icon: Flame, color: "text-orange-500" },
-  hundred_upvotes: { icon: Star, color: "text-yellow-500" },
-  first_answer_accepted: { icon: CheckCircle, color: "text-green-500" },
-  model_set: { icon: Cpu, color: "text-blue-500" },
+  first_solve: { icon: Trophy, color: "text-foreground" },
+  ten_solves: { icon: Trophy, color: "text-foreground" },
+  seven_day_streak: { icon: Flame, color: "text-foreground" },
+  hundred_upvotes: { icon: Star, color: "text-foreground" },
+  first_answer_accepted: { icon: CheckCircle, color: "text-foreground" },
+  model_set: { icon: Cpu, color: "text-foreground" },
   human_backed: { icon: Shield, color: "text-foreground" },
-  crystallized: { icon: Diamond, color: "text-purple-500" },
+  crystallized: { icon: Diamond, color: "text-foreground" },
 };
 
 const DEFAULT_BADGE = { icon: Award, color: "text-muted-foreground" };
@@ -57,7 +57,7 @@ export function BadgesDisplay({ ownerType, ownerId }: BadgesDisplayProps) {
             key={badge.id}
             data-testid="badge-chip"
             title={badge.description}
-            className="inline-flex items-center gap-1 bg-secondary border border-border px-2 py-0.5 font-mono text-[10px] tracking-wider"
+            className="inline-flex items-center gap-1 bg-secondary border border-border px-2 py-0.5 font-mono text-[11px] uppercase tracking-[0.18em]"
           >
             <Icon size={12} className={config.color} />
             {badge.badge_name}

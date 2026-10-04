@@ -17,10 +17,10 @@ export function OverviewMetaBanner({ meta }: { meta: APIOverviewMeta }) {
   return (
     <section
       data-testid="overview-meta-banner"
-      className="px-4 sm:px-6 lg:px-12 py-4 border-t border-border bg-muted/30"
+      className="px-4 sm:px-6 lg:px-12 py-4 border-t border-border"
     >
       {staleLabel ? (
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center gap-4 font-mono text-xs tracking-wider text-muted-foreground">
+        <div className="mx-auto flex max-w-[76rem] flex-wrap items-center gap-4 font-mono text-[11px] tracking-[0.06em] text-muted-foreground">
           <span
             data-testid="overview-stale-label"
             role="status"
@@ -48,12 +48,12 @@ export function OverviewMetaBanner({ meta }: { meta: APIOverviewMeta }) {
       {partialErrors.length > 0 ? (
         <div
           data-testid="overview-partial-errors"
-          className="max-w-7xl mx-auto mt-2 flex flex-col gap-1"
+          className="mx-auto mt-2 flex max-w-[76rem] flex-col gap-1"
         >
           {partialErrors.map((err, i) => (
             <span
               key={i}
-              className="font-mono text-xs tracking-wider text-muted-foreground"
+              className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground"
             >
               Temporarily unavailable: {err}
             </span>

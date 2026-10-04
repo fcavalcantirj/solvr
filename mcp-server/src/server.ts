@@ -22,11 +22,13 @@ export interface MCPResponse {
   };
 }
 
+// The MCP InitializeResult initialize answers. A client built on the MCP SDK refuses an
+// answer without serverInfo {name, version}.
 export const SERVER_INFO = {
   name: 'solvr',
   version: VERSION,
-  protocolVersion: '2024-11-05',
 };
+export const PROTOCOL_VERSION = '2024-11-05';
 
 export async function handleRequest(request: MCPRequest, tools: SolvrTools): Promise<MCPResponse> {
   const { id, method, params } = request;
@@ -37,10 +39,11 @@ export async function handleRequest(request: MCPRequest, tools: SolvrTools): Pro
         jsonrpc: '2.0',
         id,
         result: {
-          ...SERVER_INFO,
+          protocolVersion: PROTOCOL_VERSION,
           capabilities: {
             tools: {},
           },
+          serverInfo: SERVER_INFO,
         },
       };
 

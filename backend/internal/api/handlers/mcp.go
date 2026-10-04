@@ -3,6 +3,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 )
 
@@ -42,13 +43,17 @@ type rpcError struct {
 	Message string `json:"message"`
 }
 
-// MCP server info
-var mcpServerInfo = map[string]interface{}{
-	"name":            "solvr",
-	"version":         MCPVersion,
+// mcpInitializeResult is the MCP InitializeResult initialize answers: the protocol version,
+// the server's capabilities and serverInfo {name, version}. A client built on the MCP SDK
+// refuses an answer without serverInfo.
+var mcpInitializeResult = map[string]interface{}{
 	"protocolVersion": "2024-11-05",
 	"capabilities": map[string]interface{}{
 		"tools": map[string]interface{}{},
+	},
+	"serverInfo": map[string]interface{}{
+		"name":    "solvr",
+		"version": MCPVersion,
 	},
 }
 
@@ -258,8 +263,13 @@ func (h *MCPHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	raw, err := io.ReadAll(r.Body)
+	if err != nil {
+		h.writeRPCError(w, nil, -32700, "Parse error: "+err.Error())
+		return
+	}
 	var req jsonRPCRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.Unmarshal(raw, &req); err != nil {
 		h.writeRPCError(w, nil, -32700, "Parse error: "+err.Error())
 		return
 	}
@@ -267,6 +277,16 @@ func (h *MCPHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	if req.JSONRPC != "2.0" {
 		h.writeRPCError(w, req.ID, -32600, "Invalid JSON-RPC version")
 		return
+	}
+
+	// A notification (a message without an id) is never answered: over HTTP it is accepted
+	// with 202 and no body (notifications/initialized, notifications/cancelled, ...).
+	var members map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &members); err == nil {
+		if _, hasID := members["id"]; !hasID {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
 	}
 
 	// Handle MCP methods
@@ -287,7 +307,7 @@ func (h *MCPHandler) Handle(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *MCPHandler) handleInitialize(w http.ResponseWriter, req jsonRPCRequest) {
-	h.writeRPCResult(w, req.ID, mcpServerInfo)
+	h.writeRPCResult(w, req.ID, mcpInitializeResult)
 }
 
 func (h *MCPHandler) handleInitialized(w http.ResponseWriter, req jsonRPCRequest) {

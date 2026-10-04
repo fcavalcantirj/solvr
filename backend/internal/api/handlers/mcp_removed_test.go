@@ -104,7 +104,8 @@ func TestMCPRemoved_AToolThatNeverExistedIsStillUnknown(t *testing.T) {
 
 func TestMCPRemoved_InitializeAnswersTheVersionOfTheNotes(t *testing.T) {
 	assert.Equal(t, "2.0.0", MCPVersion)
-	assert.Equal(t, MCPVersion, mcpRPC(t, "initialize", nil)["version"])
+	info, _ := mcpRPC(t, "initialize", nil)["serverInfo"].(map[string]interface{})
+	assert.Equal(t, MCPVersion, info["version"])
 }
 
 // tools/list offers none of them: no removed tool, and no tool takes a removed argument.

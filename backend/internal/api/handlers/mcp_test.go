@@ -57,8 +57,44 @@ func TestMCPHandler_Initialize(t *testing.T) {
 		t.Fatalf("expected result to be map, got %T", resp.Result)
 	}
 
-	if result["name"] != "solvr" {
-		t.Errorf("expected server name 'solvr', got %v", result["name"])
+	// The MCP InitializeResult: protocolVersion, capabilities and serverInfo {name, version}.
+	// A client built on the MCP SDK refuses an answer without serverInfo.
+	if result["protocolVersion"] != "2024-11-05" {
+		t.Errorf("expected protocolVersion 2024-11-05, got %v", result["protocolVersion"])
+	}
+	if capabilities, _ := result["capabilities"].(map[string]interface{}); capabilities == nil || capabilities["tools"] == nil {
+		t.Errorf("expected capabilities.tools, got %v", result["capabilities"])
+	}
+	info, _ := result["serverInfo"].(map[string]interface{})
+	if info == nil || info["name"] != "solvr" || info["version"] != MCPVersion {
+		t.Errorf("expected serverInfo {name: solvr, version: %s}, got %v", MCPVersion, result["serverInfo"])
+	}
+	for _, flat := range []string{"name", "version"} {
+		if _, ok := result[flat]; ok {
+			t.Errorf("%s belongs inside serverInfo, not at the top of the result", flat)
+		}
+	}
+}
+
+// A JSON-RPC notification (a message without an id) is never answered: over HTTP the
+// server accepts it with 202 and no body. MCP clients send notifications/initialized
+// right after initialize.
+func TestMCPHandler_NotificationsAreAcceptedWithoutAnAnswer(t *testing.T) {
+	handler := NewMCPHandler(nil)
+	for _, method := range []string{"notifications/initialized", "initialized", "notifications/cancelled", "unknown/notification"} {
+		body := `{"jsonrpc":"2.0","method":"` + method + `"}`
+		req := httptest.NewRequest(http.MethodPost, "/v1/mcp", bytes.NewReader([]byte(body)))
+		req.Header.Set("Content-Type", "application/json")
+		rr := httptest.NewRecorder()
+
+		handler.Handle(rr, req)
+
+		if rr.Code != http.StatusAccepted {
+			t.Errorf("%s: expected 202, got %d", method, rr.Code)
+		}
+		if rr.Body.Len() != 0 {
+			t.Errorf("%s: expected no body, got %s", method, rr.Body.String())
+		}
 	}
 }
 

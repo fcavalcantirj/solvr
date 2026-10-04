@@ -180,7 +180,7 @@ describe('the version the migration notes describe', () => {
       { jsonrpc: '2.0', id: 1, method: 'initialize', params: {} },
       new SolvrTools(API_KEY, 'http://127.0.0.1:9')
     );
-    expect((response.result as { version: string }).version).toBe(VERSION);
+    expect((response.result as { serverInfo: { version: string } }).serverInfo.version).toBe(VERSION);
     expect(README).toContain(NOTES_HEADING);
   });
 });

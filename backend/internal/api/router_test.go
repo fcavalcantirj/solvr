@@ -1076,8 +1076,8 @@ func TestMCPEndpointExists(t *testing.T) {
 	}
 
 	// Should return server info
-	if result["name"] != "solvr" {
-		t.Errorf("expected server name 'solvr', got %v", result["name"])
+	if info, _ := result["serverInfo"].(map[string]interface{}); info == nil || info["name"] != "solvr" {
+		t.Errorf("expected serverInfo.name 'solvr', got %v", result["serverInfo"])
 	}
 }
 

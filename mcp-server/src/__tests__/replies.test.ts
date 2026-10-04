@@ -103,7 +103,7 @@ describe('JSON-RPC handler', () => {
   it('answers initialize, rejects a call without a tool name and an unknown method', async () => {
     const tools = new SolvrTools(API_KEY, 'http://127.0.0.1:1');
     const init = await handleRequest({ jsonrpc: '2.0', id: 1, method: 'initialize' }, tools);
-    expect(init.result).toMatchObject({ name: 'solvr', capabilities: { tools: {} } });
+    expect(init.result).toMatchObject({ serverInfo: { name: 'solvr' }, capabilities: { tools: {} } });
     const noName = await handleRequest({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: {} }, tools);
     expect(noName.error?.code).toBe(-32602);
     const unknown = await handleRequest({ jsonrpc: '2.0', id: 3, method: 'nope' }, tools);

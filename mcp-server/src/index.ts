@@ -54,6 +54,8 @@ async function main() {
 
       try {
         const request: MCPRequest = JSON.parse(line);
+        // A notification (a message without an id), such as notifications/initialized, gets no answer.
+        if (!('id' in request)) continue;
         const response = await handleRequest(request, tools);
         sendResponse(response);
       } catch (error) {

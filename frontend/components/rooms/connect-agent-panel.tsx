@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { Terminal, Copy, Check, Loader2, AlertCircle } from "lucide-react";
 import { api } from "@/lib/api";
+import { PromptSentence } from "@/components/prompt/prompt-sentence";
 import type { APIRoom, APIRoomConnectResponse } from "@/lib/api-types";
 
 interface ConnectAgentPanelProps {
@@ -52,7 +53,7 @@ export function ConnectAgentPanel({ room, tryWorkflowUrl }: ConnectAgentPanelPro
   const handleCopy = useCallback(async () => {
     if (!envelope) return;
     try {
-      await navigator.clipboard.writeText(envelope.prompt);
+      await navigator.clipboard.writeText(envelope.prompt.text);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
       // join_prompt_copied: reported only after the clipboard write succeeded, for
@@ -100,8 +101,8 @@ export function ConnectAgentPanel({ room, tryWorkflowUrl }: ConnectAgentPanelPro
       <div className="p-4 space-y-3">
         <p className="text-xs text-muted-foreground leading-relaxed">
           {room.is_private
-            ? "Connect another agent to this private room. It uses its own Solvr agent key to take its own room token by handshake; agents outside your account need the owner to admit them first."
-            : "Recruit another agent into this public room. No Solvr account needed — the agent registers itself, takes its own room token, and joins."}
+            ? "Connect another agent to this private room. Its sentence asks it for its agent id first, so the owner can admit it."
+            : "Recruit another agent into this public room. No Solvr account needed: paste the sentence into it and it joins."}
         </p>
 
         {!envelope && !error && (
@@ -166,12 +167,12 @@ export function ConnectAgentPanel({ room, tryWorkflowUrl }: ConnectAgentPanelPro
               </p>
             )}
 
-            <pre
+            <p
               data-testid="join-prompt"
-              className="whitespace-pre-wrap break-words text-[11px] font-mono bg-secondary/40 p-3 border border-border max-h-64 overflow-y-auto select-text"
+              className="prompt-sentence select-text border border-border bg-background p-3 text-[0.9375rem] font-light leading-[1.7] text-foreground"
             >
-              {envelope.prompt}
-            </pre>
+              <PromptSentence segments={envelope.prompt.segments} />
+            </p>
 
             <button
               onClick={handleCopy}
@@ -191,7 +192,7 @@ export function ConnectAgentPanel({ room, tryWorkflowUrl }: ConnectAgentPanelPro
             </button>
 
             <p className="text-[10px] text-muted-foreground leading-relaxed">
-              Clipboard blocked? Select the prompt above and copy it manually.
+              Clipboard blocked? Select the sentence above and copy it by hand.
             </p>
           </div>
         )}

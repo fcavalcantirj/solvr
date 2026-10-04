@@ -41,16 +41,27 @@ const collaboratorEnvelope: APIRoomConnectResponse = {
     room_url: "https://solvr.dev/rooms/help-with-hermes-agent",
     private: false,
     task: "Fix the Hermes agent buffer size",
-    expected_planner_identity: "planner-bot",
-    executor_prompt: "",
-    prompt:
-      "You are the Collaborator agent joining an existing Solvr room. " +
-      "ROOM: https://solvr.dev/rooms/help-with-hermes-agent " +
-      "POST https://api.solvr.dev/v1/agents/register " +
-      "POST https://api.solvr.dev/v1/rooms/help-with-hermes-agent/handshake",
+    prompt: {
+      text:
+        "Learn Solvr from https://solvr.dev/skill.md. Join the public Solvr room \"Hermes agent\" at https://solvr.dev/rooms/help-with-hermes-agent as the COLLABORATOR, read it, and help with the work pinned there, and post what you did.",
+      segments: [
+        { kind: "text", text: "Learn Solvr from " },
+        { kind: "link", text: "https://solvr.dev/skill.md" },
+        { kind: "text", text: ". Join the " },
+        { kind: "visibility", text: "public", value: "public" },
+        { kind: "text", text: " Solvr room \"" },
+        { kind: "intent", text: "Hermes agent" },
+        { kind: "text", text: "\" at " },
+        { kind: "link", text: "https://solvr.dev/rooms/help-with-hermes-agent" },
+        { kind: "text", text: " as the " },
+        { kind: "role", text: "COLLABORATOR", side: "b" },
+        { kind: "text", text: ", read it, and " },
+        { kind: "text", text: "help with the work pinned there, and post what you did" },
+        { kind: "text", text: "." },
+      ],
+      word_count: 33,
+    },
     role: "collaborator",
-    first_message_id: 42,
-    first_message_url: "https://solvr.dev/rooms/help-with-hermes-agent#message-1",
   },
 };
 
@@ -80,9 +91,7 @@ describe("ConnectAgentPanel", () => {
 
     // The copyable prompt appears, bound to the real room, with the Collaborator role.
     const prompt = await screen.findByTestId("join-prompt");
-    expect(prompt.textContent).toContain(
-      "joining an existing Solvr room",
-    );
+    expect(prompt.textContent).toBe(collaboratorEnvelope.data.prompt.text);
     expect(prompt.textContent).toContain(
       "https://solvr.dev/rooms/help-with-hermes-agent",
     );
@@ -98,8 +107,13 @@ describe("ConnectAgentPanel", () => {
   });
 
   it("fetches the API-owned join prompt for a private room its member can see", async () => {
+    const privateText = "Learn Solvr from https://solvr.dev/skill.md. Join the private Solvr room https://solvr.dev/rooms/help-with-hermes-agent as the COLLABORATOR, read it, and help with the work pinned there, and post what you did. It's private, so give me your agent id first and I'll get you admitted.";
     getRoomConnectMock.mockResolvedValue({
-      data: { ...collaboratorEnvelope.data, private: true },
+      data: {
+        ...collaboratorEnvelope.data,
+        private: true,
+        prompt: { text: privateText, segments: [{ kind: "text", text: privateText }], word_count: 44 },
+      },
     });
     render(<ConnectAgentPanel room={makeRoom({ is_private: true })} />);
 
@@ -116,7 +130,7 @@ describe("ConnectAgentPanel", () => {
       );
     });
     const prompt = await screen.findByTestId("join-prompt");
-    expect(prompt.textContent).toContain("/v1/rooms/help-with-hermes-agent/handshake");
+    expect(prompt.textContent).toContain("give me your agent id first");
   });
 
   it("copies the join prompt to the clipboard", async () => {
@@ -131,7 +145,7 @@ describe("ConnectAgentPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: /copy join prompt/i }));
 
     await waitFor(() => {
-      expect(writeTextMock).toHaveBeenCalledWith(collaboratorEnvelope.data.prompt);
+      expect(writeTextMock).toHaveBeenCalledWith(collaboratorEnvelope.data.prompt.text);
     });
     expect(await screen.findByText(/copied/i)).toBeInTheDocument();
   });

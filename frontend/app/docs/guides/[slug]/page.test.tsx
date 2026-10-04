@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render } from '@testing-library/react';
 
-// Task idx 84: three evidence-backed workflow guides. Each embeds the live prompt the
-// API serves, states exactly what was tested (over plain HTTPS, date, commit, test
-// name), claims no named client, and links to the connect flow.
+// Task idx 84, v1.3.5: each use-case guide is a title, one line and the API's example
+// sentence, big and read-only (GET /v1/connect/examples) — no step lists and no endpoints.
+// The unlisted resume guide keeps its long-form content and its tested record.
 
 vi.mock('@/components/header', () => ({ Header: () => null }));
 vi.mock('@/components/footer', () => ({ Footer: () => null }));
@@ -14,89 +14,88 @@ vi.mock('next/navigation', () => ({
 }));
 
 import GuidePage, { generateMetadata } from './page';
-import { WORKFLOW_GUIDES } from '@/lib/docs/workflow-guides';
+import { LISTED_GUIDES, WORKFLOW_GUIDES } from '@/lib/docs/workflow-guides';
+import { CONNECT_EXAMPLES } from '@/components/connect/connect-fixture';
 
 const fetchMock = vi.fn();
 beforeEach(() => {
   fetchMock.mockReset();
-  fetchMock.mockResolvedValue({
+  fetchMock.mockImplementation(async (url: string) => ({
     ok: true,
     status: 200,
-    json: async () => ({ data: { prompt: { text: 'POST https://api.solvr.dev/v1/agents/register SEEDED PROMPT' } } }),
-  });
+    json: async () =>
+      String(url).includes('/v1/connect/examples')
+        ? { data: { instruction_version: '2.0', presets: CONNECT_EXAMPLES } }
+        : { data: { prompt: { text: 'Learn Solvr from https://solvr.dev/skill.md. SEEDED SENTENCE' } } },
+  }));
   vi.stubGlobal('fetch', fetchMock);
 });
 afterEach(() => vi.unstubAllGlobals());
 
 const params = (slug: string) => ({ params: Promise.resolve({ slug }) });
 
-describe('workflow guides', () => {
-  // Replaces 'publishes exactly the three evidence-backed guides': the share-context
-  // guide (TestGuide_ShareContext) joins them, second, as on the homepage use cases.
-  it('publishes exactly the four evidence-backed guides', () => {
-    expect(WORKFLOW_GUIDES.map((g) => g.slug)).toEqual([
-      'connect-planner-executor',
-      'share-context-between-agents',
-      'connect-builder-reviewer',
-      'resume-across-two-clis',
+describe('use-case guides', () => {
+  it('lists the three use cases, in the order of the sentences', () => {
+    expect(LISTED_GUIDES.map((g) => [g.slug, g.preset])).toEqual([
+      ['connect-planner-executor', 'plan-and-build'],
+      ['share-context-between-agents', 'collaborate'],
+      ['connect-builder-reviewer', 'build-and-review'],
     ]);
   });
 
-  it('teaches the planner to pin its plan as the room directive, as the tested prompt does', () => {
-    const planner = WORKFLOW_GUIDES.find((g) => g.slug === 'connect-planner-executor')!;
-    expect(planner.steps.join(' ')).toMatch(/pins? .*directive/i);
-    expect(planner.steps.join(' ')).toContain('/entries/{id}/pin');
-  });
-
-  it('share context: shows the example instruction and embeds the prompt that carries it', async () => {
-    const share = WORKFLOW_GUIDES.find((g) => g.slug === 'share-context-between-agents')!;
-    expect(share.preset).toBe('collaborate');
-    expect(share.example).toBeTruthy();
-    const { container } = render(await GuidePage(params(share.slug)));
-    expect(container.querySelector('[data-testid="guide-example"]')?.textContent).toContain(share.example!);
-    const [url] = fetchMock.mock.calls[0];
-    expect(String(url)).toContain(`task=${encodeURIComponent(share.example!)}`);
-  });
-
-  for (const guide of WORKFLOW_GUIDES) {
-    it(`${guide.slug}: renders its steps, the live prompt and what was tested`, async () => {
+  for (const guide of LISTED_GUIDES) {
+    it(`${guide.slug}: a title, one line and the example sentence, nothing else`, async () => {
       const { container } = render(await GuidePage(params(guide.slug)));
       const text = container.textContent ?? '';
-      expect(container.querySelector('h1')?.textContent).toBe(guide.title);
-      expect(text).toContain('SEEDED PROMPT');
-      expect(text).toContain('Tested over plain HTTPS');
-      expect(text).toContain(guide.tested.date);
-      expect(text).toContain(guide.tested.commit);
-      expect(text).toContain(guide.tested.test);
-      for (const step of guide.steps) expect(text).toContain(step);
-      const hrefs = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href'));
-      expect(hrefs).toContain('/connect');
+      expect(container.querySelector('h1')).toHaveTextContent(guide.title);
+      expect(text).toContain(guide.description);
+      const example = CONNECT_EXAMPLES.find((p) => p.value === guide.preset)!;
+      expect(container.querySelector('[data-testid="prompt-sentence"]')?.textContent).toBe(example.prompt.text);
+      expect(text).toContain(example.next);
+      expect(container.querySelector('ol')).toBeNull();
+      for (const forbidden of ['api.solvr.dev', '/v1/', 'curl', 'STEPS', 'WHAT WAS TESTED']) {
+        expect(text).not.toContain(forbidden);
+      }
       expect(text).not.toMatch(/claude code|codex|cursor|gemini/i);
-      const [url, init] = fetchMock.mock.calls[0];
-      expect(String(url)).toContain(`/v1/connect?preset=${guide.preset}`);
-      expect(init).toMatchObject({ cache: 'no-store' });
-    });
-
-    it(`${guide.slug}: has its own canonical and breadcrumbs`, async () => {
-      const metadata = await generateMetadata(params(guide.slug));
-      expect(metadata.alternates?.canonical).toBe(`/docs/guides/${guide.slug}`);
-      expect(metadata.title).toBe(guide.title);
-      const { container } = render(await GuidePage(params(guide.slug)));
-      const ld = [...container.querySelectorAll('script[type="application/ld+json"]')].map((s) => JSON.parse(s.innerHTML));
-      expect(ld[0].itemListElement.map((i: { item: string }) => i.item)).toEqual([
-        'https://solvr.dev/', 'https://solvr.dev/docs', 'https://solvr.dev/docs/guides', `https://solvr.dev/docs/guides/${guide.slug}`,
-      ]);
     });
   }
 
-  it('still teaches the workflow when the live prompt cannot be read', async () => {
-    fetchMock.mockRejectedValue(new TypeError('fetch failed'));
-    const { container } = render(await GuidePage(params(WORKFLOW_GUIDES[0].slug)));
-    expect(container.textContent).toContain(WORKFLOW_GUIDES[0].steps[0]);
-    expect([...container.querySelectorAll('a')].map((a) => a.getAttribute('href'))).toContain('/connect');
+  it('reads the examples from the API', async () => {
+    render(await GuidePage(params(LISTED_GUIDES[0].slug)));
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/v1/connect/examples');
   });
 
-  it('answers a real 404 for a guide that does not exist', async () => {
-    await expect(GuidePage(params('connect-everything'))).rejects.toThrow('NEXT_NOT_FOUND');
+  it('points at Connect when the sentence cannot be read', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 503, json: async () => ({}) });
+    const { container } = render(await GuidePage(params(LISTED_GUIDES[1].slug)));
+    expect(container.querySelector('[data-testid="prompt-sentence"]')).toBeNull();
+    expect(container.querySelector('a[href="/connect?preset=collaborate"]')).not.toBeNull();
+  });
+});
+
+describe('the resume guide (unlisted)', () => {
+  const resume = WORKFLOW_GUIDES.find((g) => g.slug === 'resume-across-two-clis')!;
+
+  it('is not listed, and keeps its content', async () => {
+    expect(resume.listed).toBe(false);
+    const { container } = render(await GuidePage(params(resume.slug)));
+    const text = container.textContent ?? '';
+    for (const step of resume.steps ?? []) expect(text).toContain(step);
+    expect(text).toContain(resume.tested!.test);
+    expect(text).toContain('SEEDED SENTENCE');
+  });
+});
+
+describe('guide metadata and missing guides', () => {
+  it('titles each guide and canonicalizes its URL', async () => {
+    for (const guide of WORKFLOW_GUIDES) {
+      const meta = await generateMetadata(params(guide.slug));
+      expect(meta.title).toBe(guide.title);
+      expect(meta.alternates?.canonical).toBe(`/docs/guides/${guide.slug}`);
+    }
+  });
+
+  it('answers 404 for an unknown guide', async () => {
+    await expect(GuidePage(params('no-such-guide'))).rejects.toThrow('NEXT_NOT_FOUND');
   });
 });

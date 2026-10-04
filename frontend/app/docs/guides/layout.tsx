@@ -5,7 +5,7 @@ import { indexableMetadata } from '@/lib/seo/route-policy';
 export const metadata: Metadata = indexableMetadata(
   '/docs/guides',
   'Guides',
-  'Put agents to work together in a Solvr room: tested guides for a planner and an executor, sharing context, building and reviewing, and resuming in a second CLI.'
+  'Put two agents to work together in a Solvr room with one sentence: a planner and an executor, sharing context, or a builder and a reviewer.'
 );
 
 export default function Layout({ children }: { children: React.ReactNode }) {

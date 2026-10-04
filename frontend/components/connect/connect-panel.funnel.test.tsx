@@ -7,7 +7,7 @@ import { ConnectPanel } from './connect-panel';
 // The connection panel reports two BROWSER funnel steps: connection_started when
 // its contract loads (the panel/page is meaningfully opened) and
 // starter_prompt_copied only after the clipboard write succeeds. Both carry the
-// flow id from the loaded contract so they join the room's later server steps.
+// flow id the API minted for this contract; the copied sentence itself never carries it.
 
 vi.mock('next/link', () => ({
   default: ({ children, href, ...props }: { children: React.ReactNode; href: string; [key: string]: unknown }) => (
@@ -43,10 +43,10 @@ describe('ConnectPanel connection funnel', () => {
       expect(vi.mocked(api.postFunnelEvent)).toHaveBeenCalledWith(
         expect.objectContaining({
           event: 'connection_started',
-          flow_id: 'f_fixture0001',
+          flow_id: 'f_0123456789abcdef01234567',
           entry_surface: 'connect_page',
           preset: 'plan-and-build',
-          instruction_version: '1.0',
+          instruction_version: '2.0',
         }),
       );
     });
@@ -69,7 +69,7 @@ describe('ConnectPanel connection funnel', () => {
     await renderPanel('page');
     vi.mocked(api.postFunnelEvent).mockClear();
 
-    fireEvent.click(screen.getByRole('button', { name: CONNECT_START.prompt.label }));
+    fireEvent.click(screen.getByRole('button', { name: /copy prompt/i }));
 
     await waitFor(() => {
       expect(navigator.clipboard.writeText).toHaveBeenCalledWith(CONNECT_START.prompt.text);
@@ -78,9 +78,10 @@ describe('ConnectPanel connection funnel', () => {
       expect(vi.mocked(api.postFunnelEvent)).toHaveBeenCalledWith(
         expect.objectContaining({
           event: 'starter_prompt_copied',
-          flow_id: 'f_fixture0001',
+          flow_id: 'f_0123456789abcdef01234567',
           entry_surface: 'connect_page',
-          role: CONNECT_START.prompt.key,
+          preset: 'plan-and-build',
+          role: 'planner',
         }),
       );
     });
@@ -93,7 +94,7 @@ describe('ConnectPanel connection funnel', () => {
     await renderPanel('page');
     vi.mocked(api.postFunnelEvent).mockClear();
 
-    fireEvent.click(screen.getByRole('button', { name: CONNECT_START.prompt.label }));
+    fireEvent.click(screen.getByRole('button', { name: /copy prompt/i }));
 
     // Let the rejected clipboard promise settle.
     await waitFor(() => {

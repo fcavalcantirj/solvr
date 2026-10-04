@@ -32,12 +32,12 @@ function envelope(role: 'planner' | 'executor') {
       room_url: 'https://solvr.dev/rooms/debug-the-parser',
       private: false,
       task: '',
-      expected_planner_identity: '',
-      executor_prompt: role === 'executor' ? 'EXECUTOR PROMPT for debug-the-parser' : '',
-      prompt: role === 'planner' ? 'PLANNER PROMPT for debug-the-parser' : '',
+      prompt: {
+        text: `${role.toUpperCase()} PROMPT for debug-the-parser`,
+        segments: [{ kind: 'text' as const, text: `${role.toUpperCase()} PROMPT for debug-the-parser` }],
+        word_count: 4,
+      },
       role,
-      first_message_id: 0,
-      first_message_url: '',
     },
   };
 }

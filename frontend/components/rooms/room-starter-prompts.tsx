@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Terminal, Copy, Check, Loader2, AlertCircle } from "lucide-react";
 import { api } from "@/lib/api";
-import type { APIRoom } from "@/lib/api-types";
+import type { APIPrompt, APIRoom } from "@/lib/api-types";
+import { PromptSentence } from "@/components/prompt/prompt-sentence";
 
 interface RoomStarterPromptsProps {
   room: APIRoom;
@@ -35,8 +36,8 @@ type CopyTarget = "planner" | "executor";
 export function RoomStarterPrompts({ room, justCreated }: RoomStarterPromptsProps) {
   const show = justCreated ?? readCreatedParam();
 
-  const [plannerPrompt, setPlannerPrompt] = useState<string | null>(null);
-  const [executorPrompt, setExecutorPrompt] = useState<string | null>(null);
+  const [plannerPrompt, setPlannerPrompt] = useState<APIPrompt | null>(null);
+  const [executorPrompt, setExecutorPrompt] = useState<APIPrompt | null>(null);
   const [roomUrl, setRoomUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
@@ -51,7 +52,7 @@ export function RoomStarterPrompts({ room, justCreated }: RoomStarterPromptsProp
         api.getRoomConnect(room.slug, "executor"),
       ]);
       setPlannerPrompt(planner.data.prompt);
-      setExecutorPrompt(executor.data.executor_prompt);
+      setExecutorPrompt(executor.data.prompt);
       setRoomUrl(planner.data.room_url || executor.data.room_url);
     } catch {
       setError(true);
@@ -65,7 +66,7 @@ export function RoomStarterPrompts({ room, justCreated }: RoomStarterPromptsProp
     load();
   }, [show, load]);
 
-  const copy = useCallback(async (target: CopyTarget, text: string | null) => {
+  const copy = useCallback(async (target: CopyTarget, text: string | undefined) => {
     if (!text) return;
     try {
       await navigator.clipboard.writeText(text);
@@ -133,7 +134,7 @@ export function RoomStarterPrompts({ room, justCreated }: RoomStarterPromptsProp
             copyTestId="starter-copy-planner"
             prompt={plannerPrompt}
             copied={copied === "planner"}
-            onCopy={() => copy("planner", plannerPrompt)}
+            onCopy={() => copy("planner", plannerPrompt.text)}
           />
         )}
 
@@ -144,7 +145,7 @@ export function RoomStarterPrompts({ room, justCreated }: RoomStarterPromptsProp
             copyTestId="starter-copy-executor"
             prompt={executorPrompt}
             copied={copied === "executor"}
-            onCopy={() => copy("executor", executorPrompt)}
+            onCopy={() => copy("executor", executorPrompt.text)}
           />
         )}
       </div>
@@ -163,7 +164,7 @@ function StarterPrompt({
   label: string;
   testId: string;
   copyTestId: string;
-  prompt: string;
+  prompt: APIPrompt;
   copied: boolean;
   onCopy: () => void;
 }) {
@@ -172,12 +173,12 @@ function StarterPrompt({
       <span className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground">
         {label}
       </span>
-      <pre
+      <p
         data-testid={testId}
-        className="whitespace-pre-wrap break-words text-[11px] font-mono bg-secondary/40 p-3 border border-border max-h-64 overflow-y-auto select-text"
+        className="prompt-sentence select-text border border-border bg-background p-3 text-[0.9375rem] font-light leading-[1.7] text-foreground"
       >
-        {prompt}
-      </pre>
+        <PromptSentence segments={prompt.segments} />
+      </p>
       <button
         data-testid={copyTestId}
         onClick={onCopy}
@@ -196,7 +197,7 @@ function StarterPrompt({
         )}
       </button>
       <p className="text-[10px] text-muted-foreground leading-relaxed">
-        Clipboard blocked? Select the prompt above and copy it manually.
+        Clipboard blocked? Select the sentence above and copy it by hand.
       </p>
     </div>
   );

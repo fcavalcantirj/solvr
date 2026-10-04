@@ -3,13 +3,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { CONNECT_START, CONNECT_START_PRIVATE_COLLABORATE, CONNECT_START_BUILD_AND_REVIEW } from './connect-fixture';
+import { CONNECT_START, CONNECT_START_BUILD_AND_REVIEW } from './connect-fixture';
 import { ConnectPanel } from './connect-panel';
 
-// The connection panel is the ONE surface that starts a connection. The index
-// opens it inline and /connect renders the same component full-page, so every
-// string, every option and the prompt itself come from GET /v1/connect and
-// nothing is decided in the browser.
+// The connection panel is the ONE surface that starts a connection (v1.3.5). It renders
+// the API's sentence by its segments, sends back what the visitor types or flips, swaps
+// the use case among the sentences the API already sent, and copies the text it was given.
 
 vi.mock('next/link', () => ({
   default: ({ children, href, ...props }: { children: React.ReactNode; href: string; [key: string]: unknown }) => (
@@ -18,7 +17,7 @@ vi.mock('next/link', () => ({
 }));
 
 vi.mock('@/lib/api', () => ({
-  api: { getConnectStart: vi.fn() },
+  api: { getConnectStart: vi.fn(), postFunnelEvent: vi.fn() },
 }));
 
 import { api } from '@/lib/api';
@@ -28,267 +27,117 @@ const read = (file: string) => readFileSync(join(process.cwd(), file), 'utf8');
 beforeEach(() => {
   vi.mocked(api.getConnectStart).mockReset();
   vi.mocked(api.getConnectStart).mockResolvedValue({ data: CONNECT_START });
+  vi.mocked(api.postFunnelEvent).mockReset();
+  vi.mocked(api.postFunnelEvent).mockResolvedValue(undefined);
   Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
 });
 
-// renderPanel waits for the first contract to arrive.
 async function renderPanel(variant: 'panel' | 'page' = 'panel') {
   const result = render(<ConnectPanel variant={variant} />);
   await screen.findByTestId('connect-panel');
   return result;
 }
 
-describe('ConnectPanel renders the API contract', () => {
-  it('publishes the heading, the intro and the note the API wrote', async () => {
+const sentence = () => screen.getByTestId('prompt-sentence');
+
+describe('ConnectPanel renders the API sentence', () => {
+  it('shows exactly the text the API served, segment by segment', async () => {
     await renderPanel();
-    expect(screen.getByText(CONNECT_START.heading)).toBeInTheDocument();
-    expect(screen.getByText(CONNECT_START.intro)).toBeInTheDocument();
-    expect(screen.getByText(CONNECT_START.note)).toBeInTheDocument();
+    expect(sentence().textContent).toBe(CONNECT_START.prompt.text);
   });
 
-  it('shows the optional task field with the API label, placeholder, note and bound', async () => {
+  it('gives each deciding word its own kind of token', async () => {
     await renderPanel();
-    const field = screen.getByLabelText(CONNECT_START.task_field.label);
-    expect(field).toHaveAttribute('placeholder', CONNECT_START.task_field.placeholder);
-    expect(field).toHaveAttribute('maxlength', String(CONNECT_START.task_field.max_chars));
-    expect(screen.getByText(CONNECT_START.task_field.note)).toBeInTheDocument();
+    const s = sentence();
+    const roles = [...s.querySelectorAll('[data-kind="role"]')].map((n) => n.textContent);
+    expect(roles).toEqual(['PLANNER', 'EXECUTOR']);
+    expect(s.querySelector('[data-kind="handoff"]')).toHaveTextContent('answer me with a prompt for the');
+    expect(within(s).getByRole('textbox', { name: 'What should they do?' })).toHaveTextContent('work on what I tell you next');
+    expect(within(s).getByRole('switch', { name: 'Private room' })).toHaveAttribute('aria-checked', 'false');
+    expect(within(s).getByRole('link', { name: 'https://solvr.dev/skill.md' })).toHaveAttribute('href', 'https://solvr.dev/skill.md');
   });
 
-  it('offers every preset and every visibility the API sent, with its explanation', async () => {
+  it('offers every use case the API sent, its closing cell, and the line on what happens next', async () => {
     await renderPanel();
-    for (const option of [...CONNECT_START.presets, ...CONNECT_START.visibility_options]) {
-      const control = screen.getByRole('radio', { name: new RegExp(option.label, 'i') });
-      expect((control as HTMLInputElement).checked).toBe(option.selected);
-      expect(screen.getByText(option.description)).toBeInTheDocument();
-    }
-  });
-
-  it('names the two copy/paste actions in order, before any statistic has to be read', async () => {
-    await renderPanel();
-    const steps = within(screen.getByTestId('connect-steps')).getAllByRole('listitem');
-    expect(steps).toHaveLength(CONNECT_START.steps.length);
-    CONNECT_START.steps.forEach((step, i) => {
-      expect(steps[i]).toHaveTextContent(step.label);
-      expect(steps[i]).toHaveTextContent(step.detail);
-    });
+    const radios = screen.getAllByRole('radio');
+    expect(radios.map((r) => (r as HTMLInputElement).value)).toEqual(['plan-and-build', 'collaborate', 'build-and-review']);
+    expect(screen.getByTestId('role-pair-more')).toHaveTextContent('Your imagination');
+    expect(screen.getByTestId('role-pair-more')).toHaveTextContent('Any number of agents');
+    expect(screen.getByText(CONNECT_START.next)).toBeInTheDocument();
+    expect(screen.getByText(`${CONNECT_START.prompt.word_count} words, plain text`)).toBeInTheDocument();
   });
 
   it('links the real example the API chose', async () => {
     await renderPanel();
-    const link = screen.getByRole('link', { name: CONNECT_START.example.label });
-    expect(link).toHaveAttribute('href', CONNECT_START.example.url);
-    expect(screen.getByText(CONNECT_START.example.detail)).toBeInTheDocument();
-  });
-
-  it('renders the Add another agent control with its role prompt from the API', async () => {
-    await renderPanel();
-    expect(screen.getByText(CONNECT_START.add_agent.label)).toBeInTheDocument();
-    expect(screen.getByText(CONNECT_START.add_agent.detail)).toBeInTheDocument();
-    expect(screen.getByTestId('connect-add-agent-prompt')).toHaveTextContent(
-      CONNECT_START.add_agent.role_prompt,
+    expect(screen.getByRole('link', { name: /watch two agents do it/i })).toHaveAttribute(
+      'href',
+      '/rooms/tictactoe-human-vs-computer-20260920',
     );
-  });
-
-  it('renders the Customize section with advanced instructions and API examples', async () => {
-    await renderPanel();
-    expect(screen.getByText(CONNECT_START.customize.label)).toBeInTheDocument();
-    expect(screen.getByText(CONNECT_START.customize.detail)).toBeInTheDocument();
-    for (const instruction of CONNECT_START.customize.advanced_instructions) {
-      expect(screen.getByText(instruction)).toBeInTheDocument();
-    }
-    expect(screen.getByTestId('connect-api-examples')).toBeInTheDocument();
-    for (const example of CONNECT_START.customize.api_examples) {
-      expect(screen.getByTestId('connect-api-examples').textContent).toContain(example);
-    }
-  });
-});
-
-describe('ConnectPanel keeps the flow client-independent', () => {
-  it('states the only requirement is outbound HTTPS and lists what is never needed', async () => {
-    await renderPanel();
-    const block = screen.getByTestId('connect-requirements');
-    expect(block).toHaveTextContent(CONNECT_START.requirements.label);
-    expect(within(block).getByText(CONNECT_START.requirements.detail)).toBeInTheDocument();
-    for (const item of CONNECT_START.requirements.not_needed) {
-      expect(within(block).getByText(item)).toBeInTheDocument();
-    }
-  });
-
-  it('names example clients without claiming tested compatibility', async () => {
-    await renderPanel();
-    const examples = screen.getByTestId('connect-client-examples');
-    for (const client of CONNECT_START.requirements.client_examples) {
-      expect(examples).toHaveTextContent(client);
-    }
-    // The clients are examples, not a required onboarding choice: no radio /
-    // required control forces one, and the note declines tested compatibility.
-    for (const client of CONNECT_START.requirements.client_examples) {
-      expect(screen.queryByRole('radio', { name: new RegExp(client, 'i') })).not.toBeInTheDocument();
-    }
-    expect(screen.getByTestId('connect-requirements')).toHaveTextContent(
-      CONNECT_START.requirements.client_examples_note,
-    );
-  });
-
-  it('gives an agent without HTTPS a help link instead of a fake connection', async () => {
-    await renderPanel();
-    const block = screen.getByTestId('connect-requirements');
-    expect(block).toHaveTextContent(CONNECT_START.requirements.missing_capability);
-    const help = within(block).getByRole('link', { name: CONNECT_START.requirements.help_label });
-    expect(help).toHaveAttribute('href', CONNECT_START.requirements.help_url);
   });
 });
 
 describe('ConnectPanel copying', () => {
-  it('copies the prompt with no task entered and explains where to paste it', async () => {
+  it('copies exactly the plain text the API served', async () => {
     await renderPanel();
-
-    expect(screen.getByText(CONNECT_START.prompt.instruction)).toBeInTheDocument();
-    expect(screen.getByText(CONNECT_START.prompt.next_step)).toBeInTheDocument();
-
-    const copy = screen.getByRole('button', { name: CONNECT_START.prompt.label });
-    fireEvent.click(copy);
-
-    await waitFor(() => {
-      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(CONNECT_START.prompt.text);
-    });
-    await screen.findByText(CONNECT_START.prompt.copied_label);
+    fireEvent.click(screen.getByRole('button', { name: /copy prompt/i }));
+    await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith(CONNECT_START.prompt.text));
+    expect(await screen.findByRole('button', { name: /copied/i })).toBeInTheDocument();
   });
 
-  it('shows the prompt itself, so it can be read and selected without the clipboard', async () => {
+  it('does not report Copied and says how to copy by hand when the clipboard is denied', async () => {
+    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockRejectedValue(new Error('denied')) } });
     await renderPanel();
-    const pre = screen.getByTestId('connect-prompt-text');
-    expect(pre).toHaveTextContent('You are the PLANNER agent');
-    // The prompt block is selectable so a visitor can always copy it by hand.
-    expect(pre.className).toContain('select-all');
-  });
-
-  it('confirms a successful copy by naming the agent to paste into and what comes back', async () => {
-    await renderPanel();
-    // No confirmation before the copy actually happens.
-    expect(screen.queryByTestId('connect-copied-detail')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: CONNECT_START.prompt.label }));
-
-    const status = await screen.findByRole('status');
-    expect(status).toHaveTextContent(CONNECT_START.prompt.copied_detail);
-    // The feedback explains which agent should receive it and what to expect.
-    expect(status.textContent?.toLowerCase()).toContain('planner');
-    expect(status.textContent?.toLowerCase()).toContain('executor prompt');
-  });
-
-  it('does not report Copied and offers a manual copy when the clipboard is denied', async () => {
-    await renderPanel();
-    Object.assign(navigator, {
-      clipboard: { writeText: vi.fn().mockRejectedValue(new Error('clipboard permission denied')) },
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: CONNECT_START.prompt.label }));
-
-    // A manual-copy instruction appears instead of a fake success.
-    const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent(/copy it manually/i);
-
-    // The button never claims Copied and no success confirmation is shown.
-    expect(screen.queryByTestId('connect-copied-detail')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: CONNECT_START.prompt.label })).toBeInTheDocument();
-    expect(screen.queryByText(CONNECT_START.prompt.copied_label)).not.toBeInTheDocument();
-
-    // The prompt stays readable and selectable for a manual copy.
-    const pre = screen.getByTestId('connect-prompt-text');
-    expect(pre.className).toContain('select-all');
-    expect(pre).toHaveTextContent('You are the PLANNER agent');
+    fireEvent.click(screen.getByRole('button', { name: /copy prompt/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/copy it by hand/i);
+    expect(screen.queryByRole('button', { name: /copied/i })).not.toBeInTheDocument();
   });
 });
 
-describe('ConnectPanel sends every choice back to the API', () => {
+describe('ConnectPanel sends every change back to the API', () => {
   it('asks the API for its own defaults instead of assuming any', async () => {
     await renderPanel();
-    expect(vi.mocked(api.getConnectStart)).toHaveBeenCalledWith({});
+    expect(api.getConnectStart).toHaveBeenCalledWith({});
   });
 
-  it('re-reads the prompt when the visitor types a task', async () => {
+  it('re-reads the sentence when the visitor types the intent', async () => {
     await renderPanel();
-    fireEvent.change(screen.getByLabelText(CONNECT_START.task_field.label), {
-      target: { value: 'Port the billing job' },
-    });
-    await waitFor(
-      () => {
-        expect(vi.mocked(api.getConnectStart)).toHaveBeenCalledWith(
-          expect.objectContaining({ task: 'Port the billing job' }),
-        );
-      },
-      { timeout: 3000 },
-    );
+    const slot = within(sentence()).getByRole('textbox');
+    slot.textContent = 'ship the signup page';
+    fireEvent.input(slot);
+    await waitFor(() => expect(api.getConnectStart).toHaveBeenLastCalledWith({ intent: 'ship the signup page' }));
   });
 
-  it('re-reads the prompt when the preset or the visibility changes, and renders what comes back', async () => {
+  it('re-reads the sentence with the other visibility when the visitor flips it', async () => {
     await renderPanel();
-
-    // What the API answers while only the preset has changed: the room is
-    // still public, because the visitor has not chosen otherwise yet.
-    const collaboratePublic = {
-      ...CONNECT_START_PRIVATE_COLLABORATE,
-      visibility_options: CONNECT_START.visibility_options,
-      selected: { ...CONNECT_START_PRIVATE_COLLABORATE.selected, visibility: 'public' },
-    };
-    vi.mocked(api.getConnectStart).mockResolvedValue({ data: collaboratePublic });
-
-    fireEvent.click(screen.getByRole('radio', { name: /Collaborate/i }));
-    await waitFor(() => {
-      expect(vi.mocked(api.getConnectStart)).toHaveBeenCalledWith(
-        expect.objectContaining({ preset: 'collaborate' }),
-      );
-    });
-
-    await screen.findByRole('radio', { name: /Collaborate/i, checked: true });
-    vi.mocked(api.getConnectStart).mockResolvedValue({ data: CONNECT_START_PRIVATE_COLLABORATE });
-
-    fireEvent.click(screen.getByRole('radio', { name: /Private/i }));
-    await waitFor(() => {
-      expect(vi.mocked(api.getConnectStart)).toHaveBeenCalledWith(
-        expect.objectContaining({ visibility: 'private' }),
-      );
-    });
-
-    // The copy control, the instruction and the prompt are the API's new ones,
-    // not the first ones relabelled in the browser.
-    await screen.findByRole('button', { name: CONNECT_START_PRIVATE_COLLABORATE.prompt.label });
-    expect(screen.getByText(CONNECT_START_PRIVATE_COLLABORATE.prompt.instruction)).toBeInTheDocument();
-    expect(screen.getByTestId('connect-prompt-text')).toHaveTextContent('You are the FIRST agent');
+    fireEvent.click(within(sentence()).getByRole('switch'));
+    await waitFor(() => expect(api.getConnectStart).toHaveBeenLastCalledWith({ visibility: 'private' }));
   });
 
-  it('re-reads the prompt when the build-and-review preset is chosen', async () => {
+  it('swaps the use case among the sentences it already has, without asking again', async () => {
     await renderPanel();
-
-    // The API answers with the build-and-review variant while the room is still
-    // public, because the visitor has not chosen otherwise yet.
-    const buildAndReviewPublic = {
-      ...CONNECT_START_BUILD_AND_REVIEW,
-      visibility_options: CONNECT_START.visibility_options,
-      selected: { ...CONNECT_START_BUILD_AND_REVIEW.selected, visibility: 'public' },
-    };
-    vi.mocked(api.getConnectStart).mockResolvedValue({ data: buildAndReviewPublic });
-
-    fireEvent.click(screen.getByRole('radio', { name: /Build and review/i }));
-    await waitFor(() => {
-      expect(vi.mocked(api.getConnectStart)).toHaveBeenCalledWith(
-        expect.objectContaining({ preset: 'build-and-review' }),
-      );
-    });
-
-    // The builder prompt replaces the planner prompt.
-    await screen.findByRole('button', { name: CONNECT_START_BUILD_AND_REVIEW.prompt.label });
-    expect(screen.getByText(CONNECT_START_BUILD_AND_REVIEW.prompt.instruction)).toBeInTheDocument();
-    expect(screen.getByTestId('connect-prompt-text')).toHaveTextContent('You are the BUILDER agent');
+    const calls = vi.mocked(api.getConnectStart).mock.calls.length;
+    fireEvent.click(screen.getByRole('radio', { name: /share context/i }));
+    await waitFor(() => expect(sentence().textContent).toBe(CONNECT_START.presets[1].prompt.text));
+    expect(within(sentence()).getAllByText('LEARNER')).toHaveLength(1);
+    expect(screen.getByText(CONNECT_START.presets[1].next)).toBeInTheDocument();
+    expect(api.getConnectStart).toHaveBeenCalledTimes(calls);
   });
 
-  it('renders the build-and-review add-agent role as a reviewer', async () => {
+  it('holds every use case in the same place, so switching moves nothing else', async () => {
+    const { container } = await renderPanel();
+    const held = container.querySelectorAll('p.prompt-sentence[aria-hidden="true"]');
+    expect(held).toHaveLength(2);
+    expect([...held].map((p) => p.textContent)).toEqual([
+      CONNECT_START.presets[1].prompt.text,
+      CONNECT_START.presets[2].prompt.text,
+    ]);
+  });
+
+  it('renders the selected use case the API answered with', async () => {
     vi.mocked(api.getConnectStart).mockResolvedValue({ data: CONNECT_START_BUILD_AND_REVIEW });
     await renderPanel();
-
-    expect(screen.getByText(CONNECT_START_BUILD_AND_REVIEW.add_agent.label)).toBeInTheDocument();
-    expect(screen.getByTestId('connect-add-agent-prompt')).toHaveTextContent('reviewer');
+    expect(sentence().textContent).toBe(CONNECT_START_BUILD_AND_REVIEW.prompt.text);
+    expect(screen.getByRole('radio', { name: /build & review/i })).toBeChecked();
   });
 });
 
@@ -299,49 +148,36 @@ describe('ConnectPanel states', () => {
     expect(screen.getByTestId('connect-loading')).toBeInTheDocument();
   });
 
-  it('reports a failure instead of inventing a prompt', async () => {
-    vi.mocked(api.getConnectStart).mockRejectedValue(new Error('connection contract unavailable'));
+  it('reports a failure instead of inventing a sentence', async () => {
+    vi.mocked(api.getConnectStart).mockRejectedValue(new Error('The API is down'));
     render(<ConnectPanel />);
-    const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('connection contract unavailable');
-    expect(screen.queryByTestId('connect-prompt-text')).not.toBeInTheDocument();
-  });
-});
-
-describe('ConnectPanel variants', () => {
-  it('points the compact panel at the full page, which stays directly linkable', async () => {
-    await renderPanel('panel');
-    const link = screen.getByRole('link', { name: CONNECT_START.page_label });
-    expect(link).toHaveAttribute('href', CONNECT_START.page_url);
-  });
-
-  it('does not link the page to itself', async () => {
-    await renderPanel('page');
-    expect(screen.queryByRole('link', { name: CONNECT_START.page_label })).not.toBeInTheDocument();
+    expect(await screen.findByRole('alert')).toHaveTextContent('The API is down');
+    expect(screen.queryByTestId('prompt-sentence')).not.toBeInTheDocument();
   });
 
   it('titles the page variant as the page heading and the panel as a section', async () => {
-    const { unmount } = await renderPanel('page');
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(CONNECT_START.heading);
-    unmount();
-
+    const page = await renderPanel('page');
+    expect(screen.getByRole('heading', { level: 1, name: CONNECT_START.heading })).toBeInTheDocument();
+    page.unmount();
     await renderPanel('panel');
-    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(CONNECT_START.heading);
+    expect(screen.getByRole('heading', { level: 2, name: CONNECT_START.heading })).toBeInTheDocument();
   });
 });
 
 describe('ConnectPanel is a dumb terminal', () => {
-  it('writes no prompt, no endpoint and no visibility rule of its own', () => {
-    const source = read('components/connect/connect-panel.tsx');
-    for (const forbidden of [
-      'api.solvr.dev',
-      'agents/register',
-      'is_private',
-      'Copy planner prompt',
-      'Paste this into your planner',
-      'plan-and-build',
+  it('writes no sentence, no endpoint and no use case of its own', () => {
+    for (const file of [
+      'components/connect/connect-panel.tsx',
+      'components/prompt/prompt.tsx',
+      'components/prompt/prompt-sentence.tsx',
+      'components/prompt/prompt-stack.tsx',
+      'components/prompt/role-pair-switch.tsx',
+      'hooks/use-connect-start.ts',
     ]) {
-      expect(source).not.toContain(forbidden);
+      const source = read(file);
+      for (const forbidden of ['api.solvr.dev', 'Learn Solvr', 'skill.md', 'join it as the', 'PLANNER', 'EXECUTOR', 'is_private', "'plan-and-build'"]) {
+        expect(source, `${file} contains ${forbidden}`).not.toContain(forbidden);
+      }
     }
   });
 });

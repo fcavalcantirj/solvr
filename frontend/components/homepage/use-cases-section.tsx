@@ -1,12 +1,18 @@
+"use client";
+
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 
-import { USE_CASES } from '@/lib/docs/use-cases';
+import { Prompt } from '@/components/prompt/prompt';
+import { guideForPreset } from '@/lib/docs/use-cases';
+import type { APIConnectPreset } from '@/lib/api-types';
 
-// Right under the hero: three ways to put agents to work in a Solvr room. Each
-// card says who does what, gives an instruction to paste, starts /connect with
-// the matching preset already chosen, and links the guide that was tested.
-export function UseCasesSection() {
+// Right under the hero: three ways to put two agents to work, each the API's example
+// sentence (GET /v1/connect/examples, read on the server) in the compact Prompt. The
+// sentence is the same for all three; the marked words change. Each card copies its
+// sentence, opens /connect with its use case chosen, and links the guide that was tested.
+// Without the examples (the API could not be read) the cards keep their way onward.
+export function UseCasesSection({ examples }: { examples?: APIConnectPreset[] | null }) {
   return (
     <section
       data-testid="use-cases-section"
@@ -14,54 +20,52 @@ export function UseCasesSection() {
       className="px-4 sm:px-6 lg:px-12 py-12 lg:py-16 border-t border-border"
     >
       <div className="max-w-7xl mx-auto">
-        <p className="font-mono text-xs tracking-[0.3em] text-muted-foreground mb-4">
-          WHAT AGENTS DO IN A ROOM
-        </p>
-        <h2 id="use-cases-heading" className="text-3xl md:text-4xl font-light tracking-tight mb-8">
-          Pick a way to work.
+        <h2 id="use-cases-heading" className="max-w-[30ch] text-3xl md:text-4xl font-light tracking-tight mb-8">
+          One sentence, three ways to put two agents to work.
         </h2>
-        <div className="grid gap-6 lg:grid-cols-3">
-          {USE_CASES.map((useCase) => (
-            <article
-              key={useCase.preset}
-              data-testid="use-case-card"
-              className="border border-border p-6 flex flex-col gap-4"
-            >
-              <h3 className="text-xl font-light tracking-tight">{useCase.title}</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">{useCase.roles}</p>
-              <div>
-                <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-muted-foreground mb-2">
-                  {useCase.exampleFor}
-                </p>
-                <pre
-                  data-testid="use-case-example"
-                  className="whitespace-pre-wrap break-words bg-secondary p-4 font-mono text-xs leading-relaxed"
-                >
-                  {useCase.example}
-                </pre>
-              </div>
-              {useCase.next ? (
-                <p className="text-sm text-muted-foreground leading-relaxed">{useCase.next}</p>
-              ) : null}
-              <div className="mt-auto flex flex-col sm:flex-row lg:flex-col xl:flex-row gap-3">
-                <Link
-                  href={`/connect?preset=${useCase.preset}`}
-                  className="group font-mono text-xs uppercase tracking-wider bg-foreground text-background px-5 py-3 flex items-center justify-center gap-2 hover:bg-foreground/90 transition-colors"
-                >
-                  {useCase.connectLabel}
-                  <ArrowRight size={12} className="group-hover:translate-x-1 transition-transform" />
-                </Link>
-                <Link
-                  href={`/docs/guides/${useCase.guideSlug}`}
-                  className="font-mono text-xs uppercase tracking-wider border border-foreground px-5 py-3 text-center hover:bg-foreground hover:text-background transition-colors"
-                >
-                  Read the guide
-                </Link>
-              </div>
-            </article>
-          ))}
-        </div>
+        {examples && examples.length > 0 ? (
+          <div className="grid gap-4 lg:grid-cols-3 lg:gap-5">
+            {examples.map((example) => {
+              const guide = guideForPreset(example.value);
+              return (
+                <div key={example.value} data-testid="use-case-card">
+                  <Prompt
+                    variant="card"
+                    title={example.label}
+                    preset={example}
+                    footer={<CardLinks preset={example.value} guideSlug={guide?.slug} />}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-muted-foreground">
+            <Link href="/connect" className="text-foreground underline underline-offset-4">
+              Copy the sentence at Connect
+            </Link>
+            .
+          </p>
+        )}
       </div>
     </section>
+  );
+}
+
+function CardLinks({ preset, guideSlug }: { preset: string; guideSlug?: string }) {
+  const link =
+    'group inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground transition-colors hover:text-foreground';
+  return (
+    <span className="flex flex-wrap items-center gap-x-5 gap-y-2">
+      <Link href={`/connect?preset=${preset}`} className={link}>
+        Make it yours
+        <ArrowRight aria-hidden="true" className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+      </Link>
+      {guideSlug ? (
+        <Link href={`/docs/guides/${guideSlug}`} className={link}>
+          Guide
+        </Link>
+      ) : null}
+    </span>
   );
 }

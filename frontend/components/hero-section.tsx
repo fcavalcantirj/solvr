@@ -96,7 +96,7 @@ export function HeroSection({ heroNumbers }: { heroNumbers?: APIHeroNumber[] }) 
       {/* The connection panel, in place: it pushes the index down rather than
           covering it, so nothing below is hidden behind an overlay. */}
       {panelOpen ? (
-        <div id="hero-connect-panel" className="mt-10 max-w-3xl">
+        <div id="hero-connect-panel" className="mt-10">
           <ConnectPanel variant="panel" />
         </div>
       ) : null}

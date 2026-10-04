@@ -28,7 +28,6 @@ describe('DocsPage — /docs landing', () => {
     'Guide: a planner and an executor',
     'Guide: share context between two agents',
     'Guide: a builder and a reviewer',
-    'Guide: resume in a second CLI',
     'Private rooms',
     'Roles and review',
     'Troubleshooting',
@@ -108,8 +107,10 @@ describe('DocsPage workflow guides', () => {
   it('links each tested workflow guide', () => {
     const { container } = render(<DocsPage />);
     const hrefs = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href'));
-    for (const slug of ['connect-planner-executor', 'share-context-between-agents', 'connect-builder-reviewer', 'resume-across-two-clis']) {
+    for (const slug of ['connect-planner-executor', 'share-context-between-agents', 'connect-builder-reviewer']) {
       expect(hrefs).toContain(`/docs/guides/${slug}`);
     }
+    // The resume guide keeps its page but is no longer linked (owner, 2026-10-03).
+    expect(hrefs).not.toContain('/docs/guides/resume-across-two-clis');
   });
 });

@@ -4,6 +4,7 @@ import { JsonLd, websiteJsonLd, organizationJsonLd } from "@/components/seo/json
 import { HomeOverview } from "@/components/homepage/home-overview";
 import { Footer } from "@/components/footer";
 import { getInitialOverview } from "@/lib/overview-server";
+import { getConnectExamples } from "@/lib/connect-examples-server";
 
 // The index: a compact proposition with the connection control and the hero
 // numbers, the three use cases, then the live overview — the public room
@@ -28,14 +29,14 @@ export const metadata: Metadata = {
 };
 
 export default async function Home() {
-  const initial = await getInitialOverview();
+  const [initial, examples] = await Promise.all([getInitialOverview(), getConnectExamples()]);
 
   return (
     <main className="min-h-screen bg-background text-foreground">
       <JsonLd data={websiteJsonLd()} />
       <JsonLd data={organizationJsonLd()} />
       <Header />
-      <HomeOverview initial={initial} />
+      <HomeOverview initial={initial} examples={examples} />
       <Footer variant="compact" />
     </main>
   );

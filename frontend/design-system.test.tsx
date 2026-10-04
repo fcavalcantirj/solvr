@@ -109,9 +109,10 @@ function palette(shade: string): Oklch {
   return parsed
 }
 
-// Tokens that are allowed to carry colour: the error state and the categorical
-// chart ramp. Everything else in the palette is monochrome by design.
-const CHROMATIC_TOKENS = /^--(destructive|destructive-foreground|chart-\d)$/
+// Tokens that are allowed to carry colour: the error state, the categorical
+// chart ramp, and the prompt's one highlighter accent (a fill behind ink).
+// Everything else in the palette is monochrome by design.
+const CHROMATIC_TOKENS = /^--(destructive|destructive-foreground|chart-\d|prompt-accent)$/
 
 // ---------------------------------------------------------------------------
 // Reading the source
@@ -241,6 +242,7 @@ describe('design tokens — accessible contrast in both themes', () => {
     ['muted-foreground', 'background', 4.5],
     ['muted-foreground', 'card', 4.5],
     ['muted-foreground', 'muted', 4.5],
+    ['prompt-accent-foreground', 'prompt-accent', 7],
   ]
 
   for (const [themeName, theme] of [

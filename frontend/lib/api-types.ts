@@ -1,3 +1,5 @@
+import type { APIPrompt } from './connect-types';
+
 // Solvr API Types
 // Extracted from api.ts to keep files under 800 lines
 
@@ -1443,19 +1445,17 @@ export interface APIStreamTicketResponse {
  * "collaborator"). The prompt tells the agent to self-register, take its OWN
  * room token by handshake, and join — it never creates a duplicate room.
  */
+// GET /v1/rooms/{slug}/connect: the sentence for an agent joining this room in a role.
 export interface APIRoomConnectResponse {
   data: {
     instruction_version: string;
     room_slug: string;
     room_url: string;
     private: boolean;
-    task: string;
-    expected_planner_identity: string;
-    executor_prompt: string;
-    prompt: string;
     role: string;
-    first_message_id: number;
-    first_message_url: string;
+    task: string;
+    prompt: APIPrompt;
+    current_directive?: { id: number; body: string; url: string };
   };
 }
 

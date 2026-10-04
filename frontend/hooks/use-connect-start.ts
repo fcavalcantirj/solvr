@@ -4,26 +4,23 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { APIError } from '@/lib/api-error';
 import { useDebounce } from '@/hooks/use-debounce';
-import type { APIConnectStart } from '@/lib/api-types';
+import type { APIConnectPreset, APIConnectStart } from '@/lib/api-types';
 
-// The start-flow contract, re-read whenever the visitor changes something.
+// The start-flow contract, re-read whenever the visitor changes the sentence.
 //
-// The hook holds what the visitor TYPED or CHOSE and nothing else: the prompt,
-// the labels, the explanations and which option is selected all come back from
-// GET /v1/connect. A choice not yet made is not sent at all, so the API's own
-// defaults are the only defaults anywhere.
+// The hook holds what the visitor TYPED or CHOSE and nothing else: the sentence, its
+// segments, the use cases and their lines all come back from GET /v1/connect. A choice
+// not yet made is not sent, so the API's own defaults are the only defaults.
 //
-// The full /connect page also forwards the SOURCE it was linked with — a public
-// room (?from_room=) or a post (?post=), "Try this workflow" — read once from its
-// own address. The API validates it; an unknown or private source simply gives the
-// ordinary contract.
+// Typing the intent and flipping the visibility re-read the API (the intent debounced).
+// Switching the use case does not: every use case's sentence arrives in the same answer,
+// so the switch only picks which one shows and nothing else on the page moves.
 //
-// It forwards the PRESET it was linked with too (?preset=, from the homepage use
-// cases), so the API answers with that preset selected. The API is the only judge
-// of a preset: one it refuses with a 400 (old links still carry the retired
-// planner-executor) is dropped once, and the contract is read again with the
-// API's own default. Nothing here knows the preset values or maps one to another.
-const TASK_DEBOUNCE_MS = 300;
+// The full /connect page also forwards the SOURCE it was linked with — a public room
+// (?from_room=) or a post (?post=), "Try this workflow" — and the PRESET (?preset=, from
+// the home cards), read once from its own address. The API is the only judge of both:
+// a preset it refuses with a 400 is dropped once, and the contract is read again.
+const INTENT_DEBOUNCE_MS = 300;
 
 interface ConnectSourceParams {
   from_room?: string;
@@ -49,27 +46,32 @@ function readPresetFromLocation(): string | undefined {
 export function useConnectStart({ readLocation = false }: { readLocation?: boolean } = {}) {
   const [source] = useState<ConnectSourceParams>(() => (readLocation ? readSourceFromLocation() : {}));
   const [linkedPreset] = useState<string | undefined>(() => (readLocation ? readPresetFromLocation() : undefined));
-  const [task, setTask] = useState('');
+  const [intent, setIntent] = useState('');
   const [preset, setPreset] = useState<string | undefined>(linkedPreset);
-  // Set once the API has refused the linked preset, so it is dropped only once.
-  const linkedPresetRefused = useRef(false);
   const [visibility, setVisibility] = useState<string | undefined>(undefined);
   const [start, setStart] = useState<APIConnectStart | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Bumped to read again after the API refused the linked preset (dropped only once).
+  const [attempt, setAttempt] = useState(0);
+  const linkedPresetRefused = useRef(false);
+  // The preset in force when a read starts; switching it never triggers a read.
+  const presetRef = useRef(preset);
+  presetRef.current = preset;
 
-  const debouncedTask = useDebounce(task, TASK_DEBOUNCE_MS);
+  const debouncedIntent = useDebounce(intent, INTENT_DEBOUNCE_MS);
 
   useEffect(() => {
     let cancelled = false;
+    const asked = presetRef.current;
 
     const fetchStart = async () => {
       let retrying = false;
       try {
         const response = await api.getConnectStart({
           ...source,
-          ...(debouncedTask ? { task: debouncedTask } : {}),
-          ...(preset ? { preset } : {}),
+          ...(debouncedIntent.trim() ? { intent: debouncedIntent } : {}),
+          ...(asked ? { preset: asked } : {}),
           ...(visibility ? { visibility } : {}),
         });
         if (!cancelled) {
@@ -80,15 +82,16 @@ export function useConnectStart({ readLocation = false }: { readLocation?: boole
         if (cancelled) return;
         const refusedLinkedPreset =
           err instanceof APIError && err.statusCode === 400 &&
-          preset !== undefined && preset === linkedPreset && !linkedPresetRefused.current;
+          asked !== undefined && asked === linkedPreset && !linkedPresetRefused.current;
         if (refusedLinkedPreset) {
-          // Read the contract again without it: the API's default is the only default.
           linkedPresetRefused.current = true;
           retrying = true;
+          presetRef.current = undefined;
           setPreset(undefined);
+          setAttempt((n) => n + 1);
           return;
         }
-        setError(err instanceof Error ? err.message : 'The connection instructions could not be read');
+        setError(err instanceof Error ? err.message : 'The connection sentence could not be read');
       } finally {
         if (!cancelled && !retrying) setLoading(false);
       }
@@ -98,7 +101,12 @@ export function useConnectStart({ readLocation = false }: { readLocation?: boole
     return () => {
       cancelled = true;
     };
-  }, [source, linkedPreset, debouncedTask, preset, visibility]);
+  }, [source, linkedPreset, debouncedIntent, visibility, attempt]);
 
-  return { start, loading, error, task, setTask, setPreset, setVisibility };
+  // The use case showing: the visitor's pick, else the one the API selected.
+  const presets = start?.presets ?? [];
+  const active: APIConnectPreset | undefined =
+    presets.find((p) => p.value === preset) ?? presets.find((p) => p.selected) ?? presets[0];
+
+  return { start, active, loading, error, intent, setIntent, setPreset, setVisibility };
 }

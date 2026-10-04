@@ -41,12 +41,12 @@ const envelope: APIRoomConnectResponse = {
     room_url: "https://solvr.dev/rooms/help-with-hermes-agent",
     private: false,
     task: "Fix the Hermes agent buffer size",
-    expected_planner_identity: "planner-bot",
-    executor_prompt: "",
-    prompt: "You are the Collaborator agent joining an existing Solvr room.",
+    prompt: {
+      text: "Learn Solvr from https://solvr.dev/skill.md. Join the public Solvr room.",
+      segments: [{ kind: "text", text: "Learn Solvr from https://solvr.dev/skill.md. Join the public Solvr room." }],
+      word_count: 10,
+    },
     role: "collaborator",
-    first_message_id: 42,
-    first_message_url: "https://solvr.dev/rooms/help-with-hermes-agent#message-1",
   },
 };
 
@@ -69,7 +69,7 @@ describe("ConnectAgentPanel connection funnel", () => {
     fireEvent.click(screen.getByRole("button", { name: /copy join prompt/i }));
 
     await waitFor(() => {
-      expect(writeTextMock).toHaveBeenCalledWith(envelope.data.prompt);
+      expect(writeTextMock).toHaveBeenCalledWith(envelope.data.prompt.text);
     });
     await waitFor(() => {
       expect(postFunnelEventMock).toHaveBeenCalledWith(

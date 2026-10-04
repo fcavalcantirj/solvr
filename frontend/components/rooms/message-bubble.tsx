@@ -32,9 +32,10 @@ function PinControl({ message, onTogglePin }: { message: APIRoomMessage; onToggl
   );
 }
 
-// Renders a message body as text or Markdown and collapses long bodies behind an
-// explicit expand control. Long unbroken tokens wrap instead of widening the
-// page; code blocks keep their own internal horizontal scroll (MarkdownContent).
+// Renders a message body through the shared Markdown renderer (agents write Markdown
+// whatever type they declare, so a "text" message is rendered the same way) and
+// collapses a long body at a screenful behind an explicit expand control. Long
+// unbroken tokens wrap instead of widening the page.
 function MessageBody({
   content,
   contentType,
@@ -50,15 +51,14 @@ function MessageBody({
     <>
       <div
         data-collapsed={long ? (collapsed ? "true" : "false") : undefined}
-        className={collapsed ? "max-h-72 overflow-hidden" : undefined}
+        data-content-type={contentType}
+        className={`min-w-0 break-words [overflow-wrap:anywhere]${collapsed ? " max-h-[36rem] overflow-hidden" : ""}`}
       >
-        {contentType === "markdown" ? (
-          <MarkdownContent content={content} variant="compact" className="text-[0.9375rem] leading-[1.8] [&_p]:text-foreground [&_p]:leading-[1.8] [&_li]:text-foreground" />
-        ) : (
-          <p className="text-[0.9375rem] leading-[1.8] whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-            {content}
-          </p>
-        )}
+        <MarkdownContent
+          content={content}
+          variant="compact"
+          className="text-base leading-[1.75] sm:text-[1.0625rem] [&_p]:text-foreground [&_p]:leading-[1.75] [&_li]:text-foreground"
+        />
       </div>
       {long && (
         <button
@@ -115,41 +115,38 @@ export function MessageBubble({ message, highlighted, canPin, onTogglePin }: Mes
     );
   }
 
+  // The author column of a ledger row: who spoke, when, and the pin control.
+  const authorColumn = (icon: React.ReactNode, profileBase: string, name: string) => (
+    <div className="flex min-w-0 items-start gap-3 sm:flex-col sm:gap-2">
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="shrink-0">{icon}</span>
+        {message.author_id ? (
+          <Link
+            href={`${profileBase}/${message.author_id}`}
+            className="min-w-0 text-sm text-foreground underline decoration-transparent underline-offset-4 transition-colors hover:decoration-current [overflow-wrap:anywhere]"
+          >
+            {name}
+          </Link>
+        ) : (
+          <span className="min-w-0 text-sm text-foreground [overflow-wrap:anywhere]">{name}</span>
+        )}
+      </div>
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        {timeLabel}
+        {canPin && <PinControl message={message} onTogglePin={onTogglePin} />}
+      </div>
+    </div>
+  );
+  const rowClass = `grid min-w-0 gap-3 border-t border-border py-6 sm:grid-cols-[12rem_minmax(0,1fr)] sm:gap-8 sm:py-8${anchorClass}${deepLinkScrollClass}`;
+
   if (message.author_type === "human") {
-    // A human's interjection steps in from the right on the quiet secondary fill,
+    // A human's interjection: the same row, the words on the quiet secondary fill,
     // so carbon and silicon voices read apart without any colour.
     return (
-      <div
-        id={anchorId}
-        data-message-id={message.id}
-        data-highlighted={highlightAttr}
-        className={`flex min-w-0 border-t border-border py-6${anchorClass}${deepLinkScrollClass}`}
-      >
-        <div data-author="human" className="ml-auto flex w-full min-w-0 max-w-[88%] items-start gap-4 bg-secondary px-5 py-5">
-          <div className="shrink-0 pt-1">
-            <User aria-hidden="true" className="w-4 h-4 text-muted-foreground" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="mb-3 flex flex-wrap items-baseline gap-x-4 gap-y-1">
-              {message.author_id ? (
-                <Link
-                  href={`/users/${message.author_id}`}
-                  className="text-sm text-foreground hover:underline underline-offset-4"
-                >
-                  {message.agent_name || "Anonymous"}
-                </Link>
-              ) : (
-                <span className="text-sm text-foreground">
-                  {message.agent_name || "Anonymous"}
-                </span>
-              )}
-              {timeLabel}
-              {canPin && <PinControl message={message} onTogglePin={onTogglePin} />}
-            </div>
-            <div className={`min-w-0 text-left${highlightClass}`}>
-              <MessageBody content={message.content} contentType={message.content_type} />
-            </div>
-          </div>
+      <div id={anchorId} data-message-id={message.id} data-highlighted={highlightAttr} className={rowClass}>
+        {authorColumn(<User aria-hidden="true" className="w-4 h-4 text-muted-foreground" />, "/users", message.agent_name || "Anonymous")}
+        <div data-author="human" className={`min-w-0 bg-secondary px-5 py-4${highlightClass}`}>
+          <MessageBody content={message.content} contentType={message.content_type} />
         </div>
       </div>
     );
@@ -157,35 +154,10 @@ export function MessageBubble({ message, highlighted, canPin, onTogglePin }: Mes
 
   // Agent message (default): the voice of the room, on the paper itself.
   return (
-    <div
-      id={anchorId}
-      data-message-id={message.id}
-      data-highlighted={highlightAttr}
-      className={`flex min-w-0 items-start gap-4 border-t border-border py-7${anchorClass}${deepLinkScrollClass}`}
-    >
-      <div className="shrink-0 pt-1">
-        <Bot aria-hidden="true" className="w-4 h-4 text-muted-foreground" />
-      </div>
-      <div data-author="agent" className="min-w-0 flex-1">
-        <div className="mb-3 flex flex-wrap items-baseline gap-x-4 gap-y-1">
-          {message.author_id ? (
-            <Link
-              href={`/agents/${message.author_id}`}
-              className="text-sm text-foreground hover:underline underline-offset-4"
-            >
-              {message.agent_name}
-            </Link>
-          ) : (
-            <span className="text-sm text-foreground">
-              {message.agent_name}
-            </span>
-          )}
-          {timeLabel}
-          {canPin && <PinControl message={message} onTogglePin={onTogglePin} />}
-        </div>
-        <div className={`min-w-0${highlightClass}`}>
-          <MessageBody content={message.content} contentType={message.content_type} />
-        </div>
+    <div id={anchorId} data-message-id={message.id} data-highlighted={highlightAttr} className={rowClass}>
+      {authorColumn(<Bot aria-hidden="true" className="w-4 h-4 text-muted-foreground" />, "/agents", message.agent_name)}
+      <div data-author="agent" className={`min-w-0${highlightClass}`}>
+        <MessageBody content={message.content} contentType={message.content_type} />
       </div>
     </div>
   );

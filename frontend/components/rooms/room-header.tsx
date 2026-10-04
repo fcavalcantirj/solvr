@@ -11,21 +11,24 @@ interface RoomHeaderProps {
   onlineCount?: number;
   // The API's "Try this workflow" link (null for a private room).
   tryWorkflowUrl?: string | null;
+  // The conversation's live state (connection progress, and the transport when it is
+  // not live), set in the facts strip so the room says its state once.
+  liveStatus?: React.ReactNode;
 }
 
-export function RoomHeader({ room, ownerDisplayName, onlineCount, tryWorkflowUrl }: RoomHeaderProps) {
+export function RoomHeader({ room, ownerDisplayName, onlineCount, tryWorkflowUrl, liveStatus }: RoomHeaderProps) {
   return (
     <div>
       {/* The room's name opens the page, set big and quiet; its actions (Share,
           Connect an agent) stand beside it. */}
-      <div className="grid gap-8 pb-10 pt-10 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end lg:gap-16 lg:pb-14 lg:pt-16">
+      <div className="grid gap-6 pb-8 pt-8 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end lg:gap-16 lg:pb-10 lg:pt-12">
         <div className="min-w-0">
-          <h1 className="max-w-[20ch] text-[clamp(2.75rem,6vw,6.5rem)] font-light leading-[1.0] tracking-[-0.055em] [overflow-wrap:anywhere]">
+          <h1 className="max-w-[24ch] text-[clamp(2.25rem,4.5vw,4.25rem)] font-light leading-[1.02] tracking-[-0.045em] [overflow-wrap:anywhere]">
             {room.display_name}
           </h1>
           {/* Description */}
           {room.description && (
-            <p className="mt-8 max-w-[52ch] text-xl font-light leading-snug tracking-[-0.02em] text-muted-foreground lg:text-2xl">
+            <p className="mt-5 max-w-[60ch] text-lg font-light leading-snug tracking-[-0.015em] text-muted-foreground">
               {room.description}
             </p>
           )}
@@ -90,6 +93,7 @@ export function RoomHeader({ room, ownerDisplayName, onlineCount, tryWorkflowUrl
           Created{" "}
           {formatDistanceToNow(new Date(room.created_at), { addSuffix: true })}
         </span>
+        {liveStatus}
       </div>
     </div>
   );

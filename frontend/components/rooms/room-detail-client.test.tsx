@@ -307,12 +307,12 @@ describe("RoomDetailClient — jump to latest", () => {
       />,
     );
 
-    // Reader has scrolled up into earlier history (far from the bottom).
-    const container = screen.getByTestId("room-scroll");
-    Object.defineProperty(container, "scrollHeight", { value: 2000, configurable: true });
-    Object.defineProperty(container, "clientHeight", { value: 300, configurable: true });
-    container.scrollTop = 0;
-    fireEvent.scroll(container);
+    // Reader has scrolled the page up into earlier history (far from the bottom).
+    const page = document.documentElement;
+    Object.defineProperty(page, "scrollHeight", { value: 2000, configurable: true });
+    Object.defineProperty(page, "clientHeight", { value: 300, configurable: true });
+    page.scrollTop = 0;
+    fireEvent.scroll(window);
 
     // A new message arrives via SSE.
     sseState.newMessages = [makeMsg(3, "brand new arrival")];
@@ -376,5 +376,43 @@ describe("RoomDetailClient — participant offline indicator", () => {
       />,
     );
     expect(screen.queryByTestId("participant-offline")).not.toBeInTheDocument();
+  });
+});
+
+// v1.3.9: a room is a transcript page. The page scrolls (no box scrolling inside it),
+// it opens on the room's header, and the room's live state is said once, in the header.
+describe("RoomDetailClient — transcript page", () => {
+  beforeEach(() => {
+    resetSseMock();
+    window.scrollTo = vi.fn() as unknown as typeof window.scrollTo;
+  });
+
+  it("lets the page scroll the transcript instead of a box inside it", () => {
+    render(<RoomDetailClient room={makeRoom()} initialMessages={[makeMsg(1, "one")]} initialAgents={[]} />);
+    const transcript = screen.getByTestId("room-scroll");
+    expect(transcript.className).not.toMatch(/overflow-y-(auto|scroll)/);
+    let el: HTMLElement | null = transcript;
+    while (el) {
+      expect(el.className || "", "no ancestor scrolls the transcript").not.toMatch(/overflow-y-(auto|scroll)/);
+      el = el.parentElement;
+    }
+  });
+
+  it("opens on the header, not scrolled to the bottom", () => {
+    render(<RoomDetailClient room={makeRoom()} initialMessages={[makeMsg(1, "one"), makeMsg(2, "two")]} initialAgents={[]} />);
+    expect(window.scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("says the room is live once, in the header, while the connection is up", () => {
+    sseState.status = "connected";
+    render(<RoomDetailClient room={makeRoom()} initialMessages={[makeMsg(1, "one")]} initialAgents={[]} />);
+    expect(screen.getAllByText(/\bLIVE\b/)).toHaveLength(1);
+    expect(screen.getByTestId("room-status")).toHaveTextContent("LIVE");
+  });
+
+  it("says when the connection is reconnecting", () => {
+    sseState.status = "reconnecting";
+    render(<RoomDetailClient room={makeRoom()} initialMessages={[makeMsg(1, "one")]} initialAgents={[]} />);
+    expect(screen.getByText(/reconnecting/i)).toBeInTheDocument();
   });
 });

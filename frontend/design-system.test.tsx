@@ -625,6 +625,17 @@ describe('the one-sentence page language', () => {
     expect(read('components/homepage/room-activity-section.tsx')).not.toContain('border border-border bg-background')
   })
 
+  // A room is a transcript page (v1.3.9): the conversation spans its column and the page
+  // scrolls it, never a capped box scrolling inside the page.
+  it('lets a room read down the page instead of inside a capped box', () => {
+    const css = read('components/rooms/rooms-layout.module.css')
+    const reading = css.match(/\.reading\s*\{[^}]*\}/g) ?? []
+    expect(reading.length).toBeGreaterThan(0)
+    for (const block of reading) {
+      expect(block).not.toMatch(/max-height|max-width:\s*46rem/)
+    }
+  })
+
   // The owner's rule for every index page: the page scrolls vertically only.
   it.each([
     'components/posts/posts-list.tsx',

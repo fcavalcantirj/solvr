@@ -48,6 +48,12 @@ const OLDER_PAGE_SIZE = 50;
 
 // Reads a deep-link target from the URL (?message=<id>) without pulling in the
 // Next router, so the component stays trivially testable via the prop.
+// v1.3.9: a room is a transcript page. The document scrolls the conversation, so
+// every scroll read and write goes to the page's own scroller.
+function pageScroller(): HTMLElement {
+  return (document.scrollingElement as HTMLElement | null) ?? document.documentElement;
+}
+
 function readMessageParam(): number | undefined {
   if (typeof window === 'undefined') return undefined;
   const raw = new URLSearchParams(window.location.search).get('message');
@@ -110,12 +116,14 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
     }
   }, [room.slug]);
 
+  // The transcript element (deep-link lookups); the page itself does the scrolling.
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  // The reader is "following the latest exchange" while near the bottom, where
-  // the newest message lives. Default true: the page opens pinned to the latest.
-  const isNearBottomRef = useRef(true);
-  // When set, the next layout pass pins the viewport to the bottom (newest).
-  const pinBottomRef = useRef(true);
+  // The reader is "following the latest exchange" while near the bottom of the page,
+  // where the newest message lives. The page opens on the room's header, so this is
+  // measured on mount rather than assumed.
+  const isNearBottomRef = useRef(false);
+  // When set, the next layout pass scrolls the page to the bottom (newest).
+  const pinBottomRef = useRef(false);
   // When set (during LOAD OLDER), the next layout pass keeps the reading position
   // anchored after older messages are prepended, so nothing appears to jump.
   const olderAnchorRef = useRef<number | null>(null);
@@ -133,20 +141,19 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
   );
 
   const scrollToBottom = useCallback((smooth = false) => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
-    if (typeof el.scrollTo === 'function') {
-      el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
+    const el = pageScroller();
+    if (typeof window.scrollTo === 'function') {
+      window.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
+    } else {
+      el.scrollTop = el.scrollHeight;
     }
-    el.scrollTop = el.scrollHeight;
   }, []);
 
   // Position the viewport after every message change:
   //   - LOAD OLDER prepends history -> keep the reading position anchored.
   //   - otherwise, if we should follow the latest -> pin to the bottom.
   useLayoutEffect(() => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
+    const el = pageScroller();
     if (olderAnchorRef.current != null) {
       el.scrollTop += el.scrollHeight - olderAnchorRef.current;
       olderAnchorRef.current = null;
@@ -154,9 +161,9 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
     }
     if (pinBottomRef.current) {
       pinBottomRef.current = false;
-      el.scrollTop = el.scrollHeight;
+      scrollToBottom(true);
     }
-  }, [messages]);
+  }, [messages, scrollToBottom]);
 
   // Append new SSE messages. When the reader is following the latest exchange the
   // new message is scrolled into view; when they are reading earlier history the
@@ -180,15 +187,14 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
   // Track scroll position so we know whether the reader is following the latest
   // exchange; clear the unread count the moment they return to the bottom.
   useEffect(() => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
     const onScroll = () => {
-      const near = isNearBottom(el);
+      const near = isNearBottom(pageScroller());
       isNearBottomRef.current = near;
       if (near) setUnreadCount(0);
     };
-    el.addEventListener('scroll', onScroll, { passive: true });
-    return () => el.removeEventListener('scroll', onScroll);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
   // Resolve a deep-linked message once. If it is outside the loaded window we
@@ -230,8 +236,7 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
     if (loadingOlder || messages.length === 0) return;
     setLoadingOlder(true);
     const oldestId = Math.min(...messages.map(m => m.id));
-    const el = scrollContainerRef.current;
-    if (el) olderAnchorRef.current = el.scrollHeight;
+    olderAnchorRef.current = pageScroller().scrollHeight;
     try {
       const res = await api.fetchRoomMessages(room.slug, { before: oldestId, limit: OLDER_PAGE_SIZE });
       const batch = res.data;
@@ -316,18 +321,24 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
     <div className={styles.page}>
       {/* Room header — lives inside the client component so message_count
           reflects SSE arrivals immediately instead of the stale ISR snapshot. */}
-      <RoomHeader room={displayedRoom} ownerDisplayName={ownerDisplayName} onlineCount={agents.length} tryWorkflowUrl={tryWorkflowUrl} />
+      <RoomHeader
+        room={displayedRoom}
+        ownerDisplayName={ownerDisplayName}
+        onlineCount={agents.length}
+        tryWorkflowUrl={tryWorkflowUrl}
+        liveStatus={
+          <>
+            <ConnectionStatusBadge status={connectionStatus} />
+            {/* The transport speaks only when it is not live: the header already says LIVE. */}
+            {status !== 'connected' ? <SseStatusBadge status={status} /> : null}
+          </>
+        }
+      />
 
       <div className={styles.conversation}>
-        {/* The conversation itself: a calm reading column that grows with the
-            transcript and scrolls inside itself once it outgrows the screen. */}
+        {/* The conversation itself: the transcript reads down the page, one ledger
+            row per message, and the page scrolls it (no box inside the page). */}
         <div className={styles.reading}>
-          {/* Connection progress (server-derived) + live SSE transport status,
-              set on top of the conversation they describe. */}
-          <div className="flex shrink-0 flex-wrap items-center gap-x-6 gap-y-3 border-b border-border py-5">
-            <ConnectionStatusBadge status={connectionStatus} />
-            <SseStatusBadge status={status} />
-          </div>
 
           {/* Participant offline — a partner that was present has stopped responding.
               Kept distinct from the transport badge above (which reports the reader's
@@ -342,8 +353,8 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
             </div>
           )}
 
-          {/* Messages — scrollable */}
-          <div ref={scrollContainerRef} data-testid="room-scroll" className="min-h-0 min-w-0 overflow-y-auto overscroll-contain">
+          {/* Messages */}
+          <div ref={scrollContainerRef} data-testid="room-scroll" className="min-w-0">
             <MessageList
               messages={messages}
               slug={room.slug}
@@ -356,8 +367,8 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
             />
           </div>
 
-          {/* Comment input — pinned under the newest message, always visible */}
-          <div className="w-full max-w-[46rem] shrink-0">
+          {/* Comment input — sticks to the bottom of the screen under the newest message */}
+          <div className="sticky bottom-0 z-10 w-full border-t border-border bg-background/95 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/85">
             <CommentInput slug={room.slug} onMessageSent={handleMessageSent} archived={displayedRoom.archived_at != null} />
           </div>
         </div>

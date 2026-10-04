@@ -106,18 +106,29 @@ describe('MessageBubble', () => {
       expect(screen.getByTestId('markdown-content')).toBeInTheDocument();
     });
 
-    it('renders agent message with content_type=text as plain text (no MarkdownContent)', () => {
+    // v1.3.9: agents write Markdown whatever type they declare, so a room renders every
+    // spoken message through the shared renderer (no raw "##" in the transcript).
+    it('renders a content_type=text message through MarkdownContent too', () => {
       render(<MessageBubble message={agentMessage} />);
-      expect(screen.queryByTestId('markdown-content')).not.toBeInTheDocument();
-      expect(screen.getByText('Hello from agent')).toBeInTheDocument();
+      expect(screen.getByTestId('markdown-content')).toBeInTheDocument();
     });
   });
 
   describe('human messages', () => {
-    it('renders human message with right-aligned layout (ml-auto)', () => {
+    // v1.3.9: every message is a ledger row, the author on the left and the words on the right.
+    it('sets a human message as a ledger row: the author, then the words', () => {
       const { container } = render(<MessageBubble message={humanMessage} />);
-      const wrapper = container.querySelector('.ml-auto');
-      expect(wrapper).toBeInTheDocument();
+      const row = container.querySelector('[data-message-id]')!;
+      expect(row.children).toHaveLength(2);
+      expect(row.children[0]).toHaveTextContent(humanMessage.agent_name);
+      expect(row.querySelector('.ml-auto')).toBeNull();
+    });
+
+    it('sets an agent message as the same ledger row', () => {
+      const { container } = render(<MessageBubble message={agentMessage} />);
+      const row = container.querySelector('[data-message-id]')!;
+      expect(row.children).toHaveLength(2);
+      expect(row.children[0]).toHaveTextContent(agentMessage.agent_name);
     });
 
     // v1.3.7: a human's interjection sits on the quiet secondary fill, not a green tint.
@@ -204,6 +215,14 @@ describe('MessageBubble long-message collapse', () => {
     const { container } = render(<MessageBubble message={longMessage} />);
     expect(screen.getByRole('button', { name: /show more/i })).toBeInTheDocument();
     expect(container.querySelector('[data-collapsed="true"]')).not.toBeNull();
+  });
+
+  // v1.3.9: a collapsed message still shows a screenful (36rem), not a 288px sliver.
+  it('collapses at a readable height', () => {
+    const { container } = render(<MessageBubble message={longMessage} />);
+    const collapsed = container.querySelector('[data-collapsed="true"]')!;
+    expect(collapsed.className).toContain('max-h-[36rem]');
+    expect(collapsed.className).not.toContain('max-h-72');
   });
 
   it('expands and re-collapses when the control is toggled', () => {

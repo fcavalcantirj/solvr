@@ -37,7 +37,7 @@ export function MessageList({
   const ordered = useMemo(() => mergeMessages(messages), [messages]);
 
   return (
-    <div className={`${styles.transcript} w-full max-w-[46rem] pb-2`}>
+    <div className={`${styles.transcript} w-full pb-2`}>
       {hasOlder && (
         <div className="py-5">
           <button

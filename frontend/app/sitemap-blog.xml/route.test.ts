@@ -11,7 +11,7 @@ describe('sitemap-blog.xml', () => {
   });
 
   function stubBlog(blogPosts: { slug: string; updated_at: string }[]) {
-    const fetchMock = vi.fn().mockResolvedValue({ json: async () => ({ data: { blog_posts: blogPosts } }) });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ data: { blog_posts: blogPosts } }) });
     vi.stubGlobal('fetch', fetchMock);
     return fetchMock;
   }
@@ -48,12 +48,15 @@ describe('sitemap-blog.xml', () => {
     expect(res.headers.get('CDN-Cache-Control')).toBeNull();
   });
 
-  it('returns an empty urlset when the API call fails', async () => {
+  // SPEC.md 27.1 (Sitemaps): a failed read is a retryable 503, never an empty url set.
+  it('answers 503 with Retry-After and no url set when the API call fails', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('boom')));
 
     const res = await route.GET();
 
-    expect(await res.text()).toContain('<urlset');
+    expect(res.status).toBe(503);
+    expect(res.headers.get('Retry-After')).toBe('120');
+    expect(await res.text()).not.toContain('<urlset');
     expect(res.headers.get('Cache-Control') ?? '').toContain('no-store');
   });
 });

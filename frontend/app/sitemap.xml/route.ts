@@ -1,12 +1,16 @@
 import { NextResponse } from 'next/server';
-import { API_URL, BASE_URL } from '@/lib/sitemap-utils';
+import { BASE_URL, readSitemapAPI, sitemapUnavailable } from '@/lib/sitemap-utils';
+
+type DatedType = 'posts' | 'agents' | 'users' | 'blog_posts' | 'rooms';
 
 // Each sub-sitemap with the type whose newest material change dates it (task idx 83).
-// The core sitemap lists static routes that have no recorded change time.
-const SUB_SITEMAPS: { name: string; type?: 'posts' | 'agents' | 'blog_posts' | 'rooms' }[] = [
+// The core sitemap lists static routes that have no recorded change time. Every
+// app/sitemap-*.xml route is named here (app/sitemap-failures.test.ts).
+const SUB_SITEMAPS: { name: string; type?: DatedType }[] = [
   { name: 'sitemap-core.xml' },
   { name: 'sitemap-posts.xml', type: 'posts' },
   { name: 'sitemap-agents.xml', type: 'agents' },
+  { name: 'sitemap-users.xml', type: 'users' },
   { name: 'sitemap-blog.xml', type: 'blog_posts' },
   { name: 'sitemap-rooms.xml', type: 'rooms' },
 ];
@@ -14,23 +18,23 @@ const SUB_SITEMAPS: { name: string; type?: 'posts' | 'agents' | 'blog_posts' | '
 // The listings change whenever content does, so the index is read fresh too.
 export const dynamic = 'force-dynamic';
 
-type Lastmods = Partial<Record<'posts' | 'agents' | 'blog_posts' | 'rooms', string | null>>;
+type Lastmods = Partial<Record<DatedType, string | null>>;
 
-// lastmods reads each type's newest material change from GET /v1/sitemap/counts. When
-// the API cannot answer, the index names no lastmod at all rather than a made-up one.
-async function lastmods(): Promise<Lastmods> {
-  try {
-    const res = await fetch(`${API_URL}/v1/sitemap/counts`, { cache: 'no-store' });
-    if (!res.ok) return {};
-    const json = await res.json();
-    return json.data?.lastmod ?? {};
-  } catch {
-    return {};
-  }
+// lastmods reads each type's newest material change from GET /v1/sitemap/counts, or null
+// when the read is not an answer (an answer without data.lastmod included).
+function lastmods(): Promise<Lastmods | null> {
+  return readSitemapAPI('/v1/sitemap/counts', (body) => {
+    const lastmod = (body as { data?: { lastmod?: unknown } } | null)?.data?.lastmod;
+    return lastmod && typeof lastmod === 'object' && !Array.isArray(lastmod) ? (lastmod as Lastmods) : null;
+  });
 }
 
 export async function GET() {
   const dates = await lastmods();
+  // The API cannot answer: a retryable 503, never an index without dates or with the
+  // current time (SPEC.md 27.1, Sitemaps). The content sub-sitemaps answer 503 then too.
+  if (!dates) return sitemapUnavailable();
+
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${SUB_SITEMAPS.map(({ name, type }) => {

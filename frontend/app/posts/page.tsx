@@ -4,10 +4,9 @@ import Link from 'next/link';
 import { Header } from "@/components/header";
 import { PostsPageClient } from "@/components/posts/posts-page-client";
 import type { APIPost } from "@/lib/api-types";
+import { readListForPage } from "@/lib/seo/read-for-page";
 import { collectionRobots, indexableMetadata, POSTS_ARCHIVE } from "@/lib/seo/route-policy";
 import { trackCta } from "@/lib/track-attrs";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 
 // A post that is deleted or made family-only leaves the API's list at once; the
 // page asks the API on every request so no stored copy keeps showing it.
@@ -30,18 +29,11 @@ export async function generateMetadata({
   };
 }
 
-const getInitialPosts = cache(async (): Promise<APIPost[]> => {
-  try {
-    const res = await fetch(`${API_BASE_URL}/v1/posts?sort=newest&per_page=20`, {
-      cache: 'no-store',
-    });
-    if (!res.ok) return [];
-    const json = await res.json();
-    return json.data ?? [];
-  } catch {
-    return [];
-  }
-});
+// A failed read fails the page (a retryable 5xx), never an empty collection at 200
+// (SPEC.md 27.4, lib/seo/read-for-page.ts).
+const getInitialPosts = cache(
+  async (): Promise<APIPost[]> => (await readListForPage<{ data: APIPost[] }>('/v1/posts?sort=newest&per_page=20')).data
+);
 
 export default async function PostsPage() {
   const initialPosts = await getInitialPosts();

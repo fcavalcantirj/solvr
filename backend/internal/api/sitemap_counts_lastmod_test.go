@@ -18,7 +18,8 @@ func TestSitemapCounts_NameEachTypesLastmod(t *testing.T) {
 	data, _ := body["data"].(map[string]any)
 	require.Contains(t, data, "lastmod")
 	lastmod, _ := data["lastmod"].(map[string]any)
-	for _, key := range []string{"posts", "agents", "blog_posts", "rooms"} {
+	// users dates /sitemap-users.xml in the index like agents dates /sitemap-agents.xml.
+	for _, key := range []string{"posts", "agents", "users", "blog_posts", "rooms"} {
 		assert.Contains(t, lastmod, key)
 	}
 }

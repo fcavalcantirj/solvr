@@ -151,15 +151,15 @@ func TestSitemapHandler_GetSitemapURLs(t *testing.T) {
 			},
 		},
 		{
-			name: "returns 500 on repository error",
+			name: "returns a retryable 503 on repository error (SPEC.md 27.1)",
 			mockRepo: &MockSitemapRepository{
 				Err: context.DeadlineExceeded,
 			},
-			expectedStatus: http.StatusInternalServerError,
+			expectedStatus: http.StatusServiceUnavailable,
 			checkResponse: func(t *testing.T, body map[string]interface{}) {
 				errObj := body["error"].(map[string]interface{})
-				if errObj["code"] != "INTERNAL_ERROR" {
-					t.Errorf("expected error code 'INTERNAL_ERROR', got '%v'", errObj["code"])
+				if errObj["code"] != "SERVICE_UNAVAILABLE" {
+					t.Errorf("expected error code 'SERVICE_UNAVAILABLE', got '%v'", errObj["code"])
 				}
 			},
 		},
@@ -299,15 +299,15 @@ func TestSitemapHandler_GetSitemapCounts(t *testing.T) {
 			},
 		},
 		{
-			name: "returns 500 on repository error",
+			name: "returns a retryable 503 on repository error (SPEC.md 27.1)",
 			mockRepo: &MockSitemapRepository{
 				CountsErr: context.DeadlineExceeded,
 			},
-			expectedStatus: http.StatusInternalServerError,
+			expectedStatus: http.StatusServiceUnavailable,
 			checkResponse: func(t *testing.T, body map[string]interface{}) {
 				errObj := body["error"].(map[string]interface{})
-				if errObj["code"] != "INTERNAL_ERROR" {
-					t.Errorf("expected error code 'INTERNAL_ERROR', got '%v'", errObj["code"])
+				if errObj["code"] != "SERVICE_UNAVAILABLE" {
+					t.Errorf("expected error code 'SERVICE_UNAVAILABLE', got '%v'", errObj["code"])
 				}
 			},
 		},
@@ -523,16 +523,16 @@ func TestSitemapHandler_GetSitemapURLs_Pagination(t *testing.T) {
 			},
 		},
 		{
-			name:        "paginated repo error returns 500",
+			name:        "paginated repo error returns a retryable 503",
 			queryString: "?type=posts",
 			mockRepo: &MockSitemapRepository{
 				PaginatedErr: context.DeadlineExceeded,
 			},
-			expectedStatus: http.StatusInternalServerError,
+			expectedStatus: http.StatusServiceUnavailable,
 			checkResponse: func(t *testing.T, body map[string]interface{}) {
 				errObj := body["error"].(map[string]interface{})
-				if errObj["code"] != "INTERNAL_ERROR" {
-					t.Errorf("expected error code 'INTERNAL_ERROR', got '%v'", errObj["code"])
+				if errObj["code"] != "SERVICE_UNAVAILABLE" {
+					t.Errorf("expected error code 'SERVICE_UNAVAILABLE', got '%v'", errObj["code"])
 				}
 			},
 		},

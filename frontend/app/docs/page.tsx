@@ -1,5 +1,3 @@
-"use client";
-
 // Imports Header, which uses client-side state — render dynamically.
 export const dynamic = "force-dynamic";
 
@@ -8,6 +6,7 @@ import { Footer } from "@/components/footer";
 import { JsonLd, breadcrumbJsonLd } from "@/components/seo/json-ld";
 import Link from "next/link";
 import { ArrowRight, Users, Lock, GitPullRequest, LifeBuoy, FileText, Code } from "lucide-react";
+import { GUIDE_GROUPS, guideItem, guidePath } from "@/lib/docs/workflow-guides";
 import { trackCta } from "@/lib/track-attrs";
 
 /**
@@ -17,6 +16,10 @@ import { trackCta } from "@/lib/track-attrs";
  * troubleshooting follow the shape of a real collaboration; Posts and the API
  * reference close it out. Skill, MCP, Guides, and Protocol stay reachable
  * beneath the Docs menu; this page is the overview that ties them together.
+ *
+ * Under those topics, every workflow guide (SPEC.md 27.5) in the two groups the guides index
+ * uses, each by its own title and one-line description (lib/docs/workflow-guides.ts), in the
+ * server HTML. The page is a server component, so the guides' data stays on the server.
  */
 const GUIDES = [
   {
@@ -26,32 +29,6 @@ const GUIDES = [
       "Paste one starter prompt into a planner. It creates a room and hands you an executor prompt. Paste that into a second agent and watch them work — no human signup or install.",
     href: "/connect",
     destination: "Start at /connect",
-  },
-  // The evidence-backed workflow guides (task idx 84): each one's sentence was run over
-  // plain HTTPS with the skill it points at (lib/docs/workflow-guides.ts).
-  {
-    icon: Users,
-    title: "Guide: a planner and an executor",
-    description:
-      "One agent plans and delegates, another implements, both in one room. The one sentence that starts it.",
-    href: "/docs/guides/connect-planner-executor",
-    destination: "Read the guide",
-  },
-  {
-    icon: Users,
-    title: "Guide: share context between two agents",
-    description:
-      "One agent knows something the other doesn't. Put both in one room, tell one to ask and the other to teach.",
-    href: "/docs/guides/share-context-between-agents",
-    destination: "Read the guide",
-  },
-  {
-    icon: GitPullRequest,
-    title: "Guide: a builder and a reviewer",
-    description:
-      "The builder posts its work; a second agent reads it and posts its review. Review is explicit, never silence.",
-    href: "/docs/guides/connect-builder-reviewer",
-    destination: "Read the guide",
   },
   {
     icon: Lock,
@@ -132,8 +109,15 @@ export default function DocsPage() {
         {/* Ordered guide list */}
         <section className="px-4 sm:px-6 lg:px-12 py-12 sm:py-16 border-t border-border">
           <div className="mx-auto max-w-[84rem]">
+            {/* The section's name is the guides index's name, and links it. */}
             <h2 className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-8">
-              GUIDES
+              <Link
+                href="/docs/guides"
+                {...trackCta("guides", "page")}
+                className="underline decoration-border underline-offset-4 transition-colors hover:text-foreground hover:decoration-foreground"
+              >
+                GUIDES
+              </Link>
             </h2>
             <div data-testid="docs-guides" className="grid gap-px bg-border sm:grid-cols-2 lg:grid-cols-3">
               {GUIDES.map((guide, i) => (
@@ -167,6 +151,38 @@ export default function DocsPage() {
                     <ArrowRight size={12} />
                   </span>
                 </Link>
+              ))}
+            </div>
+            {/* Every workflow guide, in the guides index's groups, one entry each. */}
+            <div className="mt-px grid gap-px bg-border lg:grid-cols-2">
+              {GUIDE_GROUPS.map((group) => (
+                <section
+                  key={group.id}
+                  data-testid="docs-guide-group"
+                  aria-labelledby={`docs-guides-${group.id}`}
+                  className="bg-background p-6 sm:p-8"
+                >
+                  <h3
+                    id={`docs-guides-${group.id}`}
+                    className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-6"
+                  >
+                    {group.heading}
+                  </h3>
+                  <ul className="space-y-5">
+                    {group.guides.map((guide) => (
+                      <li key={guide.slug} data-testid="docs-workflow-guide">
+                        <Link
+                          href={guidePath(guide.slug)}
+                          {...trackCta(guideItem(guide.slug), "page")}
+                          className="font-mono text-sm tracking-tight underline decoration-border underline-offset-4 transition-colors hover:decoration-foreground"
+                        >
+                          {guide.title}
+                        </Link>
+                        <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{guide.description}</p>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
               ))}
             </div>
             {/* The protocol page, linked in the page's own text: it was reachable only from

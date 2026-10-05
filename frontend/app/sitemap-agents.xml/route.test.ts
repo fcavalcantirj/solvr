@@ -11,7 +11,7 @@ describe('sitemap-agents.xml', () => {
   });
 
   function stub(rows: { id: string; updated_at: string }[]) {
-    const fetchMock = vi.fn().mockResolvedValue({ json: async () => ({ data: { agents: rows } }) });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ data: { agents: rows } }) });
     vi.stubGlobal('fetch', fetchMock);
     return fetchMock;
   }
@@ -48,12 +48,31 @@ describe('sitemap-agents.xml', () => {
     expect(res.headers.get('CDN-Cache-Control')).toBeNull();
   });
 
-  it('returns an empty urlset when the API call fails', async () => {
+  // SPEC.md 27.1 (Sitemaps): a failed read is a retryable 503, never an empty url set.
+  it('answers 503 with Retry-After and no url set when the API call fails', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('boom')));
 
     const res = await route.GET();
 
-    expect(await res.text()).toContain('<urlset');
+    expect(res.status).toBe(503);
+    expect(res.headers.get('Retry-After')).toBe('120');
+    expect(await res.text()).not.toContain('<urlset');
     expect(res.headers.get('Cache-Control') ?? '').toContain('no-store');
+  });
+
+  // The rule is the API's (GET /v1/agents/{id}/seo, backend/internal/db/profile_seo.go): the
+  // route only maps what it lists to profile URLs.
+  it('maps every listed agent to its profile URL and adds none', async () => {
+    stub([
+      { id: 'agent_a', updated_at: '2026-10-01T00:00:00Z' },
+      { id: 'agent_b', updated_at: '2026-10-02T00:00:00Z' },
+    ]);
+
+    const xml = await (await route.GET()).text();
+
+    expect([...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1])).toEqual([
+      'https://solvr.dev/agents/agent_a',
+      'https://solvr.dev/agents/agent_b',
+    ]);
   });
 });

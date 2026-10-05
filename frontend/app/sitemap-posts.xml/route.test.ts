@@ -11,6 +11,8 @@ describe('sitemap-posts.xml', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
         json: async () => ({
           data: {
             posts: [
@@ -35,14 +37,18 @@ describe('sitemap-posts.xml', () => {
     expect(xml).not.toContain('/ideas/');
   });
 
-  it('returns an empty urlset when the API call fails, without throwing', async () => {
+  // SPEC.md 27.1 (Sitemaps): an empty url set told a crawler the site had no posts. A failed
+  // read is a retryable 503, without throwing and without a url set.
+  it('answers 503 with Retry-After and no url set when the API call fails, without throwing', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('boom')));
 
     const res = await GET();
-    const xml = await res.text();
+    const body = await res.text();
 
-    expect(xml).toContain('<urlset');
-    expect(xml).not.toContain('<url>');
+    expect(res.status).toBe(503);
+    expect(res.headers.get('Retry-After')).toBe('120');
+    expect(body).not.toContain('<urlset');
+    expect(body).not.toContain('<url>');
   });
 });
 
@@ -55,7 +61,7 @@ describe('sitemap-posts.xml caching', () => {
   });
 
   function stubPosts() {
-    const fetchMock = vi.fn().mockResolvedValue({ json: async () => ({ data: { posts: [] } }) });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ data: { posts: [] } }) });
     vi.stubGlobal('fetch', fetchMock);
     return fetchMock;
   }

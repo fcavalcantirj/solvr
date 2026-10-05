@@ -141,12 +141,18 @@ function formatRelativeTime(dateString: string): string {
   return `${diffDays}d ago`;
 }
 
+// The page's one heading. The server HTML is the loading state (the status is read in the
+// browser), so that state names the page too: it drew a bar here and served no h1.
+function StatusTitle({ className = "" }: { className?: string }) {
+  return <h1 className={`text-2xl font-normal tracking-[-0.025em] ${className}`}>Solvr Status</h1>;
+}
+
 function LoadingSkeleton() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Header />
       <main aria-busy="true" className="px-4 pb-16 pt-28 sm:px-6 lg:px-12 lg:pt-32">
-        <Skeleton className="mb-12 h-6 w-40" />
+        <StatusTitle className="mb-12" />
         <div className="grid gap-12 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] lg:gap-16">
           <div className="space-y-4">
             <Skeleton className="h-24 w-4/5" />
@@ -248,7 +254,7 @@ export default function StatusPage() {
       <Header />
       <main className="pt-16">
         <section className="px-4 pb-12 pt-12 sm:px-6 lg:px-12 lg:pb-16 lg:pt-16">
-          <h1 className="text-2xl font-normal tracking-[-0.025em]">Solvr Status</h1>
+          <StatusTitle />
           <div className="mt-10 grid min-w-0 gap-10 lg:mt-14 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] lg:gap-16">
             <div className="min-w-0 lg:border-r lg:border-border lg:pr-12">
               <p className="max-w-[12ch] text-[clamp(2.75rem,7.5vw,8.5rem)] font-light leading-[0.98] tracking-[-0.055em] [overflow-wrap:anywhere]">

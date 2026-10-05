@@ -402,8 +402,18 @@ bash ~/.claude/skills/solvr/scripts/solvr-admin.sh email history
 
 - Frontend uses `output: 'standalone'` in `next.config.mjs` for Docker deployment
 - **DO NOT use `generateSitemaps()`** — it creates dynamic routes that break with standalone mode (caused production 404)
-- Current sitemap (`frontend/app/sitemap.ts`) is a single flat file fetching all URLs via `GET /v1/sitemap/urls`
-- Sitemap protocol limit: 50,000 URLs per file. Current count: ~100
+- The sitemaps are route handlers (SPEC.md 27.1, "Sitemaps"). `robots.txt` names only the index `/sitemap.xml`
+  (`frontend/app/sitemap.xml/route.ts`), which names six sub-sitemaps, one folder each under `frontend/app/`:
+  - `sitemap-core.xml`: the static routes `frontend/lib/seo/route-policy.ts` marks `sitemap: true` (no API read, cacheable)
+  - `sitemap-posts.xml`, `sitemap-agents.xml`, `sitemap-users.xml`, `sitemap-blog.xml`, `sitemap-rooms.xml`: each reads
+    `GET /v1/sitemap/urls?type=<posts|agents|users|blog_posts|rooms>&per_page=5000` on every request, served `no-store`.
+    The API decides what each lists (a profile under the rule of its `/seo` verdict).
+  - The index dates each content sub-sitemap from `GET /v1/sitemap/counts` (`data.lastmod`).
+- When the API cannot be read, the index and the content sub-sitemaps answer `503` with `Retry-After: 120`, never an
+  empty url set. A new sub-sitemap must be named by the index: `frontend/app/sitemap-failures.test.ts` fails otherwise.
+- Sitemap protocol limit: 50,000 URLs per file. Each content sub-sitemap reads one page of at most 5,000 rows (the API's
+  largest `per_page`), so a type nearing 5,000 must be paged into more files first. Measured on production 2026-10-04
+  (recon `FINDINGS.md`): 467 posts, 71 agents, 32 blog posts, 28 rooms.
 
 ---
 
@@ -418,12 +428,13 @@ bash ~/.claude/skills/solvr/scripts/solvr-admin.sh email history
 - When needed, build it API-first: SPEC entry, a migration for single-use expiring reset tokens, `POST /v1/auth/forgot-password`
   + `POST /v1/auth/reset-password` (Resend email, same answer whether or not the email exists), then the two pages.
 
-### Sitemap sharding (when approaching 50k URLs)
+### Sitemap paging (when a type approaches 5,000 rows)
+- The sitemap index and one sub-sitemap per type are built (Deployment Constraints above). What is not built: a type
+  with more rows than one API page (`per_page` max 5,000) spread over several files.
 - Backend pagination API is already built: `GET /v1/sitemap/urls?type=posts&page=1&per_page=2500`
-- Backend counts API is already built: `GET /v1/sitemap/counts`
-- Frontend types (`SitemapUrlsParams`, `APISitemapCountsResponse`) are already in `lib/api-types.ts`
-- When needed, replace single `sitemap.ts` with a route handler (`app/sitemap.xml/route.ts`) that generates a sitemap index + individual sitemap files — this approach works with `output: 'standalone'`
-- Alternative: generate static XML files at build time via a script writing to `/public`
+- Backend counts API is already built: `GET /v1/sitemap/counts` (per-type counts tell the index how many files a type needs)
+- When needed, add numbered route handlers per type and name them in the index — route handlers work with
+  `output: 'standalone'`; `generateSitemaps()` does not
 
 ---
 

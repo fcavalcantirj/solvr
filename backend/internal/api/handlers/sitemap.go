@@ -14,6 +14,9 @@ const (
 	SitemapMaxPerPage = 5000
 	// SitemapDefaultPerPage is the default per_page value when not specified.
 	SitemapDefaultPerPage = 2500
+	// SitemapRetryAfterSeconds is the Retry-After of a sitemap read whose database read failed
+	// (SPEC.md 27.1), the same wait the web's sitemaps then give crawlers.
+	SitemapRetryAfterSeconds = "120"
 )
 
 // SitemapRepositoryInterface defines the interface for sitemap data access.
@@ -50,7 +53,7 @@ func (h *SitemapHandler) GetSitemapURLs(w http.ResponseWriter, r *http.Request) 
 	// Backward compat: no type param → return all URLs
 	urls, err := h.repo.GetSitemapURLs(ctx)
 	if err != nil {
-		writeSitemapError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get sitemap URLs")
+		writeSitemapUnavailable(w, "sitemap URLs could not be read")
 		return
 	}
 
@@ -95,11 +98,20 @@ func (h *SitemapHandler) getSitemapURLsPaginated(w http.ResponseWriter, r *http.
 
 	urls, err := h.repo.GetPaginatedSitemapURLs(ctx, opts)
 	if err != nil {
-		writeSitemapError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get sitemap URLs")
+		writeSitemapUnavailable(w, "sitemap URLs could not be read")
 		return
 	}
 
 	writeSitemapURLsResponse(w, urls)
+}
+
+// writeSitemapUnavailable answers a failed database read: a retryable 503 with Retry-After,
+// never a 500 (SPEC.md 27.1). A crawler that reads the web's sitemap in that minute is then
+// told to come back, not that the site has no pages. The error envelope adds
+// retry_after_seconds from the header.
+func writeSitemapUnavailable(w http.ResponseWriter, message string) {
+	w.Header().Set("Retry-After", SitemapRetryAfterSeconds)
+	writeSitemapError(w, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", message+"; retry later")
 }
 
 func writeSitemapError(w http.ResponseWriter, status int, code, message string) {
@@ -136,14 +148,7 @@ func (h *SitemapHandler) GetSitemapCounts(w http.ResponseWriter, r *http.Request
 
 	counts, err := h.repo.GetSitemapCounts(ctx)
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"error": map[string]string{
-				"code":    "INTERNAL_ERROR",
-				"message": "failed to get sitemap counts",
-			},
-		})
+		writeSitemapUnavailable(w, "sitemap counts could not be read")
 		return
 	}
 

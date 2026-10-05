@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -721,8 +722,10 @@ func hashPasswordForTest(password string) string {
 }
 
 // Helper to generate UUID (simplified for tests)
+// generateUUID was a timestamp, but the clock here moves in microseconds: two methods created
+// in one microsecond shared an id and Delete removed the wrong one (81 failing runs in 300).
 func generateUUID() string {
-	return "uuid_" + time.Now().Format("20060102150405.000000000")
+	return "uuid_" + uuid.NewString()
 }
 
 // ============================================================================

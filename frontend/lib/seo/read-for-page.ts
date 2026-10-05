@@ -23,3 +23,14 @@ export async function readForPage<T>(path: string): Promise<{ status: number; da
   if (res.status >= 500 || res.status === 429) throw new UpstreamError(`${path}: API answered ${res.status}`);
   return { status: res.status, data: null };
 }
+
+// readListForPage is a collection page's server read of its list (SPEC.md 27.4): only a 2xx
+// whose body carries a list (`data: [...]`) is an answer, and it is returned whole. Anything
+// else throws, so the page answers a retryable 5xx instead of an empty list at 200: a list
+// refuses nothing a page could turn into a 404, and an empty list told a crawler that read it
+// in that minute the collection was empty.
+export async function readListForPage<T extends { data: unknown[] }>(path: string): Promise<T> {
+  const { status, data } = await readForPage<T>(path);
+  if (!data || !Array.isArray(data.data)) throw new UpstreamError(`${path}: API answered ${status} without a list`);
+  return data;
+}

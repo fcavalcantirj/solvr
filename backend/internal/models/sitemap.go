@@ -58,6 +58,7 @@ type SitemapCounts struct {
 type SitemapLastmods struct {
 	Posts     *time.Time `json:"posts"`
 	Agents    *time.Time `json:"agents"`
+	Users     *time.Time `json:"users"`
 	BlogPosts *time.Time `json:"blog_posts"`
 	Rooms     *time.Time `json:"rooms"`
 }

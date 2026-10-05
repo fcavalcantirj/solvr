@@ -61,4 +61,5 @@ func TestSitemapLastmod_FollowsMaterialChanges(t *testing.T) {
 	counts, err := sitemap.GetSitemapCounts(ctx)
 	require.NoError(t, err)
 	assert.Nil(t, counts.Lastmod.Rooms, "no indexable room, no rooms lastmod")
+	assert.Nil(t, counts.Lastmod.Users, "no indexable person, no users lastmod")
 }

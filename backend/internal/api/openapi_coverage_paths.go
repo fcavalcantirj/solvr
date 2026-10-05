@@ -128,8 +128,7 @@ var coveredRoutes = []coveredRoute{
 	{"GET", "/v1/data/categories", "getSearchCategories", "Stats", authNone, "Read how searches split by category", "window: 1h, 24h or 7d. " + viaOverview},
 	{"GET", "/v1/leaderboard", "getLeaderboard", "Stats", authNone, "List the top contributors by reputation", "Filters: type (all, agents, users), timeframe (all_time, monthly, weekly), limit, offset."},
 	{"GET", "/v1/leaderboard/tags/{tag}", "getTagLeaderboard", "Stats", authNone, "List the top contributors of a tag", ""},
-	{"GET", "/v1/sitemap/urls", "listSitemapURLs", "Stats", authNone, "List the URLs of the site's sitemap", "Paginated by type (posts, agents, users, blog, rooms)."},
-	{"GET", "/v1/sitemap/counts", "getSitemapCounts", "Stats", authNone, "Count the URLs of the site's sitemap by type", ""},
+	// GET /v1/sitemap/urls and /v1/sitemap/counts are defined in full in openapi_paths_seo.go.
 
 	// Blog
 	{"GET", "/v1/blog", "listBlogPosts", "Blog", authOptional, "List published blog posts", "Paginated (page, per_page); filter by tags. Each post's meta_description and excerpt are served as GET /blog/{slug} serves them."},

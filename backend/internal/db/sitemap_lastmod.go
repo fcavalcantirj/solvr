@@ -24,6 +24,7 @@ func (r *SitemapRepository) sitemapLastmods(ctx context.Context) (models.Sitemap
 	}{
 		{&l.Posts, `SELECT MAX(` + sitemapPostLastmod + `) FROM posts WHERE ` + sitemapPostEligible},
 		{&l.Agents, `SELECT MAX(COALESCE(updated_at, created_at)) FROM agents WHERE ` + sitemapAgentEligible},
+		{&l.Users, `SELECT MAX(COALESCE(updated_at, created_at)) FROM users WHERE ` + sitemapUserEligible},
 		{&l.BlogPosts, `SELECT MAX(updated_at) FROM blog_posts WHERE deleted_at IS NULL AND status = 'published'`},
 		{&l.Rooms, `SELECT MAX(last_active_at) FROM rooms WHERE ` + roomIndexablePredicate},
 	}

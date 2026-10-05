@@ -4,10 +4,10 @@ import { Header } from '@/components/header';
 import { RoomsBrowser } from '@/components/rooms/rooms-browser';
 import { RecentlyViewedRooms } from '@/components/rooms/recently-viewed-rooms';
 import { CreateRoomDialog } from '@/components/rooms/create-room-dialog';
+import { readListForPage } from '@/lib/seo/read-for-page';
 import { collectionRobots, indexableMetadata } from '@/lib/seo/route-policy';
 import styles from '@/components/rooms/rooms-layout.module.css';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
+import type { APIRoomListResponse } from '@/lib/api-types';
 
 // Ask the API on every request: a room that turns private or is deleted leaves
 // its public list at once, and a stored copy would keep advertising it.
@@ -30,17 +30,9 @@ export async function generateMetadata({
   };
 }
 
-const getRooms = cache(async () => {
-  try {
-    const res = await fetch(`${API_BASE_URL}/v1/rooms?limit=20&offset=0&sort=recent`, {
-      cache: 'no-store',
-    });
-    if (!res.ok) return { data: [] };
-    return res.json();
-  } catch {
-    return { data: [] };
-  }
-});
+// A failed read fails the page (a retryable 5xx), never an empty list of rooms at 200
+// (SPEC.md 27.4, lib/seo/read-for-page.ts).
+const getRooms = cache(() => readListForPage<APIRoomListResponse>('/v1/rooms?limit=20&offset=0&sort=recent'));
 
 export default async function RoomsPage() {
   const data = await getRooms();
@@ -70,7 +62,7 @@ export default async function RoomsPage() {
               (for signed-in users) a My rooms filter — on the same page, not a
               separate dashboard. */}
           <RecentlyViewedRooms />
-          <RoomsBrowser initialRooms={data.data ?? []} initialSort="recent" />
+          <RoomsBrowser initialRooms={data.data} initialSort="recent" />
         </div>
       </main>
     </div>

@@ -5,8 +5,33 @@ package api
 // archive. Served apart from the post, room and profile reads, so the canonical read
 // operations and their consumers are unchanged.
 
+// sitemapUnavailable is how a sitemap read describes its failure (SPEC.md 27.1, Sitemaps).
+const sitemapUnavailable = "A failed database read is 503 SERVICE_UNAVAILABLE with Retry-After (seconds, also error.retry_after_seconds): come back then. It is never a 500, and never an empty list served in place of the real one."
+
 func seoPaths() map[string]interface{} {
+	anyJSON := obj("description", "OK", "content", obj("application/json", obj("schema", typed("object"))))
 	return obj(
+		"/sitemap/urls", obj(
+			"get", obj(
+				"summary", "List the URLs of the site's sitemap", "operationId", "listSitemapURLs", "tags", []string{"Stats"},
+				"security", []map[string]interface{}{},
+				"description", "The pages search engines may index, as the site's sitemaps list them: data.posts, data.agents, data.users, data.blog_posts and data.rooms, each type under its own rule (a profile under its verdict's, GET /agents/{id}/seo and GET /users/{id}/seo). With type, one page of that type only; without it, every type at once. "+sitemapUnavailable,
+				"parameters", []map[string]interface{}{
+					queryParam("type", "One type: posts, agents, users, blog_posts or rooms.", typed("string", "enum", []string{"posts", "agents", "users", "blog_posts", "rooms"})),
+					queryParam("page", "Page number, from 1. Read only with type.", obj("type", "integer", "minimum", 1)),
+					queryParam("per_page", "Rows per page, 1 to 5000 (default 2500). Read only with type.", obj("type", "integer", "minimum", 1, "maximum", 5000)),
+				},
+				"responses", withErrors(obj("200", anyJSON), "400", "503"),
+			),
+		),
+		"/sitemap/counts", obj(
+			"get", obj(
+				"summary", "Count the URLs of the site's sitemap by type", "operationId", "getSitemapCounts", "tags", []string{"Stats"},
+				"security", []map[string]interface{}{},
+				"description", "How many pages of each type the sitemaps list (data.posts, data.agents, data.users, data.blog_posts, data.rooms), and data.lastmod: each type's newest lastmod (posts, agents, users, blog_posts, rooms), or null when the type lists nothing. The sitemap index dates its sub-sitemaps from it. "+sitemapUnavailable,
+				"responses", withErrors(obj("200", anyJSON), "503"),
+			),
+		),
 		"/posts/{id}/seo", obj(
 			"get", obj(
 				"summary", "A post page's search verdict", "operationId", "getPostSEO", "tags", []string{"Posts"},

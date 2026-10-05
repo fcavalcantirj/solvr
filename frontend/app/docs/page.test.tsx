@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { GUIDE_GROUPS, guideItem, guidePath } from '@/lib/docs/workflow-guides';
 import DocsPage from './page';
 
 // Header/Footer are exercised by their own tests; stub them here.
@@ -23,12 +24,9 @@ vi.mock('next/link', () => ({
  * ordering and the concept explanations the redesign requires.
  */
 describe('DocsPage — /docs landing', () => {
+  // The workflow guides are listed apart, every one of them (DocsPage links every guide).
   const orderedGuideTitles = [
     'Connect two agents',
-    // The evidence-backed workflow guides (task idx 84).
-    'Guide: a planner and an executor',
-    'Guide: share context between two agents',
-    'Guide: a builder and a reviewer',
     'Private rooms',
     'Roles and review',
     'Troubleshooting',
@@ -103,16 +101,55 @@ describe('DocsPage — /docs landing', () => {
 });
 
 // Task idx 84: the evidence-backed workflow guides live within Docs, linked from the
-// Docs overview (not new main-navigation destinations).
-describe('DocsPage workflow guides', () => {
-  it('links each tested workflow guide', () => {
+// Docs overview (not new main-navigation destinations). The overview linked only the three
+// use-case guides; it links the guides index and all nine guides now, in the server HTML, in
+// the two groups the index uses, each by its title and its own one-line description.
+describe('DocsPage links every guide', () => {
+  const html = () => renderToStaticMarkup(<DocsPage />);
+  const text = (s: string) => s.replace(/<[^>]+>/g, '').replace(/&#x27;|&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+
+  it('links the guides index by its name, marked for the click listener', () => {
+    render(<DocsPage />);
+    const link = screen.getByRole('link', { name: 'GUIDES' });
+    expect(link).toHaveAttribute('href', '/docs/guides');
+    expect(link.closest('h2')).not.toBeNull();
+    expect(link).toHaveAttribute('data-track-item', 'guides');
+    expect(link).toHaveAttribute('data-track-location', 'page');
+  });
+
+  it('lists the nine guides in the index groups, in its order, one entry each with its own description', () => {
+    const blocks = html().split('data-testid="docs-guide-group"').slice(1);
+    expect(blocks).toHaveLength(GUIDE_GROUPS.length);
+    GUIDE_GROUPS.forEach((group, i) => {
+      const block = blocks[i];
+      expect(block).toMatch(new RegExp(`<h3[^>]*>${group.heading}</h3>`));
+      // Each entry: the rest of its <li> tag, then its content up to </li>.
+      const entries = block.split('data-testid="docs-workflow-guide"').slice(1).map((e) => e.split('</li>')[0].replace(/^[^>]*>/, ''));
+      expect(entries).toHaveLength(group.guides.length);
+      group.guides.forEach((guide, j) => {
+        expect(entries[j]).toMatch(new RegExp(`<a\\b[^>]*href="${guidePath(guide.slug)}"[^>]*>${guide.title}</a>`));
+        expect(text(entries[j])).toBe(`${guide.title}${guide.description}`);
+      });
+    });
+    expect(GUIDE_GROUPS.flatMap((g) => g.guides)).toHaveLength(9);
+  });
+
+  it('marks each guide link for the click listener as the index does', () => {
+    render(<DocsPage />);
+    for (const guide of GUIDE_GROUPS.flatMap((g) => g.guides)) {
+      const link = screen.getByRole('link', { name: guide.title });
+      expect(link).toHaveAttribute('href', guidePath(guide.slug));
+      expect(link).toHaveAttribute('data-track-item', guideItem(guide.slug));
+    }
+  });
+
+  it('links every guide once, the resume guide included', () => {
     const { container } = render(<DocsPage />);
     const hrefs = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href'));
-    for (const slug of ['connect-planner-executor', 'share-context-between-agents', 'connect-builder-reviewer']) {
-      expect(hrefs).toContain(`/docs/guides/${slug}`);
+    for (const guide of GUIDE_GROUPS.flatMap((g) => g.guides)) {
+      expect(hrefs.filter((h) => h === guidePath(guide.slug))).toHaveLength(1);
     }
-    // The resume guide keeps its page but is no longer linked (owner, 2026-10-03).
-    expect(hrefs).not.toContain('/docs/guides/resume-across-two-clis');
+    expect(hrefs).toContain('/docs/guides/resume-across-two-clis');
   });
 });
 
@@ -134,8 +171,8 @@ describe('DocsPage links the protocol page', () => {
     expect(link).toHaveAttribute('data-track-location', 'page');
   });
 
-  it('keeps the guide list as it was', () => {
+  it('keeps the six topic cards beside the guides', () => {
     render(<DocsPage />);
-    expect(within(screen.getByTestId('docs-guides')).getAllByTestId('docs-guide')).toHaveLength(9);
+    expect(within(screen.getByTestId('docs-guides')).getAllByTestId('docs-guide')).toHaveLength(6);
   });
 });

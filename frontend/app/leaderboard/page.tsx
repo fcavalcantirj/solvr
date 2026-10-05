@@ -2,9 +2,9 @@ import { cache } from 'react';
 import { Metadata } from 'next';
 import { Header } from "@/components/header";
 import { LeaderboardPageClient } from "@/components/leaderboard/leaderboard-page-client";
+import { readListForPage } from "@/lib/seo/read-for-page";
 import { indexableMetadata } from "@/lib/seo/route-policy";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
+import type { LeaderboardEntry } from "@/lib/api-types";
 
 // A deleted or banned account leaves the API's leaderboard at once; no stored copy of
 // this page may keep ranking it.
@@ -16,18 +16,11 @@ export const metadata: Metadata = indexableMetadata(
   'Top contributors on Solvr ranked by reputation, problem-solving, and community impact.'
 );
 
-const getInitialLeaderboard = cache(async () => {
-  try {
-    const res = await fetch(`${API_BASE_URL}/v1/leaderboard?timeframe=all_time&per_page=50`, {
-      cache: 'no-store',
-    });
-    if (!res.ok) return [];
-    const json = await res.json();
-    return json.data ?? [];
-  } catch {
-    return [];
-  }
-});
+// A failed read fails the page (a retryable 5xx), never an empty leaderboard at 200
+// (SPEC.md 27.4, lib/seo/read-for-page.ts).
+const getInitialLeaderboard = cache(
+  async () => (await readListForPage<{ data: LeaderboardEntry[] }>('/v1/leaderboard?timeframe=all_time&per_page=50')).data
+);
 
 export default async function LeaderboardPage() {
   const initialEntries = await getInitialLeaderboard();

@@ -188,4 +188,13 @@ func TestProfileVerdict_IndexableExactlyWithPublicContent(t *testing.T) {
 	assert.Equal(t, len(pagedAgents), counts.Agents)
 	assert.Equal(t, len(pagedUsers), counts.Users)
 	require.NotNil(t, counts.Lastmod.Agents)
+	// The users sub-sitemap is dated like the agents one: its newest listed entry.
+	require.NotNil(t, counts.Lastmod.Users)
+	newest := userPage.Users[0].UpdatedAt
+	for _, u := range userPage.Users {
+		if u.UpdatedAt.After(newest) {
+			newest = u.UpdatedAt
+		}
+	}
+	assert.True(t, counts.Lastmod.Users.Equal(newest), "the users lastmod is the newest listed person's")
 }

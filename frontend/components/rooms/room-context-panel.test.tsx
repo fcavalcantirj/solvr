@@ -54,6 +54,11 @@ describe('RoomContextPanel (task 33, step 4)', () => {
 
   // Each context item can be expanded IN PLACE — a toggle button, never a
   // navigation away from the room.
+  it('adds no h1 to the room page when the task starts with "#"', () => {
+    const { container } = render(<RoomContextPanel initialTask={makeMessage({ content: '# Build tic-tac-toe\n\nfirst', content_type: 'markdown' })} />);
+    expect(container.querySelectorAll('h1')).toHaveLength(0);
+  });
+
   it('expands and collapses without leaving the room', () => {
     render(<RoomContextPanel initialTask={makeMessage()} />);
     const toggle = screen.getByRole('button', { name: /expand/i });

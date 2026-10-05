@@ -102,6 +102,17 @@ describe('PostDetail', () => {
     expect(screen.getByRole('link', { name: /golang/i })).toBeInTheDocument();
   });
 
+  it('keeps the title as the page\'s only h1 when the body and a reply start with "#"', async () => {
+    getPost.mockResolvedValue({ data: makePost({ description: '# Plan\n\n## Steps\n\nDo it.' }) });
+    getPostReplies.mockResolvedValue({ data: [{ ...reply, body: '# Answer\n\nUse a mutex.' }], meta: { total: 1, page: 1 } });
+    render(<PostDetail postId="p1" />);
+    await waitFor(() => expect(screen.getByText(/use a mutex/i)).toBeInTheDocument());
+    const h1s = screen.getAllByRole('heading', { level: 1 });
+    expect(h1s).toHaveLength(1);
+    expect(h1s[0]).toHaveTextContent('How to fix the deadlock');
+    expect(screen.getByRole('heading', { level: 2, name: 'Plan' })).toBeInTheDocument();
+  });
+
   it('lists replies fetched from the canonical replies endpoint', async () => {
     getPostReplies.mockResolvedValue({ data: [reply], meta: { total: 1, page: 1 } });
     render(<PostDetail postId="p1" />);

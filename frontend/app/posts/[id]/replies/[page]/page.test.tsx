@@ -65,6 +65,15 @@ describe('post reply pages', () => {
     expect(init).toMatchObject({ cache: 'no-store' });
   });
 
+  it('keeps the page title as its only h1 when a reply starts with "#"', async () => {
+    const page2 = replies(2, 3);
+    page2.data[0].body = '# Heading in a reply\n\ntext';
+    api([200, post()], [200, page2]);
+    const { container } = render(await RepliesPage(params()));
+    expect(container.textContent).toContain('Heading in a reply');
+    expect(container.querySelectorAll('h1')).toHaveLength(1);
+  });
+
   it('links back to the post as the first page', async () => {
     api([200, post()], [200, replies(2, 2)]);
     const { container } = render(await RepliesPage(params()));

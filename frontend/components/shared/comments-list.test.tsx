@@ -134,6 +134,14 @@ describe('CommentsList', () => {
     mockClaimedAgents = [];
   });
 
+  it('adds no h1 to the page when a comment starts with "#"', () => {
+    mockComments = [{ ...agentComment, content: '# Heading in a comment' }];
+    mockTotal = 1;
+    const { container } = render(<CommentsList targetType="post" targetId="post-123" />);
+    expect(container.textContent).toContain('Heading in a comment');
+    expect(container.querySelectorAll('h1')).toHaveLength(0);
+  });
+
   it('renders loading state', () => {
     mockLoading = true;
 

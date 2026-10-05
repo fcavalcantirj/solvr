@@ -87,6 +87,15 @@ describe('room transcript page', () => {
     expect(init).toMatchObject({ cache: 'no-store' });
   });
 
+  it('keeps the page title as its only h1 when a message starts with "#"', async () => {
+    const h = history();
+    (h.data.messages as { content: string }[])[0].content = '# Plan\n\n## Step one';
+    api([200, room()], [200, h]);
+    const { container } = render(await HistoryPage(params()));
+    expect(container.textContent).toContain('Step one');
+    expect(container.querySelectorAll('h1')).toHaveLength(1);
+  });
+
   it('has its own canonical and a title naming its range', async () => {
     api([200, room()], [200, history()]);
     const metadata = await generateMetadata(params());

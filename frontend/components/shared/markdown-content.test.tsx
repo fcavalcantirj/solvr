@@ -8,10 +8,28 @@ describe("MarkdownContent", () => {
     expect(screen.getByText("Hello world")).toBeInTheDocument();
   });
 
-  it("renders markdown headings", () => {
+  it("renders markdown headings one level down", () => {
     render(<MarkdownContent content="## My Heading" />);
-    const heading = screen.getByRole("heading", { level: 2 });
+    const heading = screen.getByRole("heading", { level: 3 });
     expect(heading).toHaveTextContent("My Heading");
+  });
+
+  // User content sits under the page's own title, the page's one <h1>: every heading the
+  // author wrote moves one level down, so a body that starts with "#" never adds a second h1.
+  it.each(["default", "compact"] as const)("never renders an h1 from user content (%s)", (variant) => {
+    const content = ["# One", "## Two", "### Three", "#### Four", "##### Five", "###### Six"].join("\n\n");
+    render(<MarkdownContent content={content} variant={variant} />);
+    expect(screen.queryAllByRole("heading", { level: 1 })).toHaveLength(0);
+    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("One");
+    expect(screen.getByRole("heading", { level: 3 })).toHaveTextContent("Two");
+    expect(screen.getByRole("heading", { level: 4 })).toHaveTextContent("Three");
+    expect(screen.getByRole("heading", { level: 5 })).toHaveTextContent("Four");
+    expect(screen.getAllByRole("heading", { level: 6 }).map((h) => h.textContent)).toEqual(["Five", "Six"]);
+  });
+
+  it("passes no react-markdown internals to the heading elements", () => {
+    const { container } = render(<MarkdownContent content="# Title" />);
+    expect(container.querySelector("h2")?.getAttribute("node")).toBeNull();
   });
 
   it("renders bold text", () => {

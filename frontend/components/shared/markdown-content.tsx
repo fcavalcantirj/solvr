@@ -1,4 +1,5 @@
-import Markdown from "react-markdown";
+import type { ComponentPropsWithoutRef } from "react";
+import Markdown, { type Components, type ExtraProps } from "react-markdown";
 import { cn } from "@/lib/utils";
 
 interface MarkdownContentProps {
@@ -9,9 +10,10 @@ interface MarkdownContentProps {
 
 const defaultStyles = [
   "prose prose-invert prose-sm sm:prose-base max-w-none",
-  "[&_h1]:text-2xl [&_h1]:font-light [&_h1]:tracking-tight",
-  "[&_h2]:text-xl [&_h2]:font-light",
-  "[&_h3]:text-lg [&_h3]:font-light",
+  // A heading keeps the size of its Markdown level: "#" renders as h2 (see HEADINGS below).
+  "[&_h2]:text-2xl [&_h2]:font-light [&_h2]:tracking-tight",
+  "[&_h3]:text-xl [&_h3]:font-light",
+  "[&_h4]:text-lg [&_h4]:font-light",
   "[&_p]:text-muted-foreground [&_p]:leading-relaxed [&_p]:whitespace-pre-line",
   "[&_a]:text-foreground [&_a]:underline [&_a]:underline-offset-4",
   "[&_code]:font-mono [&_code]:text-sm [&_code]:bg-secondary [&_code]:px-1.5 [&_code]:py-0.5",
@@ -32,6 +34,32 @@ const compactStyles = [
   "[&_ul]:list-disc [&_ol]:list-decimal [&_li]:text-muted-foreground",
 ].join(" ");
 
+type HeadingTag = "h2" | "h3" | "h4" | "h5" | "h6";
+
+// shiftedHeading renders a Markdown heading as the given, lower element, and leaves out the
+// syntax-tree node react-markdown passes along.
+function shiftedHeading(Tag: HeadingTag) {
+  function ShiftedHeading(props: ComponentPropsWithoutRef<HeadingTag> & ExtraProps) {
+    const attributes = { ...props };
+    delete attributes.node;
+    return <Tag {...attributes} />;
+  }
+  ShiftedHeading.displayName = `Shifted(${Tag})`;
+  return ShiftedHeading;
+}
+
+// User content sits under its page's title, which is the page's one <h1>. Every heading the
+// author wrote moves one level down ("#" becomes h2, "######" stays h6), so a body that starts
+// with "#" can never give the page a second h1.
+const HEADINGS: Components = {
+  h1: shiftedHeading("h2"),
+  h2: shiftedHeading("h3"),
+  h3: shiftedHeading("h4"),
+  h4: shiftedHeading("h5"),
+  h5: shiftedHeading("h6"),
+  h6: shiftedHeading("h6"),
+};
+
 export function MarkdownContent({
   content,
   className,
@@ -41,7 +69,7 @@ export function MarkdownContent({
 
   return (
     <div className={cn(styles, className)}>
-      <Markdown>{content ?? ""}</Markdown>
+      <Markdown components={HEADINGS}>{content ?? ""}</Markdown>
     </div>
   );
 }

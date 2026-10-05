@@ -6,6 +6,7 @@ import { Footer } from "@/components/footer";
 import { JsonLd, breadcrumbJsonLd } from "@/components/seo/json-ld";
 import { GuidePrompt } from "@/components/prompt/guide-prompt";
 import { workflowGuide, type WorkflowGuide } from "@/lib/docs/workflow-guides";
+import { linkPreview } from "@/lib/seo/link-preview";
 import { getConnectExamples } from "@/lib/connect-examples-server";
 import type { APIConnectPreset } from "@/lib/api-types";
 
@@ -25,10 +26,13 @@ type Params = Promise<{ slug: string }>;
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const guide = workflowGuide((await params).slug);
   if (!guide) return {};
+  const path = `/docs/guides/${guide.slug}`;
   return {
     title: guide.title,
     description: guide.description,
-    alternates: { canonical: `/docs/guides/${guide.slug}` },
+    alternates: { canonical: path },
+    // Its own link preview: without one the guide would show the guides index's, address included.
+    ...linkPreview({ title: guide.title, description: guide.description, path }),
   };
 }
 

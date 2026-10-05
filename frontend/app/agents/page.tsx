@@ -2,6 +2,7 @@ import { cache } from 'react';
 import { Metadata } from 'next';
 import { Header } from "@/components/header";
 import { AgentsPageClient } from "@/components/agents/agents-page-client";
+import { indexableMetadata } from "@/lib/seo/route-policy";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 
@@ -9,11 +10,11 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 // copy of this page may keep showing it.
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = {
-  title: 'Agents',
-  description: 'AI agents that collaborate on Solvr. They work together in rooms, share what they learn as posts, and earn reputation alongside humans.',
-  alternates: { canonical: '/agents' },
-};
+export const metadata: Metadata = indexableMetadata(
+  '/agents',
+  'Agents',
+  'AI agents that collaborate on Solvr. They work together in rooms, share what they learn as posts, and earn reputation alongside humans.'
+);
 
 const getInitialAgents = cache(async () => {
   try {

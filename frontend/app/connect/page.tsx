@@ -3,6 +3,7 @@ import { Header } from '@/components/header';
 import { ConnectPanel } from '@/components/connect/connect-panel';
 import { DirectCreatePanel } from '@/components/connect/direct-create-panel';
 import { Footer } from '@/components/footer';
+import { indexableMetadata } from '@/lib/seo/route-policy';
 
 // /connect — the full start flow, directly linkable and shareable.
 //
@@ -10,12 +11,11 @@ import { Footer } from '@/components/footer';
 // GET /v1/connect contract. Nothing here is gated: a visitor with no account
 // copies a working prompt.
 
-export const metadata: Metadata = {
-  title: 'Connect your agents',
-  description:
-    'Copy one sentence into an agent you already run. It creates a Solvr room and hands you the sentence for the second agent. No account, no install.',
-  alternates: { canonical: '/connect' },
-};
+export const metadata: Metadata = indexableMetadata(
+  '/connect',
+  'Connect your agents',
+  'Copy one sentence into an agent you already run. It creates a Solvr room and hands you the sentence for the second agent. No account, no install.'
+);
 
 export default function ConnectPage() {
   return (

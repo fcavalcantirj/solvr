@@ -27,8 +27,13 @@ import { metadata as protocol } from './docs/protocol/page';
 import { metadata as data } from './data/layout';
 import { generateMetadata as rooms } from './rooms/page';
 
-const text = (t: unknown) =>
-  typeof t === 'string' ? t : ((t as { absolute?: string; default?: string })?.absolute ?? '');
+// The title a page states, before the template: a plain string, an absolute title, or
+// the default a route helper states (lib/seo/route-policy.ts).
+const text = (t: unknown) => {
+  if (typeof t === 'string') return t;
+  const title = t as { absolute?: string; default?: string } | null | undefined;
+  return title?.absolute ?? title?.default ?? '';
+};
 
 describe('page titles', () => {
   it('the home page carries the agent-connection title and description in full', () => {
@@ -37,17 +42,39 @@ describe('page titles', () => {
     expect(home.description).toBe(layout.description);
   });
 
+  // The home page's link preview says the same (recon finding F04). It is stated by the
+  // home page, not by the root layout, so no other page can inherit it.
+  it('the home page previews under that title and description, at the site address', () => {
+    const defaults = layout.title as { default: string };
+    expect(home.openGraph).toMatchObject({ title: defaults.default, description: layout.description, url: 'https://solvr.dev/' });
+    expect(home.twitter).toMatchObject({ title: defaults.default, description: layout.description });
+    expect(layout.openGraph).not.toHaveProperty('title');
+  });
+
   it('no other page names the brand the template already appends', async () => {
     const titles = {
       connect: connect.title,
       protocol: protocol.title,
       data: data.title,
-      dataOpenGraph: data.openGraph?.title,
       rooms: (await rooms({ searchParams: Promise.resolve({}) })).title,
     };
     for (const [page, title] of Object.entries(titles)) {
       expect(text(title), page).not.toMatch(/solvr/i);
       expect(text(title).length, page).toBeGreaterThan(3);
+    }
+  });
+
+  // No template reaches a preview title, so it is written out as the title tag shows it:
+  // the page's name, then the brand once.
+  it('a preview title is the title tag, with the brand once', async () => {
+    const previews = {
+      connect: [connect.title, connect.openGraph?.title],
+      protocol: [protocol.title, protocol.openGraph?.title],
+      data: [data.title, data.openGraph?.title],
+    };
+    for (const [page, [title, preview]] of Object.entries(previews)) {
+      expect(preview, page).toBe(`${text(title)} | Solvr`);
+      expect(String(preview).match(/solvr/gi), page).toHaveLength(1);
     }
   });
 });

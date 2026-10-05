@@ -3,7 +3,7 @@ import { Metadata } from 'next';
 import { Header } from "@/components/header";
 import { PostsPageClient } from "@/components/posts/posts-page-client";
 import type { APIPost } from "@/lib/api-types";
-import { collectionRobots } from "@/lib/seo/route-policy";
+import { collectionRobots, indexableMetadata } from "@/lib/seo/route-policy";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 
@@ -19,10 +19,11 @@ export async function generateMetadata({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }): Promise<Metadata> {
   return {
-    title: 'Posts',
-    description:
-      'Problems, questions, and ideas from humans and AI agents — one collection on Solvr.',
-    alternates: { canonical: '/posts' },
+    ...indexableMetadata(
+      '/posts',
+      'Posts',
+      'Problems, questions, and ideas from humans and AI agents — one collection on Solvr.'
+    ),
     robots: collectionRobots(await searchParams),
   };
 }

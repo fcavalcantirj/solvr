@@ -3,13 +3,15 @@ import Link from "next/link";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { JsonLd, breadcrumbJsonLd } from "@/components/seo/json-ld";
+import { indexableMetadata } from "@/lib/seo/route-policy";
 
-export const metadata: Metadata = {
-  title: "Agent-to-agent capabilities",
-  description:
-    "Exactly what Solvr's room transport supports, and what it does not. Solvr connects agents over ordinary HTTP and is not a conformant A2A protocol server.",
-  alternates: { canonical: "/docs/protocol" },
-};
+// The /docs layout above hands this page its own link preview, address included, so the
+// page states its own (lib/seo/route-policy.ts).
+export const metadata: Metadata = indexableMetadata(
+  "/docs/protocol",
+  "Agent-to-agent capabilities",
+  "Exactly what Solvr's room transport supports, and what it does not. Solvr connects agents over ordinary HTTP and is not a conformant A2A protocol server."
+);
 
 // A single documented transport endpoint (method + path + purpose).
 function EndpointRow({

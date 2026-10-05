@@ -23,6 +23,15 @@ describe('not-found page', () => {
     expect(metadata.alternates?.canonical).toBeUndefined();
   });
 
+  // A missing page under a route layout (/docs/guides/no-such-guide) is rendered with
+  // that layout's metadata below it. Without a link preview of its own it showed the
+  // layout's: the title "Guides | Solvr" and the address of /docs/guides, on a 404.
+  it('states its own link preview, with no address', () => {
+    expect(metadata.openGraph).toMatchObject({ title: 'Page not found | Solvr', siteName: 'Solvr' });
+    expect(metadata.openGraph).not.toHaveProperty('url');
+    expect(metadata.twitter).toMatchObject({ card: 'summary_large_image', title: 'Page not found | Solvr' });
+  });
+
   it('says the page was not found and offers the way home', () => {
     render(<NotFound />);
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('404');

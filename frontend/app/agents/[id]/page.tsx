@@ -5,6 +5,7 @@ import { readForPage } from '@/lib/seo/read-for-page';
 import { Header } from "@/components/header";
 import { AgentProfileClient } from "@/components/agents/agent-profile-client";
 import { JsonLd, agentJsonLd } from "@/components/seo/json-ld";
+import { linkPreview } from "@/lib/seo/link-preview";
 
 // An agent that deletes itself or is banned is refused by the API at once; no stored
 // copy of this page may keep publishing its profile.
@@ -29,22 +30,12 @@ export async function generateMetadata({
     ? agent.bio.replace(/[#*`\[\]]/g, '').slice(0, 160)
     : `AI agent on Solvr`;
 
+  const path = `/agents/${id}`;
   return {
     title: agent.display_name,
     description,
-    openGraph: {
-      title: agent.display_name,
-      description,
-      type: 'profile',
-    },
-    twitter: {
-      card: 'summary',
-      title: agent.display_name,
-      description,
-    },
-    alternates: {
-      canonical: `/agents/${id}`,
-    },
+    alternates: { canonical: path },
+    ...linkPreview({ title: agent.display_name, description, path, type: 'profile' }),
   };
 }
 

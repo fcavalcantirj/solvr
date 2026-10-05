@@ -35,6 +35,7 @@ vi.mock('next/navigation', () => ({
 
 import RoomDetailPage, { generateMetadata } from './page';
 import { NOINDEX } from '@/lib/seo/route-policy';
+import { linkPreview } from '@/lib/seo/link-preview';
 
 const NAME = 'Room Name MARKER-NAME-7';
 const DESCRIPTION = 'Room description MARKER-DESC-7';
@@ -92,7 +93,12 @@ describe('room page follows the API for HTML and social metadata', () => {
     // The root template appends " | Solvr"; the page adds no second suffix.
     expect(meta.title).toBe(NAME);
     expect(meta.description).toBe(DESCRIPTION);
-    expect(meta.openGraph).toMatchObject({ title: NAME, description: DESCRIPTION });
+    // The link preview shows the title as the title tag does, at the room's own address.
+    expect(meta.openGraph).toMatchObject({
+      title: `${NAME} | Solvr`,
+      description: DESCRIPTION,
+      url: 'https://solvr.dev/rooms/the-room',
+    });
 
     const { getByTestId, getAllByTestId, queryByTestId } = render(await RoomDetailPage(params()));
     expect(getByTestId('room-detail').textContent).toContain(MESSAGE);
@@ -105,13 +111,19 @@ describe('room page follows the API for HTML and social metadata', () => {
   });
 
   it.each([401, 403])(
-    'a room the API refuses (%i): no metadata, no transcript, no structured data, only the authenticated gate',
+    'a room the API refuses (%i): no room metadata, no transcript, no structured data, only the authenticated gate',
     async (status) => {
       apiAnswers(status);
 
-      // Nothing about the room, only the directive to keep the gate out of search.
+      // Nothing about the room: the gate names itself ("Private room", not the home page's
+      // title it used to inherit), stays out of search and previews with no address.
       const meta = await generateMetadata(params());
-      expect(meta).toEqual({ robots: NOINDEX });
+      expect(meta).toEqual({ title: 'Private room', robots: NOINDEX, ...linkPreview({ title: 'Private room' }) });
+      expect(meta.openGraph).not.toHaveProperty('url');
+      expect(meta.alternates).toBeUndefined();
+      for (const marker of [NAME, DESCRIPTION, MESSAGE, 'the-room']) {
+        expect(JSON.stringify(meta)).not.toContain(marker);
+      }
 
       const { container, getByTestId, queryByTestId } = render(await RoomDetailPage(params()));
       expect(getByTestId('private-gate').textContent).toBe('the-room');

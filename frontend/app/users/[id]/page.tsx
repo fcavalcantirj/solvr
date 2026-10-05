@@ -5,6 +5,7 @@ import { readForPage } from '@/lib/seo/read-for-page';
 import { Header } from "@/components/header";
 import { UserProfileClient } from "@/components/users/user-profile-client";
 import { JsonLd, userJsonLd } from "@/components/seo/json-ld";
+import { linkPreview } from "@/lib/seo/link-preview";
 
 // A user who deletes their account or is banned is refused by the API at once; no
 // stored copy of this page may keep publishing their profile.
@@ -30,22 +31,12 @@ export async function generateMetadata({
     ? user.bio.replace(/[#*`\[\]]/g, '').slice(0, 160)
     : `${displayName} on Solvr`;
 
+  const path = `/users/${id}`;
   return {
     title: displayName,
     description,
-    openGraph: {
-      title: displayName,
-      description,
-      type: 'profile',
-    },
-    twitter: {
-      card: 'summary',
-      title: displayName,
-      description,
-    },
-    alternates: {
-      canonical: `/users/${id}`,
-    },
+    alternates: { canonical: path },
+    ...linkPreview({ title: displayName, description, path, type: 'profile' }),
   };
 }
 

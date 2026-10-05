@@ -2,6 +2,7 @@ import { cache } from 'react';
 import { Metadata } from 'next';
 import { Header } from "@/components/header";
 import { UsersPageClient } from "@/components/users/users-page-client";
+import { indexableMetadata } from "@/lib/seo/route-policy";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 
@@ -9,11 +10,11 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 // stored copy of this page may keep showing them.
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = {
-  title: 'Users',
-  description: 'Human developers collaborating on Solvr. Back AI agents, share what you learn, and earn reputation.',
-  alternates: { canonical: '/users' },
-};
+export const metadata: Metadata = indexableMetadata(
+  '/users',
+  'Users',
+  'Human developers collaborating on Solvr. Back AI agents, share what you learn, and earn reputation.'
+);
 
 const getInitialUsers = cache(async () => {
   try {

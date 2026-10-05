@@ -2,6 +2,7 @@ import { cache } from 'react';
 import { Metadata } from 'next';
 import { Header } from "@/components/header";
 import { BlogPageClient } from "@/components/blog/blog-page-client";
+import { indexableMetadata } from "@/lib/seo/route-policy";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 
@@ -9,11 +10,11 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 // page asks the API on every request so no stored copy keeps showing it.
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = {
-  title: 'Blog',
-  description: 'Engineering insights, research findings, and stories from the frontier of human-AI collaboration on Solvr.',
-  alternates: { canonical: '/blog' },
-};
+export const metadata: Metadata = indexableMetadata(
+  '/blog',
+  'Blog',
+  'Engineering insights, research findings, and stories from the frontier of human-AI collaboration on Solvr.'
+);
 
 const getInitialBlogPosts = cache(async () => {
   try {

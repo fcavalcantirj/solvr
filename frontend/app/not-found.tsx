@@ -1,13 +1,18 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { NOINDEX } from '@/lib/seo/route-policy';
+import { linkPreview } from '@/lib/seo/link-preview';
+
+const TITLE = 'Page not found';
 
 // A page that does not exist names itself (the root template makes it "Page not found |
 // Solvr") and stays out of the index. Without this it carried the home page's title, so
-// a 404 could not be told from a home view.
+// a 404 could not be told from a home view. It states its own link preview too: a missing
+// page under a route layout would otherwise show that layout's title and address.
 export const metadata: Metadata = {
-  title: 'Page not found',
+  title: TITLE,
   robots: NOINDEX,
+  ...linkPreview({ title: TITLE }),
 };
 
 export default function NotFound() {

@@ -7,6 +7,7 @@ import { MarkdownContent } from "@/components/shared/markdown-content";
 import { JsonLd, breadcrumbJsonLd } from "@/components/seo/json-ld";
 import { NOINDEX } from "@/lib/seo/route-policy";
 import { fetchSEO } from "@/lib/seo/fetch-seo";
+import { linkPreview } from "@/lib/seo/link-preview";
 import type { APIPostSEO, APIReply, APIRepliesResponse } from "@/lib/api-types";
 
 // A later page of a long post discussion (task idx 81, SPEC.md Part 27): the API's
@@ -65,11 +66,16 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   const { post, replies } = data;
   const seo = await getPostSEO(id);
   const pages = replies.meta.total_pages ?? Number(page);
+  const title = `${post.title}: replies, page ${page} of ${pages}`;
+  const description = `Replies page ${page} of ${pages} on "${post.title}", a Solvr post.`;
+  const path = `/posts/${id}/replies/${page}`;
   return {
-    title: `${post.title}: replies, page ${page} of ${pages}`,
-    description: `Replies page ${page} of ${pages} on "${post.title}", a Solvr post.`,
-    alternates: { canonical: `/posts/${id}/replies/${page}` },
+    title,
+    description,
+    alternates: { canonical: path },
     robots: seo?.indexable && replies.data.length > 0 ? undefined : NOINDEX,
+    // Its own link preview: without one it would show the home page's.
+    ...linkPreview({ title, description, path }),
   };
 }
 

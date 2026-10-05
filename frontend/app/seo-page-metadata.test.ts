@@ -1,9 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { Metadata } from 'next';
 import { NOINDEX } from '@/lib/seo/route-policy';
+import { PREVIEW_CARD_PATH } from '@/lib/seo/link-preview';
+import { previewProblems, readPreview } from '@/lib/seo/preview-check';
 
 // Task idx 80: content pages render the API's seo verdict as robots and description
 // metadata; collection pages keep internal search results and filter combinations
 // out of the index while the bare collection stays indexable.
+//
+// Link previews (recon finding F04): every kind of content page states its own preview,
+// under the title its title tag shows, its canonical as the address, and a picture.
 
 vi.mock('react', async (importOriginal) => ({
   ...(await importOriginal<typeof import('react')>()),
@@ -17,12 +23,34 @@ vi.mock('@/components/rooms/recently-viewed-rooms', () => ({ RecentlyViewedRooms
 vi.mock('@/components/rooms/create-room-dialog', () => ({ CreateRoomDialog: () => null }));
 vi.mock('@/components/rooms/room-detail-client', () => ({ RoomDetailClient: () => null }));
 vi.mock('@/components/rooms/private-room-view', () => ({ PrivateRoomView: () => null }));
-vi.mock('@/components/seo/json-ld', () => ({ JsonLd: () => null, roomJsonLd: () => ({}), breadcrumbJsonLd: () => ({}) }));
+vi.mock('@/components/seo/json-ld', () => ({
+  JsonLd: () => null,
+  roomJsonLd: () => ({}),
+  breadcrumbJsonLd: () => ({}),
+  postPageJsonLd: () => ({}),
+  agentJsonLd: () => ({}),
+  userJsonLd: () => ({}),
+  blogPostJsonLd: () => ({}),
+}));
+vi.mock('@/components/footer', () => ({ Footer: () => null }));
+vi.mock('@/components/agents/agent-profile-client', () => ({ AgentProfileClient: () => null }));
+vi.mock('@/components/users/user-profile-client', () => ({ UserProfileClient: () => null }));
+vi.mock('@/components/prompt/guide-prompt', () => ({ GuidePrompt: () => null }));
+vi.mock('./blog/[slug]/blog-post-content', () => ({ BlogPostContent: () => null }));
+vi.mock('next/font/google', () => ({ Inter: () => ({}), JetBrains_Mono: () => ({}) }));
+vi.mock('@next/third-parties/google', () => ({ GoogleAnalytics: () => null }));
 
+import { metadata as rootLayout } from './layout';
 import * as postsPage from './posts/page';
 import * as roomsPage from './rooms/page';
 import * as postPage from './posts/[id]/page';
+import * as repliesPage from './posts/[id]/replies/[page]/page';
 import * as roomPage from './rooms/[slug]/page';
+import * as transcriptPage from './rooms/[slug]/history/[page]/page';
+import * as agentPage from './agents/[id]/page';
+import * as userPage from './users/[id]/page';
+import * as blogPostPage from './blog/[slug]/page';
+import * as guidePage from './docs/guides/[slug]/page';
 
 const fetchMock = vi.fn();
 const answer = (status: number, body: unknown) =>
@@ -39,6 +67,16 @@ const unreachableVerdict = (parent: [number, unknown]) =>
     if (String(url).endsWith('/seo')) throw new TypeError('fetch failed');
     const [status, body] = parent;
     return { ok: status < 300, status, json: async () => body };
+  });
+
+// serve answers each API path in the table with its body, and 404 for any other path.
+const serve = (table: Record<string, unknown>) =>
+  fetchMock.mockImplementation(async (url: string) => {
+    const { pathname, search } = new URL(String(url));
+    const body = table[`${pathname}${search}`];
+    return body === undefined
+      ? { ok: false, status: 404, json: async () => ({ error: { code: 'NOT_FOUND' } }) }
+      : { ok: true, status: 200, json: async () => body };
   });
 
 beforeEach(() => {
@@ -156,5 +194,220 @@ describe('room page', () => {
   it.each([403, 404])('is noindex when the API refuses the verdict with %i', async (status) => {
     answerBy([200, roomBody], [status, null]);
     expect((await roomPage.generateMetadata(params)).robots).toEqual(NOINDEX);
+  });
+});
+
+describe('link previews of content pages', () => {
+  const HOME_TITLE = (rootLayout.title as { default: string }).default;
+  const CARD = `https://solvr.dev${PREVIEW_CARD_PATH}`;
+
+  const POST = {
+    data: {
+      id: 'p1',
+      title: 'Hand a plan to an executor',
+      description: '## raw *markdown*',
+      created_at: '2026-09-01T00:00:00Z',
+      updated_at: '2026-09-02T00:00:00Z',
+      tags: ['agents', 'planning'],
+    },
+  };
+  // What the API's /seo read answers: the title and the description the page shows.
+  const POST_SEO = { data: { indexable: true, title: 'Hand a plan to an executor — Dev Nine', description: 'Hand a plan from the API' } };
+  const REPLIES = {
+    data: [{ id: 'r2a', body: 'reply', author: { id: 'agent_x', type: 'agent', display_name: 'executor' }, created_at: '2026-09-01T00:00:00Z' }],
+    meta: { total: 250, page: 2, per_page: 100, total_pages: 3, has_more: true },
+  };
+  const ROOM = { data: { room: { slug: 'kestrel', display_name: 'raw name', description: 'raw *desc*' } } };
+  const ROOM_SEO = { data: { indexable: true, title: 'Kestrel build', description: 'Plan and ship kestrel' } };
+  const HISTORY = {
+    data: {
+      page: 2,
+      page_size: 100,
+      from_sequence: 101,
+      to_sequence: 200,
+      total_pages: 3,
+      prev_page: 1,
+      next_page: 3,
+      messages: [{ id: 7, author_type: 'agent', author_id: 'agent_planner', agent_name: 'planner', content: 'Plan', sequence_num: 101, created_at: '2026-09-01T10:00:00Z' }],
+    },
+  };
+  const BLOG_POST = {
+    slug: 'a-post',
+    title: 'A listed blog post',
+    body: 'Body',
+    excerpt: 'An excerpt',
+    meta_description: 'What the post says',
+    created_at: '2026-09-01T00:00:00Z',
+    published_at: '2026-09-03T00:00:00Z',
+    updated_at: '2026-09-04T00:00:00Z',
+    tags: ['agents'],
+    cover_image_url: '',
+  };
+
+  interface ContentPage {
+    api: Record<string, unknown>;
+    load: () => Promise<Metadata>;
+    path: string;
+    title: string;
+    description: string;
+    type: string;
+  }
+
+  const pages: Record<string, ContentPage> = {
+    post: {
+      api: { '/v1/posts/p1': POST, '/v1/posts/p1/seo': POST_SEO },
+      load: () => postPage.generateMetadata({ params: Promise.resolve({ id: 'p1' }) }),
+      path: '/posts/p1',
+      title: 'Hand a plan to an executor — Dev Nine | Solvr',
+      description: 'Hand a plan from the API',
+      type: 'article',
+    },
+    'replies page': {
+      api: { '/v1/posts/p1': POST, '/v1/posts/p1/seo': POST_SEO, '/v1/posts/p1/replies?page=2': REPLIES },
+      load: () => repliesPage.generateMetadata({ params: Promise.resolve({ id: 'p1', page: '2' }) }),
+      path: '/posts/p1/replies/2',
+      title: 'Hand a plan to an executor: replies, page 2 of 3 | Solvr',
+      description: 'Replies page 2 of 3 on "Hand a plan to an executor", a Solvr post.',
+      type: 'website',
+    },
+    room: {
+      api: { '/v1/rooms/kestrel': ROOM, '/v1/rooms/kestrel/seo': ROOM_SEO },
+      load: () => roomPage.generateMetadata({ params: Promise.resolve({ slug: 'kestrel' }) }),
+      path: '/rooms/kestrel',
+      title: 'Kestrel build | Solvr',
+      description: 'Plan and ship kestrel',
+      type: 'website',
+    },
+    'transcript page': {
+      api: { '/v1/rooms/kestrel': ROOM, '/v1/rooms/kestrel/seo': ROOM_SEO, '/v1/rooms/kestrel/history/2': HISTORY },
+      load: () => transcriptPage.generateMetadata({ params: Promise.resolve({ slug: 'kestrel', page: '2' }) }),
+      path: '/rooms/kestrel/history/2',
+      title: 'Kestrel build: transcript, messages 101–200 | Solvr',
+      description: 'Page 2 of 3 of the Kestrel build room transcript on Solvr, messages 101–200.',
+      type: 'website',
+    },
+    agent: {
+      api: { '/v1/agents/agent_one': { data: { agent: { id: 'agent_one', display_name: 'Listed Agent', bio: 'Plans **builds**' } } } },
+      load: () => agentPage.generateMetadata({ params: Promise.resolve({ id: 'agent_one' }) }),
+      path: '/agents/agent_one',
+      title: 'Listed Agent | Solvr',
+      description: 'Plans builds',
+      type: 'profile',
+    },
+    user: {
+      api: { '/v1/users/u1': { data: { id: 'u1', display_name: 'Listed User', bio: 'Reviews plans' } } },
+      load: () => userPage.generateMetadata({ params: Promise.resolve({ id: 'u1' }) }),
+      path: '/users/u1',
+      title: 'Listed User | Solvr',
+      description: 'Reviews plans',
+      type: 'profile',
+    },
+    'blog post': {
+      api: { '/v1/blog/a-post': { data: BLOG_POST } },
+      load: () => blogPostPage.generateMetadata({ params: Promise.resolve({ slug: 'a-post' }) }),
+      path: '/blog/a-post',
+      title: 'A listed blog post | Solvr',
+      description: 'What the post says',
+      type: 'article',
+    },
+    guide: {
+      api: {},
+      load: () => guidePage.generateMetadata({ params: Promise.resolve({ slug: 'connect-planner-executor' }) }),
+      path: '/docs/guides/connect-planner-executor',
+      title: 'Connect a planner and an executor | Solvr',
+      description: 'One agent plans and gives orders; the other builds and reports back.',
+      type: 'website',
+    },
+  };
+
+  it.each(Object.entries(pages))('a %s previews under its own title, description and address, with the card', async (_kind, page) => {
+    serve(page.api);
+    const metadata = await page.load();
+    expect(metadata.alternates?.canonical).toBe(page.path);
+    expect(previewProblems(metadata, { homeTitle: HOME_TITLE })).toEqual([]);
+    const preview = readPreview(metadata);
+    expect(preview).toMatchObject({
+      title: page.title,
+      description: page.description,
+      url: `https://solvr.dev${page.path}`,
+      type: page.type,
+      image: CARD,
+      twitterCard: 'summary_large_image',
+      twitterImage: CARD,
+    });
+    expect(preview.images[0]).toMatchObject({ width: 1200, height: 630, type: 'image/png' });
+  });
+
+  // The API composes what a post or a room is called and how it is described (/seo);
+  // the preview repeats that, never the raw post or room.
+  it('a post and a room preview under what the API\'s /seo read answers', async () => {
+    serve(pages.post.api);
+    const post = readPreview(await pages.post.load());
+    expect(post.title).toContain('Dev Nine');
+    expect(post.description).not.toContain('raw');
+    serve(pages.room.api);
+    const room = readPreview(await pages.room.load());
+    expect(room.title).not.toContain('raw name');
+    expect(room.description).not.toContain('raw');
+  });
+
+  it('a post keeps its dates and tags', async () => {
+    serve(pages.post.api);
+    expect((await pages.post.load()).openGraph).toMatchObject({
+      type: 'article',
+      publishedTime: '2026-09-01T00:00:00Z',
+      modifiedTime: '2026-09-02T00:00:00Z',
+      tags: ['agents', 'planning'],
+    });
+  });
+
+  it('a blog post keeps its dates and tags, dated from its publication', async () => {
+    serve(pages['blog post'].api);
+    expect((await pages['blog post'].load()).openGraph).toMatchObject({
+      type: 'article',
+      publishedTime: '2026-09-03T00:00:00Z',
+      modifiedTime: '2026-09-04T00:00:00Z',
+      tags: ['agents'],
+    });
+  });
+
+  // The API serves cover_image_url; a post that has one previews with it. Its size is
+  // not known here, so none is claimed.
+  it('a blog post with a cover image previews with that image, claiming no size for it', async () => {
+    const cover = 'https://cdn.example.test/covers/a-post.jpg';
+    serve({ '/v1/blog/a-post': { data: { ...BLOG_POST, cover_image_url: cover } } });
+    const metadata = await pages['blog post'].load();
+    expect(previewProblems(metadata, { homeTitle: HOME_TITLE })).toEqual([]);
+    const preview = readPreview(metadata);
+    expect(preview.image).toBe(cover);
+    expect(preview.twitterImage).toBe(cover);
+    expect(preview.twitterCard).toBe('summary_large_image');
+    expect(preview.images).toEqual([{ url: cover, alt: 'A listed blog post' }]);
+  });
+
+  // A room that may not be indexed is still a public page someone can paste: it keeps its preview.
+  it('a room that is not indexable keeps its preview', async () => {
+    serve({ ...pages.room.api, '/v1/rooms/kestrel/seo': { data: { ...ROOM_SEO.data, indexable: false } } });
+    const metadata = await pages.room.load();
+    expect(metadata.robots).toEqual(NOINDEX);
+    expect(previewProblems(metadata, { homeTitle: HOME_TITLE })).toEqual([]);
+  });
+
+  // No detail of a room the server may not read reaches its metadata. The gate names
+  // itself, so it no longer shows the home page's title, and names no address.
+  it('a private room previews as a private room: no address, nothing about the room', async () => {
+    answer(403, null);
+    const metadata = await pages.room.load();
+    expect(metadata.robots).toEqual(NOINDEX);
+    expect(metadata.alternates).toBeUndefined();
+    expect(previewProblems(metadata, { homeTitle: HOME_TITLE })).toEqual([]);
+    expect(readPreview(metadata)).toMatchObject({ title: 'Private room | Solvr', url: undefined, image: CARD });
+    expect(JSON.stringify(metadata)).not.toContain('kestrel');
+  });
+
+  // A room the API no longer has is a real 404: the not-found page names itself.
+  it('a missing room states nothing of its own', async () => {
+    answer(404, null);
+    expect(await pages.room.load()).toEqual({ robots: NOINDEX });
   });
 });

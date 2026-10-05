@@ -99,6 +99,32 @@ describe('route layout titles', () => {
   });
 });
 
+// Link previews (recon finding F04): a route that stated only a title inherited the home
+// page's whole preview. The two route helpers now state each route's own.
+describe('route metadata helpers and the link preview', () => {
+  it('an indexable route previews under its own title, description and canonical', () => {
+    const metadata = indexableMetadata('/docs', 'Docs', 'x'.repeat(50));
+    expect(metadata.openGraph).toMatchObject({
+      title: 'Docs | Solvr',
+      description: 'x'.repeat(50),
+      url: 'https://solvr.dev/docs',
+      siteName: 'Solvr',
+      type: 'website',
+    });
+    expect(metadata.twitter).toMatchObject({ card: 'summary_large_image', title: 'Docs | Solvr', description: 'x'.repeat(50) });
+    expect(metadata.alternates?.canonical).toBe('/docs');
+  });
+
+  it('a noindex route previews under its own title and names no address', () => {
+    const metadata = noindexMetadata('Settings');
+    expect(metadata.openGraph).toMatchObject({ title: 'Settings | Solvr', siteName: 'Solvr' });
+    expect(metadata.openGraph).not.toHaveProperty('url');
+    expect(metadata.twitter).toMatchObject({ card: 'summary_large_image', title: 'Settings | Solvr' });
+    expect(metadata.robots).toEqual(NOINDEX);
+    expect(metadata.alternates).toBeUndefined();
+  });
+});
+
 describe('workflow guides in the route policy', () => {
   it('lists each guide as indexable and in the core sitemap', async () => {
     const { WORKFLOW_GUIDES } = await import('@/lib/docs/workflow-guides');

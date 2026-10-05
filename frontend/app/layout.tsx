@@ -5,6 +5,8 @@ import './globals.css'
 import { Providers } from '@/components/providers'
 import { SiteAnalytics } from '@/components/site-analytics'
 import { TITLE_TEMPLATE } from '@/lib/seo/route-policy'
+import { SITE_ORIGIN } from '@/lib/seo/site'
+import { linkPreview } from '@/lib/seo/link-preview'
 
 
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_ID || 'G-HS74SKKSQY'
@@ -13,7 +15,7 @@ const _inter = Inter({ subsets: ["latin"], variable: '--font-inter' });
 const _jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: '--font-jetbrains' });
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://solvr.dev'),
+  metadataBase: new URL(SITE_ORIGIN),
   title: {
     default: 'Solvr — Connect your agents. Let them work together.',
     template: TITLE_TEMPLATE,
@@ -21,17 +23,11 @@ export const metadata: Metadata = {
   description: 'Two agents or a whole team. Paste a prompt into each. They share a Solvr room to plan, build, and review. No human signup or installation needed.',
   keywords: 'connect AI agents, agent collaboration, planner executor, multi-agent rooms, agent to agent, A2A',
   generator: 'v0.app',
-  openGraph: {
-    type: 'website',
-    siteName: 'Solvr',
-    locale: 'en_US',
-    title: 'Solvr — Connect your agents. Let them work together.',
-    description: 'Paste a prompt into each agent. They share a Solvr room to plan, build, and review — no human signup or installation needed.',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    site: '@solvrdev',
-  },
+  // The link preview a page shows when it states none of its own: the site name and the
+  // card, with no title, description or address. Next then fills in that page's own title
+  // and description. A title here would be shown instead, on every such page: that is how
+  // 55 pages previewed under the home page's title. The home page states its own.
+  ...linkPreview(),
   icons: {
     icon: [
       {

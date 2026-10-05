@@ -14,8 +14,11 @@ import { metadata } from './layout';
 
 /**
  * The site-wide metadata must lead with the connection proposition, not the old
- * "collective intelligence / living knowledge base" framing. Social previews
- * (openGraph) carry the same promise so shared links describe connecting agents.
+ * "collective intelligence / living knowledge base" framing.
+ *
+ * The link preview is each page's own (lib/seo/link-preview.ts). The root layout hands
+ * down the site name and the card only: when it also stated the home page's title and
+ * description, every page that stated no preview showed the home page's.
  */
 describe('root layout metadata — connection proposition', () => {
   const title =
@@ -41,9 +44,23 @@ describe('root layout metadata — connection proposition', () => {
     expect(keywords).not.toContain('programming q&a');
   });
 
-  it('gives social previews the same connection proposition', () => {
-    const og = metadata.openGraph as { title?: string; description?: string } | undefined;
-    expect(String(og?.title ?? '').toLowerCase()).toContain('connect');
-    expect(String(og?.description ?? '').toLowerCase()).toContain('agent');
+  it('hands every page the site name and the preview card, with a large-image card for Twitter', () => {
+    const og = metadata.openGraph as { siteName?: string; images?: { url: string; width: number; height: number }[] } | undefined;
+    expect(og?.siteName).toBe('Solvr');
+    expect(og?.images).toHaveLength(1);
+    expect(og?.images?.[0]).toMatchObject({ width: 1200, height: 630 });
+    expect(og?.images?.[0].url).toMatch(/^https:\/\/solvr\.dev\/og\/.+\.png$/);
+    expect(metadata.twitter).toMatchObject({ card: 'summary_large_image' });
+  });
+
+  // Next copies a page's own title and description into a preview that states none. A
+  // title here would win over that, on every page without a preview of its own.
+  it('states no preview title, description or address for the pages below it to inherit', () => {
+    for (const preview of [metadata.openGraph, metadata.twitter]) {
+      expect(preview).toBeDefined();
+      expect(preview).not.toHaveProperty('title');
+      expect(preview).not.toHaveProperty('description');
+      expect(preview).not.toHaveProperty('url');
+    }
   });
 });

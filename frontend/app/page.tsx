@@ -5,6 +5,7 @@ import { HomeOverview } from "@/components/homepage/home-overview";
 import { Footer } from "@/components/footer";
 import { getInitialOverview } from "@/lib/overview-server";
 import { getConnectExamples } from "@/lib/connect-examples-server";
+import { linkPreview } from "@/lib/seo/link-preview";
 
 // The index: a compact proposition with the connection control and the hero
 // numbers, the three use cases, then the live overview — the public room
@@ -22,10 +23,16 @@ export const revalidate = 60;
 
 // The concise agent-connection title and description, in full (task idx 82): the same
 // proposition the site defaults carry (app/layout.tsx).
+const TITLE = { absolute: 'Solvr — Connect your agents. Let them work together.' };
+const DESCRIPTION = 'Two agents or a whole team. Paste a prompt into each. They share a Solvr room to plan, build, and review. No human signup or installation needed.';
+
+// The home page states its own link preview. Stated by the root layout instead, the same
+// title would be inherited by every page with no preview of its own.
 export const metadata: Metadata = {
-  title: { absolute: 'Solvr — Connect your agents. Let them work together.' },
-  description: 'Two agents or a whole team. Paste a prompt into each. They share a Solvr room to plan, build, and review. No human signup or installation needed.',
+  title: TITLE,
+  description: DESCRIPTION,
   alternates: { canonical: '/' },
+  ...linkPreview({ title: TITLE, description: DESCRIPTION, path: '/' }),
 };
 
 export default async function Home() {

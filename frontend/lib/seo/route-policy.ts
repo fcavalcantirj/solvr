@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import { linkPreview } from './link-preview';
+import { TITLE_TEMPLATE } from './site';
 
 // The one table of which static routes search engines may index (task idx 80).
 // Content pages (a post, a room) are decided by the API's `seo.indexable`; this
@@ -65,23 +67,29 @@ export const NOINDEX_ROUTES: string[] = [
   '/posts/new',
 ];
 
-// The root title template (app/layout.tsx). Next hands a layout's template only to the
-// segments below it, and a layout whose title is a plain string hands down none, so
-// every route layout restates it to keep " | Solvr" on its nested pages.
-export const TITLE_TEMPLATE = '%s | Solvr';
+// The root title template (lib/seo/site.ts), restated by every route layout.
+export { TITLE_TEMPLATE };
 
 // The robots directive of a page that stays usable but out of search results.
 export const NOINDEX: NonNullable<Metadata['robots']> = { index: false, follow: true };
 
-// noindexMetadata is the metadata of a NOINDEX_ROUTES page.
+// noindexMetadata is the metadata of a NOINDEX_ROUTES page. Its link preview carries its
+// own title and no address: the page has no canonical.
 export function noindexMetadata(title: string): Metadata {
-  return { title: { default: title, template: TITLE_TEMPLATE }, robots: NOINDEX };
+  return { title: { default: title, template: TITLE_TEMPLATE }, robots: NOINDEX, ...linkPreview({ title }) };
 }
 
 // indexableMetadata is the metadata of an INDEXABLE_ROUTES page: its own title and
-// description, and a self-referencing canonical with no query string.
+// description, a self-referencing canonical with no query string, and a link preview
+// that says the same (lib/seo/link-preview.ts). A layout hands its preview to the pages
+// below it, address included, so a page that states its own canonical states its own.
 export function indexableMetadata(path: string, title: string, description: string): Metadata {
-  return { title: { default: title, template: TITLE_TEMPLATE }, description, alternates: { canonical: path } };
+  return {
+    title: { default: title, template: TITLE_TEMPLATE },
+    description,
+    alternates: { canonical: path },
+    ...linkPreview({ title, description, path }),
+  };
 }
 
 // Query parameters that only attribute a visit; they never change what a page shows,

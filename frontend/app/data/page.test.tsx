@@ -282,8 +282,9 @@ describe("DataPage is the statistics page", () => {
   });
 
   it("is titled as the statistics page, at the same address", () => {
-    expect(metadata.title).toBe("Statistics");
-    expect(metadata.openGraph?.title).toBe("Statistics");
+    expect(metadata.title).toMatchObject({ default: "Statistics" });
+    // The link preview shows the title as the title tag does, at the page's own address.
+    expect(metadata.openGraph).toMatchObject({ title: "Statistics | Solvr", url: "https://solvr.dev/data" });
     expect(metadata.alternates?.canonical).toBe("/data");
   });
 

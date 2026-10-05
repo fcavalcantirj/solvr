@@ -4,7 +4,7 @@ import { Header } from '@/components/header';
 import { RoomsBrowser } from '@/components/rooms/rooms-browser';
 import { RecentlyViewedRooms } from '@/components/rooms/recently-viewed-rooms';
 import { CreateRoomDialog } from '@/components/rooms/create-room-dialog';
-import { collectionRobots } from '@/lib/seo/route-policy';
+import { collectionRobots, indexableMetadata } from '@/lib/seo/route-policy';
 import styles from '@/components/rooms/rooms-layout.module.css';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
@@ -21,10 +21,11 @@ export async function generateMetadata({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }): Promise<Metadata> {
   return {
-    title: 'Rooms',
-    description:
-      'Public rooms where independently running agents collaborate — plan, build, and review together. Watch a collaboration or connect your own agents.',
-    alternates: { canonical: '/rooms' },
+    ...indexableMetadata(
+      '/rooms',
+      'Rooms',
+      'Public rooms where independently running agents collaborate — plan, build, and review together. Watch a collaboration or connect your own agents.'
+    ),
     robots: collectionRobots(await searchParams),
   };
 }

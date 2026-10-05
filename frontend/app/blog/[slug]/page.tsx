@@ -3,6 +3,7 @@ import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { readForPage } from '@/lib/seo/read-for-page';
 import { JsonLd, blogPostJsonLd } from "@/components/seo/json-ld";
+import { linkPreview } from "@/lib/seo/link-preview";
 import { BlogPostContent } from "./blog-post-content";
 import { formatRelativeTime } from "@/lib/api";
 
@@ -31,25 +32,20 @@ export async function generateMetadata({
     || post.excerpt
     || (post.body ? post.body.replace(/[#*`\[\]]/g, '').slice(0, 160) : 'A blog post on Solvr');
 
+  const path = `/blog/${slug}`;
   return {
     title: post.title,
     description,
-    openGraph: {
+    alternates: { canonical: path },
+    ...linkPreview({
       title: post.title,
       description,
+      path,
       type: 'article',
-      publishedTime: post.published_at || post.created_at,
-      modifiedTime: post.updated_at,
-      tags: post.tags,
-    },
-    twitter: {
-      card: 'summary',
-      title: post.title,
-      description,
-    },
-    alternates: {
-      canonical: `/blog/${slug}`,
-    },
+      article: { publishedTime: post.published_at || post.created_at, modifiedTime: post.updated_at, tags: post.tags },
+      // A post with a cover image previews with it; any other shows the card.
+      image: post.cover_image_url,
+    }),
   };
 }
 

@@ -1,12 +1,17 @@
 import { Metadata } from "next";
 import { Header } from "@/components/header";
 import { PostComposer } from "@/components/posts/post-composer";
+import { linkPreview } from "@/lib/seo/link-preview";
+
+const TITLE = "New post";
+const DESCRIPTION = "Publish a post to the Solvr knowledge base.";
 
 export const metadata: Metadata = {
-  title: "New post",
-  description: "Publish a post to the Solvr knowledge base.",
+  title: TITLE,
+  description: DESCRIPTION,
   alternates: { canonical: "/posts/new" },
   robots: { index: false },
+  ...linkPreview({ title: TITLE, description: DESCRIPTION, path: "/posts/new" }),
 };
 
 export default function NewPostPage() {

@@ -11,6 +11,7 @@ import { JsonLd, roomJsonLd, breadcrumbJsonLd } from "@/components/seo/json-ld";
 import type { APIRoomDetailResponse } from "@/lib/api-types";
 import { NOINDEX } from "@/lib/seo/route-policy";
 import { fetchSEO } from "@/lib/seo/fetch-seo";
+import { linkPreview } from "@/lib/seo/link-preview";
 import type { APIRoomSEO } from "@/lib/api-types";
 
 const API_BASE_URL =
@@ -31,6 +32,9 @@ export const dynamic = "force-dynamic";
 const getRoom = cache((slug: string): Promise<{ status: number; data: unknown }> =>
   readForPage<unknown>(`/v1/rooms/${encodeURIComponent(slug)}`)
 );
+
+// What the page of a room the server may not read is called. It says nothing of the room.
+const PRIVATE_ROOM_TITLE = "Private room";
 
 // The page's search verdict (task idx 80): the API decides it at its own endpoint. A
 // refusal answers null (rendered as noindex); an API failure throws, a retryable 5xx
@@ -60,22 +64,29 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const { data } = await getRoom(slug);
+  const { status, data } = await getRoom(slug);
   const payload = data as APIRoomDetailResponse | null;
-  // A private room (403 to the server), or one the server could not read, is never
-  // indexed; no private detail goes into its metadata.
-  if (!payload?.data?.room) return { robots: NOINDEX };
+  if (!payload?.data?.room) {
+    // A room the API does not have is a real 404; the not-found page names itself.
+    if (status === 404) return { robots: NOINDEX };
+    // A private room (403 to the server), or one the server could not read, is never
+    // indexed; no private detail goes into its metadata. The gate names itself: with no
+    // title it showed the home page's, in the tab and in a pasted link.
+    return { title: PRIVATE_ROOM_TITLE, robots: NOINDEX, ...linkPreview({ title: PRIVATE_ROOM_TITLE }) };
+  }
   const seo = await getRoomSEO(slug);
   // The API decides whether the page may be indexed, its title and its description
   // (task idx 80); the page only renders that.
   const title = seo?.title ?? payload.data.room.display_name;
   const description = seo?.description;
+  const path = `/rooms/${slug}`;
   return {
     title,
     description,
-    openGraph: { title, description, type: "website" },
-    alternates: { canonical: `/rooms/${slug}` },
+    alternates: { canonical: path },
     robots: seo?.indexable ? undefined : NOINDEX,
+    // The link preview repeats that title and description (lib/seo/link-preview.ts).
+    ...linkPreview({ title, description, path }),
   };
 }
 

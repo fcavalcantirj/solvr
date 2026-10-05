@@ -1,10 +1,14 @@
 import { Metadata } from "next";
 import { Header } from "@/components/header";
 import { PostEditor } from "@/components/posts/post-editor";
+import { linkPreview } from "@/lib/seo/link-preview";
+
+const TITLE = "Edit post";
 
 export const metadata: Metadata = {
-  title: "Edit post",
+  title: TITLE,
   robots: { index: false },
+  ...linkPreview({ title: TITLE }),
 };
 
 export default async function EditPostPage({

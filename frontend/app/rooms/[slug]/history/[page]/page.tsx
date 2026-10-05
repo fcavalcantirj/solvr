@@ -9,6 +9,7 @@ import styles from "@/components/rooms/rooms-layout.module.css";
 import { JsonLd, breadcrumbJsonLd } from "@/components/seo/json-ld";
 import { NOINDEX } from "@/lib/seo/route-policy";
 import { fetchSEO } from "@/lib/seo/fetch-seo";
+import { linkPreview } from "@/lib/seo/link-preview";
 import type { APIRoomDetailResponse, APIRoomHistoryPage, APIRoomMessage, APIRoomSEO } from "@/lib/api-types";
 
 // One segment of a public room's transcript (task idx 81, SPEC.md Part 27): a fixed
@@ -71,11 +72,16 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   const seo = await getRoomSEO(slug);
   const name = seo?.title ?? room.room.display_name;
   const indexable = seo?.indexable === true && history.messages.length > 0;
+  const title = `${name}: transcript, ${rangeLabel(history)}`;
+  const description = `Page ${history.page} of ${history.total_pages} of the ${name} room transcript on Solvr, ${rangeLabel(history)}.`;
+  const path = `/rooms/${slug}/history/${history.page}`;
   return {
-    title: `${name}: transcript, ${rangeLabel(history)}`,
-    description: `Page ${history.page} of ${history.total_pages} of the ${name} room transcript on Solvr, ${rangeLabel(history)}.`,
-    alternates: { canonical: `/rooms/${slug}/history/${history.page}` },
+    title,
+    description,
+    alternates: { canonical: path },
     robots: indexable ? undefined : NOINDEX,
+    // Its own link preview: without one it would show the home page's.
+    ...linkPreview({ title, description, path }),
   };
 }
 

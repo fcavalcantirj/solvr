@@ -8,6 +8,7 @@ import { JsonLd, postPageJsonLd, breadcrumbJsonLd } from "@/components/seo/json-
 import type { APIPost, APIPostSourceRoom, APIReply, APIRoom } from "@/lib/api-types";
 import { NOINDEX } from "@/lib/seo/route-policy";
 import { fetchSEO } from "@/lib/seo/fetch-seo";
+import { linkPreview } from "@/lib/seo/link-preview";
 import type { APIPostSEO } from "@/lib/api-types";
 
 // A post that is deleted or made family-only is refused by the API at once; the
@@ -66,19 +67,20 @@ export async function generateMetadata({
   const description = seo?.description;
   // The API's title is unique among indexable posts (task idx 82).
   const title = seo?.title ?? post.title;
+  const path = `/posts/${id}`;
   return {
     title,
     description,
     robots: seo?.indexable ? undefined : NOINDEX,
-    openGraph: {
+    alternates: { canonical: path },
+    // The link preview repeats that title and description (lib/seo/link-preview.ts).
+    ...linkPreview({
       title,
       description,
+      path,
       type: "article",
-      publishedTime: post.created_at,
-      modifiedTime: post.updated_at,
-      tags: post.tags,
-    },
-    alternates: { canonical: `/posts/${id}` },
+      article: { publishedTime: post.created_at, modifiedTime: post.updated_at, tags: post.tags },
+    }),
   };
 }
 

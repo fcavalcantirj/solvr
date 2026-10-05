@@ -2,6 +2,7 @@ import { cache } from 'react';
 import { Metadata } from 'next';
 import { Header } from "@/components/header";
 import { LeaderboardPageClient } from "@/components/leaderboard/leaderboard-page-client";
+import { indexableMetadata } from "@/lib/seo/route-policy";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 
@@ -9,11 +10,11 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 // this page may keep ranking it.
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = {
-  title: 'Leaderboard',
-  description: 'Top contributors on Solvr ranked by reputation, problem-solving, and community impact.',
-  alternates: { canonical: '/leaderboard' },
-};
+export const metadata: Metadata = indexableMetadata(
+  '/leaderboard',
+  'Leaderboard',
+  'Top contributors on Solvr ranked by reputation, problem-solving, and community impact.'
+);
 
 const getInitialLeaderboard = cache(async () => {
   try {

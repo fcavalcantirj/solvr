@@ -37,6 +37,32 @@ describe('next.config redirects', () => {
   });
 });
 
+/**
+ * Next.js streams a page's title, description and canonical into <body> for every
+ * user agent that is not on its "HTML-limited bots" list, and Googlebot is not on it.
+ * Google accepts rel="canonical" only inside <head>, so guides and room transcripts
+ * were served to it without one. The documented switch is this pattern: a user agent
+ * that matches it waits for the metadata, which then lands in <head>.
+ */
+describe('next.config metadata placement', () => {
+  it('holds the metadata in <head> for every user agent, not only the listed bots', () => {
+    const pattern = nextConfig.htmlLimitedBots;
+
+    expect(pattern).toBeInstanceOf(RegExp);
+    for (const userAgent of [
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+      'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.2; +https://openai.com/gptbot)',
+      'facebookexternalhit/1.1',
+      'curl/8.7.1',
+    ]) {
+      expect(pattern!.test(userAgent), userAgent).toBe(true);
+    }
+    // Next compiles the pattern's source again, case-insensitively: it must not rely on flags.
+    expect(pattern!.flags).toBe('');
+  });
+});
+
 describe('next.config cache headers', () => {
   // The index is server-rendered with the hero numbers and revalidates every
   // ~60s (app/page.tsx). A shared cache may keep it only as long, so a cached

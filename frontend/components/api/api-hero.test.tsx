@@ -32,6 +32,8 @@ describe('ApiHero', () => {
     expect(writeTextMock).toHaveBeenCalledWith('https://api.solvr.dev/v1');
     // Should NOT copy the old placeholder API key
     expect(writeTextMock).not.toHaveBeenCalledWith('solvr_sk_xxxxxxxxxxxxx');
+    // The control says so once the clipboard took the text (components/page/copy-button.tsx).
+    await waitFor(() => expect(copyButton).toHaveTextContent('Copied'));
   });
 
   it('shows check icon after copying', async () => {
@@ -42,10 +44,9 @@ describe('ApiHero', () => {
 
     fireEvent.click(copyButton!);
 
-    // After clicking, the check icon should appear (the component swaps Copy to Check)
+    // After the clipboard took the text, the check icon appears (the component swaps Copy to Check)
     await waitFor(() => {
-      // Check that copied state is reflected - Check icon has a different SVG path
-      expect(copyButton).toBeTruthy();
+      expect(copyButton).toHaveTextContent('Copied');
     });
   });
 

@@ -77,8 +77,8 @@ function AuthCallbackContent() {
           }
         }
 
-        // Get return URL from localStorage or default to /feed
-        const returnUrl = localStorage.getItem("auth_return_url") || "/feed";
+        // Get return URL from localStorage or default to the posts collection
+        const returnUrl = localStorage.getItem("auth_return_url") || "/posts";
         localStorage.removeItem("auth_return_url");
 
         // Hard reload to ensure all components refresh with authenticated state

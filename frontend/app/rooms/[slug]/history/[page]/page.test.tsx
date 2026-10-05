@@ -45,10 +45,12 @@ const history = (overrides: Record<string, unknown> = {}) => ({
 });
 
 const fetchMock = vi.fn();
-function api(roomAnswer: [number, unknown], historyAnswer: [number, unknown]) {
+// seoStatus, when given, is what the verdict read answers on its own (else it answers like the room).
+function api(roomAnswer: [number, unknown], historyAnswer: [number, unknown], seoStatus?: number) {
   fetchMock.mockImplementation(async (url: string) => {
     const u = String(url);
-    const [status, body] = u.includes('/history/') ? historyAnswer : roomAnswer;
+    const [roomStatus, body] = u.includes('/history/') ? historyAnswer : roomAnswer;
+    const status = u.endsWith('/seo') && seoStatus !== undefined ? seoStatus : roomStatus;
     const seo = (body as { seo?: unknown } | null)?.seo;
     return { ok: status < 300, status, json: async () => (u.endsWith('/seo') ? seo : body) };
   });
@@ -98,6 +100,17 @@ describe('room transcript page', () => {
     api([200, room(false)], [200, history()]);
     expect((await generateMetadata(params())).robots).toEqual(NOINDEX);
     api([200, room()], [200, history({ messages: [] })]);
+    expect((await generateMetadata(params())).robots).toEqual(NOINDEX);
+  });
+
+  // SPEC 27.4: a failed verdict read is a retryable failure, never a "not indexable".
+  it('fails retryably, never as noindex, when the verdict read fails', async () => {
+    api([200, room()], [200, history()], 503);
+    await expect(generateMetadata(params())).rejects.toThrow(/\/v1\/rooms\/kestrel\/seo.*503/);
+  });
+
+  it('is noindex when the API refuses the verdict', async () => {
+    api([200, room()], [200, history()], 403);
     expect((await generateMetadata(params())).robots).toEqual(NOINDEX);
   });
 

@@ -57,7 +57,7 @@ export function ApiCta() {
               <ArrowRight aria-hidden="true" size={14} className="transition-transform group-hover:translate-x-1" />
             </Link>
             <Link
-              href="/feed"
+              href="/posts"
               className={cn(
                 "inline-flex min-h-12 items-center justify-center gap-3 border border-background/30 px-8 py-4 font-mono text-[11px] uppercase tracking-[0.18em] transition-colors hover:border-background hover:bg-background hover:text-foreground",
                 FOCUS_ON_INK,

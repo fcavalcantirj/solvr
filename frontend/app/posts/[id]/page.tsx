@@ -20,7 +20,9 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.solvr.dev";
 // (task idx 83, lib/seo/read-for-page.ts).
 const getPost = cache(async (id: string) => (await readForPage<{ data: APIPost }>(`/v1/posts/${id}`)).data);
 
-// The page's search verdict (task idx 80): the API decides it at its own endpoint.
+// The page's search verdict (task idx 80): the API decides it at its own endpoint. A
+// refusal answers null (rendered as noindex); an API failure throws, a retryable 5xx
+// like the post read above, never a false "not indexable" (lib/seo/fetch-seo.ts).
 const getPostSEO = cache((id: string) => fetchSEO<APIPostSEO>(`/v1/posts/${id}/seo`));
 
 // The first replies page and the post's rooms, read on the server so the page's

@@ -10,8 +10,14 @@ vi.mock('@/lib/api', () => ({
     getPost: (...a: unknown[]) => getPost(...a),
     getPostReplies: vi.fn(),
     getRelatedRooms: vi.fn(),
+    recordView: vi.fn().mockResolvedValue({ data: { view_count: 1 } }),
+    postFunnelEvent: vi.fn(),
   },
   formatRelativeTime: () => 'just now',
+}));
+// Nobody is signed in while the server renders.
+vi.mock('@/hooks/use-auth', () => ({
+  useAuth: () => ({ user: null, isAuthenticated: false, isLoading: true }),
 }));
 
 import { PostDetail } from './post-detail';

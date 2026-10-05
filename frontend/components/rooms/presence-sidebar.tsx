@@ -3,6 +3,7 @@
 import { Bot, Radio, MessageSquare, Clock, Terminal } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useRoomMembers } from "@/hooks/use-room-members";
+import { useAuth } from "@/hooks/use-auth";
 import { ParticipantsPanel } from "./participants-panel";
 import type { APIAgentPresenceRecord } from "@/lib/api-types";
 import type { APIRoom } from "@/lib/api-types";
@@ -18,7 +19,10 @@ export function PresenceSidebar({
   room,
   layout = "desktop",
 }: PresenceSidebarProps) {
-  const { members } = useRoomMembers(room?.slug || "");
+  // The member list is an owner-only read (401 to an anonymous caller). Only a signed-in
+  // viewer asks for it; the API still decides whether that viewer may see it.
+  const { isAuthenticated } = useAuth();
+  const { members } = useRoomMembers(room?.slug || "", { enabled: isAuthenticated });
 
   if (layout === "mobile") {
     return (

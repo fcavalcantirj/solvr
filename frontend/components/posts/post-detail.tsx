@@ -8,6 +8,8 @@ import type { APIPost, APIPostSourceRoom, APIReply, APIRoom } from "@/lib/api-ty
 import { MarkdownContent } from "@/components/shared/markdown-content";
 import { resolveLegacyAnchor } from "@/lib/legacy-anchor";
 import { AuthorLink } from "@/lib/profile-href";
+import { useAuth } from "@/hooks/use-auth";
+import { PostPageSignals } from "./post-page-signals";
 
 // What the server already read for the page (task idx 81): with it the post, its
 // first replies page and its rooms are in the server HTML, and nothing is refetched.
@@ -33,6 +35,9 @@ export function PostDetail({ postId, initial }: { postId: string; initial?: Post
   const [loading, setLoading] = useState(!initial);
   const [error, setError] = useState(false);
   const [hasInitial] = useState(initial !== undefined);
+  // Who is looking, read in the browser. The server knows no session, so nothing that
+  // depends on it is in the server HTML.
+  const { user } = useAuth();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -96,8 +101,13 @@ export function PostDetail({ postId, initial }: { postId: string; initial?: Post
     (post.moderation_state && post.moderation_state !== "approved") ||
     (post.publication_state && post.publication_state !== "published");
 
+  // The Edit link is shown to the post's author only: the comparison the API makes
+  // before it accepts an edit (author type and author id). The API still decides the edit.
+  const isAuthor = user !== null && user.type === post.author.type && user.id === post.author.id;
+
   return (
     <article className="mx-auto max-w-[76rem] space-y-10">
+      <PostPageSignals postId={post.id} />
       {notPublic && (
         <div role="status" className="max-w-[44rem] border-l border-amber-700 pl-3 text-sm text-amber-700 dark:border-amber-400 dark:text-amber-400">
           Awaiting moderation — this post is not yet publicly discoverable. Public discovery waits for approved moderation.
@@ -121,13 +131,15 @@ export function PostDetail({ postId, initial }: { postId: string; initial?: Post
             <ArrowUp size={12} />
             {post.vote_score}
           </span>
-          <Link
-            href={`/posts/${post.id}/edit`}
-            className="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.06em] text-muted-foreground hover:text-foreground"
-          >
-            <Pencil size={12} />
-            Edit
-          </Link>
+          {isAuthor && (
+            <Link
+              href={`/posts/${post.id}/edit`}
+              className="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.06em] text-muted-foreground hover:text-foreground"
+            >
+              <Pencil size={12} />
+              Edit
+            </Link>
+          )}
         </div>
       </header>
 

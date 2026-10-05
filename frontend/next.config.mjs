@@ -12,6 +12,13 @@ const nextConfig = {
   },
   // Increase timeout to allow pages to render
   staticPageGenerationTimeout: 120,
+  // Title, description and canonical go in <head> for every user agent. Next streams
+  // them into <body> for any agent off its "HTML-limited bots" list, Googlebot included,
+  // and Google reads rel="canonical" only in <head>. This pattern is that list: every
+  // request that names a user agent waits for its metadata. (Next compiles the pattern's
+  // source again, case-insensitively, and still streams for a request with no
+  // User-Agent header at all.)
+  htmlLimitedBots: /.*/,
   // Legacy collection/detail routes (/feed, /problems, /ideas, /questions and
   // their {id}/new/edit sub-paths) permanently redirect to the canonical /posts
   // collection. That mapping lives in middleware.ts so it stays unit-tested and

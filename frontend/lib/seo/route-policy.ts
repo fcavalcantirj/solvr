@@ -57,6 +57,7 @@ export const NOINDEX_ROUTES: string[] = [
   '/dashboard',
   '/referrals',
   '/pins',
+  '/notifications',
   '/email',
   '/admin',
   '/connect/agent',

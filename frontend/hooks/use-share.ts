@@ -6,7 +6,9 @@ export interface UseShareResult {
   isSharing: boolean;
   shared: boolean;
   error: string | null;
-  share: (title: string, url: string) => Promise<void>;
+  // Resolves true once the link was handed to the share sheet or the clipboard, and
+  // false when the visitor dismissed the sheet or the browser refused. It never rejects.
+  share: (title: string, url: string) => Promise<boolean>;
 }
 
 /**
@@ -28,7 +30,7 @@ export function useShare(): UseShareResult {
     }
   }, [shared]);
 
-  const share = useCallback(async (title: string, url: string) => {
+  const share = useCallback(async (title: string, url: string): Promise<boolean> => {
     setIsSharing(true);
     setError(null);
     setShared(false);
@@ -45,12 +47,14 @@ export function useShare(): UseShareResult {
       } else {
         throw new Error('Sharing not supported');
       }
+      return true;
     } catch (err) {
       // Don't treat user cancellation as an error
       if (err instanceof Error && err.name === 'AbortError') {
-        return;
+        return false;
       }
       setError(err instanceof Error ? err.message : 'Failed to share');
+      return false;
     } finally {
       setIsSharing(false);
     }

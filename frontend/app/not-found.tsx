@@ -1,4 +1,14 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
+import { NOINDEX } from '@/lib/seo/route-policy';
+
+// A page that does not exist names itself (the root template makes it "Page not found |
+// Solvr") and stays out of the index. Without this it carried the home page's title, so
+// a 404 could not be told from a home view.
+export const metadata: Metadata = {
+  title: 'Page not found',
+  robots: NOINDEX,
+};
 
 export default function NotFound() {
   return (

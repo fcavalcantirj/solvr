@@ -503,6 +503,7 @@ export class SolvrAPIBase {
     return this.fetch<APIRecordViewResponse>(`/v1/posts/${postId}/view`, {
       method: 'POST',
       headers,
+      skipAuthEvent: true,  // A view is a background beacon: a refused one never opens the login dialog
     });
   }
 

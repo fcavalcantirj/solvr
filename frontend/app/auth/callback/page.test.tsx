@@ -57,7 +57,9 @@ describe('AuthCallbackPage', () => {
     expect(init.method).toBe('POST');
     expect(JSON.parse(init.body)).toEqual({ login_code: 'solvr_lc_abc' });
     expect(String(url)).not.toContain('solvr_lc_abc');
-    await waitFor(() => expect(locationState.href).toBe('/feed'));
+    // With no saved page to return to, the visitor lands on the posts collection. The old
+    // default was /feed, a retired route that only answers a redirect.
+    await waitFor(() => expect(locationState.href).toBe('/posts'));
   });
 
   it('takes the code out of the address bar before it does anything else', async () => {

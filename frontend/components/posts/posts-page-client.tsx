@@ -4,11 +4,15 @@ import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Search } from "lucide-react";
 import { PostsList } from "./posts-list";
+import { useDebounce } from "@/hooks/use-debounce";
 import type { APIPost } from "@/lib/api-types";
 
 interface PostsPageClientProps {
   initialPosts: APIPost[];
 }
+
+// How long typing must pause before the term is searched.
+const SEARCH_PAUSE_MS = 300;
 
 // The single canonical knowledge collection. One search box, one Recent/Top
 // ordering control, and NO type selector or problem-specific status filter —
@@ -21,6 +25,10 @@ export function PostsPageClient({ initialPosts }: PostsPageClientProps) {
 
   const [query, setQuery] = useState(initialQuery);
   const [sort, setSort] = useState<"new" | "top">("new");
+  // The box shows every keystroke at once, but the list (and the search API, which logs
+  // each call as a search) gets the trimmed term only once typing pauses. A term that
+  // arrived in the link is searched at once.
+  const searchQuery = useDebounce(query.trim(), SEARCH_PAUSE_MS);
 
   return (
     <div className="w-full pb-16">
@@ -69,7 +77,7 @@ export function PostsPageClient({ initialPosts }: PostsPageClientProps) {
         </div>
       </div>
 
-      <PostsList initialPosts={initialPosts} searchQuery={query} sort={sort} />
+      <PostsList initialPosts={initialPosts} searchQuery={searchQuery} sort={sort} />
     </div>
   );
 }

@@ -42,13 +42,16 @@ describe('useShare', () => {
 
     const { result } = renderHook(() => useShare());
 
+    let done: boolean | undefined;
     await act(async () => {
-      await result.current.share('Test Post', 'https://solvr.dev/posts/123');
+      done = await result.current.share('Test Post', 'https://solvr.dev/posts/123');
     });
 
     expect(writeText).toHaveBeenCalledWith('https://solvr.dev/posts/123');
     expect(result.current.shared).toBe(true);
     expect(result.current.error).toBeNull();
+    // The caller learns the link really left the page (it reports a funnel step then).
+    expect(done).toBe(true);
   });
 
   it('should use Web Share API when available', async () => {
@@ -61,8 +64,9 @@ describe('useShare', () => {
 
     const { result } = renderHook(() => useShare());
 
+    let done: boolean | undefined;
     await act(async () => {
-      await result.current.share('Test Post', 'https://solvr.dev/posts/123');
+      done = await result.current.share('Test Post', 'https://solvr.dev/posts/123');
     });
 
     expect(shareFn).toHaveBeenCalledWith({
@@ -70,6 +74,27 @@ describe('useShare', () => {
       url: 'https://solvr.dev/posts/123',
     });
     expect(result.current.shared).toBe(true);
+    expect(done).toBe(true);
+  });
+
+  it('answers false, without an error, when the visitor dismisses the share sheet', async () => {
+    const dismissed = Object.assign(new Error('Share canceled'), { name: 'AbortError' });
+    const shareFn = vi.fn().mockRejectedValue(dismissed);
+    Object.defineProperty(global.navigator, 'share', {
+      value: shareFn,
+      writable: true,
+    });
+
+    const { result } = renderHook(() => useShare());
+
+    let done: boolean | undefined;
+    await act(async () => {
+      done = await result.current.share('Test Post', 'https://solvr.dev/posts/123');
+    });
+
+    expect(done).toBe(false);
+    expect(result.current.shared).toBe(false);
+    expect(result.current.error).toBeNull();
   });
 
   it('should handle clipboard errors', async () => {
@@ -86,12 +111,14 @@ describe('useShare', () => {
 
     const { result } = renderHook(() => useShare());
 
+    let done: boolean | undefined;
     await act(async () => {
-      await result.current.share('Test Post', 'https://solvr.dev/posts/123');
+      done = await result.current.share('Test Post', 'https://solvr.dev/posts/123');
     });
 
     expect(result.current.error).toBe('Clipboard denied');
     expect(result.current.shared).toBe(false);
+    expect(done).toBe(false);
   });
 
   it('should reset shared state after timeout', async () => {

@@ -185,4 +185,27 @@ describe('useViewTracking', () => {
 
     expect(api.recordView).not.toHaveBeenCalled();
   });
+
+  // A browser set to block site data throws on any session storage access. The hook is
+  // now mounted on every post page, so that must stay silent: no view, and no rejected
+  // promise left for the page to report.
+  it('stays silent, and records nothing, when session storage is blocked', async () => {
+    const blocked = () => {
+      throw new DOMException('The operation is insecure.', 'SecurityError');
+    };
+    const original = sessionStorageMock.getItem.getMockImplementation();
+    sessionStorageMock.getItem.mockImplementation(blocked);
+    try {
+      const { result } = renderHook(() => useViewTracking('post-123', 0, { enabled: false }));
+
+      await act(async () => {
+        await expect(result.current.recordView()).resolves.toBeUndefined();
+      });
+
+      expect(api.recordView).not.toHaveBeenCalled();
+      expect(result.current.isLoading).toBe(false);
+    } finally {
+      sessionStorageMock.getItem.mockImplementation(original!);
+    }
+  });
 });

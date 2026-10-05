@@ -1,8 +1,11 @@
-import { render, screen, within } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { render, screen, within, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+vi.mock('@/lib/api', () => ({ api: { postFunnelEvent: vi.fn() } }));
+
+import { api } from '@/lib/api';
 import { UseCasesSection } from './use-cases-section';
 import { CONNECT_EXAMPLES } from '@/components/connect/connect-fixture';
 
@@ -69,5 +72,64 @@ describe('UseCasesSection', () => {
     for (const forbidden of ['Learn Solvr', 'skill.md', 'PLANNER', 'join it as the']) {
       expect(source).not.toContain(forbidden);
     }
+  });
+});
+
+// The three Copy prompt buttons of the home page reported nothing, so the main conversion
+// of the site was not measured. Each now reports the browser funnel step
+// starter_prompt_copied for its own use case, only after the clipboard write succeeded.
+describe('UseCasesSection connection funnel', () => {
+  beforeEach(() => {
+    vi.mocked(api.postFunnelEvent).mockReset();
+    vi.mocked(api.postFunnelEvent).mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+  });
+
+  it('reports nothing just for showing the cards', () => {
+    render(<UseCasesSection examples={CONNECT_EXAMPLES} />);
+    expect(api.postFunnelEvent).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [0, 'plan-and-build', 'planner'],
+    [1, 'collaborate', 'learner'],
+    [2, 'build-and-review', 'builder'],
+  ])('reports one starter_prompt_copied for card %i after a successful copy', async (index, preset, role) => {
+    render(<UseCasesSection examples={CONNECT_EXAMPLES} />);
+
+    fireEvent.click(within(cards()[index]).getByRole('button', { name: /copy prompt/i }));
+
+    await waitFor(() => {
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(CONNECT_EXAMPLES[index].prompt.text);
+    });
+    await waitFor(() => expect(api.postFunnelEvent).toHaveBeenCalledTimes(1));
+    expect(api.postFunnelEvent).toHaveBeenCalledWith({
+      event: 'starter_prompt_copied',
+      entry_surface: 'homepage_use_cases',
+      preset,
+      role,
+    });
+  });
+
+  it('reports nothing when the browser blocks the clipboard', async () => {
+    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockRejectedValue(new Error('denied')) } });
+    render(<UseCasesSection examples={CONNECT_EXAMPLES} />);
+
+    fireEvent.click(within(cards()[0]).getByRole('button', { name: /copy prompt/i }));
+
+    // The card says how to copy by hand; that is the settled, failed state.
+    expect(await within(cards()[0]).findByRole('alert')).toBeInTheDocument();
+    expect(api.postFunnelEvent).not.toHaveBeenCalled();
+  });
+
+  it('never sends the copied sentence, or any word of it, as funnel data', async () => {
+    render(<UseCasesSection examples={CONNECT_EXAMPLES} />);
+
+    fireEvent.click(within(cards()[0]).getByRole('button', { name: /copy prompt/i }));
+
+    await waitFor(() => expect(api.postFunnelEvent).toHaveBeenCalledTimes(1));
+    const sent = JSON.stringify(vi.mocked(api.postFunnelEvent).mock.calls[0][0]);
+    expect(sent).not.toContain('ship the signup page');
+    expect(sent).not.toContain('skill.md');
   });
 });

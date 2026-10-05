@@ -40,6 +40,13 @@ describe('route policy', () => {
     }
   });
 
+  // /notifications is the signed-in inbox: it was in neither table, so it was served
+  // with the home page's title and no robots directive.
+  it('keeps the signed-in inbox out of the index and out of the sitemap', () => {
+    expect(NOINDEX_ROUTES).toContain('/notifications');
+    expect(INDEXABLE_ROUTES.map((r) => r.path)).not.toContain('/notifications');
+  });
+
   it('keeps indexable and noindex routes apart', () => {
     for (const { path } of INDEXABLE_ROUTES) {
       expect(NOINDEX_ROUTES.some((n) => path === n || path.startsWith(`${n}/`)), path).toBe(false);

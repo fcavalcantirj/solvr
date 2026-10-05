@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { JsonLd, breadcrumbJsonLd } from "@/components/seo/json-ld";
-import { Prompt } from "@/components/prompt/prompt";
+import { GuidePrompt } from "@/components/prompt/guide-prompt";
 import { workflowGuide, type WorkflowGuide } from "@/lib/docs/workflow-guides";
 import { getConnectExamples } from "@/lib/connect-examples-server";
 import type { APIConnectPreset } from "@/lib/api-types";
@@ -72,7 +72,7 @@ function UseCaseGuide({ guide, example }: { guide: WorkflowGuide; example?: APIC
       </header>
       <div className="mt-12 lg:mt-14" data-testid="guide-prompt">
         {example ? (
-          <Prompt variant="guide" preset={example} />
+          <GuidePrompt example={example} />
         ) : (
           <p className="text-muted-foreground">
             The sentence could not be read right now.{" "}

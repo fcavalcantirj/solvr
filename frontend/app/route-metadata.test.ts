@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Metadata } from 'next';
-import { NOINDEX } from '@/lib/seo/route-policy';
+import { NOINDEX, NOINDEX_ROUTES, TITLE_TEMPLATE } from '@/lib/seo/route-policy';
 
 // Task idx 80: the client-rendered routes get their robots, title, description and
 // canonical from a server layout. Noindex routes stay usable but out of search;
@@ -19,6 +19,8 @@ const noindexLayouts: Record<string, () => Promise<{ metadata: Metadata }>> = {
   '/admin': () => import('./admin/layout'),
   '/connect/agent': () => import('./connect/agent/layout'),
   '/blog/create': () => import('./blog/create/layout'),
+  // The signed-in inbox answered 200 with the home page's title and no robots directive.
+  '/notifications': () => import('./notifications/layout'),
 };
 
 const indexableLayouts: Record<string, () => Promise<{ metadata: Metadata }>> = {
@@ -44,7 +46,16 @@ describe('route layouts', () => {
       expect(metadata.robots).toEqual(NOINDEX);
       expect(metadata.alternates?.canonical).toBeUndefined();
     });
+
+    it(`${path} is named by the route policy as noindex`, () => {
+      expect(NOINDEX_ROUTES).toContain(path);
+    });
   }
+
+  it('/notifications carries its own title, not the home page title', async () => {
+    const { metadata } = await noindexLayouts['/notifications']();
+    expect(metadata.title).toEqual({ default: 'Notifications', template: TITLE_TEMPLATE });
+  });
 
   for (const [path, load] of Object.entries(indexableLayouts)) {
     it(`${path} is indexable with a self-referencing canonical`, async () => {

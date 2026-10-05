@@ -17,8 +17,14 @@ export function CopyButton({
 }) {
   const [copied, setCopied] = useState(false);
 
-  const copy = () => {
-    navigator.clipboard.writeText(text);
+  // "Copied" is said only once the clipboard took the text: a browser can refuse the
+  // write, or have no clipboard at all, and the label must not claim otherwise.
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      return;
+    }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };

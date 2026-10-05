@@ -35,10 +35,12 @@ const replies = (page: number, totalPages: number) => ({
 });
 
 const fetchMock = vi.fn();
-function api(postAnswer: [number, unknown], repliesAnswer: [number, unknown]) {
+// seoStatus, when given, is what the verdict read answers on its own (else it answers like the post).
+function api(postAnswer: [number, unknown], repliesAnswer: [number, unknown], seoStatus?: number) {
   fetchMock.mockImplementation(async (url: string) => {
     const u = String(url);
-    const [status, body] = u.includes('/replies') ? repliesAnswer : postAnswer;
+    const [postStatus, body] = u.includes('/replies') ? repliesAnswer : postAnswer;
+    const status = u.endsWith('/seo') && seoStatus !== undefined ? seoStatus : postStatus;
     const seo = (body as { seo?: unknown } | null)?.seo;
     return { ok: status < 300, status, json: async () => (u.endsWith('/seo') ? seo : body) };
   });
@@ -76,6 +78,17 @@ describe('post reply pages', () => {
     expect(metadata.alternates?.canonical).toBe('/posts/p1/replies/2');
     expect(metadata.robots).toBeUndefined();
     api([200, post(false)], [200, replies(2, 3)]);
+    expect((await generateMetadata(params())).robots).toEqual(NOINDEX);
+  });
+
+  // SPEC 27.4: a failed verdict read is a retryable failure, never a "not indexable".
+  it('fails retryably, never as noindex, when the verdict read fails', async () => {
+    api([200, post()], [200, replies(2, 3)], 503);
+    await expect(generateMetadata(params())).rejects.toThrow(/\/v1\/posts\/p1\/seo.*503/);
+  });
+
+  it('is noindex when the API refuses the verdict', async () => {
+    api([200, post()], [200, replies(2, 3)], 404);
     expect((await generateMetadata(params())).robots).toEqual(NOINDEX);
   });
 

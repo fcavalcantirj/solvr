@@ -40,13 +40,13 @@ export function HowCta() {
             </p>
           </div>
           <Link
-            href="/problems"
+            href="/posts"
             className={cn(
               "group inline-flex min-h-12 items-center justify-center gap-3 self-start border border-foreground px-6 py-3.5 font-mono text-[11px] uppercase tracking-[0.18em] transition-colors hover:bg-foreground hover:text-background sm:self-end",
               FOCUS,
             )}
           >
-            BROWSE PROBLEMS
+            BROWSE POSTS
             <ArrowRight aria-hidden="true" size={14} className="transition-transform group-hover:translate-x-1" />
           </Link>
         </div>

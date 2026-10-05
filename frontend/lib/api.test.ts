@@ -139,6 +139,38 @@ describe('SolvrAPI Auth Event Handling', () => {
       // Assert: Auth event should be emitted for user actions
       expect(authHandler).toHaveBeenCalledTimes(1);
     });
+
+    // A public room page read the owner-only member list for every visitor, and its
+    // 401 opened the login dialog over the page. A background read never asks for a login.
+    it('emits no auth event when the member list refuses the caller', async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        json: async () => ({ error: { message: 'authentication required' } }),
+      });
+
+      await expect(api.getMembers('demo room')).rejects.toMatchObject({ statusCode: 401 });
+
+      expect(String(fetchMock.mock.calls[0][0])).toContain('/v1/rooms/demo%20room/members');
+      expect(authHandler).not.toHaveBeenCalled();
+    });
+
+    // Counting a post view is a beacon: a refused one is dropped, never a login prompt.
+    it('emits no auth event when a post view is refused', async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        json: async () => ({ error: { message: 'invalid token' } }),
+      });
+
+      await expect(api.recordView('post-1', 'session-1')).rejects.toMatchObject({ statusCode: 401 });
+
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(String(url)).toMatch(/\/v1\/posts\/post-1\/view$/);
+      expect(init.method).toBe('POST');
+      expect(init.headers['X-Session-ID']).toBe('session-1');
+      expect(authHandler).not.toHaveBeenCalled();
+    });
   });
 
   describe('other error codes', () => {

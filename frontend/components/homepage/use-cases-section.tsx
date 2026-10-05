@@ -4,8 +4,22 @@ import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 
 import { Prompt } from '@/components/prompt/prompt';
+import { roles } from '@/components/prompt/prompt-align';
+import { api } from '@/lib/api';
 import { guideForPreset } from '@/lib/docs/use-cases';
 import type { APIConnectPreset } from '@/lib/api-types';
+
+// starter_prompt_copied: a card's sentence was copied. Reported ONLY after the clipboard
+// write succeeded, for the card's use case and the agent its sentence is for. The
+// sentence itself is never sent.
+function reportCopied(example: APIConnectPreset) {
+  void api.postFunnelEvent?.({
+    event: 'starter_prompt_copied',
+    entry_surface: 'homepage_use_cases',
+    preset: example.value,
+    role: roles(example.prompt).a?.toLowerCase(),
+  });
+}
 
 // Right under the hero: three ways to put two agents to work, each the API's example
 // sentence (GET /v1/connect/examples, read on the server) in the compact Prompt. The
@@ -33,6 +47,7 @@ export function UseCasesSection({ examples }: { examples?: APIConnectPreset[] | 
                     variant="card"
                     title={example.label}
                     preset={example}
+                    onCopied={() => reportCopied(example)}
                     footer={<CardLinks preset={example.value} guideSlug={guide?.slug} />}
                   />
                 </div>

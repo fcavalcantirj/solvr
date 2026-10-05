@@ -32,7 +32,9 @@ const getRoom = cache((slug: string): Promise<{ status: number; data: unknown }>
   readForPage<unknown>(`/v1/rooms/${encodeURIComponent(slug)}`)
 );
 
-// The page's search verdict (task idx 80): the API decides it at its own endpoint.
+// The page's search verdict (task idx 80): the API decides it at its own endpoint. A
+// refusal answers null (rendered as noindex); an API failure throws, a retryable 5xx
+// like the room read above, never a false "not indexable" (lib/seo/fetch-seo.ts).
 const getRoomSEO = cache((slug: string) =>
   fetchSEO<APIRoomSEO>(`/v1/rooms/${encodeURIComponent(slug)}/seo`)
 );

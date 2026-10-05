@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, fireEvent, waitFor, screen } from '@testing-library/react';
 
 // Task idx 84, v1.3.5: each use-case guide is a title, one line and the API's example
 // sentence, big and read-only (GET /v1/connect/examples) — no step lists and no endpoints.
@@ -12,7 +12,9 @@ vi.mock('next/navigation', () => ({
     throw new Error('NEXT_NOT_FOUND');
   },
 }));
+vi.mock('@/lib/api', () => ({ api: { postFunnelEvent: vi.fn() } }));
 
+import { api } from '@/lib/api';
 import GuidePage, { generateMetadata } from './page';
 import { LISTED_GUIDES, WORKFLOW_GUIDES } from '@/lib/docs/workflow-guides';
 import { CONNECT_EXAMPLES } from '@/components/connect/connect-fixture';
@@ -70,6 +72,47 @@ describe('use-case guides', () => {
     const { container } = render(await GuidePage(params(LISTED_GUIDES[1].slug)));
     expect(container.querySelector('[data-testid="prompt-sentence"]')).toBeNull();
     expect(container.querySelector('a[href="/connect?preset=collaborate"]')).not.toBeNull();
+  });
+});
+
+// A guide's Copy prompt reported nothing. It now reports the browser funnel step
+// starter_prompt_copied for the guide's own use case, only after the copy succeeded.
+describe('use-case guides: the copy is reported', () => {
+  beforeEach(() => {
+    vi.mocked(api.postFunnelEvent).mockReset();
+    vi.mocked(api.postFunnelEvent).mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+  });
+
+  it.each([
+    ['connect-planner-executor', 'plan-and-build', 'planner'],
+    ['share-context-between-agents', 'collaborate', 'learner'],
+    ['connect-builder-reviewer', 'build-and-review', 'builder'],
+  ])('%s reports one starter_prompt_copied after a successful copy', async (slug, preset, role) => {
+    render(await GuidePage(params(slug)));
+    expect(api.postFunnelEvent).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /copy prompt/i }));
+
+    const example = CONNECT_EXAMPLES.find((p) => p.value === preset)!;
+    await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith(example.prompt.text));
+    await waitFor(() => expect(api.postFunnelEvent).toHaveBeenCalledTimes(1));
+    expect(api.postFunnelEvent).toHaveBeenCalledWith({
+      event: 'starter_prompt_copied',
+      entry_surface: 'guide_page',
+      preset,
+      role,
+    });
+  });
+
+  it('reports nothing when the browser blocks the clipboard', async () => {
+    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockRejectedValue(new Error('denied')) } });
+    render(await GuidePage(params(LISTED_GUIDES[0].slug)));
+
+    fireEvent.click(screen.getByRole('button', { name: /copy prompt/i }));
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(api.postFunnelEvent).not.toHaveBeenCalled();
   });
 });
 

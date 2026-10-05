@@ -478,10 +478,13 @@ class SolvrAPI extends SolvrAPIBase {
   /**
    * Get the member list for a room. Owner-only endpoint.
    * Returns all members (not just live agents) with their roles and timestamps.
+   * It is read in the background of a room page anyone can open, so a refusal
+   * (401) leaves the list out and never opens the login dialog.
    */
   async getMembers(slug: string): Promise<APIRoomMembersResponse> {
     return this.fetch<APIRoomMembersResponse>(
       `/v1/rooms/${encodeURIComponent(slug)}/members`,
+      { skipAuthEvent: true },
     );
   }
 

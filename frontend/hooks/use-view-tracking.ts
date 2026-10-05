@@ -33,10 +33,11 @@ function getSessionId(): string {
 function hasViewedPost(postId: string): boolean {
   if (typeof window === 'undefined') return false;
 
-  const viewedPosts = sessionStorage.getItem(VIEW_STORAGE_KEY);
-  if (!viewedPosts) return false;
-
   try {
+    // A browser that blocks site data throws on this read; recordView then fails
+    // quietly on the session id, inside its own try, and sends nothing.
+    const viewedPosts = sessionStorage.getItem(VIEW_STORAGE_KEY);
+    if (!viewedPosts) return false;
     const viewed = JSON.parse(viewedPosts) as string[];
     return viewed.includes(postId);
   } catch {

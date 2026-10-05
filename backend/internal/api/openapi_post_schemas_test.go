@@ -19,6 +19,8 @@ func TestOpenAPIPosts_SchemasDescribeTheJSONTheHandlersReturn(t *testing.T) {
 		"Post":              reflect.TypeOf(models.PostWithAuthor{}),
 		"PostAuthor":        reflect.TypeOf(models.PostAuthor{}),
 		"CreatePostRequest": reflect.TypeOf(handlers.CreatePostRequest{}),
+		"PostsListResponse": reflect.TypeOf(handlers.PostsListResponse{}),
+		"PostsListMeta":     reflect.TypeOf(handlers.PostsListMeta{}),
 		"SearchResponse":    reflect.TypeOf(handlers.SearchResponse{}),
 		"SearchMeta":        reflect.TypeOf(handlers.SearchResponseMeta{}),
 		"SearchResult":      reflect.TypeOf(models.SearchResultResponse{}),
@@ -68,4 +70,40 @@ func TestOpenAPISearch_DocumentsExactlyTheParametersTheHandlerReads(t *testing.T
 	sameSet(t, "GET /search query parameters", documented, handlers.SearchParamNames())
 	assert.Equal(t, "#/components/schemas/SearchResponse",
 		at(t, search, "responses", "200", "content", "application/json", "schema", "$ref"))
+}
+
+// SPEC.md 27.2: GET /v1/posts documents exactly the query parameters the handler reads
+// (handlers.PostListParamNames), indexable among them, and its meta names total_pages, which
+// the post archive pages read to know their last page.
+func TestOpenAPIPosts_ListDocumentsExactlyTheParametersTheHandlerReads(t *testing.T) {
+	spec := servedSpec(t)
+	list := operation(t, spec, "get", "/posts")
+	var documented []string
+	described := map[string]string{}
+	for _, raw := range list["parameters"].([]interface{}) {
+		p := deref(t, spec, raw).(map[string]interface{})
+		if assert.Equal(t, "query", p["in"]) {
+			documented = append(documented, p["name"].(string))
+			described[p["name"].(string)], _ = p["description"].(string)
+		}
+	}
+	sameSet(t, "GET /posts query parameters", documented, handlers.PostListParamNames())
+	assert.Contains(t, described["indexable"], "sitemap", "indexable is described by the rule it applies")
+
+	assert.Equal(t, "#/components/schemas/PostsListResponse",
+		at(t, list, "responses", "200", "content", "application/json", "schema", "$ref"))
+	assert.Equal(t, "#/components/schemas/PostsListMeta",
+		at(t, spec, "components", "schemas", "PostsListResponse", "properties", "meta", "$ref"))
+	meta := at(t, spec, "components", "schemas", "PostsListMeta").(map[string]interface{})
+	assert.ElementsMatch(t, []interface{}{"total", "page", "per_page", "total_pages", "has_more"}, meta["required"])
+	assert.Equal(t, "integer", at(t, meta, "properties", "total_pages", "type"))
+}
+
+// GET /v1/me/posts answers another meta (no has_more, no total_pages), so it keeps the
+// shared pagination schema: only the canonical list promises total_pages.
+func TestOpenAPIPosts_OnlyTheCanonicalListPromisesTotalPages(t *testing.T) {
+	spec := servedSpec(t)
+	assert.NotContains(t, propertyNames(t, spec, "PaginationMeta"), "total_pages")
+	assert.Equal(t, "#/components/schemas/PostsResponse",
+		at(t, operation(t, spec, "get", "/me/posts"), "responses", "200", "content", "application/json", "schema", "$ref"))
 }

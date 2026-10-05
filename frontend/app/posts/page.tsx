@@ -1,9 +1,11 @@
 import { cache, Suspense } from 'react';
 import { Metadata } from 'next';
+import Link from 'next/link';
 import { Header } from "@/components/header";
 import { PostsPageClient } from "@/components/posts/posts-page-client";
 import type { APIPost } from "@/lib/api-types";
-import { collectionRobots, indexableMetadata } from "@/lib/seo/route-policy";
+import { collectionRobots, indexableMetadata, POSTS_ARCHIVE } from "@/lib/seo/route-policy";
+import { trackCta } from "@/lib/track-attrs";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 
@@ -53,6 +55,22 @@ export default async function PostsPage() {
         <Suspense fallback={null}>
           <PostsPageClient initialPosts={initialPosts} />
         </Suspense>
+        {/* The archive (SPEC.md 27.2): every post as a plain link, fifty to a page. The list
+            above shows twenty and loads the rest in the browser, which a crawler does not
+            do, so this link is in the server HTML, outside that list. */}
+        <nav
+          aria-label="Post archive"
+          className="mx-4 mb-16 flex flex-wrap items-baseline gap-x-8 gap-y-2 border-t border-border py-6 sm:mx-6 lg:mx-12"
+        >
+          <Link
+            href={POSTS_ARCHIVE.path(1)}
+            {...trackCta("browse_all_posts", "page")}
+            className="font-mono text-[11px] uppercase tracking-[0.18em] text-foreground underline underline-offset-4 transition-colors hover:text-muted-foreground focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+          >
+            Browse all posts
+          </Link>
+          <p className="text-sm text-muted-foreground">Every post, newest first, fifty to a page.</p>
+        </nav>
       </main>
     </div>
   );

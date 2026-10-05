@@ -7,6 +7,18 @@ import (
 	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
+// postListParams are the query parameters parsePostListOptions reads.
+var postListParams = []string{
+	"author_id", "author_type", "has_answer", "indexable", "needs_help", "page", "per_page",
+	"sort", "status", "tags", "timeframe", "type",
+}
+
+// PostListParamNames lists the query parameters GET /posts reads, sorted; the published
+// OpenAPI operation documents exactly these.
+func PostListParamNames() []string {
+	return append([]string{}, postListParams...)
+}
+
 // parsePostListOptions defines the filters, ordering, pagination and visibility of the
 // canonical GET /v1/posts list ONCE. Legacy discovery routes (GET /v1/problems,
 // /v1/questions, /v1/ideas) are adapters that reach this same parser (task idx 71).
@@ -56,6 +68,10 @@ func parsePostListOptions(r *http.Request) (models.PostListOptions, error) {
 	// Parse needs_help filter (posts with a reply migrated from a stuck approach; replaces
 	// the legacy GET /v1/feed/stuck query stack)
 	opts.NeedsHelp = q.Get("needs_help") == "true"
+
+	// Parse indexable filter (SPEC.md 27.2): exactly the posts the post sitemap lists. The
+	// post archive pages and the profile pages link what it lists.
+	opts.Indexable = q.Get("indexable") == "true"
 
 	// Parse sort parameter
 	if sortParam := q.Get("sort"); sortParam != "" {

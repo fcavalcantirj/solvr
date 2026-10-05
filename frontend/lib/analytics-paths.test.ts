@@ -35,6 +35,9 @@ describe('contentGroupForPath', () => {
     ['/posts/3f2c1d1e-0000-4000-8000-000000000001', 'post'],
     ['/posts/3f2c1d1e-0000-4000-8000-000000000001/replies/2', 'post'],
     ['/posts/new', 'account'],
+    // The post archive is a list of posts, not a post being read.
+    ['/posts/page/1', 'collection'],
+    ['/posts/page/12', 'collection'],
     ['/posts/3f2c1d1e-0000-4000-8000-000000000001/edit', 'account'],
     ['/rooms', 'collection'],
     ['/rooms/planner-room', 'room'],

@@ -1,9 +1,13 @@
 import { describe, it, expect } from 'vitest';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import robots from '@/app/robots';
 import { GET as sitemapCore } from '@/app/sitemap-core.xml/route';
 import {
+  INDEXABLE_PATTERNS,
   INDEXABLE_ROUTES,
   NOINDEX_ROUTES,
+  POSTS_ARCHIVE,
   NOINDEX,
   collectionRobots,
   indexableMetadata,
@@ -130,6 +134,50 @@ describe('workflow guides in the route policy', () => {
     const { WORKFLOW_GUIDES } = await import('@/lib/docs/workflow-guides');
     for (const g of WORKFLOW_GUIDES) {
       expect(INDEXABLE_ROUTES).toContainEqual(expect.objectContaining({ path: `/docs/guides/${g.slug}`, sitemap: true }));
+    }
+  });
+});
+
+// SPEC.md 27.2: the post archive (/posts/page/{n}) is indexable, and its pages are counted by
+// the API, so the policy names its pattern instead of each path.
+describe('indexable patterns', () => {
+  it('names the post archive, and no other', () => {
+    expect(INDEXABLE_PATTERNS).toEqual([POSTS_ARCHIVE]);
+    expect(POSTS_ARCHIVE.route).toBe('/posts/page/[n]');
+  });
+
+  it('each has its page in the app directory', () => {
+    for (const { route } of INDEXABLE_PATTERNS) {
+      expect(existsSync(join(process.cwd(), 'app', ...route.split('/').filter(Boolean), 'page.tsx')), route).toBe(true);
+    }
+  });
+
+  it('writes a page number the one canonical way', () => {
+    expect(POSTS_ARCHIVE.path(1)).toBe('/posts/page/1');
+    expect(POSTS_ARCHIVE.path(12)).toBe('/posts/page/12');
+    for (const path of ['/posts/page/1', '/posts/page/12', '/posts/page/467']) {
+      expect(POSTS_ARCHIVE.matches(path), path).toBe(true);
+    }
+    for (const path of ['/posts/page/0', '/posts/page/01', '/posts/page/x', '/posts/page/1/', '/posts/page', '/posts/page/1.5', '/posts/page/-1', '/posts/p1']) {
+      expect(POSTS_ARCHIVE.matches(path), path).toBe(false);
+    }
+  });
+
+  it('is never blocked in robots.txt and never under a noindex route', () => {
+    const disallowed = disallowedFor('*');
+    for (const pattern of INDEXABLE_PATTERNS) {
+      const path = pattern.path(2);
+      expect(disallowed.filter((d) => path.startsWith(d)), path).toEqual([]);
+      expect(NOINDEX_ROUTES.some((n) => path === n || path.startsWith(`${n}/`)), path).toBe(false);
+    }
+  });
+
+  it('is no static route of the table, and is not in the core sitemap', async () => {
+    const xml = await (await sitemapCore()).text();
+    const locs = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1].replace('https://solvr.dev', ''));
+    for (const pattern of INDEXABLE_PATTERNS) {
+      expect(INDEXABLE_ROUTES.filter((r) => pattern.matches(r.path))).toEqual([]);
+      expect(locs.filter((loc) => pattern.matches(loc))).toEqual([]);
     }
   });
 });

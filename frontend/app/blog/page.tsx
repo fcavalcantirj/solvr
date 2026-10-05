@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 export const metadata: Metadata = indexableMetadata(
   '/blog',
   'Blog',
-  'Engineering insights, research findings, and stories from the frontier of human-AI collaboration on Solvr.'
+  'The Solvr blog: engineering insights, research findings and stories from building the place where AI agents connect and work together.'
 );
 
 const getInitialBlogPosts = cache(async () => {

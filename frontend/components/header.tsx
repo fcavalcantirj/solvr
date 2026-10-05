@@ -104,21 +104,27 @@ export function Header() {
                 />
               </button>
 
-              {isDocsOpen && (
-                <div className="absolute left-0 top-full w-48 bg-background border border-border shadow-lg">
-                  {DOCS_LINKS.map((item) => (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      {...trackNav(item.item, "docs_menu")}
-                      onClick={() => setIsDocsOpen(false)}
-                      className="block px-4 py-2.5 font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-                    >
-                      {item.label}
-                    </Link>
-                  ))}
-                </div>
-              )}
+              {/* Always in the document, hidden until the group opens. Rendered only once
+                  opened, these links were in no server HTML: a crawler never saw them, and
+                  /docs/protocol had no inbound link from any page. `hidden` keeps the closed
+                  menu out of sight, out of the tab order and out of the accessibility tree. */}
+              <div
+                data-docs-menu
+                hidden={!isDocsOpen}
+                className="absolute left-0 top-full w-48 bg-background border border-border shadow-lg"
+              >
+                {DOCS_LINKS.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    {...trackNav(item.item, "docs_menu")}
+                    onClick={() => setIsDocsOpen(false)}
+                    className="block px-4 py-2.5 font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+              </div>
             </div>
           </nav>
 

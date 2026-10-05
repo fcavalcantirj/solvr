@@ -32,6 +32,17 @@ describe('not-found page', () => {
     expect(metadata.twitter).toMatchObject({ card: 'summary_large_image', title: 'Page not found | Solvr' });
   });
 
+  // Next merges metadata key by key down the route (mergeMetadata in
+  // next/dist/lib/metadata/resolve-metadata.js walks the keys a segment states): a segment
+  // that states no `alternates` keeps the one above it. So a missing page under a layout that
+  // states a canonical (/docs/guides/no-such-guide under /docs/guides) told search engines
+  // the 404 was that layout's page. A stated, empty `alternates` replaces the inherited one.
+  // Measured on the built site: the canonical link is gone from that 404.
+  it('states an empty alternates, so it inherits no canonical', () => {
+    expect(metadata).toHaveProperty('alternates');
+    expect(metadata.alternates).toEqual({});
+  });
+
   it('says the page was not found and offers the way home', () => {
     render(<NotFound />);
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('404');

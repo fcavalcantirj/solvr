@@ -3,21 +3,39 @@ package db
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
-// sitemapPostEligible is the sitemap's post rule: the canonical public-eligibility rule
+// postIndexableRule is the one rule for a post a search engine may index, which is the rule
+// for what the post sitemap lists: the canonical public-eligibility rule
 // (models.Post.PublicEligible: published, moderation-approved, public, not deleted) for a
 // post of any type, whatever its votes or solved state. The legacy hidden statuses stay
 // excluded while writers that set status alone exist (cmd/moderate-existing rejects that
-// way). BART-151: private posts are never in the public sitemap.
-const sitemapPostEligible = `deleted_at IS NULL
-		AND visibility = 'public'
-		AND publication_state = 'published'
-		AND moderation_state = 'approved'
-		AND status NOT IN ('draft', 'pending_review', 'rejected')`
+// way). BART-151: private posts are never in the public sitemap. "{p}" stands for the
+// qualifier of the query that reads the rule (postIndexablePredicate).
+const postIndexableRule = `{p}deleted_at IS NULL
+		AND {p}visibility = 'public'
+		AND {p}publication_state = 'published'
+		AND {p}moderation_state = 'approved'
+		AND {p}status NOT IN ('draft', 'pending_review', 'rejected')`
+
+// postIndexablePredicate writes postIndexableRule for a query: against an unaliased posts
+// table (alias ""), or against the alias the query gives posts ("p"). The sitemap and
+// GET /v1/posts?indexable=true (SPEC.md 27.2, posts_list.go) both read it, so the post
+// archive links exactly the posts the sitemap lists.
+func postIndexablePredicate(alias string) string {
+	qualifier := ""
+	if alias != "" {
+		qualifier = alias + "."
+	}
+	return strings.ReplaceAll(postIndexableRule, "{p}", qualifier)
+}
+
+// sitemapPostEligible is the rule as the sitemap's queries read it, on an unaliased posts.
+var sitemapPostEligible = postIndexablePredicate("")
 
 // sitemapAgentEligible is the one rule for an agent profile in the sitemap: an active agent
 // with contributions that has not been deleted or banned (both set deleted_at).

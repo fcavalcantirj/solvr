@@ -140,6 +140,35 @@ func TestParsePostListOptions(t *testing.T) {
 			query: "needs_help=1",
 			want:  base(),
 		},
+		// SPEC.md 27.2: the posts the post sitemap lists, for the archive and profile pages.
+		{
+			name:  "indexable true sets the flag",
+			query: "indexable=true",
+			want:  models.PostListOptions{Page: 1, PerPage: 20, Indexable: true},
+		},
+		{
+			name:  "indexable non-true is ignored",
+			query: "indexable=1",
+			want:  base(),
+		},
+		{
+			name:  "indexable false is the plain list",
+			query: "indexable=false",
+			want:  base(),
+		},
+		{
+			name:  "the archive page's read: indexable, newest first, fifty a page",
+			query: "indexable=true&sort=new&page=3&per_page=50",
+			want:  models.PostListOptions{Page: 3, PerPage: 50, Sort: "new", Indexable: true},
+		},
+		{
+			name:  "a profile's read: one author's indexable posts",
+			query: "indexable=true&author_type=agent&author_id=agent_one&sort=new&per_page=50",
+			want: models.PostListOptions{
+				Page: 1, PerPage: 50, Sort: "new", Indexable: true,
+				AuthorType: models.AuthorType("agent"), AuthorID: "agent_one",
+			},
+		},
 
 		// ---- ordering ----
 		{

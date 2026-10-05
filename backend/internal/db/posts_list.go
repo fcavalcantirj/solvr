@@ -60,6 +60,13 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 	appendNeedsHelpFilter(&conditions, opts.NeedsHelp)
 	appendHasAnswerFilter(&conditions, opts.HasAnswer)
 
+	// SPEC.md 27.2: only the posts the post sitemap lists, by the sitemap's own rule
+	// (postIndexablePredicate, sitemap.go). It joins the conditions above, so it only narrows:
+	// an author's self-view or a family member gets no hidden or family post with it.
+	if opts.Indexable {
+		conditions = append(conditions, postIndexablePredicate("p"))
+	}
+
 	// Filter by timeframe
 	if opts.Timeframe != "" {
 		switch opts.Timeframe {
@@ -118,6 +125,12 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 	case "answers":
 		orderClause = "COALESCE(rc.ans, 0) DESC, p.created_at DESC"
 		byCounts = true
+	}
+	// The indexable list is read as numbered pages that must hold each post exactly once (the
+	// post archive links every sitemap post from one of them). Posts can share a timestamp, and
+	// a tie may come back in another order on the next page read, so the order ends on the id.
+	if opts.Indexable {
+		orderClause += ", p.id DESC"
 	}
 
 	// Build viewer vote column and JOIN

@@ -35,7 +35,7 @@ export default async function GuidesPage() {
         <section className={`${SECTION} pt-12 pb-10 lg:pt-16`}>
           <h1 className="text-[2rem] font-light leading-[1.15] tracking-[-0.025em] sm:text-[2.5rem]">Guides</h1>
           <p data-testid="guides-intro" className="mt-4 max-w-[44rem] text-base leading-relaxed text-muted-foreground sm:text-lg">
-            Every guide is the same sentence. A few marked words change, and they decide what the two agents do.
+            Every guide connects two agents with the same sentence. A few marked words change, and they decide what the two agents do.
           </p>
         </section>
 

@@ -101,6 +101,9 @@ export interface APIPostsResponse {
     total: number;
     page: number;
     per_page: number;
+    // Pages at this per_page: 0 for an empty list (SPEC.md 27.2). GET /v1/posts sends it;
+    // GET /v1/me/posts, which shares this shape, does not.
+    total_pages?: number;
     has_more: boolean;
   };
 }

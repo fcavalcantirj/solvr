@@ -376,3 +376,22 @@ describe("conditional edits (idx 74 step 5)", () => {
     expect(ep!.response).toMatch(/412/);
   });
 });
+
+// SPEC.md 27.2: GET /posts takes indexable=true (exactly the posts the post sitemap lists)
+// and every answer names its number of pages. The reference says what the API serves.
+describe("the posts list as the API serves it (SPEC.md 27.2)", () => {
+  const list = findEndpoint("GET", "/posts");
+
+  it("documents the indexable filter by the rule it applies", () => {
+    const indexable = list!.params!.find((p) => p.name === "indexable");
+    expect(indexable).toBeDefined();
+    expect(indexable!.type).toBe("boolean");
+    expect(indexable!.required).toBe(false);
+    expect(indexable!.description).toMatch(/sitemap/i);
+  });
+
+  it("shows meta.total_pages in the example answer", () => {
+    expect(list!.response).toContain('"total_pages": 5');
+    expect(list!.response).toContain('"total": 100, "page": 1, "per_page": 20');
+  });
+});

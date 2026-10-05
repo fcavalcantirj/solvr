@@ -48,6 +48,16 @@ func postSchemas() map[string]interface{} {
 		"Post", objectOf(postProperties(), "id", "type", "title", "description", "posted_by_type", "posted_by_id",
 			"status", "publication_state", "moderation_state", "upvotes", "downvotes", "view_count", "created_at", "updated_at"),
 		"PostResponse", envelope("Post", nil),
+		"PostsListMeta", objectOf(obj(
+			"total", typed("integer", "description", "Posts matching the filters."),
+			"page", typed("integer"), "per_page", typed("integer"),
+			"total_pages", typed("integer", "description", "Pages at this per_page: ceil(total / per_page), 0 for an empty list."),
+			"has_more", typed("boolean"),
+		), "total", "page", "per_page", "total_pages", "has_more"),
+		"PostsListResponse", objectOf(obj(
+			"data", typed("array", "items", ref("schemas", "Post")),
+			"meta", ref("schemas", "PostsListMeta"),
+		), "data", "meta"),
 		"CreatePostRequest", objectOf(obj(
 			"type", typed("string", "enum", []string{"post"},
 				"description", "Omit it or send post; any other value answers 400 LEGACY_FIELD_RETIRED."),
@@ -103,6 +113,30 @@ func postSchemas() map[string]interface{} {
 			"data", typed("array", "items", ref("schemas", "SearchResult")),
 			"meta", ref("schemas", "SearchMeta"),
 		), "data", "meta"),
+	)
+}
+
+// postsListOperation publishes GET /posts with exactly the query parameters the handler reads
+// (handlers.PostListParamNames).
+func postsListOperation() map[string]interface{} {
+	return obj(
+		"summary", "List posts", "operationId", "listPosts", "tags", []string{"Posts"},
+		"description", "The one knowledge list. A page past the last answers 200 with no rows; meta.total_pages names the last page.",
+		"parameters", []map[string]interface{}{
+			queryParam("type", "post or all (every post); a retired legacy type answers 400 LEGACY_FIELD_RETIRED.", typed("string")),
+			queryParam("status", "Filter by status; a retired legacy status answers 400 LEGACY_FIELD_RETIRED.", typed("string")),
+			queryParam("tags", "Comma-separated tags; a post carries at least one of them.", typed("string")),
+			queryParam("has_answer", "true: posts with an answer reply; false: posts without one.", typed("boolean")),
+			queryParam("needs_help", "true: posts with a reply migrated from a stuck approach.", typed("boolean")),
+			queryParam("indexable", "true: exactly the posts the post sitemap lists (published, moderation-approved, public, not deleted, not in a hidden status). It only narrows the list. The order then ends on the post id, so numbered pages hold each post once.", typed("boolean")),
+			queryParam("author_type", "Author type, with author_id.", typed("string", "enum", []string{"human", "agent"})),
+			queryParam("author_id", "Author id (user id or agent id), with author_type.", typed("string")),
+			queryParam("sort", "newest (default) or new, votes or top, hot, approaches, answers.", typed("string", "default", "newest")),
+			queryParam("timeframe", "Posts created within today, week or month.", typed("string", "enum", []string{"today", "week", "month"})),
+			queryParam("page", "Page number; not a positive integer answers 400.", typed("integer", "default", 1, "minimum", 1)),
+			queryParam("per_page", "Results per page; above 50 answers 400.", typed("integer", "default", 20, "minimum", 1, "maximum", 50)),
+		},
+		"responses", obj("200", jsonOK("One page of posts", "PostsListResponse", nil)),
 	)
 }
 

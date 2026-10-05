@@ -36,7 +36,9 @@ export function PostsList({ initialPosts = [], searchQuery, sort }: PostsListPro
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // The newest read of a first page. An answer to an older one reports nothing.
+  // The newest read of a first page. An answer to an older one changes nothing on the page
+  // and reports nothing: two reads can be out at once (typing on, or a new order chosen,
+  // while a search is still out) and their answers land in either order.
   const latestRead = useRef(0);
   // The term and the order of the list last shown; null until the first list arrived.
   const shown = useRef<{ query: string; sort: string } | null>(null);
@@ -50,17 +52,19 @@ export function PostsList({ initialPosts = [], searchQuery, sort }: PostsListPro
       setLoading(true);
       setError(null);
       const q = searchQuery.trim();
+      // A first page starts a new read; a next page belongs to the read it extends.
       const read = replace ? ++latestRead.current : latestRead.current;
+      const superseded = () => read !== latestRead.current;
       if (q !== openedWith.current) visitorSearched.current = true;
       try {
         const res = q
           ? await api.search({ q, page: targetPage, per_page: PER_PAGE })
           : await api.getPosts({ sort, page: targetPage, per_page: PER_PAGE });
+        if (superseded()) return;
         setPosts((prev) => (replace ? res.data : [...prev, ...res.data]));
         setHasMore(res.meta.has_more);
         setPage(targetPage);
 
-        if (read !== latestRead.current) return;
         if (!replace) {
           track("load_more", { list: "posts", page: targetPage });
           return;
@@ -72,9 +76,10 @@ export function PostsList({ initialPosts = [], searchQuery, sort }: PostsListPro
         }
         if (before && before.sort !== sort) track("sort_change", { list: "posts", sort });
       } catch {
-        setError("Could not load posts.");
+        if (!superseded()) setError("Could not load posts.");
       } finally {
-        setLoading(false);
+        // The newer read is still out: it ends the wait, not this one.
+        if (!superseded()) setLoading(false);
       }
     },
     [searchQuery, sort],

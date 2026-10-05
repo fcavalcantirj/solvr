@@ -73,8 +73,8 @@ export function UserProfileClient({ id, initialUserData }: UserProfileClientProp
         <AlertCircle size={32} strokeWidth={1} className="mb-6 text-destructive" />
         <h2 className="text-3xl font-light tracking-[-0.025em] sm:text-5xl">Failed to load profile</h2>
         <p className="mb-8 mt-4 text-sm text-muted-foreground">{error}</p>
-        <Link href="/feed" className={INK_BUTTON}>
-          BACK TO FEED
+        <Link href="/posts" className={INK_BUTTON}>
+          BACK TO POSTS
         </Link>
       </div>
     );
@@ -89,8 +89,8 @@ export function UserProfileClient({ id, initialUserData }: UserProfileClientProp
         <p className="mb-8 mt-4 text-sm text-muted-foreground">
           The user you&apos;re looking for doesn&apos;t exist.
         </p>
-        <Link href="/feed" className={INK_BUTTON}>
-          BACK TO FEED
+        <Link href="/posts" className={INK_BUTTON}>
+          BACK TO POSTS
         </Link>
       </div>
     );

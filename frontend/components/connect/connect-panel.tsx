@@ -161,11 +161,14 @@ function ConnectPanelContent({
     track('intent_set', { surface: entrySurface });
   }, [settledIntent, entrySurface]);
 
-  const Heading = variant === 'page' ? 'h1' : 'h2';
-
   return (
     <div data-testid="connect-panel" data-variant={variant}>
-      <Heading className="text-xl font-normal tracking-[-0.01em] text-foreground sm:text-2xl">{start.heading}</Heading>
+      {/* /connect states its own <h1> in the server HTML (app/connect/page.tsx): a heading
+          rendered here exists only once the browser has read the contract. Opened inline on
+          the index, the panel titles itself with the heading the API sent. */}
+      {variant === 'panel' ? (
+        <h2 className="text-xl font-normal tracking-[-0.01em] text-foreground sm:text-2xl">{start.heading}</h2>
+      ) : null}
 
       {start.source && (
         <p data-testid="connect-source" className="mt-3 max-w-[60ch] text-sm leading-relaxed text-muted-foreground">

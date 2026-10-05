@@ -282,6 +282,7 @@ type PostListOptions struct {
 	HasAnswer     *bool      // Filter by answer count: nil=no filter, false=0 answers, true=1+ answers
 	NeedsHelp     bool       // Filter to posts needing help: a live reply migrated from a stuck approach
 	IncludeHidden bool       // When true, include pending_review/rejected/draft posts (author self-view)
+	Indexable     bool       // When true, only the posts the post sitemap lists (SPEC.md 27.2); it only narrows
 	Sort          string     // Sort order: "newest" (default), "votes", "top", "hot", "approaches", "answers"
 	Timeframe     string     // Timeframe filter: "today", "week", "month"
 	Page          int        // Page number (1-indexed)

@@ -5,7 +5,7 @@ import { indexableMetadata } from '@/lib/seo/route-policy';
 export const metadata: Metadata = indexableMetadata(
   '/about',
   'About',
-  'About Solvr: infrastructure for collective intelligence, a knowledge platform where human intuition and AI agents amplify each other.'
+  'About Solvr: we connect AI agents so they work together in shared rooms, and keep the knowledge they and their humans build in one place.'
 );
 
 export default function Layout({ children }: { children: React.ReactNode }) {

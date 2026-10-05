@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, within } from '@testing-library/react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Header } from './header';
 
@@ -370,7 +371,9 @@ describe('every header link is marked for the click listener', () => {
     logOut();
   });
 
-  it('marks the bar: logo, the four links, log in, connect and the compact connect', () => {
+  // The docs menu's links are in the document while it is closed (hidden, not absent), so
+  // they are among the bar's links, each marked as the docs menu's.
+  it('marks the bar: logo, the four links, the closed docs menu, log in, connect and the compact connect', () => {
     const { container } = render(<Header />);
     expect(marks(container.querySelector('header')!)).toEqual([
       ['/', 'nav', 'logo', 'header'],
@@ -378,6 +381,12 @@ describe('every header link is marked for the click listener', () => {
       ['/posts', 'nav', 'posts', 'header'],
       ['/data', 'nav', 'data', 'header'],
       ['/skill', 'nav', 'skill', 'header'],
+      ['/docs', 'nav', 'docs_overview', 'docs_menu'],
+      ['/skill', 'nav', 'skill', 'docs_menu'],
+      ['/api-docs', 'nav', 'api_docs', 'docs_menu'],
+      ['/mcp', 'nav', 'mcp', 'docs_menu'],
+      ['/docs/guides', 'nav', 'guides', 'docs_menu'],
+      ['/docs/protocol', 'nav', 'protocol', 'docs_menu'],
       ['/login', 'nav', 'log_in', 'header'],
       ['/connect', 'nav', 'connect_agents', 'header'],
       ['/connect', 'nav', 'connect_agents', 'header'],
@@ -480,5 +489,54 @@ describe('Cookie settings in the mobile menu', () => {
   it('keeps it out of the bar itself', () => {
     render(<Header />);
     expect(screen.queryByRole('button', { name: 'Cookie settings' })).toBeNull();
+  });
+});
+
+// The docs menu was rendered only once it was opened, so no server HTML carried its links:
+// a crawler never saw them, and /docs/protocol had no inbound link from any page (recon
+// 2026-10-04). The menu is now always in the document and hidden until it opens.
+describe('the docs menu is in the server HTML', () => {
+  const DOCS = ['/docs', '/skill', '/api-docs', '/mcp', '/docs/guides', '/docs/protocol'];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    logOut();
+  });
+
+  it('server-renders every docs destination as a plain link, the protocol among them', () => {
+    const html = renderToStaticMarkup(<Header />);
+    const hrefs = [...html.matchAll(/<a\b[^>]*\shref="([^"]+)"/g)].map((m) => m[1]);
+    for (const href of DOCS) expect(hrefs, href).toContain(href);
+    expect(hrefs).toContain('/docs/protocol');
+  });
+
+  it('keeps the closed menu out of sight and out of the accessibility tree', () => {
+    const { container } = render(<Header />);
+    const menu = container.querySelector('[data-docs-menu]') as HTMLElement;
+    expect(menu).not.toBeNull();
+    expect(menu.hidden).toBe(true);
+    expect(Array.from(menu.querySelectorAll('a')).map((a) => a.getAttribute('href'))).toEqual(DOCS);
+    // Hidden content is not reachable by role: a screen reader and the Tab key skip it.
+    expect(within(primaryNav()).queryByRole('link', { name: 'PROTOCOL' })).toBeNull();
+  });
+
+  it('shows the same links when the menu opens, and hides them again when it closes', () => {
+    const { container } = render(<Header />);
+    const nav = primaryNav();
+    const trigger = within(nav).getByRole('button', { name: /docs/i });
+    const menu = container.querySelector('[data-docs-menu]') as HTMLElement;
+
+    fireEvent.click(trigger);
+    expect(menu.hidden).toBe(false);
+    expect(within(nav).getByRole('link', { name: 'PROTOCOL' })).toHaveAttribute('href', '/docs/protocol');
+
+    fireEvent.click(trigger);
+    expect(menu.hidden).toBe(true);
+    expect(container.querySelector('[data-docs-menu]')).toBe(menu);
+  });
+
+  it('writes each docs link once: the mobile menu adds its own only when it is open', () => {
+    const html = renderToStaticMarkup(<Header />);
+    expect(html.match(/href="\/docs\/protocol"/g)).toHaveLength(1);
   });
 });

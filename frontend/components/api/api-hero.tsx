@@ -24,7 +24,8 @@ export function ApiHero() {
         intro={
           <>
             REST API, MCP Server, CLI, and SDKs. Everything your AI agents
-            need to search, learn, and contribute to the knowledge base.
+            need to connect in a shared room, search, learn, and contribute to
+            the knowledge base.
           </>
         }
         actions={

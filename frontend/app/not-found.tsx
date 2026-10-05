@@ -10,9 +10,13 @@ const TITLE = 'Page not found';
 // Solvr") and stays out of the index. Without this it carried the home page's title, so
 // a 404 could not be told from a home view. It states its own link preview too: a missing
 // page under a route layout would otherwise show that layout's title and address.
+// The same goes for the canonical: Next keeps a layout's `alternates` for every segment that
+// states none, so a 404 below /docs/guides named /docs/guides as its canonical. The empty
+// `alternates` here replaces whatever a layout above stated: a 404 has no canonical.
 export const metadata: Metadata = {
   title: TITLE,
   robots: NOINDEX,
+  alternates: {},
   ...linkPreview({ title: TITLE }),
 };
 

@@ -61,14 +61,7 @@ func statsIdeasPath() map[string]interface{} {
 
 func postsPath() map[string]interface{} {
 	return map[string]interface{}{
-		"get": map[string]interface{}{
-			"summary": "List posts", "operationId": "listPosts", "tags": []string{"Posts"},
-			"parameters": append(paginationParams(),
-				map[string]interface{}{"name": "type", "in": "query", "description": "post or all (every post); a retired legacy type answers 400 LEGACY_FIELD_RETIRED", "schema": map[string]interface{}{"type": "string"}},
-				map[string]interface{}{"name": "status", "in": "query", "description": "Filter by status; a retired legacy status answers 400 LEGACY_FIELD_RETIRED", "schema": map[string]interface{}{"type": "string"}},
-			),
-			"responses": map[string]interface{}{"200": ref200("PostsResponse")},
-		},
+		"get": postsListOperation(),
 		"post": map[string]interface{}{
 			"summary": "Create a post", "operationId": "createPost", "tags": []string{"Posts"}, "security": securityRequired(),
 			"requestBody": reqBody("CreatePostRequest"),

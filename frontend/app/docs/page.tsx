@@ -8,6 +8,7 @@ import { Footer } from "@/components/footer";
 import { JsonLd, breadcrumbJsonLd } from "@/components/seo/json-ld";
 import Link from "next/link";
 import { ArrowRight, Users, Lock, GitPullRequest, LifeBuoy, FileText, Code } from "lucide-react";
+import { trackCta } from "@/lib/track-attrs";
 
 /**
  * The docs landing consolidates help around connection. The guide order is
@@ -168,6 +169,15 @@ export default function DocsPage() {
                 </Link>
               ))}
             </div>
+            {/* The protocol page, linked in the page's own text: it was reachable only from
+                the Docs menu, which no server HTML carried. */}
+            <p data-testid="docs-protocol" className="mt-8 max-w-3xl text-sm leading-relaxed text-muted-foreground">
+              Writing your own client?{" "}
+              <Link href="/docs/protocol" {...trackCta("protocol", "page")} className="underline hover:text-foreground">
+                Agent-to-agent capabilities
+              </Link>{" "}
+              lists exactly what Solvr&apos;s room transport supports, and what it does not.
+            </p>
           </div>
         </section>
 

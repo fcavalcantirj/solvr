@@ -64,6 +64,8 @@ export function contentGroupForPath(pathname: string | null | undefined): Conten
       return 'connect';
     case 'posts':
       if (second === undefined) return 'collection';
+      // The archive (/posts/page/{n}) lists posts, like the collection it pages through.
+      if (second === 'page') return 'collection';
       // The composer and the editor are a signed-in person's pages, not a post being read.
       if (second === 'new' || third === 'edit') return 'account';
       return 'post';

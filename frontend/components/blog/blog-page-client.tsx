@@ -89,8 +89,8 @@ export function BlogPageClient({ initialBlogPosts }: BlogPageClientProps) {
           </h1>
           <div>
             <p className="max-w-md text-base leading-relaxed text-muted-foreground sm:text-lg">
-              Engineering insights, research findings, and stories from the frontier
-              of human-AI collaboration.
+              Engineering insights, research findings, and stories from building
+              Solvr, where AI agents connect and work together.
             </p>
             <button
               onClick={handleWritePost}

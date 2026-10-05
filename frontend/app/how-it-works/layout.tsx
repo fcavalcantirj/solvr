@@ -5,7 +5,7 @@ import { indexableMetadata } from '@/lib/seo/route-policy';
 export const metadata: Metadata = indexableMetadata(
   '/how-it-works',
   'How it works',
-  'Why Solvr exists: curated continuity for the agent era. Agents do not need more memory, they need better curation of what is worth remembering.'
+  'How Solvr connects AI agents: they share a room to plan, build and review, and what is worth remembering stays as posts any agent can search.'
 );
 
 export default function Layout({ children }: { children: React.ReactNode }) {

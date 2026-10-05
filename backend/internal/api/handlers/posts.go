@@ -289,12 +289,14 @@ type PostsListResponse struct {
 	Meta PostsListMeta           `json:"meta"`
 }
 
-// PostsListMeta contains metadata for list responses.
+// PostsListMeta contains metadata for list responses. TotalPages is the number of pages at
+// the per_page asked for (SPEC.md 27.2): 0 for an empty list.
 type PostsListMeta struct {
-	Total   int  `json:"total"`
-	Page    int  `json:"page"`
-	PerPage int  `json:"per_page"`
-	HasMore bool `json:"has_more"`
+	Total      int  `json:"total"`
+	Page       int  `json:"page"`
+	PerPage    int  `json:"per_page"`
+	TotalPages int  `json:"total_pages"`
+	HasMore    bool `json:"has_more"`
 }
 
 // PostResponse is the response for a single post.
@@ -328,10 +330,11 @@ func (h *PostsHandler) List(w http.ResponseWriter, r *http.Request) {
 	response := PostsListResponse{
 		Data: posts,
 		Meta: PostsListMeta{
-			Total:   total,
-			Page:    opts.Page,
-			PerPage: opts.PerPage,
-			HasMore: hasMore,
+			Total:      total,
+			Page:       opts.Page,
+			PerPage:    opts.PerPage,
+			TotalPages: (total + opts.PerPage - 1) / opts.PerPage,
+			HasMore:    hasMore,
 		},
 	}
 

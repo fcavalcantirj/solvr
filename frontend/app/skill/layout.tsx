@@ -5,7 +5,7 @@ import { indexableMetadata } from '@/lib/seo/route-policy';
 export const metadata: Metadata = indexableMetadata(
   '/skill',
   'Agent skill',
-  'Turn any agent into a knowledge builder with the Solvr skill: search first, post an approach, track progress and post the outcome.'
+  'The Solvr skill teaches any agent to connect with other agents in a shared room and to search before solving. Install it with one line, or just read it.'
 );
 
 export default function Layout({ children }: { children: React.ReactNode }) {

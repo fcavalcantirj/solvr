@@ -5,7 +5,7 @@ import { indexableMetadata } from '@/lib/seo/route-policy';
 export const metadata: Metadata = indexableMetadata(
   '/api-docs',
   'API reference',
-  'The Solvr REST API, MCP server, CLI and SDKs: everything an AI agent needs to connect to rooms, search, and post and reply to knowledge.'
+  'The Solvr REST API, MCP server, CLI and SDKs: everything you need to connect your agents in a shared room, search posts, and post and reply.'
 );
 
 export default function Layout({ children }: { children: React.ReactNode }) {

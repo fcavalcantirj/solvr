@@ -47,6 +47,28 @@ export const INDEXABLE_ROUTES: IndexableRoute[] = [
   { path: '/status', sitemap: false },
 ];
 
+// An indexable route whose pages the API counts, so the table names its pattern instead of
+// each path. Every page is its own canonical. None is in the core sitemap: these pages
+// exist to carry links to content the content sitemaps already list.
+export interface IndexablePattern {
+  // The route as the app directory spells it.
+  route: string;
+  // The path of one of its pages.
+  path: (page: number) => string;
+  // Whether a path is one of its pages, written the one canonical way (no leading zero).
+  matches: (path: string) => boolean;
+}
+
+// The post archive (SPEC.md 27.2): every post the sitemap lists, fifty to a page, as plain
+// links in server HTML.
+export const POSTS_ARCHIVE: IndexablePattern = {
+  route: '/posts/page/[n]',
+  path: (page) => `/posts/page/${page}`,
+  matches: (path) => /^\/posts\/page\/[1-9][0-9]{0,8}$/.test(path),
+};
+
+export const INDEXABLE_PATTERNS: IndexablePattern[] = [POSTS_ARCHIVE];
+
 // Routes that stay usable but must never be indexed: sign-in and account pages,
 // transient connection states, composers and editors. A prefix covers its subtree.
 // robots.txt must let crawlers fetch them, or they could never read the noindex.

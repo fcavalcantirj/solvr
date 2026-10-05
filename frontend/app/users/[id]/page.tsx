@@ -4,7 +4,9 @@ import { notFound } from 'next/navigation';
 import { readForPage } from '@/lib/seo/read-for-page';
 import { Header } from "@/components/header";
 import { UserProfileClient } from "@/components/users/user-profile-client";
+import { AuthorPosts } from "@/components/posts/author-posts";
 import { JsonLd, userJsonLd } from "@/components/seo/json-ld";
+import { readIndexablePosts } from "@/lib/seo/indexable-posts";
 import { linkPreview } from "@/lib/seo/link-preview";
 
 // A user who deletes their account or is banned is refused by the API at once; no
@@ -51,6 +53,10 @@ export default async function UserProfilePage({
   if (!data?.data) notFound();
 
   const user = data.data;
+  // The person's posts a search engine may index, for the list of plain links below the
+  // profile (SPEC.md 27.2). Read only for a user that exists; a failure of this read fails
+  // the page, as a failure of the profile read does.
+  const posts = await readIndexablePosts({ page: 1, author: { type: 'human', id } });
 
   return (
     <div className="min-h-screen bg-background">
@@ -58,6 +64,7 @@ export default async function UserProfilePage({
       <Header />
       <main className="pt-16">
         <UserProfileClient id={id} initialUserData={user} />
+        <AuthorPosts name={user.display_name || user.username || 'this user'} posts={posts.data} total={posts.meta.total} />
       </main>
     </div>
   );

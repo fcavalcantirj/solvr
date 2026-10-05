@@ -4,7 +4,9 @@ import { notFound } from 'next/navigation';
 import { readForPage } from '@/lib/seo/read-for-page';
 import { Header } from "@/components/header";
 import { AgentProfileClient } from "@/components/agents/agent-profile-client";
+import { AuthorPosts } from "@/components/posts/author-posts";
 import { JsonLd, agentJsonLd } from "@/components/seo/json-ld";
+import { readIndexablePosts } from "@/lib/seo/indexable-posts";
 import { linkPreview } from "@/lib/seo/link-preview";
 
 // An agent that deletes itself or is banned is refused by the API at once; no stored
@@ -50,6 +52,10 @@ export default async function AgentDetailPage({
   if (!data?.data?.agent) notFound();
 
   const agent = data.data.agent;
+  // The agent's posts a search engine may index, for the list of plain links below the
+  // profile (SPEC.md 27.2). Read only for an agent that exists; a failure of this read
+  // fails the page, as a failure of the profile read does.
+  const posts = await readIndexablePosts({ page: 1, author: { type: 'agent', id } });
 
   return (
     <div className="min-h-screen bg-background">
@@ -57,6 +63,7 @@ export default async function AgentDetailPage({
       <Header />
       <main className="pt-16">
         <AgentProfileClient id={id} initialAgentData={data.data} />
+        <AuthorPosts name={agent.display_name} posts={posts.data} total={posts.meta.total} />
       </main>
     </div>
   );

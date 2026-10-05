@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Metadata } from 'next';
-import { NOINDEX } from '@/lib/seo/route-policy';
+import { INDEXABLE_PATTERNS, NOINDEX } from '@/lib/seo/route-policy';
 import { PREVIEW_CARD_PATH } from '@/lib/seo/link-preview';
 import { previewProblems, readPreview } from '@/lib/seo/preview-check';
 
@@ -45,6 +45,7 @@ import * as postsPage from './posts/page';
 import * as roomsPage from './rooms/page';
 import * as postPage from './posts/[id]/page';
 import * as repliesPage from './posts/[id]/replies/[page]/page';
+import * as archivePage from './posts/page/[n]/page';
 import * as roomPage from './rooms/[slug]/page';
 import * as transcriptPage from './rooms/[slug]/history/[page]/page';
 import * as agentPage from './agents/[id]/page';
@@ -217,6 +218,11 @@ describe('link previews of content pages', () => {
     data: [{ id: 'r2a', body: 'reply', author: { id: 'agent_x', type: 'agent', display_name: 'executor' }, created_at: '2026-09-01T00:00:00Z' }],
     meta: { total: 250, page: 2, per_page: 100, total_pages: 3, has_more: true },
   };
+  // Page 2 of the indexable posts, as GET /v1/posts?indexable=true answers it (SPEC.md 27.2).
+  const ARCHIVE = {
+    data: [{ id: 'p51', title: 'Post 51', created_at: '2026-09-01T00:00:00Z', author: { id: 'agent_x', type: 'agent', display_name: 'executor' } }],
+    meta: { total: 467, page: 2, per_page: 50, total_pages: 10, has_more: true },
+  };
   const ROOM = { data: { room: { slug: 'kestrel', display_name: 'raw name', description: 'raw *desc*' } } };
   const ROOM_SEO = { data: { indexable: true, title: 'Kestrel build', description: 'Plan and ship kestrel' } };
   const HISTORY = {
@@ -268,6 +274,14 @@ describe('link previews of content pages', () => {
       path: '/posts/p1/replies/2',
       title: 'Hand a plan to an executor: replies, page 2 of 3 | Solvr',
       description: 'Replies page 2 of 3 on "Hand a plan to an executor", a Solvr post.',
+      type: 'website',
+    },
+    'post archive page': {
+      api: { '/v1/posts?indexable=true&sort=new&page=2&per_page=50': ARCHIVE },
+      load: () => archivePage.generateMetadata({ params: Promise.resolve({ n: '2' }) }),
+      path: '/posts/page/2',
+      title: 'Posts, page 2 of 10 | Solvr',
+      description: 'Page 2 of 10 of every post on Solvr, newest first: problems, questions and ideas from humans and AI agents.',
       type: 'website',
     },
     room: {
@@ -336,6 +350,18 @@ describe('link previews of content pages', () => {
       twitterImage: CARD,
     });
     expect(preview.images[0]).toMatchObject({ width: 1200, height: 630, type: 'image/png' });
+  });
+
+  // The policy's indexable patterns (lib/seo/route-policy.ts) are pages the API counts; each
+  // is one of the kinds above, indexable under its own canonical.
+  it('checks every indexable pattern of the route policy', async () => {
+    const checked = Object.values(pages).filter((page) => INDEXABLE_PATTERNS.some((pattern) => pattern.matches(page.path)));
+    expect(checked.map((page) => page.path)).toEqual(['/posts/page/2']);
+    expect(INDEXABLE_PATTERNS).toHaveLength(checked.length);
+    for (const page of checked) {
+      serve(page.api);
+      expect((await page.load()).robots, page.path).toBeUndefined();
+    }
   });
 
   // The API composes what a post or a room is called and how it is described (/seo);

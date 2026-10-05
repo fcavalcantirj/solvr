@@ -10,6 +10,7 @@ import {
   StepList,
   TEXT_LINK,
 } from "@/components/page/marketing";
+import { trackCta } from "@/lib/track-attrs";
 
 // /skill opens on the line that installs the skill, set as the page's title.
 export function SkillHero() {
@@ -39,7 +40,7 @@ export function SkillHero() {
           }
           actions={
             <>
-              <a href="/solvr-skill.zip" download className={TEXT_LINK}>
+              <a href="/solvr-skill.zip" download {...trackCta("download_zip", "hero")} className={TEXT_LINK}>
                 Download ZIP
                 <Download aria-hidden="true" size={14} />
               </a>
@@ -47,6 +48,7 @@ export function SkillHero() {
                 href="https://github.com/fcavalcantirj/solvr/tree/main/skill"
                 target="_blank"
                 rel="noopener noreferrer"
+                {...trackCta("github", "hero")}
                 className={TEXT_LINK}
               >
                 View on GitHub
@@ -100,7 +102,7 @@ export function SkillHero() {
                     </>
                   ),
                   extra: (
-                    <a href="/settings/agents" className={`${TEXT_LINK} mt-2`}>
+                    <a href="/settings/agents" {...trackCta("claim_agent", "page")} className={`${TEXT_LINK} mt-2`}>
                       Claim at solvr.dev/settings/agents →
                     </a>
                   ),

@@ -1,6 +1,8 @@
 // Privacy policy, sections 6 to 13 (data retention through contact). Split out of
-// app/privacy/page.tsx so every file stays under the 800-line limit; the text is unchanged.
-import { Shield, Database, Lock, Clock, Globe, UserCheck, Mail } from "lucide-react";
+// app/privacy/page.tsx so every file stays under the 800-line limit. Section 9 (Cookies &
+// Tracking) lives in privacy-tracking-section.tsx.
+import { Shield, Lock, Clock, Globe, UserCheck, Mail } from "lucide-react";
+import { PrivacyTrackingSection } from "./privacy-tracking-section";
 
 export function PrivacyLaterSections() {
   return (
@@ -235,80 +237,8 @@ export function PrivacyLaterSections() {
                   </div>
                 </section>
 
-                {/* Section 9: Cookies */}
-                <section id="cookies" className="mb-16 scroll-mt-24">
-                  <div className="flex items-start gap-4 mb-6">
-                    <div className="w-10 h-10 flex items-center justify-center bg-secondary shrink-0">
-                      <Database size={18} strokeWidth={1.5} />
-                    </div>
-                    <div>
-                      <p className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground mb-1">
-                        SECTION 09
-                      </p>
-                      <h2 className="text-2xl font-light tracking-tight">
-                        Cookies & Tracking
-                      </h2>
-                    </div>
-                  </div>
-                  <div className="pl-0 lg:pl-14 space-y-6">
-                    <p className="text-muted-foreground leading-relaxed">
-                      We use cookies and similar technologies to provide and
-                      improve our services:
-                    </p>
-
-                    <div className="space-y-4">
-                      {[
-                        {
-                          type: "Essential",
-                          purpose: "Authentication, security, preferences",
-                          duration: "Session / 1 year",
-                          optional: false,
-                        },
-                        {
-                          type: "Functional",
-                          purpose: "Remember your settings and preferences",
-                          duration: "1 year",
-                          optional: false,
-                        },
-                        {
-                          type: "Analytics",
-                          purpose: "Understand usage patterns (privacy-focused)",
-                          duration: "1 year",
-                          optional: true,
-                        },
-                      ].map((cookie) => (
-                        <div
-                          key={cookie.type}
-                          className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 border border-border"
-                        >
-                          <div className="sm:w-24">
-                            <span
-                              className={`font-mono text-xs px-2 py-1 ${cookie.optional ? "bg-secondary" : "bg-foreground text-background"}`}
-                            >
-                              {cookie.type}
-                            </span>
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-sm text-muted-foreground">
-                              {cookie.purpose}
-                            </p>
-                          </div>
-                          <div className="sm:w-24 text-left sm:text-right">
-                            <span className="font-mono text-xs text-muted-foreground">
-                              {cookie.duration}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <p className="text-sm text-muted-foreground">
-                      You can manage cookie preferences in your browser
-                      settings. Note that disabling essential cookies may affect
-                      platform functionality.
-                    </p>
-                  </div>
-                </section>
+                {/* Section 9: Cookies & Tracking (its own file: what the code does, checked by a test) */}
+                <PrivacyTrackingSection />
 
                 {/* Section 10: International Transfers */}
                 <section id="international" className="mb-16 scroll-mt-24">

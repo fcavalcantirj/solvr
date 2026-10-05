@@ -8,6 +8,7 @@ import { roles } from '@/components/prompt/prompt-align';
 import { api } from '@/lib/api';
 import { guideForPreset } from '@/lib/docs/use-cases';
 import type { APIConnectPreset } from '@/lib/api-types';
+import { trackCta } from '@/lib/track-attrs';
 
 // starter_prompt_copied: a card's sentence was copied. Reported ONLY after the clipboard
 // write succeeded, for the card's use case and the agent its sentence is for. The
@@ -48,6 +49,7 @@ export function UseCasesSection({ examples }: { examples?: APIConnectPreset[] | 
                     title={example.label}
                     preset={example}
                     onCopied={() => reportCopied(example)}
+                    copyTrack={trackCta('copy_prompt', 'page')}
                     footer={<CardLinks preset={example.value} guideSlug={guide?.slug} />}
                   />
                 </div>
@@ -56,7 +58,7 @@ export function UseCasesSection({ examples }: { examples?: APIConnectPreset[] | 
           </div>
         ) : (
           <p className="text-muted-foreground">
-            <Link href="/connect" className="text-foreground underline underline-offset-4">
+            <Link href="/connect" {...trackCta('connect_agents', 'page')} className="text-foreground underline underline-offset-4">
               Copy the sentence at Connect
             </Link>
             .
@@ -72,12 +74,12 @@ function CardLinks({ preset, guideSlug }: { preset: string; guideSlug?: string }
     'group inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground transition-colors hover:text-foreground';
   return (
     <span className="flex flex-wrap items-center gap-x-5 gap-y-2">
-      <Link href={`/connect?preset=${preset}`} className={link}>
+      <Link href={`/connect?preset=${preset}`} {...trackCta('make_it_yours', 'page')} className={link}>
         Make it yours
         <ArrowRight aria-hidden="true" className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
       </Link>
       {guideSlug ? (
-        <Link href={`/docs/guides/${guideSlug}`} className={link}>
+        <Link href={`/docs/guides/${guideSlug}`} {...trackCta('guide', 'page')} className={link}>
           Guide
         </Link>
       ) : null}

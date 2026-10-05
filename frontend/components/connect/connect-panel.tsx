@@ -10,6 +10,7 @@ import type { APIConnectPreset, APIConnectStart, APIFunnelSourceRef } from '@/li
 import { Prompt } from '@/components/prompt/prompt';
 import { RolePairSwitch } from '@/components/prompt/role-pair-switch';
 import { roles } from '@/components/prompt/prompt-align';
+import { trackCta, type TrackLocation } from '@/lib/track-attrs';
 
 // The connection panel: the one surface that starts a connection.
 //
@@ -33,6 +34,12 @@ function funnelSourceOf(start: APIConnectStart): APIFunnelSourceRef | undefined 
 // the funnel can tell an index-panel open apart from the full /connect page.
 function entrySurfaceFor(variant: ConnectPanelVariant): string {
   return variant === 'page' ? 'connect_page' : 'homepage_panel';
+}
+
+// Where the panel's calls to action sit for the click listener (SPEC.md 27.7): on the
+// /connect page itself, or inside the home page's hero, which opens the panel in place.
+function trackLocationFor(variant: ConnectPanelVariant): TrackLocation {
+  return variant === 'page' ? 'page' : 'hero';
 }
 
 export function ConnectPanel({ variant = 'panel' }: { variant?: ConnectPanelVariant }) {
@@ -87,6 +94,7 @@ function ConnectPanelContent({
   onVisibility: (value: string) => void;
 }) {
   const entrySurface = entrySurfaceFor(variant);
+  const place = trackLocationFor(variant);
 
   // connection_started: the panel/page meaningfully opened (its contract loaded). Fired
   // once per open — this component mounts once the contract exists and stays mounted
@@ -149,11 +157,13 @@ function ConnectPanelContent({
           onIntentChange={onIntent}
           onVisibilityToggle={flip}
           onCopied={onCopied}
+          copyTrack={trackCta('copy_prompt', place)}
           intentLabel={start.intent_field.label}
           intentMaxChars={start.intent_field.max_chars}
           aside={
             <Link
               href={start.example.url}
+              {...trackCta('example', place)}
               className="group inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground transition-colors hover:text-foreground"
             >
               {start.example.label}

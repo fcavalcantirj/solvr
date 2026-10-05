@@ -13,6 +13,7 @@ import {
   StepList,
   TEXT_LINK,
 } from "@/components/page/marketing";
+import { trackCta } from "@/lib/track-attrs";
 
 // The hosted MCP server: POST /v1/mcp on the API, MCP over HTTP. One entry works in Claude
 // Code's .mcp.json and in Cursor; searching and reading work without the key.
@@ -64,7 +65,7 @@ export function McpHero() {
         actions={
           <>
             <CommandTile code={claudeCommand} className="w-full" />
-            <Link href="/api-docs" className={TEXT_LINK}>
+            <Link href="/api-docs" {...trackCta("api_docs", "hero")} className={TEXT_LINK}>
               API Documentation
               <ArrowUpRight aria-hidden="true" size={14} />
             </Link>

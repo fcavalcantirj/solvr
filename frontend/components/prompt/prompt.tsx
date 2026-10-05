@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import type { TrackAttrs } from "@/lib/track-attrs";
 import { CopyPromptButton } from "./copy-prompt-button";
 import { PromptSentence } from "./prompt-sentence";
 import type { PromptPreset } from "./prompt-types";
@@ -19,6 +20,8 @@ interface PromptProps {
   onIntentChange?: (intent: string) => void;
   onVisibilityToggle?: () => void;
   onCopied?: () => void;
+  // The click mark for the Copy button, from the surface that shows this prompt.
+  copyTrack?: TrackAttrs;
   intentLabel?: string;
   intentMaxChars?: number;
   // card: what sits beside the copy action (a link onward).
@@ -45,6 +48,7 @@ export function Prompt({
   onIntentChange,
   onVisibilityToggle,
   onCopied,
+  copyTrack,
   intentLabel,
   intentMaxChars,
   footer,
@@ -84,7 +88,7 @@ export function Prompt({
         ) : null}
         <div className="mt-5 grid">{sentence(preset, true)}</div>
         <div className="mt-auto flex flex-wrap items-center justify-between gap-x-6 gap-y-3 pt-8">
-          <CopyPromptButton text={preset.prompt.text} size="sm" onCopied={onCopied} />
+          <CopyPromptButton text={preset.prompt.text} size="sm" onCopied={onCopied} track={copyTrack} />
           {footer}
         </div>
       </article>
@@ -109,7 +113,7 @@ export function Prompt({
             </p>
           ))}
         </div>
-        <CopyPromptButton text={preset.prompt.text} size="lg" onCopied={onCopied} />
+        <CopyPromptButton text={preset.prompt.text} size="lg" onCopied={onCopied} track={copyTrack} />
         <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
           {preset.prompt.word_count} words, plain text
         </p>

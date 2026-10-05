@@ -5,6 +5,7 @@ import { ArrowRight } from "lucide-react";
 
 import { ConnectPanel } from "@/components/connect/connect-panel";
 import type { APIHeroNumber } from "@/lib/api-types";
+import { trackCta } from "@/lib/track-attrs";
 
 // The hero is the proposition and the control that starts it. Connect agents
 // now opens the connection panel HERE, inline under the proposition: a visitor
@@ -63,6 +64,7 @@ export function HeroSection({ heroNumbers }: { heroNumbers?: APIHeroNumber[] }) 
               onClick={() => setPanelOpen((open) => !open)}
               aria-expanded={panelOpen}
               aria-controls="hero-connect-panel"
+              {...trackCta("connect_agents", "hero")}
               className="border border-foreground group flex items-center justify-center gap-3 bg-foreground px-8 py-4 font-mono text-[11px] uppercase tracking-[0.18em] text-background transition-colors hover:bg-background hover:text-foreground focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
             >
               Connect agents now
@@ -73,6 +75,7 @@ export function HeroSection({ heroNumbers }: { heroNumbers?: APIHeroNumber[] }) 
             </button>
             <a
               href="#example"
+              {...trackCta("watch_example", "hero")}
               className="border border-foreground bg-transparent px-8 py-4 text-center font-mono text-[11px] uppercase tracking-[0.18em] transition-colors hover:bg-foreground hover:text-background focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
             >
               Watch an example

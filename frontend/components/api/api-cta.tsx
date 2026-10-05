@@ -3,25 +3,30 @@ import Link from "next/link";
 import { CAPTION } from "@/components/page/caption";
 import { FRAME } from "@/components/page/marketing";
 import { cn } from "@/lib/utils";
+import { trackCta } from "@/lib/track-attrs";
 
+// `item` is the stable id the site's click listener reports (SPEC.md 27.7), never the title.
 const resources = [
   {
     title: "OpenAPI Spec",
     description: "Machine-readable API specification",
     href: "https://api.solvr.dev/v1/openapi.json",
     external: true,
+    item: "openapi_spec",
   },
   {
     title: "GitHub",
     description: "SDKs, examples, and issue tracker",
     href: "https://github.com/fcavalcantirj/solvr",
     external: true,
+    item: "github",
   },
   {
     title: "Guides",
     description: "Integration tutorials and best practices",
     href: "/docs/guides",
     external: false,
+    item: "guides",
   },
 ];
 
@@ -48,6 +53,7 @@ export function ApiCta() {
           <div className="mt-10 flex flex-col gap-3 sm:flex-row">
             <Link
               href="/settings/api-keys"
+              {...trackCta("get_api_key", "page")}
               className={cn(
                 "border border-background group inline-flex min-h-12 items-center justify-center gap-3 bg-background px-8 py-4 font-mono text-[11px] uppercase tracking-[0.18em] text-foreground transition-colors hover:bg-foreground hover:text-background",
                 FOCUS_ON_INK,
@@ -58,6 +64,7 @@ export function ApiCta() {
             </Link>
             <Link
               href="/posts"
+              {...trackCta("explore_posts", "page")}
               className={cn(
                 "inline-flex min-h-12 items-center justify-center gap-3 border border-background/30 px-8 py-4 font-mono text-[11px] uppercase tracking-[0.18em] transition-colors hover:border-background hover:bg-background hover:text-foreground",
                 FOCUS_ON_INK,
@@ -80,6 +87,7 @@ export function ApiCta() {
                   href={resource.href}
                   target={resource.external ? "_blank" : undefined}
                   rel={resource.external ? "noopener noreferrer" : undefined}
+                  {...trackCta(resource.item, "page")}
                   className={cn("group flex items-center justify-between gap-6 py-5", FOCUS_ON_INK)}
                 >
                   <span className="min-w-0">

@@ -5,6 +5,8 @@ import { useState } from "react";
 import { Menu, X, User, LogOut, Settings, Key, Bot, ChevronDown } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { UserMenu } from "@/components/ui/user-menu";
+import { CookieSettingsButton } from "@/components/cookie-settings-button";
+import { trackNav } from "@/lib/track-attrs";
 
 /**
  * Top-level navigation is Rooms (where agents connect), Posts (the shared
@@ -13,14 +15,17 @@ import { UserMenu } from "@/components/ui/user-menu";
  * agent up). Skill also stays inside the Docs group. The other discovery
  * surfaces — Agents, Leaderboard, IPFS — live in the footer; account surfaces
  * live in the account menu.
+ *
+ * Every link is marked for the site's click listener (trackNav, SPEC.md 27.7): `item`
+ * is a stable id for the destination, never the label.
  */
 const DOCS_LINKS = [
-  { label: "OVERVIEW", href: "/docs" },
-  { label: "SKILL", href: "/skill" },
-  { label: "API REFERENCE", href: "/api-docs" },
-  { label: "MCP", href: "/mcp" },
-  { label: "GUIDES", href: "/docs/guides" },
-  { label: "PROTOCOL", href: "/docs/protocol" },
+  { label: "OVERVIEW", href: "/docs", item: "docs_overview" },
+  { label: "SKILL", href: "/skill", item: "skill" },
+  { label: "API REFERENCE", href: "/api-docs", item: "api_docs" },
+  { label: "MCP", href: "/mcp", item: "mcp" },
+  { label: "GUIDES", href: "/docs/guides", item: "guides" },
+  { label: "PROTOCOL", href: "/docs/protocol", item: "protocol" },
 ];
 
 export function Header() {
@@ -39,7 +44,7 @@ export function Header() {
       <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 xl:px-16">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link href="/" className="font-mono text-lg tracking-tight font-medium">
+          <Link href="/" {...trackNav("logo", "header")} className="font-mono text-lg tracking-tight font-medium">
             SOLVR_
           </Link>
 
@@ -48,6 +53,7 @@ export function Header() {
             <Link
               href="/rooms"
               data-nav-level="primary"
+              {...trackNav("rooms", "header")}
               className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
             >
               ROOMS
@@ -55,6 +61,7 @@ export function Header() {
             <Link
               href="/posts"
               data-nav-level="primary"
+              {...trackNav("posts", "header")}
               className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
             >
               POSTS
@@ -62,6 +69,7 @@ export function Header() {
             <Link
               href="/data"
               data-nav-level="primary"
+              {...trackNav("data", "header")}
               className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
             >
               DATA
@@ -69,6 +77,7 @@ export function Header() {
             <Link
               href="/skill"
               data-nav-level="primary"
+              {...trackNav("skill", "header")}
               className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
             >
               SKILL
@@ -101,6 +110,7 @@ export function Header() {
                     <Link
                       key={item.href}
                       href={item.href}
+                      {...trackNav(item.item, "docs_menu")}
                       onClick={() => setIsDocsOpen(false)}
                       className="block px-4 py-2.5 font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
                     >
@@ -118,6 +128,7 @@ export function Header() {
             {!isLoading && !isAuthenticated && (
               <Link
                 href="/login"
+                {...trackNav("log_in", "header")}
                 className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
               >
                 LOG IN
@@ -125,6 +136,7 @@ export function Header() {
             )}
             <Link
               href="/connect"
+              {...trackNav("connect_agents", "header")}
               className="border border-foreground font-mono text-xs tracking-wider bg-foreground text-background px-5 py-2.5 hover:bg-background hover:text-foreground transition-colors"
             >
               CONNECT AGENTS
@@ -144,6 +156,7 @@ export function Header() {
           <div className="md:hidden flex items-center gap-2">
             <Link
               href="/connect"
+              {...trackNav("connect_agents", "header")}
               className="md:hidden font-mono text-xs tracking-wider bg-foreground text-background px-4 py-2 border border-foreground hover:bg-background hover:text-foreground transition-colors"
             >
               CONNECT
@@ -168,6 +181,7 @@ export function Header() {
             <Link
               href="/rooms"
               data-nav-level="primary"
+              {...trackNav("rooms", "mobile_menu")}
               onClick={closeMobileMenu}
               className="font-mono text-sm tracking-wider"
             >
@@ -176,6 +190,7 @@ export function Header() {
             <Link
               href="/posts"
               data-nav-level="primary"
+              {...trackNav("posts", "mobile_menu")}
               onClick={closeMobileMenu}
               className="font-mono text-sm tracking-wider"
             >
@@ -184,6 +199,7 @@ export function Header() {
             <Link
               href="/data"
               data-nav-level="primary"
+              {...trackNav("data", "mobile_menu")}
               onClick={closeMobileMenu}
               className="font-mono text-sm tracking-wider"
             >
@@ -192,6 +208,7 @@ export function Header() {
             <Link
               href="/skill"
               data-nav-level="primary"
+              {...trackNav("skill", "mobile_menu")}
               onClick={closeMobileMenu}
               className="font-mono text-sm tracking-wider"
             >
@@ -220,6 +237,7 @@ export function Header() {
                     <Link
                       key={item.href}
                       href={item.href}
+                      {...trackNav(item.item, "mobile_menu")}
                       onClick={closeMobileMenu}
                       className="font-mono text-xs tracking-wider text-muted-foreground"
                     >
@@ -232,6 +250,7 @@ export function Header() {
 
             <Link
               href="/connect"
+              {...trackNav("connect_agents", "mobile_menu")}
               onClick={closeMobileMenu}
               className="font-mono text-sm tracking-wider bg-foreground text-background px-5 py-3 w-full text-center border border-foreground hover:bg-background hover:text-foreground transition-colors"
             >
@@ -252,6 +271,7 @@ export function Header() {
                 </div>
                 <Link
                   href={`/users/${user.id}`}
+                  {...trackNav("profile", "mobile_menu")}
                   onClick={closeMobileMenu}
                   className="font-mono text-sm tracking-wider text-muted-foreground flex items-center gap-2"
                 >
@@ -260,6 +280,7 @@ export function Header() {
                 </Link>
                 <Link
                   href="/settings/agents"
+                  {...trackNav("my_agents", "mobile_menu")}
                   onClick={closeMobileMenu}
                   className="font-mono text-sm tracking-wider text-muted-foreground flex items-center gap-2"
                 >
@@ -268,6 +289,7 @@ export function Header() {
                 </Link>
                 <Link
                   href="/settings"
+                  {...trackNav("settings", "mobile_menu")}
                   onClick={closeMobileMenu}
                   className="font-mono text-sm tracking-wider text-muted-foreground flex items-center gap-2"
                 >
@@ -276,6 +298,7 @@ export function Header() {
                 </Link>
                 <Link
                   href="/settings/api-keys"
+                  {...trackNav("api_keys", "mobile_menu")}
                   onClick={closeMobileMenu}
                   className="font-mono text-sm tracking-wider text-muted-foreground flex items-center gap-2"
                 >
@@ -294,12 +317,19 @@ export function Header() {
             ) : (
               <Link
                 href="/login"
+                {...trackNav("log_in", "mobile_menu")}
                 onClick={closeMobileMenu}
                 className="font-mono text-sm tracking-wider text-muted-foreground"
               >
                 LOG IN
               </Link>
             )}
+
+            {/* Many pages have no footer, so the choice about analytics is reachable here too. */}
+            <CookieSettingsButton
+              onOpen={closeMobileMenu}
+              className="self-start font-mono text-sm uppercase tracking-wider text-muted-foreground"
+            />
           </nav>
         </div>
       )}

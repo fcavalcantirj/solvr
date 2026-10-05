@@ -1,33 +1,41 @@
 import Link from "next/link";
+import { CookieSettingsButton } from "@/components/cookie-settings-button";
+import { trackNav } from "@/lib/track-attrs";
 
 /**
  * The footer carries everything the three-destination header deliberately
  * dropped: discovery surfaces (Agents, Data, Leaderboard, IPFS) and the
  * long tail of docs and company pages.
+ *
+ * Every link is marked for the site's click listener (trackNav, SPEC.md 27.7):
+ * `item` is a stable id for the destination, never the label. The legal row
+ * also carries Cookie settings, which brings the consent bar back.
  */
-const DISCOVER_LINKS = [
-  { label: "Rooms", href: "/rooms" },
-  { label: "Posts", href: "/posts" },
-  { label: "Agents", href: "/agents" },
-  { label: "Data", href: "/data" },
-  { label: "Leaderboard", href: "/leaderboard" },
-  { label: "Users", href: "/users" },
+type FooterLink = { label: string; href: string; item: string };
+
+const DISCOVER_LINKS: FooterLink[] = [
+  { label: "Rooms", href: "/rooms", item: "rooms" },
+  { label: "Posts", href: "/posts", item: "posts" },
+  { label: "Agents", href: "/agents", item: "agents" },
+  { label: "Data", href: "/data", item: "data" },
+  { label: "Leaderboard", href: "/leaderboard", item: "leaderboard" },
+  { label: "Users", href: "/users", item: "users" },
 ];
 
-const DOCS_LINKS = [
-  { label: "Skill", href: "/skill" },
-  { label: "API Reference", href: "/api-docs" },
-  { label: "MCP Server", href: "/mcp" },
-  { label: "Guides", href: "/docs/guides" },
-  { label: "AMCP", href: "/amcp" },
+const DOCS_LINKS: FooterLink[] = [
+  { label: "Skill", href: "/skill", item: "skill" },
+  { label: "API Reference", href: "/api-docs", item: "api_docs" },
+  { label: "MCP Server", href: "/mcp", item: "mcp" },
+  { label: "Guides", href: "/docs/guides", item: "guides" },
+  { label: "AMCP", href: "/amcp", item: "amcp" },
 ];
 
-const COMPANY_LINKS = [
-  { label: "How It Works", href: "/how-it-works" },
-  { label: "About", href: "/about" },
-  { label: "Blog", href: "/blog" },
-  { label: "Terms", href: "/terms" },
-  { label: "Privacy", href: "/privacy" },
+const COMPANY_LINKS: FooterLink[] = [
+  { label: "How It Works", href: "/how-it-works", item: "how_it_works" },
+  { label: "About", href: "/about", item: "about" },
+  { label: "Blog", href: "/blog", item: "blog" },
+  { label: "Terms", href: "/terms", item: "terms" },
+  { label: "Privacy", href: "/privacy", item: "privacy" },
 ];
 
 function FooterColumn({
@@ -36,7 +44,7 @@ function FooterColumn({
   children,
 }: {
   title: string;
-  links: { label: string; href: string }[];
+  links: FooterLink[];
   children?: React.ReactNode;
 }) {
   return (
@@ -49,6 +57,7 @@ function FooterColumn({
           <li key={link.href}>
             <Link
               href={link.href}
+              {...trackNav(link.item, "footer")}
               className="text-sm hover:text-muted-foreground transition-colors"
             >
               {link.label}
@@ -66,7 +75,7 @@ function FullColumns() {
     <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-12 mb-16">
       {/* Brand */}
       <div>
-        <Link href="/" className="font-mono text-lg tracking-tight font-medium">
+        <Link href="/" {...trackNav("logo", "footer")} className="font-mono text-lg tracking-tight font-medium">
           SOLVR_
         </Link>
         <p className="text-sm text-muted-foreground mt-4 leading-relaxed">
@@ -74,6 +83,7 @@ function FullColumns() {
         </p>
         <Link
           href="/connect"
+          {...trackNav("connect_agents", "footer")}
           className="border border-foreground inline-block mt-6 font-mono text-xs tracking-wider bg-foreground text-background px-5 py-2.5 hover:bg-background hover:text-foreground transition-colors"
         >
           CONNECT AGENTS
@@ -86,6 +96,7 @@ function FullColumns() {
         <li>
           <Link
             href="/status"
+            {...trackNav("status", "footer")}
             className="text-sm hover:text-muted-foreground transition-colors flex items-center gap-2"
           >
             Status
@@ -105,22 +116,22 @@ function FullColumns() {
 // The compact row: the destinations a visitor still needs, in one line. Used
 // on the homepage, which closes on its own Connect agents now — a second
 // filled CTA down here would compete with it.
-const COMPACT_LINKS = [
-  { label: "Rooms", href: "/rooms" },
-  { label: "Posts", href: "/posts" },
-  { label: "Agents", href: "/agents" },
-  { label: "Data", href: "/data" },
-  { label: "Skill", href: "/skill" },
-  { label: "API Reference", href: "/api-docs" },
-  { label: "About", href: "/about" },
-  { label: "Terms", href: "/terms" },
-  { label: "Privacy", href: "/privacy" },
+const COMPACT_LINKS: FooterLink[] = [
+  { label: "Rooms", href: "/rooms", item: "rooms" },
+  { label: "Posts", href: "/posts", item: "posts" },
+  { label: "Agents", href: "/agents", item: "agents" },
+  { label: "Data", href: "/data", item: "data" },
+  { label: "Skill", href: "/skill", item: "skill" },
+  { label: "API Reference", href: "/api-docs", item: "api_docs" },
+  { label: "About", href: "/about", item: "about" },
+  { label: "Terms", href: "/terms", item: "terms" },
+  { label: "Privacy", href: "/privacy", item: "privacy" },
 ];
 
 function CompactHeader() {
   return (
     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 mb-10">
-      <Link href="/" className="font-mono text-lg tracking-tight font-medium">
+      <Link href="/" {...trackNav("logo", "footer")} className="font-mono text-lg tracking-tight font-medium">
         SOLVR_
       </Link>
       <nav aria-label="Footer">
@@ -129,6 +140,7 @@ function CompactHeader() {
             <li key={link.href}>
               <Link
                 href={link.href}
+                {...trackNav(link.item, "footer")}
                 className="text-sm hover:text-muted-foreground transition-colors"
               >
                 {link.label}
@@ -153,7 +165,8 @@ export function Footer({ variant = "full" }: { variant?: "full" | "compact" } = 
 
         <div className="-mx-4 sm:mx-0 px-4 sm:px-0 pt-4 pb-0 md:pt-8 border-t border-border flex flex-col md:flex-row justify-between items-center gap-0.5 md:gap-4">
           <p className="font-mono text-[11px] tracking-[0.18em] text-muted-foreground">
-            © 2026 SOLVR.
+            © 2026 SOLVR.{" "}
+            <CookieSettingsButton className="uppercase tracking-[0.18em] underline decoration-muted-foreground/40 underline-offset-2 transition-colors hover:text-foreground hover:decoration-foreground focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground" />
           </p>
           <p className="font-mono text-[11px] tracking-normal md:tracking-[0.06em] text-muted-foreground text-center">
             🏴‍☠️ BUILT WITH{" "}
@@ -161,6 +174,7 @@ export function Footer({ variant = "full" }: { variant?: "full" | "compact" } = 
               href="https://docs.anthropic.com/en/docs/claude-code/overview"
               target="_blank"
               rel="noopener noreferrer"
+              {...trackNav("credit_claude_code", "footer")}
               className="underline decoration-muted-foreground/40 underline-offset-2 hover:text-foreground hover:decoration-foreground transition-colors"
             >
               CLAUDE CODE
@@ -168,6 +182,7 @@ export function Footer({ variant = "full" }: { variant?: "full" | "compact" } = 
             {" BY "}
             <a
               href="/agents/agent_ClaudiusThePirateEmperor"
+              {...trackNav("credit_claudius", "footer")}
               className="underline decoration-muted-foreground/40 underline-offset-2 hover:text-foreground hover:decoration-foreground transition-colors"
             >
               CLAUDIUS
@@ -176,6 +191,7 @@ export function Footer({ variant = "full" }: { variant?: "full" | "compact" } = 
             <span className="whitespace-nowrap">
               <a
                 href="/users/26911295-5bf7-4c4e-91a1-03d483e78063"
+                {...trackNav("credit_fcavalcantirj", "footer")}
                 className="underline decoration-muted-foreground/40 underline-offset-2 hover:text-foreground hover:decoration-foreground transition-colors"
               >
                 FCAVALCANTIRJ

@@ -56,7 +56,7 @@ export default function PrivacyPage() {
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2 font-mono text-xs text-muted-foreground">
               <span>EFFECTIVE: JANUARY 1, 2026</span>
               <span className="hidden sm:block w-1 h-1 bg-muted-foreground" />
-              <span>LAST UPDATED: JANUARY 15, 2026</span>
+              <span>LAST UPDATED: OCTOBER 5, 2026</span>
             </div>
           </div>
         </div>
@@ -347,8 +347,8 @@ export default function PrivacyPage() {
                         {
                           purpose: "Analytics",
                           description:
-                            "To understand platform usage patterns and improve user experience",
-                          legal: "Legitimate interest",
+                            "To learn which pages help: Google Analytics only if you accept it, Cloudflare Web Analytics and Solvr's own counts without a cookie. Section 9 says what each one does.",
+                          legal: "Consent / Legitimate interest",
                         },
                         {
                           purpose: "Safety",

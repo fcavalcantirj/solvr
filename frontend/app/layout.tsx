@@ -3,7 +3,9 @@ import type { Metadata } from 'next'
 import { JetBrains_Mono, Inter } from 'next/font/google'
 import './globals.css'
 import { Providers } from '@/components/providers'
+import { ConsentBar } from '@/components/consent-bar'
 import { SiteAnalytics } from '@/components/site-analytics'
+import { TrackClicks } from '@/components/track-clicks'
 import { TITLE_TEMPLATE } from '@/lib/seo/route-policy'
 import { SITE_ORIGIN } from '@/lib/seo/site'
 import { linkPreview } from '@/lib/seo/link-preview'
@@ -56,6 +58,11 @@ export default function RootLayout({
     <html lang="en" className="overflow-x-hidden">
       <body className={`font-sans antialiased`}>
         <Providers>{children}</Providers>
+        {/* Analytics is asked for, never assumed (SPEC.md 27.7): the bar asks once, the
+            click listener and SiteAnalytics do nothing until the visitor accepts. All three
+            render nothing on the server, so the cached HTML is the same for everyone. */}
+        <ConsentBar />
+        <TrackClicks />
       </body>
       <SiteAnalytics gaId={GA_MEASUREMENT_ID} />
     </html>

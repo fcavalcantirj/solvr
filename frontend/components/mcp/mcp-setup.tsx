@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ACTION, CodeTile, MarketingSection } from "@/components/page/marketing";
+import { trackCta } from "@/lib/track-attrs";
 
 // The hosted config opens the page (mcp-hero); this section carries the Claude Code command
 // that adds the same server with the API key.
@@ -16,7 +17,7 @@ export function McpSetup() {
           <p className="max-w-[38ch] text-sm leading-relaxed text-muted-foreground">
             You&apos;ll need an API key to authenticate. Get one from your dashboard.
           </p>
-          <Link href="/settings/api-keys" className={`${ACTION} mt-5`}>
+          <Link href="/settings/api-keys" {...trackCta("get_api_key", "page")} className={`${ACTION} mt-5`}>
             Get API Key
           </Link>
         </div>

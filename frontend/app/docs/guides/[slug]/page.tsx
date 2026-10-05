@@ -9,6 +9,7 @@ import { workflowGuide, type WorkflowGuide } from "@/lib/docs/workflow-guides";
 import { linkPreview } from "@/lib/seo/link-preview";
 import { getConnectExamples } from "@/lib/connect-examples-server";
 import type { APIConnectPreset } from "@/lib/api-types";
+import { trackCta } from "@/lib/track-attrs";
 
 // An agent-workflow guide (task idx 84, v1.3.5): a title, one line, and the API's example
 // sentence for the guide's use case, big and read-only. Nothing else: the sentence is the
@@ -80,7 +81,7 @@ function UseCaseGuide({ guide, example }: { guide: WorkflowGuide; example?: APIC
         ) : (
           <p className="text-muted-foreground">
             The sentence could not be read right now.{" "}
-            <Link href={`/connect?preset=${guide.preset}`} className="text-foreground underline underline-offset-4">
+            <Link href={`/connect?preset=${guide.preset}`} {...trackCta("connect_agents", "page")} className="text-foreground underline underline-offset-4">
               Copy it from Connect
             </Link>
             .
@@ -131,7 +132,7 @@ function ResumeGuide({ guide, prompt }: { guide: WorkflowGuide; prompt: string |
           ))}
         </ol>
         <p>
-          <Link href="/connect" className={`font-mono text-sm ${link}`}>
+          <Link href="/connect" {...trackCta("connect_agents", "page")} className={`font-mono text-sm ${link}`}>
             Start at /connect
           </Link>
         </p>
@@ -146,7 +147,7 @@ function ResumeGuide({ guide, prompt }: { guide: WorkflowGuide; prompt: string |
         ) : (
           <p className="text-sm text-muted-foreground">
             The current sentence could not be read right now.{" "}
-            <Link href="/connect" className={link}>Copy it from /connect</Link>.
+            <Link href="/connect" {...trackCta("connect_agents", "page")} className={link}>Copy it from /connect</Link>.
           </p>
         )}
       </section>

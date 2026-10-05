@@ -353,3 +353,132 @@ describe('the connection action stays reachable on mobile', () => {
     expect(screen.getByRole('link', { name: 'CONNECT AGENTS' })).toHaveAttribute('href', '/connect');
   });
 });
+
+// SPEC.md 27.7: one click listener reads these marks. item says WHAT was pressed (a stable
+// id, never the label), location says WHERE it sits.
+describe('every header link is marked for the click listener', () => {
+  const marks = (root: Element) =>
+    Array.from(root.querySelectorAll('a')).map((a) => [
+      a.getAttribute('href'),
+      a.getAttribute('data-track'),
+      a.getAttribute('data-track-item'),
+      a.getAttribute('data-track-location'),
+    ]);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    logOut();
+  });
+
+  it('marks the bar: logo, the four links, log in, connect and the compact connect', () => {
+    const { container } = render(<Header />);
+    expect(marks(container.querySelector('header')!)).toEqual([
+      ['/', 'nav', 'logo', 'header'],
+      ['/rooms', 'nav', 'rooms', 'header'],
+      ['/posts', 'nav', 'posts', 'header'],
+      ['/data', 'nav', 'data', 'header'],
+      ['/skill', 'nav', 'skill', 'header'],
+      ['/login', 'nav', 'log_in', 'header'],
+      ['/connect', 'nav', 'connect_agents', 'header'],
+      ['/connect', 'nav', 'connect_agents', 'header'],
+    ]);
+  });
+
+  it('marks the docs menu as its own place', () => {
+    render(<Header />);
+    const nav = primaryNav();
+    fireEvent.click(within(nav).getByRole('button', { name: /docs/i }));
+    expect(marks(docsGroup(nav))).toEqual([
+      ['/docs', 'nav', 'docs_overview', 'docs_menu'],
+      ['/skill', 'nav', 'skill', 'docs_menu'],
+      ['/api-docs', 'nav', 'api_docs', 'docs_menu'],
+      ['/mcp', 'nav', 'mcp', 'docs_menu'],
+      ['/docs/guides', 'nav', 'guides', 'docs_menu'],
+      ['/docs/protocol', 'nav', 'protocol', 'docs_menu'],
+    ]);
+  });
+
+  it('marks the mobile menu for a signed-out visitor, docs links included', () => {
+    render(<Header />);
+    openMobileMenu();
+    const nav = mobileNav();
+    fireEvent.click(within(nav).getByRole('button', { name: /docs/i }));
+    expect(marks(nav)).toEqual([
+      ['/rooms', 'nav', 'rooms', 'mobile_menu'],
+      ['/posts', 'nav', 'posts', 'mobile_menu'],
+      ['/data', 'nav', 'data', 'mobile_menu'],
+      ['/skill', 'nav', 'skill', 'mobile_menu'],
+      ['/docs', 'nav', 'docs_overview', 'mobile_menu'],
+      ['/skill', 'nav', 'skill', 'mobile_menu'],
+      ['/api-docs', 'nav', 'api_docs', 'mobile_menu'],
+      ['/mcp', 'nav', 'mcp', 'mobile_menu'],
+      ['/docs/guides', 'nav', 'guides', 'mobile_menu'],
+      ['/docs/protocol', 'nav', 'protocol', 'mobile_menu'],
+      ['/connect', 'nav', 'connect_agents', 'mobile_menu'],
+      ['/login', 'nav', 'log_in', 'mobile_menu'],
+    ]);
+  });
+
+  it('marks the account links of the mobile menu for a signed-in visitor', () => {
+    logIn();
+    render(<Header />);
+    openMobileMenu();
+    expect(marks(mobileNav()).slice(-4)).toEqual([
+      ['/users/user-1', 'nav', 'profile', 'mobile_menu'],
+      ['/settings/agents', 'nav', 'my_agents', 'mobile_menu'],
+      ['/settings', 'nav', 'settings', 'mobile_menu'],
+      ['/settings/api-keys', 'nav', 'api_keys', 'mobile_menu'],
+    ]);
+  });
+
+  it('leaves no link unmarked, whatever is open', () => {
+    logIn();
+    const { container } = render(<Header />);
+    fireEvent.click(within(primaryNav()).getByRole('button', { name: /docs/i }));
+    openMobileMenu();
+    fireEvent.click(within(mobileNav()).getByRole('button', { name: /docs/i }));
+
+    const links = Array.from(container.querySelectorAll('header a'));
+    expect(links.length).toBeGreaterThan(20);
+    for (const link of links) {
+      expect(link.getAttribute('data-track'), link.outerHTML).toBe('nav');
+      expect(link.getAttribute('data-track-item'), link.outerHTML).toMatch(/^[a-z][a-z0-9_]*$/);
+      expect(['header', 'docs_menu', 'mobile_menu'], link.outerHTML).toContain(link.getAttribute('data-track-location'));
+    }
+  });
+});
+
+// The footer is missing on many pages, so the mobile menu carries Cookie settings too.
+describe('Cookie settings in the mobile menu', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    logOut();
+  });
+
+  it('offers it to a signed-out visitor, opens the consent bar and closes the menu', async () => {
+    const { onConsentSettingsRequest } = await import('@/lib/consent');
+    const asked = vi.fn();
+    const stop = onConsentSettingsRequest(asked);
+
+    render(<Header />);
+    openMobileMenu();
+    fireEvent.click(within(mobileNav()).getByRole('button', { name: 'Cookie settings' }));
+
+    expect(asked).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('navigation', { name: /mobile/i })).toBeNull();
+    stop();
+  });
+
+  it('offers it to a signed-in visitor as well, after Log out', () => {
+    logIn();
+    render(<Header />);
+    openMobileMenu();
+    const buttons = within(mobileNav()).getAllByRole('button').map((b) => (b.textContent || '').trim());
+    expect(buttons.slice(-2)).toEqual(['LOG OUT', 'Cookie settings']);
+  });
+
+  it('keeps it out of the bar itself', () => {
+    render(<Header />);
+    expect(screen.queryByRole('button', { name: 'Cookie settings' })).toBeNull();
+  });
+});

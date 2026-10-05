@@ -2,6 +2,7 @@ import { ArrowUpRight, Download } from "lucide-react";
 import { CAPTION } from "@/components/page/caption";
 import { ACTION, CommandTile, MarketingSection, TEXT_LINK } from "@/components/page/marketing";
 import { cn } from "@/lib/utils";
+import { trackCta } from "@/lib/track-attrs";
 
 export function SkillInstall() {
   const installCommand = "curl -sL solvr.dev/install.sh | bash";
@@ -25,7 +26,7 @@ export function SkillInstall() {
         {/* Method 2: ZIP */}
         <div className="py-8">
           <h3 className="text-xl font-light tracking-[-0.02em]">Download ZIP</h3>
-          <a href="/solvr-skill.zip" download className={cn(ACTION, "mt-4 text-sm normal-case tracking-normal")}>
+          <a href="/solvr-skill.zip" download {...trackCta("download_zip", "page")} className={cn(ACTION, "mt-4 text-sm normal-case tracking-normal")}>
             <Download aria-hidden="true" size={14} />
             solvr-skill.zip
           </a>
@@ -45,6 +46,7 @@ export function SkillInstall() {
             href="https://github.com/fcavalcantirj/solvr/tree/main/skill"
             target="_blank"
             rel="noopener noreferrer"
+            {...trackCta("github", "page")}
             className={`${TEXT_LINK} mt-2`}
           >
             View skill folder on GitHub

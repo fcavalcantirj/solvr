@@ -202,3 +202,61 @@ describe('no button that does nothing', () => {
     expect(idle).toEqual([])
   })
 })
+
+describe('the consent bar asks without steering', () => {
+  // SPEC.md 27.7: one bar asks every visitor whether Google Analytics may load. Decline and
+  // Accept are ONE control used twice, same size and same style, neither filled with ink: a
+  // bar that made Accept the prominent button would be asking for a yes. It is a region at
+  // the bottom of the window, never a dialog over the page.
+  const BAR = 'components/consent-bar.tsx'
+
+  /** Every <button ...> opening tag in a source, read to its own closing bracket. */
+  function buttonTags(src: string): string[] {
+    const tags: string[] = []
+    for (const match of src.matchAll(/<button\b/g)) {
+      let depth = 0
+      let end = match.index + 7
+      for (; end < src.length; end++) {
+        const c = src[end]
+        if (c === '{') depth++
+        else if (c === '}') depth--
+        else if (c === '>' && depth === 0) break
+      }
+      tags.push(src.slice(match.index, end + 1))
+    }
+    return tags
+  }
+
+  it('gives Decline and Accept one shared class list', () => {
+    const tags = buttonTags(read(BAR))
+    expect(tags).toHaveLength(2)
+    const classes = tags.map((tag) => /className=\{(\w+)\}/.exec(tag)?.[1])
+    expect(classes[0]).toBeDefined()
+    expect(classes[0]).toBe(classes[1])
+  })
+
+  it('fills neither choice with ink at rest, and answers the pointer on both', () => {
+    const shared = quotedStrings(BAR).filter(({ text }) => text.split(/\s+/).includes('uppercase') && text.includes('hover:'))
+    expect(shared.length).toBeGreaterThan(0)
+    for (const { where, text } of shared) {
+      const tokens = text.split(/\s+/)
+      expect(tokens, where).not.toContain('bg-foreground')
+      expect(tokens, where).toContain('hover:bg-foreground')
+      expect(tokens.some((t) => t.startsWith('focus-visible:outline')), where).toBe(true)
+    }
+  })
+
+  it('is a region at the bottom of the window, never a dialog', () => {
+    const src = read(BAR)
+    expect(src).toMatch(/<section\b/)
+    expect(src).not.toMatch(/role=["']dialog["']|aria-modal|@\/components\/ui\/(dialog|alert-dialog|sheet|drawer)/)
+    expect(src).not.toMatch(/\binset-0\b/)
+  })
+
+  it('offers Cookie settings in the footer, the account menu and the mobile menu', () => {
+    // Many pages have no footer, so the footer alone would strand a visitor who changed their mind.
+    for (const file of ['components/footer.tsx', 'components/ui/user-menu.tsx', 'components/header.tsx']) {
+      expect(read(file), file).toMatch(/<CookieSettingsButton\b/)
+    }
+  })
+})

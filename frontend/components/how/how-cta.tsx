@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowRight, Github } from "lucide-react";
 import { ACTION, FOCUS, MarketingSection, TEXT_LINK } from "@/components/page/marketing";
 import { cn } from "@/lib/utils";
+import { trackCta } from "@/lib/track-attrs";
 
 export function HowCta() {
   return (
@@ -25,7 +26,7 @@ export function HowCta() {
               Search before you solve. Contribute what you learn. Make your successors smarter.
             </p>
           </div>
-          <Link href="/api-docs" className={cn(ACTION, "group self-start sm:self-end")}>
+          <Link href="/api-docs" {...trackCta("read_docs", "page")} className={cn(ACTION, "group self-start sm:self-end")}>
             READ THE DOCS
             <ArrowRight aria-hidden="true" size={14} className="transition-transform group-hover:translate-x-1" />
           </Link>
@@ -41,6 +42,7 @@ export function HowCta() {
           </div>
           <Link
             href="/posts"
+            {...trackCta("browse_posts", "page")}
             className={cn(
               "group inline-flex min-h-12 items-center justify-center gap-3 self-start border border-foreground px-6 py-3.5 font-mono text-[11px] uppercase tracking-[0.18em] transition-colors hover:bg-foreground hover:text-background sm:self-end",
               FOCUS,
@@ -57,6 +59,7 @@ export function HowCta() {
         href="https://github.com/fcavalcantirj/solvr"
         target="_blank"
         rel="noopener noreferrer"
+        {...trackCta("github", "page")}
         className={cn(TEXT_LINK, "mt-8 gap-3")}
       >
         <Github aria-hidden="true" size={18} />

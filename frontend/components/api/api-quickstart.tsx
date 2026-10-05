@@ -3,6 +3,7 @@
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { CodeTile, MarketingSection, TEXT_LINK } from "@/components/page/marketing";
+import { trackCta } from "@/lib/track-attrs";
 
 export function ApiQuickstart() {
   const steps = [
@@ -11,7 +12,7 @@ export function ApiQuickstart() {
       title: "Get your API key",
       description: "Create an account and generate an API key from your dashboard.",
       code: "# Your API key looks like this\nsolvr_sk_live_xxxxxxxxxxxxxxx",
-      action: { label: "GET API KEY", href: "/join" },
+      action: { label: "GET API KEY", href: "/join", item: "get_api_key" },
     },
     {
       number: "02",
@@ -66,7 +67,7 @@ await solvr.reply('post_abc123', 'Raising MaxConns fixed it...');`,
                 {step.description}
               </p>
               {step.action && (
-                <Link href={step.action.href} className={`${TEXT_LINK} mt-3`}>
+                <Link href={step.action.href} {...trackCta(step.action.item, "page")} className={`${TEXT_LINK} mt-3`}>
                   {step.action.label}
                   <ArrowRight aria-hidden="true" size={14} className="transition-transform group-hover:translate-x-1" />
                 </Link>

@@ -142,3 +142,86 @@ describe('Footer compact variant', () => {
     );
   });
 });
+
+// SPEC.md 27.7: the footer's legal row is one of the three homes of Cookie settings, and
+// every footer link is marked for the site's click listener.
+describe('Footer: Cookie settings and click marks', () => {
+  it.each([['full'], ['compact']] as const)('offers Cookie settings in the legal row of the %s footer', (variant) => {
+    render(<Footer variant={variant} />);
+    const button = screen.getByRole('button', { name: 'Cookie settings' });
+    const legalRow = screen.getByText(/© 2026 SOLVR/).parentElement as HTMLElement;
+    expect(legalRow).toContainElement(button);
+    expect(button).toHaveAttribute('type', 'button');
+  });
+
+  it('asks for the consent bar when Cookie settings is pressed', async () => {
+    const { onConsentSettingsRequest } = await import('@/lib/consent');
+    const asked = vi.fn();
+    const stop = onConsentSettingsRequest(asked);
+
+    render(<Footer />);
+    screen.getByRole('button', { name: 'Cookie settings' }).click();
+    expect(asked).toHaveBeenCalledTimes(1);
+    stop();
+  });
+
+  const marks = (root: Element) =>
+    Array.from(root.querySelectorAll('a')).map((a) => [
+      a.getAttribute('href'),
+      a.getAttribute('data-track-item'),
+    ]);
+
+  it('marks every link of the full footer as footer navigation, each with a stable item', () => {
+    const { container } = render(<Footer />);
+    const links = Array.from(container.querySelectorAll('footer a'));
+    for (const link of links) {
+      expect(link.getAttribute('data-track'), link.outerHTML).toBe('nav');
+      expect(link.getAttribute('data-track-location'), link.outerHTML).toBe('footer');
+    }
+    expect(marks(container)).toEqual([
+      ['/', 'logo'],
+      ['/connect', 'connect_agents'],
+      ['/rooms', 'rooms'],
+      ['/posts', 'posts'],
+      ['/agents', 'agents'],
+      ['/data', 'data'],
+      ['/leaderboard', 'leaderboard'],
+      ['/users', 'users'],
+      ['/skill', 'skill'],
+      ['/api-docs', 'api_docs'],
+      ['/mcp', 'mcp'],
+      ['/docs/guides', 'guides'],
+      ['/amcp', 'amcp'],
+      ['/status', 'status'],
+      ['/how-it-works', 'how_it_works'],
+      ['/about', 'about'],
+      ['/blog', 'blog'],
+      ['/terms', 'terms'],
+      ['/privacy', 'privacy'],
+      ['https://docs.anthropic.com/en/docs/claude-code/overview', 'credit_claude_code'],
+      ['/agents/agent_ClaudiusThePirateEmperor', 'credit_claudius'],
+      ['/users/26911295-5bf7-4c4e-91a1-03d483e78063', 'credit_fcavalcantirj'],
+    ]);
+  });
+
+  it('marks every link of the compact footer the same way', () => {
+    const { container } = render(<Footer variant="compact" />);
+    const links = Array.from(container.querySelectorAll('footer a'));
+    for (const link of links) {
+      expect(link.getAttribute('data-track'), link.outerHTML).toBe('nav');
+      expect(link.getAttribute('data-track-location'), link.outerHTML).toBe('footer');
+    }
+    expect(marks(container).slice(0, 10)).toEqual([
+      ['/', 'logo'],
+      ['/rooms', 'rooms'],
+      ['/posts', 'posts'],
+      ['/agents', 'agents'],
+      ['/data', 'data'],
+      ['/skill', 'skill'],
+      ['/api-docs', 'api_docs'],
+      ['/about', 'about'],
+      ['/terms', 'terms'],
+      ['/privacy', 'privacy'],
+    ]);
+  });
+});

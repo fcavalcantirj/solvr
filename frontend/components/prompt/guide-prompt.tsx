@@ -2,6 +2,7 @@
 
 import { api } from "@/lib/api";
 import type { APIConnectPreset } from "@/lib/api-types";
+import { trackCta } from "@/lib/track-attrs";
 import { Prompt } from "./prompt";
 import { roles } from "./prompt-align";
 
@@ -21,5 +22,5 @@ export function GuidePrompt({ example }: { example: APIConnectPreset }) {
     });
   };
 
-  return <Prompt variant="guide" preset={example} onCopied={onCopied} />;
+  return <Prompt variant="guide" preset={example} onCopied={onCopied} copyTrack={trackCta("copy_prompt", "page")} />;
 }

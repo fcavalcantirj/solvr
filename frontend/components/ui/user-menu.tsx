@@ -2,8 +2,10 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { User, Settings, Key, LogOut, ChevronDown, Bot, HardDrive, PenLine, LayoutDashboard, Bell } from "lucide-react";
+import { User, Settings, Key, LogOut, ChevronDown, Bot, HardDrive, PenLine, LayoutDashboard, Bell, Cookie } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { CookieSettingsButton } from "@/components/cookie-settings-button";
+import { trackNav } from "@/lib/track-attrs";
 
 interface UserMenuProps {
   className?: string;
@@ -40,44 +42,53 @@ export function UserMenu({ className = "" }: UserMenuProps) {
 
   if (!user) return null;
 
+  // `item` is the stable id the site's click listener reports (SPEC.md 27.7), never the label.
   const menuItems = [
     {
       label: "PROFILE",
+      item: "profile",
       href: `/users/${user.id}`,
       icon: User,
     },
     {
       label: "DASHBOARD",
+      item: "dashboard",
       href: "/dashboard",
       icon: LayoutDashboard,
     },
     {
       label: "MY AGENTS",
+      item: "my_agents",
       href: "/settings/agents",
       icon: Bot,
     },
     {
       label: "MY PINS",
+      item: "my_pins",
       href: "/pins",
       icon: HardDrive,
     },
     {
       label: "WRITE BLOG",
+      item: "write_blog",
       href: "/blog/create",
       icon: PenLine,
     },
     {
       label: "NOTIFICATIONS",
+      item: "notifications",
       href: "/notifications",
       icon: Bell,
     },
     {
       label: "SETTINGS",
+      item: "settings",
       href: "/settings",
       icon: Settings,
     },
     {
       label: "API KEYS",
+      item: "api_keys",
       href: "/settings/api-keys",
       icon: Key,
     },
@@ -125,6 +136,7 @@ export function UserMenu({ className = "" }: UserMenuProps) {
               <Link
                 key={item.href}
                 href={item.href}
+                {...trackNav(item.item, "account_menu")}
                 onClick={() => setIsOpen(false)}
                 className="flex items-center gap-3 px-4 py-2.5 font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
               >
@@ -134,8 +146,15 @@ export function UserMenu({ className = "" }: UserMenuProps) {
             ))}
           </div>
 
-          {/* Logout */}
+          {/* Cookie settings (many pages have no footer to carry it) and logout */}
           <div className="border-t border-border py-1">
+            <CookieSettingsButton
+              onOpen={() => setIsOpen(false)}
+              className="flex items-center gap-3 w-full px-4 py-2.5 font-mono text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+            >
+              <Cookie size={14} />
+              Cookie settings
+            </CookieSettingsButton>
             <button
               onClick={() => {
                 logout();

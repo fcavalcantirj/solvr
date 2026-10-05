@@ -10,10 +10,11 @@ import { join } from 'node:path';
 // other half of the line: the frontend is code a visitor downloads, so
 // anything it carries is public whether or not a page draws it.
 //
-// The distinction that matters here is COLLECTION versus REPORTING. The gtag
-// measurement tag in app/layout.tsx and the sendGAEvent calls in lib/analytics
-// are the collection side: they run in every visitor's browser by design, and
-// a measurement id is not a secret. Reading what was collected is the other
+// The distinction that matters here is COLLECTION versus REPORTING. Google's
+// tag, which components/site-analytics.tsx requests once a visitor accepted
+// it, and the events lib/analytics.ts hands to it through lib/google-tag.ts
+// are the collection side: they run in a visitor's browser by design, and a
+// measurement id is not a secret. Reading what was collected is the other
 // side — it takes a credential, a reporting property and an export, and none
 // of those may exist in code that ships to a browser.
 //
@@ -131,12 +132,19 @@ describe('operator analytics never reach the browser', () => {
   });
 
   it('collects measurements without ever reading a report', () => {
+    // The two files that talk to Google's tag: lib/analytics.ts decides what may be
+    // sent, lib/google-tag.ts puts it on the tag's data layer.
     const analytics = readFileSync(join('lib', 'analytics.ts'), 'utf8');
+    const tag = readFileSync(join('lib', 'google-tag.ts'), 'utf8');
 
     // Collection is the whole job: events go out, nothing comes back.
-    expect(analytics).toContain('sendGAEvent');
-    expect(analytics).not.toMatch(/fetch\s*\(/);
-    expect(analytics).not.toMatch(/googleapis\.com/i);
+    expect(analytics).toContain('sendGoogleTagEvent');
+    expect(tag).toMatch(/dataLayer\.push\(/);
+    for (const source of [analytics, tag]) {
+      expect(source).not.toMatch(/fetch\s*\(/);
+      expect(source).not.toMatch(/XMLHttpRequest|sendBeacon/);
+      expect(source).not.toMatch(/googleapis\.com/i);
+    }
   });
 
   it('serves no analytics or traffic export as a static asset', () => {

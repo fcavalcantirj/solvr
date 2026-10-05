@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import type { APIOverviewClosing } from '@/lib/api-types';
+import { trackCta } from '@/lib/track-attrs';
 
 // The last thing on the index: one proposition, one action. The page closes on
 // Connect agents now — the same filled treatment the hero gives it — and the
@@ -20,6 +21,7 @@ export function ClosingSection({ data }: { data: APIOverviewClosing }) {
 
         <Link
           href={data.connect_url}
+          {...trackCta('connect_agents', 'page')}
           className="border border-foreground group inline-flex items-center gap-3 mt-10 font-mono text-[11px] uppercase tracking-[0.18em] bg-foreground text-background px-8 py-4 hover:bg-background hover:text-foreground transition-colors"
         >
           {data.connect_label}

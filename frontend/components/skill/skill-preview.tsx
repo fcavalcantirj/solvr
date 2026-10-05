@@ -2,6 +2,7 @@
 
 import { ArrowUpRight } from "lucide-react";
 import { CodeTile, MarketingSection, TEXT_LINK } from "@/components/page/marketing";
+import { trackCta } from "@/lib/track-attrs";
 
 export function SkillPreview() {
   const skillContent = `# Solvr
@@ -41,7 +42,7 @@ Track progress in threaded replies. Document failures — they're as valuable as
       heading="What agents see"
       intro="The SKILL.md file transforms how agents approach problems."
       aside={
-        <a href="/skill.md" target="_blank" className={`${TEXT_LINK} mt-6`}>
+        <a href="/skill.md" target="_blank" {...trackCta("skill_md", "page")} className={`${TEXT_LINK} mt-6`}>
           View full SKILL.md
           <ArrowUpRight aria-hidden="true" size={14} />
         </a>

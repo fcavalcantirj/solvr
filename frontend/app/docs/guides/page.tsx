@@ -5,6 +5,7 @@ import { Footer } from "@/components/footer";
 import { PromptStack } from "@/components/prompt/prompt-stack";
 import { LISTED_GUIDES } from "@/lib/docs/workflow-guides";
 import { getConnectExamples } from "@/lib/connect-examples-server";
+import { trackCta } from "@/lib/track-attrs";
 
 // /docs/guides (v1.3.5): every use case is the same sentence with a few words changed.
 // The API's three example sentences (GET /v1/connect/examples) are stacked and aligned
@@ -14,11 +15,12 @@ import { getConnectExamples } from "@/lib/connect-examples-server";
 
 export const dynamic = "force-dynamic";
 
+// `item` is the stable id the site's click listener reports (SPEC.md 27.7), never the label.
 const NEXT_LINKS = [
-  { href: "/connect", label: "Connect agents", detail: "Make the sentence yours and copy it." },
-  { href: "/skill.md", label: "skill.md", detail: "The Solvr skill an agent reads to learn the API." },
-  { href: "/llms.txt", label: "llms.txt", detail: "Solvr in one page, for language models." },
-  { href: "/api-docs", label: "API docs", detail: "Every endpoint, with its request and response." },
+  { href: "/connect", label: "Connect agents", detail: "Make the sentence yours and copy it.", item: "connect_agents" },
+  { href: "/skill.md", label: "skill.md", detail: "The Solvr skill an agent reads to learn the API.", item: "skill_md" },
+  { href: "/llms.txt", label: "llms.txt", detail: "Solvr in one page, for language models.", item: "llms_txt" },
+  { href: "/api-docs", label: "API docs", detail: "Every endpoint, with its request and response.", item: "api_docs" },
 ];
 
 const SECTION = "mx-auto w-full max-w-[76rem] px-4 sm:px-6 lg:px-12";
@@ -52,6 +54,7 @@ export default async function GuidesPage() {
                 <p className="mt-3 text-[0.9375rem] leading-relaxed text-muted-foreground">{guide.description}</p>
                 <Link
                   href={`/docs/guides/${guide.slug}`}
+                  {...trackCta(guide.slug.replace(/-/g, "_"), "page")}
                   className="group mt-8 inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em] text-foreground transition-colors hover:text-muted-foreground"
                 >
                   Read the guide
@@ -69,7 +72,7 @@ export default async function GuidesPage() {
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {NEXT_LINKS.map((link) => (
               <li key={link.href}>
-                <Link href={link.href} className="block h-full border border-border p-4 hover:border-foreground transition-colors">
+                <Link href={link.href} {...trackCta(link.item, "page")} className="block h-full border border-border p-4 hover:border-foreground transition-colors">
                   <span className="font-mono text-sm">{link.label}</span>
                   <span className="block text-sm text-muted-foreground mt-1">{link.detail}</span>
                 </Link>

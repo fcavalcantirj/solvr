@@ -3716,6 +3716,8 @@ Sitemap: https://solvr.dev/sitemap.xml
 
 ## 19.3 Analytics
 
+> Superseded by 27.7: the site uses Google Analytics, loaded only after the visitor's consent.
+
 **Tool:** Plausible (privacy-focused, GDPR-compliant)
 
 **Why Plausible over Google Analytics:**
@@ -6408,6 +6410,149 @@ Publishing pages does not certify crawling, indexing, traffic or activation.
 
 **`scripts/seo/weekly-baseline.sh`** saves the dated baseline JSON. The operator runs it with
 `ADMIN_API_KEY` from their own environment.
+
+## 27.7 Analytics events and consent
+
+Google Analytics is the one measurement that needs the visitor's consent. It runs in the
+browser, and only after Accept. The first-party funnel (25.7), the view counts and the request
+log are recorded by Solvr's own API, set no cookie and do not depend on this choice. Cloudflare
+Web Analytics is added by Cloudflare at the edge of the production site, sets no cookie and is
+outside the application. This section supersedes 19.3.
+
+**Consent.** One store, in the browser (`frontend/lib/consent.ts`). The server never reads it:
+pages are served from shared caches and are the same for everyone.
+- `localStorage` key `solvr_consent`, value
+  `{"analytics":"granted"|"denied","at":"<ISO time>","v":1}`.
+- Three states: `unset` (nothing stored), `granted`, `denied`. A choice does not expire.
+- A browser that sends Global Privacy Control (`navigator.globalPrivacyControl === true`) and
+  has no stored choice counts as `denied` and is not asked. A stored choice always wins.
+- Storage that throws counts as `unset` and never breaks a page. A choice made on such a page
+  holds until the page is left; nothing is kept.
+- A choice made in another tab is followed at once (the `storage` event).
+
+**The consent bar** (`frontend/components/consent-bar.tsx`, mounted once in the root layout).
+- A region fixed to the bottom of the window, never a dialog: no focus trap, no backdrop, no
+  reserved layout space, no layout shift.
+- It shows only while the state is `unset`, only after hydration (it is not in the server
+  HTML), and never by itself on an untracked path.
+- Its text: "Solvr would like to use Google Analytics to learn which pages help. Nothing goes
+  to Google unless you accept.", then a link "Privacy" to `/privacy` and two buttons of equal
+  size and style, "Decline" and "Accept".
+- "Cookie settings" brings the bar back on any page, with the current choice in words
+  ("Analytics is on." / "Analytics is off."). It sits in the footer's legal row, in the account
+  menu and in the mobile menu (many pages have no footer), and inside `/privacy`. Either button
+  stores the choice and closes the bar; Escape closes it unchanged.
+
+**Loading the tag** (`frontend/components/site-analytics.tsx`, `frontend/lib/google-tag.ts`).
+Google's tag is requested only when all three hold:
+1. consent is `granted`;
+2. the path is not untracked. `/claim`, `/auth/callback` and `/email/unsubscribe` carry a
+   secret in their address, and the tag sends the address with every hit;
+3. the page is idle: after the window's `load` event, at the next `requestIdleCallback`
+   (timeout 4 s), or 200 ms after `load` where the browser has no `requestIdleCallback`.
+
+Without consent there is no tag, no request to any Google host and no Google cookie: a `_ga`
+cookie left by a visit from before the bar existed is deleted as soon as the state is read and
+is not `granted`.
+
+Before the tag is requested the data layer holds, in this order:
+- `consent default`: `analytics_storage` `granted`; `ad_storage`, `ad_user_data` and
+  `ad_personalization` `denied`;
+- `js`;
+- ONE `config` for the measurement id (`NEXT_PUBLIC_GA_ID`, fallback `G-HS74SKKSQY`) with
+  `allow_google_signals: false`, `allow_ad_personalization_signals: false` and `content_group`.
+
+Measured against the real tag on 2026-10-05: with these settings hits go to
+`www.google-analytics.com/g/collect`, and when a page is left the tag sends a copy of its last
+hit, without cookies, to `www.google.com/g/collect`. Without these settings a page view also
+goes to `stats.g.doubleclick.net` and asks `google.<tld>/ads/ga-audiences`; with them neither
+is requested. `content_group` reaches a hit only as a parameter of the config
+(`gtag('set', …)` does not carry it, and a second plain config is ignored). That is why Solvr
+writes the config itself instead of using a ready-made component whose config takes no
+parameters.
+
+**Stopping the tag.** A tag cannot be taken out of a page again. When consent is no longer
+`granted`, or the visitor moves to an untracked path, `window['ga-disable-<id>']` is set to
+`true`: the tag then sends nothing and sets no cookie (measured). On Decline after Accept the
+tag is also told `consent update` with `analytics_storage` `denied`, the `_ga` and `_ga_*`
+cookies are deleted for the host and its parent domains, and the events still waiting are
+dropped. An event the tag accepted in the seconds before Decline is still delivered: the tag
+batches for about five seconds. Accept again switches the same tag back on.
+
+**Page views and `content_group`.** The tag sends `page_view` itself: on load, and about one
+second after a history change. Solvr sends no `page_view`. Every page view and every event
+carries `content_group`, the kind of page, derived from the path by one function
+(`contentGroupForPath`, `frontend/lib/analytics-paths.ts`). After a client-side navigation the
+group is updated with a config marked `update: true`, which sends nothing and is in time for
+the tag's own page view.
+
+| `content_group` | Paths |
+|---|---|
+| `home` | `/` |
+| `connect` | `/connect`, `/connect/agent` |
+| `post` | `/posts/{id}`, `/posts/{id}/replies/{n}` |
+| `room` | `/rooms/{slug}` |
+| `transcript` | `/rooms/{slug}/history/{n}` |
+| `agent` | `/agents/{id}` |
+| `user` | `/users/{id}` |
+| `blog` | `/blog`, `/blog/{slug}` |
+| `docs` | `/docs`, `/docs/protocol`, `/api-docs`, `/skill`, `/mcp`, `/amcp`, `/ipfs` |
+| `guide` | `/docs/guides`, `/docs/guides/{slug}` |
+| `collection` | `/posts`, `/rooms`, `/agents`, `/users`, `/leaderboard` |
+| `account` | `/login`, `/join`, `/dashboard`, `/settings/*`, `/notifications`, `/pins`, `/referrals`, `/admin/*`, `/posts/new`, `/posts/{id}/edit`, `/blog/create`, `/claim`, `/auth/*`, `/email/*` |
+| `other` | every other path: `/about`, `/how-it-works`, `/data`, `/status`, `/terms`, `/privacy`, a page that does not exist |
+
+A new page fails a test until the function knows its section or the page is listed as `other`.
+
+**Sending an event** (`frontend/lib/analytics.ts`, the only way in).
+- `track(event, params?)` does nothing unless consent is `granted` and the current path is
+  tracked. While the tag is not in the page yet the event waits in memory (at most 50) and is
+  sent, in order, once it is.
+- `trackOnNextPage(event, params?)` is for an action followed by a full page load, or taken on
+  an untracked path. The event waits in `sessionStorage` (`solvr_pending_events`, at most 20)
+  and is sent from the next tracked page, before the events queued on that page. Nothing is
+  stored about an action taken without consent, and consent is asked again at the time of
+  sending: without it the waiting events are dropped.
+- Event names are a closed list (`ANALYTICS_EVENTS`), and so are parameter names
+  (`TRACK_PARAM_NAMES`): `method`, `surface`, `preset`, `role`, `item`, `location`, `list`,
+  `sort`, `page`, `results`, `search_term`, `direction`, `visibility`, `status`. A name outside
+  its list is a type error, and is dropped at run time.
+- Redaction: in every string parameter, e-mail addresses, Solvr keys
+  (`solvr_[A-Za-z0-9_-]+`), bearer tokens and strings that look like a JWT are replaced by
+  `[redacted]`, and the value is then cut to 100 characters. `undefined` values are dropped.
+- Every event also carries the `content_group` of the page where it happened.
+- Wiring an event is one call where the action succeeded, one more name in `ANALYTICS_EVENTS`
+  and one more row in the table below.
+
+**Clicks.** One delegated listener (`frontend/components/track-clicks.tsx`, mounted once in the
+root layout, capture phase). A click on, or inside, an element marked `data-track="nav"` or
+`data-track="cta"` sends `nav_click` or `cta_click` with `item` (`data-track-item`) and
+`location` (`data-track-location`). Elements are marked with `trackNav(item, location)` and
+`trackCta(item, location)` (`frontend/lib/track-attrs.ts`).
+- `item` is a stable lowercase id for what was pressed, never the visible label.
+- `location` is one of `header`, `mobile_menu`, `docs_menu`, `account_menu`, `footer`, `hero`,
+  `page`.
+- `nav`: every link of the header (logo, links, log in, connect), the docs menu, the mobile
+  menu, the account menu and the footer (link groups and legal row).
+- `cta`: the calls to action of the home page, `/connect`, `/how-it-works`, `/api-docs`,
+  `/skill`, `/mcp` and the guides. The Copy button of a prompt is one of them.
+
+**Events.**
+
+| Event | When | Parameters |
+|---|---|---|
+| `page_view` | sent by the tag itself, on load and after a history change | `content_group` |
+| `nav_click` | a click on a marked navigation link | `item`, `location` |
+| `cta_click` | a click on a marked call to action | `item`, `location` |
+
+The tag's other automatic events stay on and carry `content_group` too. Measured on
+2026-10-05: `scroll` at the end of a page, `click` on a link that leaves the site (a marked
+link then sends both `nav_click` and `click`) and `user_engagement` when a page is left.
+
+**`/privacy`** says the above in plain words and lists every key the site keeps in the
+browser (`BROWSER_STORAGE`, `frontend/components/legal/privacy-tracking-section.tsx`). A test
+reads the source for `localStorage` and `sessionStorage` keys and fails when the page misses
+one or lists one that is gone.
 
 
 ---

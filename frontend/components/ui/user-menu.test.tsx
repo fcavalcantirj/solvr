@@ -114,3 +114,49 @@ describe('UserMenu', () => {
     expect(screen.getByText('API KEYS').closest('a')).toHaveAttribute('href', '/settings/api-keys');
   });
 });
+
+// SPEC.md 27.7: the account menu is one of the three homes of Cookie settings (many pages
+// have no footer), and its links are marked for the site's click listener.
+describe('UserMenu: Cookie settings and click marks', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAuth();
+  });
+
+  it('offers Cookie settings above Log out, opens the consent bar and closes the menu', async () => {
+    const { onConsentSettingsRequest } = await import('@/lib/consent');
+    const asked = vi.fn();
+    const stop = onConsentSettingsRequest(asked);
+
+    render(<UserMenu />);
+    fireEvent.click(screen.getByRole('button', { expanded: false }));
+    const buttons = screen.getAllByRole('button').map((b) => (b.textContent || '').trim());
+    expect(buttons.slice(-2)).toEqual(['Cookie settings', 'LOG OUT']);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cookie settings' }));
+    expect(asked).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('PROFILE')).toBeNull();
+    stop();
+  });
+
+  it('marks every link as account-menu navigation with a stable item', () => {
+    const { container } = render(<UserMenu />);
+    fireEvent.click(screen.getByRole('button', { expanded: false }));
+    const marks = Array.from(container.querySelectorAll('a')).map((a) => [
+      a.getAttribute('href'),
+      a.getAttribute('data-track'),
+      a.getAttribute('data-track-item'),
+      a.getAttribute('data-track-location'),
+    ]);
+    expect(marks).toEqual([
+      ['/users/user-1', 'nav', 'profile', 'account_menu'],
+      ['/dashboard', 'nav', 'dashboard', 'account_menu'],
+      ['/settings/agents', 'nav', 'my_agents', 'account_menu'],
+      ['/pins', 'nav', 'my_pins', 'account_menu'],
+      ['/blog/create', 'nav', 'write_blog', 'account_menu'],
+      ['/notifications', 'nav', 'notifications', 'account_menu'],
+      ['/settings', 'nav', 'settings', 'account_menu'],
+      ['/settings/api-keys', 'nav', 'api_keys', 'account_menu'],
+    ]);
+  });
+});

@@ -279,8 +279,8 @@ check "the skill solvr-skill.zip serves prints its version" \
 # 9. The guides steer to no removed choice: outside SKILL.md's migration notes, SKILL.md,
 #    HEARTBEAT.md, references/examples.md and the installer's banner never run an approach or
 #    answer command, ask to start or post an approach, update an approach's status, accept an
-#    answer, or search by a legacy type or status; references/api.md's GET /search documents type
-#    and status as legacy filters and its examples use neither.
+#    answer, or search by a legacy type or status; references/api.md's GET /search documents that a
+#    retired type or status is refused (400 LEGACY_FIELD_RETIRED) and its examples use neither.
 removed_choice='solvr(\.sh)? (approach|answer)( |$)|solvr(\.sh)? post (problem|question|idea)|--type (problem|question|idea)|--include (approaches|answers)'
 removed_choice="${removed_choice}"'|(start|starts|post|posts|contribute)( an| the| your)? approach|approach(es)? status'
 removed_choice="${removed_choice}"'|update (the |your |stale )?approach|accept (it|if|the answer|an answer)|mark them .?failed'
@@ -295,7 +295,9 @@ hits=$(echo "$search_ref" | grep -i -E 'type=(problem|question|idea)|status=(ope
 check "references/api.md searches by no legacy type or status" "$(is '[ -z "$hits" ]')" "$hits"
 for param in type status; do
     row=$(echo "$search_ref" | grep -E "^\| ${param} \|" || true)
-    check "references/api.md documents ${param} as a legacy filter" "$(is 'echo "$row" | grep -q "Legacy"')" "$row"
+    # The API refuses a retired type or status with 400 LEGACY_FIELD_RETIRED (it does not
+    # silently match nothing), and the row says so.
+    check "references/api.md documents that a retired ${param} is refused" "$(is 'echo "$row" | grep -q "LEGACY_FIELD_RETIRED"')" "$row"
 done
 
 echo ""

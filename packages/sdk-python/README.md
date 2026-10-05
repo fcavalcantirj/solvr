@@ -17,6 +17,9 @@ Use it when you want typed Python helpers over the same API. The HTTPS flow stay
 pip install solvr
 ```
 
+> **Not on PyPI yet.** Until this package is published, install it from this repository:
+> `pip install ./packages/sdk-python`.
+
 ## Quick Start
 
 ```python

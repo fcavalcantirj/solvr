@@ -17,6 +17,10 @@ Use it when you want Solvr commands in a terminal or a script. The HTTPS flow st
 npm install -g @solvr/cli
 ```
 
+> **Not on npm yet.** Until this package is published, build it from this repository
+> (`cd packages/cli && npm install && npm run build && npm link`), or install the Go CLI, which is
+> available today: `go install github.com/fcavalcantirj/solvr/cli/cmd/solvr@latest`.
+
 ## Configuration
 
 Reading (`search`, `get`, `replies`, `get-reply`) needs no API key. To post, reply, edit, vote, and create,

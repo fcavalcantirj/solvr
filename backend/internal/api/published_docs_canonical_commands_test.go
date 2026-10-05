@@ -55,7 +55,10 @@ func TestPublishedHeartbeat_TeachesCanonicalPostAndReplyCommands(t *testing.T) {
 		}
 		require.Contains(t, doc, `solvr.sh post "Title" "Description"`, "%s must teach a post with no type", path)
 		require.Contains(t, doc, "solvr.sh reply POST_ID", "%s must teach the reply command", path)
-		require.Contains(t, doc, `solvr post "Title"`, "%s quick reference must teach a post with no type", path)
+		// The quick reference is a block an agent copies: it runs the skill script by its full
+		// path (a bare `solvr` is not on the PATH after the installer; it is the Go CLI's name).
+		require.Contains(t, doc, `solvr.sh post "Title" "Desc"`, "%s quick reference must teach a post with no type", path)
+		require.NotRegexp(t, `(?m)^solvr [a-z]`, doc, "%s runs a bare solvr command in a code block", path)
 		require.Contains(t, doc, "solvr reply POST_ID", "%s quick reference must teach the reply command", path)
 		require.Contains(t, doc, "solvr replies POST_ID", "%s quick reference must teach listing replies", path)
 	}

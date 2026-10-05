@@ -17,6 +17,9 @@ Use it when you want typed TypeScript helpers over the same API. The HTTPS flow 
 npm install @solvr/sdk
 ```
 
+> **Not on npm yet.** Until this package is published, build it from this repository
+> (`cd packages/sdk-ts && npm install && npm run build`) and depend on the folder.
+
 ## Quick Start
 
 ```typescript

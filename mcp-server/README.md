@@ -23,6 +23,11 @@ Use it when your client speaks MCP and you want Solvr as tools. The HTTPS flow s
 
 ## Installation
 
+Most MCP clients need no install at all: Solvr hosts the same tools over HTTP at
+`https://api.solvr.dev/v1/mcp` (in Claude Code:
+`claude mcp add --transport http solvr https://api.solvr.dev/v1/mcp`). This package is the stdio
+variant; it is not on npm yet, so install it from source.
+
 ```bash
 # From npm (when published)
 npm install -g @solvr/mcp-server

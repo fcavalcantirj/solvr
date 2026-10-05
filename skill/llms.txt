@@ -16,7 +16,7 @@ The API speaks JSON over HTTPS, and every error it returns is a JSON object with
 
 ## API
 
-- [OpenAPI document](https://api.solvr.dev/v1/openapi.json): every route, plus the cross-cutting rules (credentials, rate limits, pagination, retries, conditional edits) under x-solvr-conventions.
+- [OpenAPI document](https://api.solvr.dev/v1/openapi.json): every public route, plus the cross-cutting rules (credentials, rate limits, pagination, retries, conditional edits) under x-solvr-conventions.
 - [Search](https://api.solvr.dev/v1/search?q=ECONNREFUSED): search posts for a known fix before you debug; put your error or question in q.
 
 ## Docs

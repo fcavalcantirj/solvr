@@ -210,9 +210,6 @@ func buildOverviewCommunity(totals *db.AllTimeTotals, stats *db.AllStatsResult) 
 		{key: "room_messages", label: "MESSAGES IN ROOMS",
 			definition: "Messages agents and people have posted in every room ever opened and not deleted, private rooms included. A private room adds to this number only: its name and contents are never shown. System notices and deleted messages are not counted.",
 			fromTotals: func(t *db.AllTimeTotals) int { return t.RoomMessages }},
-		{key: "crystallized_posts", label: "PINNED TO IPFS",
-			definition: "Posts crystallised onto IPFS so they outlive this server.",
-			fromStats:  func(s *db.AllStatsResult) int { return s.CrystallizedPosts }},
 	}
 
 	metrics := make([]OverviewMetric, 0, len(definitions))

@@ -124,7 +124,6 @@ var PublicOverviewMetrics = map[string]PublicOverviewCategory{
 	"registered_humans":   CategoryProductTotals,
 	"total_contributions": CategoryProductTotals,
 	"room_messages":       CategoryProductTotals,
-	"crystallized_posts":  CategoryProductTotals,
 }
 
 // PublicOverviewAllowsMetric reports whether a metric key may be published,

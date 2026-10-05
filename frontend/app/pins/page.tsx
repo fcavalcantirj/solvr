@@ -25,6 +25,7 @@ import {
 import Link from "next/link";
 import { CAPTION } from "@/components/page/caption";
 import { CollectionHeader } from "@/components/page/page-header";
+import { IpfsOfflineNotice } from "@/components/ipfs/ipfs-offline-notice";
 import { DANGER_BUTTON, FIELD, ICON_BUTTON, INK_BUTTON, LINE_BUTTON, TEXT_LINK } from "@/components/page/controls";
 
 const IPFS_GATEWAY_BASE = "https://ipfs.io/ipfs/";
@@ -226,6 +227,7 @@ function PinsContent() {
     <div className="min-h-screen bg-background">
       <Header />
       <main className="pt-16 pb-16">
+        <IpfsOfflineNotice />
         <CollectionHeader
           title={agentId ? `${agentId}'s PINS` : "MY PINS"}
           lede="Manage your IPFS pinned content. Pin CIDs to keep them available on the network."

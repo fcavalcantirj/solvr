@@ -91,14 +91,19 @@ func TestOverviewAllTimeSection_ShowsScaleWithoutConflatingRegistrationsWithUse(
 	// Scale that is usage keeps its place beside the registrations.
 	assert.Equal(t, 3327, byKey["total_contributions"].Value)
 	assert.NotContains(t, byKey, "problems_solved", "the solved metric was retired with the legacy post types (idx 68)")
-	assert.Equal(t, 12, byKey["crystallized_posts"].Value)
+	// Solvr runs no IPFS node: the page does not count posts as "pinned to IPFS" (the pins of
+	// the old node are gone with it).
+	assert.NotContains(t, byKey, "crystallized_posts")
+	for _, m := range section.Metrics {
+		assert.NotContains(t, strings.ToUpper(m.Label+m.Definition), "IPFS", "%s", m.Key)
+	}
 }
 
 // The two reads behind this section can fail independently, and a failed read
 // is not a zero: a zero would claim Solvr is empty.
 func TestOverviewAllTimeSection_ReportsEachUnreadTotalSeparately(t *testing.T) {
 	registrationKeys := []string{"public_rooms", "published_posts", "registered_agents", "registered_humans"}
-	usageKeys := []string{"total_contributions", "crystallized_posts"}
+	usageKeys := []string{"total_contributions"}
 
 	t.Run("totals unread", func(t *testing.T) {
 		section := buildOverviewCommunity(nil, &db.AllStatsResult{TotalContributions: 9})

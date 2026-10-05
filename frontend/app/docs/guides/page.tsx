@@ -1,17 +1,17 @@
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { PromptStack } from "@/components/prompt/prompt-stack";
-import { LISTED_GUIDES } from "@/lib/docs/workflow-guides";
+import { GUIDE_GROUPS, guideItem, guidePath } from "@/lib/docs/workflow-guides";
 import { getConnectExamples } from "@/lib/connect-examples-server";
 import { trackCta } from "@/lib/track-attrs";
 
-// /docs/guides (v1.3.5): every use case is the same sentence with a few words changed.
-// The API's three example sentences (GET /v1/connect/examples) are stacked and aligned
-// word for word, so the words that decide what the agents do read at a glance; a card
-// per use case opens its guide. No endpoints and no step lists: the sentence sends the
-// agent to the skill, which teaches it the rest.
+// /docs/guides (SPEC.md 27.5): every use case is the same sentence with a few words changed.
+// The API's three example sentences (GET /v1/connect/examples) are stacked and aligned word
+// for word, so the words that decide what the agents do read at a glance. Under them, every
+// guide, in two groups (by use case, by agent), one line each, in plain server HTML. No
+// endpoints and no step lists: the sentence sends the agent to the skill, which teaches it
+// the rest.
 
 export const dynamic = "force-dynamic";
 
@@ -45,25 +45,31 @@ export default async function GuidesPage() {
           </section>
         ) : null}
 
-        <section aria-labelledby="use-case-guides" className={`${SECTION} pb-16 lg:pb-20`}>
-          <h2 id="use-case-guides" className="sr-only">Guides by use case</h2>
-          <ul className="grid gap-px border border-border bg-border lg:grid-cols-3">
-            {LISTED_GUIDES.map((guide) => (
-              <li key={guide.slug} data-testid="guide-card" className="flex flex-col bg-background p-6 sm:p-8">
-                <h3 className="text-xl font-light leading-snug tracking-[-0.01em]">{guide.title}</h3>
-                <p className="mt-3 text-[0.9375rem] leading-relaxed text-muted-foreground">{guide.description}</p>
-                <Link
-                  href={`/docs/guides/${guide.slug}`}
-                  {...trackCta(guide.slug.replace(/-/g, "_"), "page")}
-                  className="group mt-8 inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em] text-foreground transition-colors hover:text-muted-foreground"
-                >
-                  Read the guide
-                  <ArrowRight aria-hidden="true" className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
+        {GUIDE_GROUPS.map((group) => (
+          <section key={group.id} aria-labelledby={`guides-${group.id}`} className={`${SECTION} pb-14 lg:pb-16`}>
+            <div className="grid gap-6 border-t border-border pt-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:gap-16">
+              <h2 id={`guides-${group.id}`} className="text-xl font-normal tracking-[-0.01em] text-foreground sm:text-2xl">
+                {group.heading}
+              </h2>
+              <ul className="border-b border-border">
+                {group.guides.map((guide) => (
+                  <li key={guide.slug} data-testid="guide-entry" className="border-t border-border py-5 first:border-t-0 first:pt-0">
+                    <h3 className="text-lg font-light leading-snug tracking-[-0.01em]">
+                      <Link
+                        href={guidePath(guide.slug)}
+                        {...trackCta(guideItem(guide.slug), "page")}
+                        className="underline decoration-border underline-offset-4 transition-colors hover:decoration-foreground focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+                      >
+                        {guide.title}
+                      </Link>
+                    </h3>
+                    <p className="mt-1.5 text-[0.9375rem] leading-relaxed text-muted-foreground">{guide.description}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </section>
+        ))}
 
         <section aria-labelledby="next-heading" className={`${SECTION} border-t border-border py-12`}>
           <h2 id="next-heading" className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-6">

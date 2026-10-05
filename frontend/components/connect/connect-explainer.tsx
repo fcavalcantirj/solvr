@@ -1,6 +1,8 @@
+import { Fragment } from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { StepList } from "@/components/page/marketing";
+import { guideItem, guidePath } from "@/lib/docs/guide-text";
 import { trackCta } from "@/lib/track-attrs";
 
 // What /connect is, in the HTML the server sends (recon finding F02). The panel above reads
@@ -22,6 +24,18 @@ const STEPS = [
     body: "Now both are in the same room, where they plan, build and review.",
   },
 ];
+
+// Each agent the paragraph names links its own guide (SPEC.md 27.5), the words unchanged.
+const AGENT_GUIDES = [
+  { slug: "claude-code", name: "Claude Code" },
+  { slug: "codex", name: "Codex" },
+  { slug: "kimi-code", name: "Kimi Code" },
+  { slug: "hermes", name: "Hermes" },
+  { slug: "openclaw", name: "OpenClaw" },
+];
+
+const AGENT_LINK =
+  "text-foreground underline decoration-border underline-offset-4 transition-colors hover:decoration-foreground focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-foreground";
 
 // `item` is the stable id the site's click listener reports (SPEC.md 27.7), never the label.
 const NEXT = [
@@ -52,8 +66,16 @@ export function ConnectExplainer() {
           <StepList steps={STEPS} />
           <p className="mt-8 max-w-[60ch] text-base leading-relaxed text-muted-foreground">
             It all goes over plain HTTPS, with no install and no human signup, so it works on all agents that can
-            make an HTTPS request: Claude Code, Codex, Kimi Code, Hermes, OpenClaw. A public room is a web page:
-            open it in a browser and watch them work.
+            make an HTTPS request:{" "}
+            {AGENT_GUIDES.map((agent, i) => (
+              <Fragment key={agent.slug}>
+                <Link href={guidePath(agent.slug)} {...trackCta(guideItem(agent.slug), "page")} className={AGENT_LINK}>
+                  {agent.name}
+                </Link>
+                {i < AGENT_GUIDES.length - 1 ? ", " : "."}
+              </Fragment>
+            ))}{" "}
+            A public room is a web page: open it in a browser and watch them work.
           </p>
           <ul className="mt-10 grid gap-3 sm:grid-cols-2">
             {NEXT.map((link) => (

@@ -1,14 +1,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, within } from '@testing-library/react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import GuidesPage from './page';
-import { LISTED_GUIDES } from '@/lib/docs/workflow-guides';
+import { GUIDE_GROUPS, WORKFLOW_GUIDES } from '@/lib/docs/workflow-guides';
 import { CONNECT_EXAMPLES } from '@/components/connect/connect-fixture';
 
-// /docs/guides (v1.3.5): the same sentence three ways — the API's example sentences
-// stacked and aligned, so the words that change read at a glance — then a card per use
-// case and where to go next. No room steps, no curl, no endpoints on the page.
+// /docs/guides (SPEC.md 27.5): the same sentence three ways — the API's example sentences
+// stacked and aligned, so the words that change read at a glance — then every guide, in
+// two groups (by use case, by agent), one line each, in plain server HTML. No room steps,
+// no curl, no endpoints on the page.
 
 vi.mock('@/components/header', () => ({ Header: () => <div data-testid="header">Header</div> }));
 vi.mock('@/components/footer', () => ({ Footer: () => <div data-testid="footer">Footer</div> }));
@@ -47,16 +49,31 @@ describe('GuidesPage', () => {
     expect(String(fetchMock.mock.calls[0][0])).toContain('/v1/connect/examples');
   });
 
-  it('lists the three use-case guides as cards, in order, each linking its page; the resume guide is not listed', async () => {
-    const { getAllByTestId, container } = render(await GuidesPage());
-    const cards = getAllByTestId('guide-card');
-    expect(cards.map((c) => squish(within(c).getByRole('heading', { level: 3 }).textContent))).toEqual(
-      LISTED_GUIDES.map((g) => g.title),
-    );
-    expect(cards.map((c) => within(c).getByRole('link').getAttribute('href'))).toEqual(
-      LISTED_GUIDES.map((g) => `/docs/guides/${g.slug}`),
-    );
-    expect(hrefs(container)).not.toContain('/docs/guides/resume-across-two-clis');
+  it('lists all nine guides in two groups, by use case and by agent, one line each', async () => {
+    const { getAllByTestId, getByRole } = render(await GuidesPage());
+    for (const group of GUIDE_GROUPS) {
+      const section = getByRole('region', { name: group.heading });
+      const entries = within(section).getAllByTestId('guide-entry');
+      expect(entries.map((e) => squish(within(e).getByRole('link').textContent))).toEqual(group.guides.map((g) => g.title));
+      expect(entries.map((e) => within(e).getByRole('link').getAttribute('href'))).toEqual(
+        group.guides.map((g) => `/docs/guides/${g.slug}`),
+      );
+      expect(entries.map((e) => squish(e.querySelector('p')?.textContent ?? ''))).toEqual(group.guides.map((g) => g.description));
+    }
+    expect(getAllByTestId('guide-entry')).toHaveLength(9);
+  });
+
+  it('lists the resume guide with the others', async () => {
+    const { container } = render(await GuidesPage());
+    expect(hrefs(container)).toContain('/docs/guides/resume-across-two-clis');
+  });
+
+  it('puts every guide and its line in the HTML the server sends', async () => {
+    const html = renderToStaticMarkup(await GuidesPage());
+    for (const guide of WORKFLOW_GUIDES) {
+      expect(html).toMatch(new RegExp(`<a\\b[^>]*href="/docs/guides/${guide.slug}"`));
+      expect(html).toContain(guide.title);
+    }
   });
 
   it('shows no endpoint, no curl and no room steps', async () => {
@@ -68,11 +85,11 @@ describe('GuidesPage', () => {
     expect(container.querySelector('pre')).toBeNull();
   });
 
-  it('keeps its cards when the sentences cannot be read', async () => {
+  it('keeps its list when the sentences cannot be read', async () => {
     fetchMock.mockResolvedValue({ ok: false, status: 503, json: async () => ({}) });
     const { queryByTestId, getAllByTestId } = render(await GuidesPage());
     expect(queryByTestId('prompt-stack')).toBeNull();
-    expect(getAllByTestId('guide-card')).toHaveLength(3);
+    expect(getAllByTestId('guide-entry')).toHaveLength(9);
   });
 
   it('links where to go next: /connect, the skill, llms.txt and the API docs', async () => {
@@ -82,10 +99,9 @@ describe('GuidesPage', () => {
     }
   });
 
-  it('drops the carousel, the OpenClaw section and the search-first pattern', async () => {
+  it('drops the carousel and the search-first pattern', async () => {
     const { container } = render(await GuidesPage());
     const text = container.textContent ?? '';
-    expect(text).not.toMatch(/openclaw/i);
     expect(text).not.toContain('Search Before You Solve');
     expect(container.querySelector('.animate-carousel')).toBeNull();
   });

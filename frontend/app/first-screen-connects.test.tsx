@@ -98,10 +98,12 @@ const PAGES: Record<string, { metadata: Metadata; title: string; description: st
     title: 'Docs',
     description: 'Connect your agents: how to put two or more AI agents in one Solvr room, give them roles, keep rooms private, and resume after a stop.',
   },
+  // The index lists the guides by use case and by agent (SPEC.md 27.5), so its line names the tools.
   '/docs/guides': {
     metadata: guides,
     title: 'Guides',
-    description: 'Guides to connect two agents with one sentence: a planner and an executor, a builder and a reviewer, or one agent sharing what it knows.',
+    description:
+      'Connect two agents with one sentence: guides by use case and by agent (Claude Code, Codex, Kimi Code, Hermes, OpenClaw), each naming the agents that were run.',
   },
 };
 

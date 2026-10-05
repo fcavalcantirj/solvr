@@ -136,6 +136,18 @@ describe('workflow guides in the route policy', () => {
       expect(INDEXABLE_ROUTES).toContainEqual(expect.objectContaining({ path: `/docs/guides/${g.slug}`, sitemap: true }));
     }
   });
+
+  // SPEC.md 27.5: nine guides, the five per-agent ones included, each one URL in the sitemap.
+  it('puts all nine guide URLs in the core sitemap, and no guide the app does not have', async () => {
+    const { WORKFLOW_GUIDES } = await import('@/lib/docs/workflow-guides');
+    const xml = await (await sitemapCore()).text();
+    const guideLocs = [...xml.matchAll(/<loc>https:\/\/solvr\.dev(\/docs\/guides\/[^<]+)<\/loc>/g)].map((m) => m[1]);
+    expect(guideLocs.sort()).toEqual(WORKFLOW_GUIDES.map((g) => `/docs/guides/${g.slug}`).sort());
+    expect(guideLocs).toHaveLength(9);
+    for (const slug of ['claude-code', 'codex', 'kimi-code', 'hermes', 'openclaw']) {
+      expect(guideLocs).toContain(`/docs/guides/${slug}`);
+    }
+  });
 });
 
 // SPEC.md 27.2: the post archive (/posts/page/{n}) is indexable, and its pages are counted by

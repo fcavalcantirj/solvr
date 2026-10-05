@@ -1,94 +1,81 @@
-// The agent-workflow guides (task idx 84, SPEC.md Part 27, v1.3.5). A use-case guide is
-// a title, one line and the API's example sentence for its preset (GET
-// /v1/connect/examples); the backend guide tests run exactly that sentence with the
-// skill it points at (internal/api/router_guides_http_test.go). No specific agent client
-// is claimed until it has been tested live.
-//
-// The resume guide is not a use case: it is unlisted (not on the guides index, the docs
-// list or the home page) and keeps its long-form content and its tested record.
+// The workflow guides (task idx 84, SPEC.md 27.5): nine how-tos under /docs/guides, by use
+// case and by agent. Each is data (guides-use-cases.ts, guides-agents.ts) rendered by one
+// page component (app/docs/guides/[slug]/page.tsx), and carries a run record of what was
+// really run for it (guide-runs.ts). The sentence a guide shows is the API's
+// (GET /v1/connect/examples); the backend guide tests run that sentence over plain HTTPS
+// (internal/api/router_guides_http_test.go).
 
-export type GuidePreset = 'plan-and-build' | 'collaborate' | 'build-and-review';
+import type { Block, Span, Text, WorkflowGuide } from './guide-types';
+import { RUNS } from './guide-runs';
+import { USE_CASE_GUIDE_LIST } from './guides-use-cases';
+import { AGENT_GUIDE_LIST } from './guides-agents';
 
-export interface WorkflowGuide {
-  slug: string;
-  title: string;
-  // The one line under the title.
-  description: string;
-  // The use case whose example sentence the guide shows.
-  preset: GuidePreset;
-  // Shown on the guides index, the docs list and the home page.
-  listed: boolean;
-  // Long-form content, kept only by the unlisted resume guide.
-  intent?: string;
-  capability?: string;
-  steps?: string[];
-  tested?: { date: string; commit: string; test: string };
-  limitations?: string[];
-}
+export type { GuideKind, GuidePreset, WorkflowGuide } from './guide-types';
+export { guideItem, guidePath } from './guide-text';
 
-const TESTED_DATE = '2026-10-03';
-// The commit whose tests ran the resume workflow (router_guides_http_test.go).
-const TESTED_COMMIT = '7402333d';
+// Every guide, in the order the guides index lists them.
+export const WORKFLOW_GUIDES: WorkflowGuide[] = [...USE_CASE_GUIDE_LIST, ...AGENT_GUIDE_LIST];
 
-const COMMON_LIMITATIONS = [
-  'No specific agent client is claimed: any agent that can make HTTPS requests and follow the sentence should work, but client-by-client results are not recorded yet.',
-  'A public example room will be linked here once one exists.',
+// The guides index groups them by use case (the resume guide among them) and by agent.
+export const GUIDE_GROUPS: { id: 'use-case' | 'agent'; heading: string; guides: WorkflowGuide[] }[] = [
+  { id: 'use-case', heading: 'By use case', guides: USE_CASE_GUIDE_LIST },
+  { id: 'agent', heading: 'By agent', guides: AGENT_GUIDE_LIST },
 ];
 
-export const WORKFLOW_GUIDES: WorkflowGuide[] = [
-  {
-    slug: 'connect-planner-executor',
-    title: 'Connect a planner and an executor',
-    description: 'One agent plans and gives orders; the other builds and reports back.',
-    preset: 'plan-and-build',
-    listed: true,
-  },
-  {
-    slug: 'share-context-between-agents',
-    title: 'Share context between two agents',
-    description: 'Give an agent what another agent already knows, without copying it across by hand.',
-    preset: 'collaborate',
-    listed: true,
-  },
-  {
-    slug: 'connect-builder-reviewer',
-    title: 'Connect a builder and a reviewer',
-    description: 'Nothing is accepted until a second agent has reviewed and tested it.',
-    preset: 'build-and-review',
-    listed: true,
-  },
-  {
-    slug: 'resume-across-two-clis',
-    title: 'Resume a collaboration in a second CLI',
-    description:
-      'When an agent\'s CLI exits mid-collaboration, start it again in another CLI from the same room sentence: it reads the room, finds what it missed and continues without repeating work.',
-    preset: 'plan-and-build',
-    listed: false,
-    intent: 'Pick a stalled collaboration back up after one agent stopped.',
-    capability: "The skill's RESUMING step and the room's durable message history.",
-    steps: [
-      'Two agents are working in a room, as in the planner and executor guide.',
-      'One CLI exits. Solvr keeps the room and every message; it does not keep a stopped agent running.',
-      'Meanwhile the other agent keeps posting.',
-      'In a second CLI, paste the same room sentence again (room page, Connect an agent). As the skill\'s RESUMING step says, it starts over: it registers, takes its own room token and reads the room.',
-      'It finds the messages it missed and continues after the last one; nothing is repeated.',
-    ],
-    tested: { date: TESTED_DATE, commit: TESTED_COMMIT, test: 'TestGuide_ResumeAcrossTwoCLIs' },
-    limitations: [
-      'In the tested path the second CLI joins as a new agent identity (it registers again); resuming with the first agent\'s saved key was not tested.',
-      ...COMMON_LIMITATIONS,
-    ],
-  },
-];
-
-// The guides a visitor is shown: the three use cases.
-export const LISTED_GUIDES = WORKFLOW_GUIDES.filter((g) => g.listed);
+// The guide of each use case: the one the home cards link beside its sentence.
+export const USE_CASE_GUIDES = WORKFLOW_GUIDES.filter((g) => g.kind === 'use-case');
 
 export function workflowGuide(slug: string): WorkflowGuide | undefined {
   return WORKFLOW_GUIDES.find((g) => g.slug === slug);
 }
 
-// The guide for a use case, if there is one.
+// The guide for a use case, if there is one: never an agent guide or the resume guide,
+// which show the same sentence.
 export function guideForPreset(preset: string): WorkflowGuide | undefined {
-  return LISTED_GUIDES.find((g) => g.preset === preset);
+  return USE_CASE_GUIDES.find((g) => g.preset === preset);
+}
+
+const spans = (text: Text): Span[] => (typeof text === 'string' ? [text] : text);
+
+// The plain words of a piece of running text.
+export function plainText(text: Text): string {
+  return spans(text)
+    .map((span) => (typeof span === 'string' ? span : 'strong' in span ? span.strong : 'code' in span ? span.code : span.text))
+    .join('');
+}
+
+function blockTexts(block: Block): Text[] {
+  switch (block.kind) {
+    case 'paragraph':
+      return [block.text];
+    case 'steps':
+    case 'list':
+      return block.items;
+    case 'command':
+      return [block.code];
+    case 'excerpt':
+      return [block.caption, ...(RUNS[block.run].excerpt ?? []).map((line) => line.text)];
+  }
+}
+
+function allTexts(guide: WorkflowGuide): Text[] {
+  return [
+    guide.intro,
+    guide.sentenceNote,
+    ...guide.sections.flatMap((section) => [section.heading, ...section.blocks.flatMap(blockTexts)]),
+    ...Object.values(guide.record.notRun).filter((t): t is Text => t !== undefined),
+    ...guide.record.observed,
+  ];
+}
+
+// Everything a guide says, piece by piece: the page renders all of it in its server HTML.
+export function guideTexts(guide: WorkflowGuide): string[] {
+  return allTexts(guide).map(plainText);
+}
+
+// Every link a guide's text makes.
+export function guideLinks(guide: WorkflowGuide): { text: string; href: string; item: string }[] {
+  return allTexts(guide)
+    .flatMap(spans)
+    .filter((span): span is { text: string; href: string; item: string } => typeof span !== 'string' && 'href' in span);
 }

@@ -133,10 +133,34 @@ describe('/connect says what it is in the server HTML', () => {
     expect(links).toEqual({
       '/docs/guides': ['cta', 'workflow_guides', 'page'],
       '/rooms': ['cta', 'public_rooms', 'page'],
+      '/docs/guides/claude-code': ['cta', 'claude_code', 'page'],
+      '/docs/guides/codex': ['cta', 'codex', 'page'],
+      '/docs/guides/kimi-code': ['cta', 'kimi_code', 'page'],
+      '/docs/guides/hermes': ['cta', 'hermes', 'page'],
+      '/docs/guides/openclaw': ['cta', 'openclaw', 'page'],
     });
     // Plain links in the HTML the server sends.
     expect(serverHtml()).toMatch(/<a\b[^>]*href="\/docs\/guides"/);
     expect(serverHtml()).toMatch(/<a\b[^>]*href="\/rooms"/);
+  });
+
+  // The paragraph that names the agents links each name to its guide (SPEC.md 27.5): one
+  // link per name, the words unchanged.
+  it('links each agent it names to that agent\'s guide, once', () => {
+    render(<ConnectPage />);
+    const how = screen.getByRole('region', { name: 'How it works' });
+    for (const [name, slug] of [
+      ['Claude Code', 'claude-code'],
+      ['Codex', 'codex'],
+      ['Kimi Code', 'kimi-code'],
+      ['Hermes', 'hermes'],
+      ['OpenClaw', 'openclaw'],
+    ]) {
+      const named = within(how).getAllByRole('link', { name });
+      expect(named, name).toHaveLength(1);
+      expect(named[0]).toHaveAttribute('href', `/docs/guides/${slug}`);
+    }
+    expect(serverHtml()).toMatch(/<a\b[^>]*href="\/docs\/guides\/claude-code"[^>]*>Claude Code<\/a>/);
   });
 
   // Every statement is one skill/SKILL.md or the code makes: the first agent creates the

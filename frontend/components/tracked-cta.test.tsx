@@ -31,7 +31,7 @@ vi.mock('@/lib/api', () => ({
 import { api } from '@/lib/api';
 import { CONNECT_EXAMPLES, CONNECT_START } from '@/components/connect/connect-fixture';
 import { OVERVIEW } from '@/components/homepage/overview-fixture';
-import { LISTED_GUIDES } from '@/lib/docs/workflow-guides';
+import { USE_CASE_GUIDES, WORKFLOW_GUIDES } from '@/lib/docs/workflow-guides';
 import { TRACK_LOCATIONS } from '@/lib/track-attrs';
 
 import { HeroSection } from '@/components/hero-section';
@@ -98,7 +98,7 @@ describe('home page', () => {
     const cards = screen.getAllByTestId('use-case-card');
     expect(cards).toHaveLength(3);
     cards.forEach((card, i) => {
-      const guide = LISTED_GUIDES.find((g) => g.preset === CONNECT_EXAMPLES[i].value)!;
+      const guide = USE_CASE_GUIDES.find((g) => g.preset === CONNECT_EXAMPLES[i].value)!;
       expect(cta(card)).toEqual([
         ['make_it_yours', 'page', `/connect?preset=${CONNECT_EXAMPLES[i].value}`],
         ['guide', 'page', `/docs/guides/${guide.slug}`],
@@ -135,12 +135,18 @@ describe('/connect and the panel the hero opens', () => {
 });
 
 describe('guides', () => {
-  it('marks every guide card and every way onward on the index', async () => {
+  it('marks every guide entry and every way onward on the index', async () => {
     render(await GuidesPage());
     expect(cta()).toEqual([
       ['connect_planner_executor', 'page', '/docs/guides/connect-planner-executor'],
       ['share_context_between_agents', 'page', '/docs/guides/share-context-between-agents'],
       ['connect_builder_reviewer', 'page', '/docs/guides/connect-builder-reviewer'],
+      ['resume_across_two_clis', 'page', '/docs/guides/resume-across-two-clis'],
+      ['claude_code', 'page', '/docs/guides/claude-code'],
+      ['codex', 'page', '/docs/guides/codex'],
+      ['kimi_code', 'page', '/docs/guides/kimi-code'],
+      ['hermes', 'page', '/docs/guides/hermes'],
+      ['openclaw', 'page', '/docs/guides/openclaw'],
       ['connect_agents', 'page', '/connect'],
       ['skill_md', 'page', '/skill.md'],
       ['llms_txt', 'page', '/llms.txt'],
@@ -154,21 +160,36 @@ describe('guides', () => {
     expect(cta()).toEqual([]);
   });
 
-  it('marks nothing on a use-case guide page that shows its sentence', async () => {
-    render(await GuidePage({ params: Promise.resolve({ slug: LISTED_GUIDES[0].slug }) }));
-    expect(screen.getByRole('button', { name: /copy prompt/i })).toBeInTheDocument();
-    expect(cta()).toEqual([]);
+  // Every way onward on a guide is a call to action of the page: the other guides, Connect,
+  // the rooms, the example rooms and the contact address. The breadcrumb is not one, and
+  // neither is the skill link inside the API's sentence.
+  it.each(WORKFLOW_GUIDES.map((g) => g.slug))('marks every way onward on the %s guide, not its Copy prompt', async (slug) => {
+    const { container } = render(await GuidePage({ params: Promise.resolve({ slug }) }));
+    const links = [...container.querySelectorAll('main a')].filter(
+      (a) => !a.closest('nav[aria-label="Breadcrumb"]') && !a.closest('[data-testid="prompt-sentence"]'),
+    );
+    expect(links.length).toBeGreaterThan(8);
+    for (const link of links) {
+      expect([link.getAttribute('data-track'), link.getAttribute('data-track-location')], link.getAttribute('href') ?? '').toEqual([
+        'cta',
+        'page',
+      ]);
+    }
+    expect(cta()).toContainEqual(['connect_agents', 'page', '/connect']);
+    expect(cta()).toContainEqual(['public_rooms', 'page', '/rooms']);
+    const copy = screen.queryByRole('button', { name: /copy prompt/i });
+    if (copy) expect(copy.closest('[data-track]')).toBeNull();
   });
 
   it('marks the way to Connect when a guide cannot show its sentence', async () => {
     fetchMock.mockResolvedValue({ ok: false, status: 503, json: async () => ({}) });
-    render(await GuidePage({ params: Promise.resolve({ slug: LISTED_GUIDES[0].slug }) }));
-    expect(cta()).toEqual([['connect_agents', 'page', `/connect?preset=${LISTED_GUIDES[0].preset}`]]);
+    render(await GuidePage({ params: Promise.resolve({ slug: USE_CASE_GUIDES[0].slug }) }));
+    expect(cta()).toContainEqual(['connect_agents', 'page', `/connect?preset=${USE_CASE_GUIDES[0].preset}`]);
   });
 
   it('marks the way to Connect on the resume guide', async () => {
     render(await GuidePage({ params: Promise.resolve({ slug: 'resume-across-two-clis' }) }));
-    expect(cta()).toEqual([['connect_agents', 'page', '/connect']]);
+    expect(cta()).toContainEqual(['connect_agents', 'page', '/connect']);
   });
 });
 

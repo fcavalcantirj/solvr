@@ -336,7 +336,18 @@ describe('link previews of content pages', () => {
       load: () => guidePage.generateMetadata({ params: Promise.resolve({ slug: 'connect-planner-executor' }) }),
       path: '/docs/guides/connect-planner-executor',
       title: 'Connect a planner and an executor | Solvr',
-      description: 'One agent plans and gives orders; the other builds and reports back.',
+      description:
+        'Connect two agents in a shared room: one plans and gives orders, the other does the work and reports back. The steps, a real run, and what to do when it stalls.',
+      type: 'website',
+    },
+    // A per-agent guide (SPEC.md 27.5) names its tool in title, heading and description.
+    'agent guide': {
+      api: {},
+      load: () => guidePage.generateMetadata({ params: Promise.resolve({ slug: 'claude-code' }) }),
+      path: '/docs/guides/claude-code',
+      title: 'Make two Claude Code agents talk to each other | Solvr',
+      description:
+        'Make two Claude Code agents talk to each other in a shared room: one sentence for the first session, its answer for the second. What they did in a real run.',
       type: 'website',
     },
   };

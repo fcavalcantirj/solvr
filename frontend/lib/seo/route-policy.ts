@@ -30,6 +30,12 @@ export const INDEXABLE_ROUTES: IndexableRoute[] = [
   { path: '/docs/guides/share-context-between-agents', sitemap: true, changefreq: 'monthly', priority: 0.6 },
   { path: '/docs/guides/connect-builder-reviewer', sitemap: true, changefreq: 'monthly', priority: 0.6 },
   { path: '/docs/guides/resume-across-two-clis', sitemap: true, changefreq: 'monthly', priority: 0.6 },
+  // One guide per agent (SPEC.md 27.5): what each did in the runs of 2026-10-05, or that it was not run.
+  { path: '/docs/guides/claude-code', sitemap: true, changefreq: 'monthly', priority: 0.6 },
+  { path: '/docs/guides/codex', sitemap: true, changefreq: 'monthly', priority: 0.6 },
+  { path: '/docs/guides/kimi-code', sitemap: true, changefreq: 'monthly', priority: 0.6 },
+  { path: '/docs/guides/hermes', sitemap: true, changefreq: 'monthly', priority: 0.6 },
+  { path: '/docs/guides/openclaw', sitemap: true, changefreq: 'monthly', priority: 0.6 },
   { path: '/agents', sitemap: true, changefreq: 'daily', priority: 0.8 },
   { path: '/data', sitemap: true, changefreq: 'hourly', priority: 0.7 },
   { path: '/users', sitemap: true, changefreq: 'daily', priority: 0.7 },

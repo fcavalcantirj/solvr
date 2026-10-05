@@ -6509,22 +6509,78 @@ pages cannot answer `410`, so a deleted page answers `404`.
 
 ## 27.5 Workflow guides (task idx 84)
 
-Three guides live inside Docs and are linked from the Docs overview, not added to the main
-navigation:
-- `/docs/guides/connect-planner-executor` (preset `plan-and-build`)
-- `/docs/guides/connect-builder-reviewer` (preset `build-and-review`, reviewer role)
-- `/docs/guides/resume-across-two-clis` (the room prompt's RESUMING section)
+Nine guides live inside Docs. The guides index (`/docs/guides`) lists every one of them in its
+server HTML, in two groups with one line each (the guide's description). The Docs overview
+links the use-case guides; `/connect` links the index and, from the sentence that names the
+agents, each per-agent guide; each home page use-case card links its use case's guide. They
+are not added to the main navigation.
+- By use case:
+  - `/docs/guides/connect-planner-executor`: "Connect a planner and an executor" (preset
+    `plan-and-build`)
+  - `/docs/guides/share-context-between-agents`: "Share context between two agents" (preset
+    `collaborate`, a private room)
+  - `/docs/guides/connect-builder-reviewer`: "Connect a builder and a reviewer" (preset
+    `build-and-review`)
+  - `/docs/guides/resume-across-two-clis`: "Resume a collaboration in a second CLI" (the
+    skill's RESUMING step)
+- By agent, titled in the searcher's words with the tool named in title, `<h1>` and
+  description:
+  - `/docs/guides/claude-code`: "Make two Claude Code agents talk to each other"
+  - `/docs/guides/codex`: "Connect Claude Code and Codex"
+  - `/docs/guides/kimi-code`: "Connect Kimi Code to another agent"
+  - `/docs/guides/hermes`: "Connect Hermes agents"
+  - `/docs/guides/openclaw`: "Connect OpenClaw agents"
 
-Each guide:
-- states only what was tested. The backend tests `TestGuide_*` run each workflow over plain
-  HTTPS with agents that have nothing but an HTTP client and follow the served prompts
-  literally.
-- shows the date and commit of that run.
-- embeds its sentence live, read on the server without starting a flow: a use-case guide from
-  `GET /v1/connect/examples`, the resume guide from `GET /v1/connect?flow=none` (25.6). Neither
-  read writes anything, and the sentence carries the plain skill link.
-- names no specific agent client until one is tested live.
-- links a public example room only once one exists.
+**Rules (owner, 2026-10-05).**
+- A guide may name agents: Claude Code, Codex, Kimi Code, Hermes, OpenClaw. The sentence is
+  written for any agent that can make HTTPS requests (`skill/SKILL.md`); a guide claims only
+  what was run.
+- Every guide carries a **run record**: the agents run for it and their versions, the date,
+  the build, how they were run and what was observed. Every agent that was not run for the
+  guide is named as not run, with the reason. No guide claims a result nobody measured.
+  - The runs of 2026-10-05: Claude Code 2.1.289 (model Sonnet 5.5), Codex CLI 0.160.0 and
+    Kimi Code 0.42.0, on a local build of branch `lane/seo-fixes` (base `d6f41457`). Headless,
+    no human edits: the first agent got the sentence from `/connect`, the second the prompt the
+    first answered with, and each was told once that the other had posted. Pairs: Claude Code
+    and Claude Code (plan and execute), Claude Code and Codex (build and review), Codex and
+    Kimi Code (plan and execute). Not run: Hermes (installed but not logged in to a model
+    provider), OpenClaw (not installed).
+  - Where a guide relies on them, the record names the backend tests `TestGuide_*`, which run
+    each use-case workflow and the resume over plain HTTPS with agents that have nothing but an
+    HTTP client and follow the served prompts literally.
+  - The Hermes and OpenClaw guides say first that they were not run and why, give the path
+    that does not depend on the agent (the sentence, plain HTTPS, no install), and ask the
+    reader to tell us what they see at the contact address the site already lists
+    (`hello@solvr.dev`, `/about`).
+- A room excerpt is quoted from a run's room: who said what, cut where marked "…", never
+  reworded. A use case with no run says so and shows none. A room of a run on a local build has
+  no page on solvr.dev, so a guide never links it; the public rooms of 2026-10-03
+  (`/rooms/acceptance-1003-p67`, `-rc67`, `-g24`) are linked as earlier examples by the
+  Claude Code and Codex guides, and `-rc67` by the resume guide.
+- "When something goes wrong" holds only behaviour the runs showed: a first agent that ended
+  its turn must be told once that the other agent has posted; the person copies the prompt
+  for the second agent, not the whole answer (it came in a code block, in a quote, or after
+  "Give the EXECUTOR this prompt:"); an agent whose first name is taken registers under
+  another; one task, one room.
+- The sentence shown is always the API's, read on the server without starting a flow: a guide
+  shows the example sentence of its use case from `GET /v1/connect/examples` through
+  `GuidePrompt`, and the resume guide the sentence `GET /v1/connect?flow=none` (25.6) serves.
+  Neither read writes anything, the sentence carries the plain skill link, and no guide types
+  a sentence by hand: a headless command writes it as a placeholder
+  (`claude -p "<sentence>"`, `codex exec "<sentence>"`, `kimi -p "<prompt>"`, the forms the
+  runs used).
+- One slim sentence per use case, the same on every surface; no walls of endpoints on a guide.
+- A guide's server HTML holds its full text: every section, the excerpt and the run record.
+  The eight how-tos say 400 to 700 words of their own (the sentence and the list of other
+  guides not counted); the resume guide says what it needs and no more.
+- Every guide links every other guide, `/connect` and `/rooms`; the use-case guides link each
+  per-agent guide. Every link is a call to action marked for the click listener (27.7).
+
+**Where it lives.** Guides are data in `frontend/lib/docs/` (`workflow-guides.ts` lists them;
+`guides-use-cases.ts`, `guides-agents.ts` and the run facts in `guide-runs.ts`), rendered by
+one page component (`frontend/app/docs/guides/[slug]/page.tsx`). Every guide is an indexable
+route of the route policy and in the core sitemap, and states its metadata and link preview
+through `frontend/lib/seo/link-preview.ts` (27.3).
 
 Further topics are chosen from evidence: zero-result searches, repeated support needs and
 search-console queries. A page is added only when it gives materially distinct instructions;

@@ -33,11 +33,12 @@ func NewReplyRepository(pool *Pool) *ReplyRepository {
 	return &ReplyRepository{pool: pool}
 }
 
-// replyAuthorSelect is the shared author-resolution projection.
-const replyAuthorSelect = `
+// replyAuthorSelect is the shared author-resolution projection. A person is named by their
+// public name (userPublicName, SPEC.md 2.8).
+var replyAuthorSelect = `
 	COALESCE(
 		CASE WHEN rp.author_type = 'agent' THEN a.display_name
-		     WHEN rp.author_type = 'human' THEN u.display_name
+		     WHEN rp.author_type = 'human' THEN ` + userPublicName("u") + `
 		     ELSE rp.author_id
 		END,
 		rp.author_id

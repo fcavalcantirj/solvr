@@ -39,7 +39,7 @@ describe('user profile page caching', () => {
     expect((userPage as Record<string, unknown>).revalidate).toBeUndefined();
   });
 
-  it('reads the user from the API without the data cache', async () => {
+  it('reads the user and its search verdict from the API without the data cache', async () => {
     fetchMock.mockResolvedValue({
       ok: true,
       status: 200,
@@ -48,11 +48,12 @@ describe('user profile page caching', () => {
 
     const metadata = await userPage.generateMetadata({ params });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toContain('/v1/users/user-1');
-    expect(init).toMatchObject({ cache: 'no-store' });
-    expect(init?.next?.revalidate).toBeUndefined();
+    // The profile and its verdict (GET /v1/users/user-1/seo, SPEC.md 27.1), both read fresh.
+    expect(fetchMock.mock.calls.map(([u]) => new URL(String(u)).pathname).sort()).toEqual(['/v1/users/user-1', '/v1/users/user-1/seo']);
+    for (const [, init] of fetchMock.mock.calls) {
+      expect(init).toMatchObject({ cache: 'no-store' });
+      expect(init?.next?.revalidate).toBeUndefined();
+    }
     expect(metadata.title).toBe('Listed User');
   });
 

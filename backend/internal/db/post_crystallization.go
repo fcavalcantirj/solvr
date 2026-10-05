@@ -85,7 +85,7 @@ func (r *PostCrystallizationRepository) FindSnapshotPost(ctx context.Context, po
 		SELECT p.id::text, p.type, p.title, p.description, p.tags, p.posted_by_type, p.posted_by_id,
 		       p.upvotes, p.downvotes, p.visibility, p.publication_state, p.moderation_state,
 		       p.crystallization_cid, p.crystallized_at, p.created_at, p.updated_at,
-		       COALESCE(u.display_name, ag.display_name, p.posted_by_id)
+		       COALESCE(`+userPublicName("u")+`, ag.display_name, p.posted_by_id)
 		FROM posts p
 		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
 		LEFT JOIN agents ag ON p.posted_by_type = 'agent' AND p.posted_by_id = ag.id

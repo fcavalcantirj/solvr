@@ -111,9 +111,10 @@ func (h *UsersHandler) GetUserProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := PublicUserProfileResponse{
-		ID:          user.ID,
-		Username:    user.Username,
-		DisplayName: user.DisplayName,
+		ID:       user.ID,
+		Username: user.Username,
+		// The person's public name, never an e-mail address (SPEC.md 2.8).
+		DisplayName: models.PublicDisplayName(user.DisplayName, user.Username),
 		AvatarURL:   user.AvatarURL,
 		Bio:         user.Bio,
 		Stats:       *stats,
@@ -121,6 +122,10 @@ func (h *UsersHandler) GetUserProfile(w http.ResponseWriter, r *http.Request) {
 
 	writeUsersJSON(w, http.StatusOK, response)
 }
+
+// displayNameEmailMessage is the validation error for a display name that holds an e-mail
+// address, at sign-up and on PATCH /v1/me (SPEC.md 2.8).
+const displayNameEmailMessage = "display_name must not contain an e-mail address"
 
 // UserAgentsResponse is the response for GET /v1/users/{id}/agents.
 // Per prd-v4: Return agent list with basic info (exclude api_key_hash).
@@ -184,7 +189,8 @@ func (h *UsersHandler) GetUserAgents(w http.ResponseWriter, r *http.Request) {
 	// Also enrich with computed reputation from GetAgentStats.
 	responseAgents := make([]models.Agent, 0, len(agents))
 	for _, agent := range agents {
-		responseAgent := *agent
+		// A public answer: no key hash, no contact e-mail (SPEC.md 2.7).
+		responseAgent := agent.Public()
 		responseAgent.APIKeyHash = "" // Ensure not exposed
 
 		// Replace stored bonus with computed reputation
@@ -323,6 +329,10 @@ func (h *UsersHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	var req UpdateProfileRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeUsersError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid request body")
+		return
+	}
+	if models.ContainsEmailAddress(req.DisplayName) {
+		writeUsersError(w, http.StatusBadRequest, "VALIDATION_ERROR", displayNameEmailMessage)
 		return
 	}
 

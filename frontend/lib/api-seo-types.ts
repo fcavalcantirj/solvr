@@ -16,6 +16,15 @@ export interface APIPostSEO {
   description: string;
 }
 
+// APIProfileSEO is GET /v1/agents/{id}/seo's and GET /v1/users/{id}/seo's data (SPEC.md
+// 27.1): indexable only for a profile with public content; the title and the description
+// (what the profile has published) are composed by the API.
+export interface APIProfileSEO {
+  indexable: boolean;
+  title: string;
+  description: string;
+}
+
 // APIPostSourceRoom is GET /v1/posts/{id}/rooms's source_room: the public room the
 // post was saved from (task idx 82).
 export interface APIPostSourceRoom {

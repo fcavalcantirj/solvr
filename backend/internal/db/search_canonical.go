@@ -119,7 +119,7 @@ func replyMatchSelect(tsArg, score, similarity, from string) string {
 			r.author_type,
 			r.author_id,
 			COALESCE(
-				CASE WHEN r.author_type = 'human' THEN u.display_name
+				CASE WHEN r.author_type = 'human' THEN ` + userPublicName("u") + `
 					 ELSE ag.display_name
 				END,
 				r.author_id

@@ -10,24 +10,25 @@ import {
   organizationJsonLd,
   breadcrumbJsonLd,
   agentJsonLd,
+  userJsonLd,
 } from './json-ld';
 
 describe('blogPostJsonLd', () => {
   const baseBlogPost = {
     title: 'Welcome to Solvr',
-    body: '# Introduction\n\nThis is the blog post body with **bold** text.',
-    excerpt: 'A short excerpt about the blog post',
     created_at: '2026-02-15T10:00:00Z',
     updated_at: '2026-02-20T15:30:00Z',
     published_at: '2026-02-15T12:00:00Z',
     tags: ['golang', 'postgresql'],
-    author: { display_name: 'Alice Developer', type: 'human' as const },
+    author: { id: 'u-1', display_name: 'Alice Developer', type: 'human' as const },
   };
+  const description = 'What the API serves as the post description';
 
   it('returns BlogPosting schema with correct structure', () => {
     const result = blogPostJsonLd({
       post: baseBlogPost,
       url: 'https://solvr.dev/blog/welcome-to-solvr',
+      description,
     });
 
     expect(result['@context']).toBe('https://schema.org');
@@ -36,7 +37,7 @@ describe('blogPostJsonLd', () => {
     expect(result.datePublished).toBe('2026-02-15T12:00:00Z');
     expect(result.dateModified).toBe('2026-02-20T15:30:00Z');
     expect(result.keywords).toBe('golang, postgresql');
-    expect(result.author).toEqual({ '@type': 'Person', name: 'Alice Developer' });
+    expect(result.author).toEqual({ '@type': 'Person', name: 'Alice Developer', url: 'https://solvr.dev/users/u-1' });
     expect(result.publisher).toEqual({
       '@type': 'Organization',
       name: 'Solvr',
@@ -48,39 +49,18 @@ describe('blogPostJsonLd', () => {
     });
   });
 
-  it('uses excerpt as description', () => {
-    const result = blogPostJsonLd({
-      post: baseBlogPost,
-      url: 'https://solvr.dev/blog/test',
-    });
-
-    expect(result.description).toBe('A short excerpt about the blog post');
-  });
-
-  it('falls back to sanitized body when no excerpt', () => {
-    const result = blogPostJsonLd({
-      post: { ...baseBlogPost, excerpt: undefined },
-      url: 'https://solvr.dev/blog/test',
-    });
-
-    expect(result.description).not.toContain('#');
-    expect(result.description).not.toContain('**');
-    expect(result.description).toContain('Introduction');
-  });
-
-  it('falls back to default description when no excerpt or body', () => {
-    const result = blogPostJsonLd({
-      post: { ...baseBlogPost, excerpt: undefined, body: '' },
-      url: 'https://solvr.dev/blog/test',
-    });
-
-    expect(result.description).toBe('A blog post on Solvr');
+  // SPEC.md 27.1/27.3: the description is the API's (the served meta_description), the one
+  // the page's meta description and link preview state. The page derives none.
+  it("states the API's description", () => {
+    const result = blogPostJsonLd({ post: baseBlogPost, url: 'https://solvr.dev/blog/test', description });
+    expect(result.description).toBe(description);
   });
 
   it('uses created_at when no published_at', () => {
     const result = blogPostJsonLd({
       post: { ...baseBlogPost, published_at: undefined },
       url: 'https://solvr.dev/blog/test',
+      description,
     });
 
     expect(result.datePublished).toBe('2026-02-15T10:00:00Z');
@@ -90,8 +70,20 @@ describe('blogPostJsonLd', () => {
     const result = blogPostJsonLd({
       post: { ...baseBlogPost, author: undefined },
       url: 'https://solvr.dev/blog/test',
+      description,
     });
 
+    expect(result.author).toBeUndefined();
+  });
+
+  // A post whose author's account is gone is served with no author name (measured on the
+  // local stack): it names no author rather than a Person without a name.
+  it('names no author when the API serves no name for one', () => {
+    const result = blogPostJsonLd({
+      post: { ...baseBlogPost, author: { id: 'gone-1', display_name: '', type: 'human' } },
+      url: 'https://solvr.dev/blog/test',
+      description,
+    });
     expect(result.author).toBeUndefined();
   });
 
@@ -99,6 +91,7 @@ describe('blogPostJsonLd', () => {
     const result = blogPostJsonLd({
       post: { ...baseBlogPost, tags: undefined },
       url: 'https://solvr.dev/blog/test',
+      description,
     });
 
     expect(result.keywords).toBeUndefined();
@@ -209,15 +202,19 @@ describe('site-wide schema', () => {
 });
 
 describe('blogPostJsonLd authors', () => {
-  it('never labels an agent author a Person', () => {
+  // The recon (2026-10-04) found no author on 32 of 32 blog posts: every one was an agent's,
+  // and an agent was given none. It is named as the API names it, as a plain Thing.
+  it('names an agent author as a Thing with its profile, never a Person', () => {
     const result = blogPostJsonLd({
       post: {
-        title: 'Agent notes', body: 'body', created_at: '2026-02-15T10:00:00Z', updated_at: '2026-02-15T10:00:00Z',
-        author: { display_name: 'Helper Bot', type: 'agent' },
+        title: 'Agent notes', created_at: '2026-02-15T10:00:00Z', updated_at: '2026-02-15T10:00:00Z',
+        author: { id: 'helper_bot', display_name: 'Helper Bot', type: 'agent' },
       },
       url: 'https://solvr.dev/blog/agent-notes',
+      description: 'Notes',
     });
-    expect(result.author).toBeUndefined();
+    expect(result.author).toEqual({ '@type': 'Thing', name: 'Helper Bot', url: 'https://solvr.dev/agents/helper_bot', identifier: 'helper_bot' });
+    expect(JSON.stringify(result)).not.toContain('Person');
   });
 });
 
@@ -239,10 +236,58 @@ describe('JSON-LD escaping', () => {
   });
 });
 
+// SPEC.md 27.3: a profile page is a ProfilePage. An agent is a plain Thing (a
+// SoftwareApplication promises a price and ratings the page does not show); a person is the
+// Person under their public name. The description is the API's /seo description.
 describe('agentJsonLd', () => {
-  it('describes the agent without passing its model off as an operating system', () => {
-    const result = agentJsonLd({ agent: { display_name: 'Helper Bot', model: 'some-model-1' }, url: 'https://solvr.dev/agents/a-1' });
-    expect(result['@type']).toBe('SoftwareApplication');
-    expect(JSON.stringify(result)).not.toContain('operatingSystem');
+  it('is a ProfilePage about a plain Thing with name, description, url and identifier', () => {
+    const result = agentJsonLd({
+      agent: { id: 'helper_bot', display_name: 'Helper Bot' },
+      url: 'https://solvr.dev/agents/helper_bot',
+      description: 'Helper Bot, an AI agent on Solvr: 2 posts.',
+    });
+    expect(result).toEqual({
+      '@context': 'https://schema.org',
+      '@type': 'ProfilePage',
+      url: 'https://solvr.dev/agents/helper_bot',
+      mainEntity: {
+        '@type': 'Thing',
+        name: 'Helper Bot',
+        description: 'Helper Bot, an AI agent on Solvr: 2 posts.',
+        url: 'https://solvr.dev/agents/helper_bot',
+        identifier: 'helper_bot',
+      },
+      publisher: { '@type': 'Organization', name: 'Solvr', url: 'https://solvr.dev' },
+    });
+    expect(JSON.stringify(result)).not.toContain('SoftwareApplication');
+  });
+
+  it('names an agent without a display name by its id and states no description it was not given', () => {
+    const result = agentJsonLd({ agent: { id: 'helper_bot', display_name: '' }, url: 'https://solvr.dev/agents/helper_bot' });
+    expect(result.mainEntity).toEqual({ '@type': 'Thing', name: 'helper_bot', url: 'https://solvr.dev/agents/helper_bot', identifier: 'helper_bot' });
+  });
+});
+
+describe('userJsonLd', () => {
+  it('is a ProfilePage about the Person under the public name the API serves', () => {
+    const result = userJsonLd({
+      user: { display_name: 'Ana Lima', username: 'ana' },
+      url: 'https://solvr.dev/users/u-1',
+      description: 'Ana Lima on Solvr: 1 post.',
+    });
+    expect(result['@type']).toBe('ProfilePage');
+    expect(result.mainEntity).toEqual({
+      '@type': 'Person',
+      name: 'Ana Lima',
+      alternateName: 'ana',
+      description: 'Ana Lima on Solvr: 1 post.',
+      url: 'https://solvr.dev/users/u-1',
+    });
+  });
+
+  // The recon found 7 ProfilePage blocks with no name: a person without a display name.
+  it('names a person without a display name by their username', () => {
+    const result = userJsonLd({ user: { display_name: '', username: 'ana' }, url: 'https://solvr.dev/users/u-1' });
+    expect((result.mainEntity as { name: string }).name).toBe('ana');
   });
 });

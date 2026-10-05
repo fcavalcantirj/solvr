@@ -119,58 +119,65 @@ export function postPageJsonLd({
   };
 }
 
-/** Schema for agent profile pages */
+/** An author named as the API names it, with a url to their profile: a human is a Person,
+ *  an agent a plain Thing with its id (an agent is never labelled a Person, SPEC.md 27.3). */
+function authorEntity(author: { id?: string; display_name: string; type?: 'human' | 'agent' }): JsonLdObject {
+  if (author.type === 'agent') {
+    return {
+      '@type': 'Thing',
+      name: author.display_name,
+      ...(author.id ? { url: `${SITE}/agents/${author.id}`, identifier: author.id } : {}),
+    };
+  }
+  return { '@type': 'Person', name: author.display_name, ...(author.id ? { url: `${SITE}/users/${author.id}` } : {}) };
+}
+
+/** An agent profile page: a ProfilePage about a plain Thing. A SoftwareApplication would
+ *  promise a price and ratings the page does not show (SPEC.md 27.3). The description is the
+ *  API's (GET /v1/agents/{id}/seo); none is invented. */
 export function agentJsonLd({
   agent,
   url,
+  description,
 }: {
-  agent: {
-    display_name: string;
-    bio?: string;
-    model?: string;
-  };
+  agent: { id: string; display_name?: string };
   url: string;
-}) {
+  description?: string;
+}): JsonLdObject {
   return {
     '@context': 'https://schema.org',
-    '@type': 'SoftwareApplication',
-    name: agent.display_name,
-    description: agent.bio
-      ? agent.bio.replace(/[#*`\[\]]/g, '').slice(0, 300)
-      : `AI agent on Solvr`,
-    applicationCategory: 'AI Agent',
+    '@type': 'ProfilePage',
     url,
-    publisher: {
-      '@type': 'Organization',
-      name: 'Solvr',
-      url: 'https://solvr.dev',
+    mainEntity: {
+      '@type': 'Thing',
+      name: agent.display_name || agent.id,
+      ...(description ? { description } : {}),
+      url,
+      identifier: agent.id,
     },
+    publisher: PUBLISHER,
   };
 }
 
-/** Schema for blog post pages */
+/** A blog post page. Its description is the API's (the served meta_description, SPEC.md
+ *  27.1), the one the page's meta description states; its author is named as the API names
+ *  them. */
 export function blogPostJsonLd({
   post,
   url,
+  description,
 }: {
   post: {
     title: string;
-    body: string;
-    excerpt?: string;
     created_at: string;
     updated_at: string;
     published_at?: string;
     tags?: string[];
-    author?: { display_name: string; type?: 'human' | 'agent' };
+    author?: { id?: string; display_name: string; type?: 'human' | 'agent' };
   };
   url: string;
+  description: string;
 }) {
-  const description = post.excerpt
-    ? post.excerpt
-    : post.body
-      ? post.body.replace(/[#*`\[\]]/g, '').slice(0, 300)
-      : 'A blog post on Solvr';
-
   return {
     '@context': 'https://schema.org',
     '@type': 'BlogPosting',
@@ -178,52 +185,43 @@ export function blogPostJsonLd({
     description,
     datePublished: post.published_at || post.created_at,
     dateModified: post.updated_at,
-    // An agent author is not a Person (task idx 82): only a human is named as one.
-    author: post.author?.type === 'human'
-      ? { '@type': 'Person', name: post.author.display_name }
-      : undefined,
+    // An author whose account is gone is served with no name: none is named.
+    author: post.author?.display_name ? authorEntity(post.author) : undefined,
     keywords: post.tags?.join(', '),
     mainEntityOfPage: {
       '@type': 'WebPage',
       '@id': url,
     },
-    publisher: {
-      '@type': 'Organization',
-      name: 'Solvr',
-      url: 'https://solvr.dev',
-    },
+    publisher: PUBLISHER,
   };
 }
 
-/** Schema for user profile pages */
+/** A person's profile page: a ProfilePage about the Person under the public name the API
+ *  serves (never an e-mail address, SPEC.md 2.8), or their username when they set none. */
 export function userJsonLd({
   user,
   url,
+  description,
 }: {
   user: {
-    display_name: string;
+    display_name?: string;
     username?: string;
-    bio?: string;
   };
   url: string;
-}) {
+  description?: string;
+}): JsonLdObject {
   return {
     '@context': 'https://schema.org',
     '@type': 'ProfilePage',
     mainEntity: {
       '@type': 'Person',
-      name: user.display_name,
+      name: user.display_name || user.username,
       alternateName: user.username,
-      description: user.bio
-        ? user.bio.replace(/[#*`\[\]]/g, '').slice(0, 300)
-        : undefined,
+      ...(description ? { description } : {}),
+      url,
     },
     url,
-    publisher: {
-      '@type': 'Organization',
-      name: 'Solvr',
-      url: 'https://solvr.dev',
-    },
+    publisher: PUBLISHER,
   };
 }
 

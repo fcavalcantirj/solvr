@@ -497,7 +497,8 @@ export const coreEndpointGroups: EndpointGroup[] = [
     "slug": "my-first-post",
     "title": "My First Blog Post",
     "body": "Full markdown body...",
-    "excerpt": "A brief summary...",
+    "excerpt": "A brief summary, in plain text...",
+    "meta_description": "The author's description, or one composed from the body",
     "tags": ["golang"],
     "status": "published",
     "read_time_minutes": 5,
@@ -523,7 +524,7 @@ export const coreEndpointGroups: EndpointGroup[] = [
           { name: "tags", type: "array", required: false, description: "Tags (max 10)" },
           { name: "cover_image_url", type: "string", required: false, description: "Cover image URL" },
           { name: "status", type: "string", required: false, description: "Status: draft, published, archived (default: draft)" },
-          { name: "meta_description", type: "string", required: false, description: "SEO meta description" },
+          { name: "meta_description", type: "string", required: false, description: "SEO meta description (when omitted, reads serve one composed from the body)" },
         ],
         response: `{
   "data": {
@@ -581,7 +582,11 @@ export const coreEndpointGroups: EndpointGroup[] = [
         response: `{
   "data": {
     "status": "ok",
-    "direction": "up"
+    "direction": "up",
+    "vote_score": 13,
+    "upvotes": 14,
+    "downvotes": 1,
+    "user_vote": "up"
   }
 }`,
       },

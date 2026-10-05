@@ -29,7 +29,9 @@ type SEOIndexable struct {
 	Rooms            int `json:"rooms"`
 	RoomHistoryPages int `json:"room_history_pages"`
 	Agents           int `json:"agents"`
-	BlogPosts        int `json:"blog_posts"`
+	// Users are the people's profiles with public content (SPEC.md 27.1).
+	Users     int `json:"users"`
+	BlogPosts int `json:"blog_posts"`
 }
 
 // SEOActivation counts activation milestones recorded in the window.
@@ -80,7 +82,7 @@ func (r *SEOBaselineRepository) Measure(ctx context.Context, from, to time.Time,
 	if err != nil {
 		return nil, fmt.Errorf("seo baseline counts: %w", err)
 	}
-	b.Indexable = SEOIndexable{Posts: counts.Posts, Rooms: counts.Rooms, Agents: counts.Agents, BlogPosts: counts.BlogPosts}
+	b.Indexable = SEOIndexable{Posts: counts.Posts, Rooms: counts.Rooms, Agents: counts.Agents, Users: counts.Users, BlogPosts: counts.BlogPosts}
 	b.Lastmod = counts.Lastmod
 
 	if err := r.pool.QueryRow(ctx, `

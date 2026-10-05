@@ -29,10 +29,34 @@ func NewBlogPostRepository(pool *Pool) *BlogPostRepository {
 	return &BlogPostRepository{pool: pool}
 }
 
+// blogPostReadColumns lists the 19 columns scanBlogPost and scanBlogPostWithAuthorRows read, in
+// their order, for the blog_posts row a query aliases alias ("" for RETURNING). The columns the
+// schema leaves nullable read through COALESCE (SPEC.md 27.1): a row written with NULL there is
+// a post, and a NULL scanned into a Go string or int failed the whole read with a 500.
+func blogPostReadColumns(alias string) string {
+	p := ""
+	if alias != "" {
+		p = alias + "."
+	}
+	return strings.ReplaceAll(`{p}id, {p}slug, {p}title, {p}body, COALESCE({p}excerpt, '') AS excerpt,
+		COALESCE({p}tags, '{}') AS tags, COALESCE({p}cover_image_url, '') AS cover_image_url,
+		{p}posted_by_type, {p}posted_by_id, {p}status,
+		COALESCE({p}view_count, 0) AS view_count, COALESCE({p}upvotes, 0) AS upvotes,
+		COALESCE({p}downvotes, 0) AS downvotes, COALESCE({p}read_time_minutes, 1) AS read_time_minutes,
+		COALESCE({p}meta_description, '') AS meta_description,
+		{p}published_at, {p}created_at, {p}updated_at, {p}deleted_at`, "{p}", p)
+}
+
 // blogPostColumns defines columns returned by RETURNING for Create/Update.
-const blogPostColumns = `id, slug, title, body, excerpt, tags, cover_image_url,
-	posted_by_type, posted_by_id, status, view_count, upvotes, downvotes,
-	read_time_minutes, meta_description, published_at, created_at, updated_at, deleted_at`
+var blogPostColumns = blogPostReadColumns("")
+
+// blogAuthorColumns are the author's public name (userPublicName for a person) and avatar,
+// the two columns after the post's own in scanBlogPostWithAuthorRows.
+var blogAuthorColumns = `COALESCE(` + userPublicName("u") + `, ag.display_name, '') as author_display_name,
+			COALESCE(u.avatar_url, ag.avatar_url, '') as author_avatar_url`
+
+// blogScore is a post's score with a NULL counter read as zero, for ordering.
+const blogScore = `(COALESCE(bp.upvotes, 0) - COALESCE(bp.downvotes, 0))`
 
 // scanBlogPost scans a single row into a BlogPost (19 columns).
 func (r *BlogPostRepository) scanBlogPost(row pgx.Row) (*models.BlogPost, error) {
@@ -207,13 +231,8 @@ func (r *BlogPostRepository) findBySlugInternal(ctx context.Context, slug string
 
 	query := fmt.Sprintf(`
 		SELECT
-			bp.id, bp.slug, bp.title, bp.body, bp.excerpt, bp.tags, bp.cover_image_url,
-			bp.posted_by_type, bp.posted_by_id, bp.status,
-			bp.view_count, bp.upvotes, bp.downvotes,
-			bp.read_time_minutes, bp.meta_description,
-			bp.published_at, bp.created_at, bp.updated_at, bp.deleted_at,
-			COALESCE(u.display_name, ag.display_name, '') as author_display_name,
-			COALESCE(u.avatar_url, ag.avatar_url, '') as author_avatar_url,
+			`+blogPostReadColumns("bp")+`,
+			`+blogAuthorColumns+`,
 			%s
 		FROM blog_posts bp
 		LEFT JOIN users u ON bp.posted_by_type = 'human' AND bp.posted_by_id = u.id::text
@@ -383,7 +402,7 @@ func (r *BlogPostRepository) List(ctx context.Context, opts models.BlogPostListO
 	orderClause := "bp.created_at DESC" // default: newest
 	switch opts.Sort {
 	case "popular":
-		orderClause = "(bp.upvotes - bp.downvotes) DESC, bp.created_at DESC"
+		orderClause = blogScore + " DESC, bp.created_at DESC"
 	case "published":
 		orderClause = "bp.published_at DESC NULLS LAST, bp.created_at DESC"
 	}
@@ -405,13 +424,8 @@ func (r *BlogPostRepository) List(ctx context.Context, opts models.BlogPostListO
 
 	query := fmt.Sprintf(`
 		SELECT
-			bp.id, bp.slug, bp.title, bp.body, bp.excerpt, bp.tags, bp.cover_image_url,
-			bp.posted_by_type, bp.posted_by_id, bp.status,
-			bp.view_count, bp.upvotes, bp.downvotes,
-			bp.read_time_minutes, bp.meta_description,
-			bp.published_at, bp.created_at, bp.updated_at, bp.deleted_at,
-			COALESCE(u.display_name, ag.display_name, '') as author_display_name,
-			COALESCE(u.avatar_url, ag.avatar_url, '') as author_avatar_url,
+			`+blogPostReadColumns("bp")+`,
+			`+blogAuthorColumns+`,
 			%s
 		FROM blog_posts bp
 		LEFT JOIN users u ON bp.posted_by_type = 'human' AND bp.posted_by_id = u.id::text
@@ -526,22 +540,19 @@ func (r *BlogPostRepository) IncrementViewCount(ctx context.Context, slug string
 // GetFeatured returns the most engaging published blog post.
 // Uses engagement score: (view_count + upvotes*5 - downvotes*2) / POWER((hours_since_publish + 24), 0.8)
 func (r *BlogPostRepository) GetFeatured(ctx context.Context) (*models.BlogPostWithAuthor, error) {
+	// A NULL counter reads as zero here too: NULL sorts first under DESC, so a row with one
+	// would otherwise always be the featured post.
 	query := `
 		SELECT
-			bp.id, bp.slug, bp.title, bp.body, bp.excerpt, bp.tags, bp.cover_image_url,
-			bp.posted_by_type, bp.posted_by_id, bp.status,
-			bp.view_count, bp.upvotes, bp.downvotes,
-			bp.read_time_minutes, bp.meta_description,
-			bp.published_at, bp.created_at, bp.updated_at, bp.deleted_at,
-			COALESCE(u.display_name, ag.display_name, '') as author_display_name,
-			COALESCE(u.avatar_url, ag.avatar_url, '') as author_avatar_url,
+			` + blogPostReadColumns("bp") + `,
+			` + blogAuthorColumns + `,
 			NULL::text as user_vote_direction
 		FROM blog_posts bp
 		LEFT JOIN users u ON bp.posted_by_type = 'human' AND bp.posted_by_id = u.id::text
 		LEFT JOIN agents ag ON bp.posted_by_type = 'agent' AND bp.posted_by_id = ag.id
 		WHERE bp.status = 'published' AND bp.deleted_at IS NULL AND bp.published_at IS NOT NULL
 		ORDER BY
-			(bp.view_count + bp.upvotes * 5 - bp.downvotes * 2)::float
+			(COALESCE(bp.view_count, 0) + COALESCE(bp.upvotes, 0) * 5 - COALESCE(bp.downvotes, 0) * 2)::float
 			/ POWER((EXTRACT(EPOCH FROM NOW() - bp.published_at) / 3600 + 24), 0.8)
 			DESC
 		LIMIT 1

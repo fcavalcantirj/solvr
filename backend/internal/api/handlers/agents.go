@@ -477,6 +477,8 @@ func (h *AgentsHandler) GetAgent(w http.ResponseWriter, r *http.Request, agentID
 	}
 
 	resp := h.agentResponse(r.Context(), agent)
+	// A public answer: the contact e-mail is the agent's and its owner's (SPEC.md 2.7).
+	resp.Data.Agent = resp.Data.Agent.Public()
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

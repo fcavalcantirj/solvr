@@ -139,6 +139,13 @@ func (h *AuthHandlers) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A public name is never an e-mail address (SPEC.md 2.8). A sign-up that sends no display
+	// name stores none, as before.
+	if models.ContainsEmailAddress(req.DisplayName) {
+		writeErrorResponse(w, http.StatusBadRequest, "VALIDATION_ERROR", displayNameEmailMessage)
+		return
+	}
+
 	if refuseIdentity(w, r, h.identityGate, db.IdentityQuery{Email: req.Email}) {
 		return
 	}

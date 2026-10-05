@@ -28,9 +28,9 @@ export async function generateMetadata({
   if (!data?.data) return {};
 
   const post = data.data;
-  const description = post.meta_description
-    || post.excerpt
-    || (post.body ? post.body.replace(/[#*`\[\]]/g, '').slice(0, 160) : 'A blog post on Solvr');
+  // The API serves every post's description (SPEC.md 27.1): the author's meta description,
+  // or one it composed from the body, Markdown removed and cut at a word. The page derives none.
+  const description = post.meta_description;
 
   const path = `/blog/${slug}`;
   return {
@@ -87,15 +87,15 @@ export default async function BlogPostPage({
       <JsonLd data={blogPostJsonLd({
         post: {
           title: raw.title,
-          body: raw.body,
-          excerpt: raw.excerpt,
           created_at: raw.created_at,
           updated_at: raw.updated_at,
           published_at: raw.published_at,
           tags: raw.tags,
-          author: raw.author ? { display_name: raw.author.display_name, type: raw.author.type } : undefined,
+          // The author as the API names them (SPEC.md 27.3).
+          author: raw.author ? { id: raw.author.id, display_name: raw.author.display_name, type: raw.author.type } : undefined,
         },
         url: `https://solvr.dev/blog/${slug}`,
+        description: raw.meta_description,
       })} />
       <BlogPostContent post={post} />
     </>

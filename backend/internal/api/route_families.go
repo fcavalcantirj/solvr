@@ -481,6 +481,8 @@ var RouteFamilies = []RouteFamily{
 			"GET /v1/sitemap/counts",
 			"GET /v1/posts/{id}/seo",
 			"GET /v1/rooms/{slug}/seo",
+			"GET /v1/agents/{id}/seo",
+			"GET /v1/users/{id}/seo",
 		},
 	},
 	{

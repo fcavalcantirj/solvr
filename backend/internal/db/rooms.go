@@ -302,7 +302,7 @@ func (r *RoomRepository) ListFiltered(ctx context.Context, params RoomListParams
 			p.is_private, ho.user_id, p.message_count, p.created_at, p.updated_at,
 			p.last_active_at, p.expires_at, p.live_agent_count,
 			` + roomParticipantCount("p.id") + ` AS unique_participant_count,
-			u.display_name AS owner_display_name,
+			` + userPublicName("u") + ` AS owner_display_name,
 			(SELECT LEFT(m.content, 200) FROM messages m
 			 WHERE m.room_id = p.id AND m.deleted_at IS NULL
 			 ORDER BY m.created_at DESC, m.id DESC LIMIT 1

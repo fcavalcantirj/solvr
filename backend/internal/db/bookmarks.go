@@ -108,7 +108,7 @@ func (r *BookmarkRepository) ListByUser(ctx context.Context, userType, userID st
 			p.id, p.type, p.title, p.description, p.tags,
 			p.posted_by_type, p.posted_by_id, p.status,
 			p.upvotes, p.downvotes, p.created_at, p.updated_at,
-			COALESCE(u.display_name, a.display_name, 'Unknown') as author_name
+			COALESCE(` + userPublicName("u") + `, a.display_name, 'Unknown') as author_name
 		FROM bookmarks b
 		JOIN posts p ON b.post_id = p.id AND p.visibility = 'public' -- BART-151: don't surface bookmarks of private posts
 		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text

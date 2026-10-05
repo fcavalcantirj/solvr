@@ -142,8 +142,12 @@ func (h *BlogHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	hasMore := (opts.Page * opts.PerPage) < total
 
+	served := make([]models.BlogPostWithAuthor, len(posts))
+	for i, p := range posts {
+		served[i] = servedBlogPostWithAuthor(p)
+	}
 	resp := BlogListResponse{
-		Data: posts,
+		Data: served,
 		Meta: BlogListMeta{
 			Total:   total,
 			Page:    opts.Page,
@@ -187,7 +191,7 @@ func (h *BlogHandler) GetBySlug(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeBlogJSON(w, http.StatusOK, BlogPostResponse{Data: post})
+	writeBlogJSON(w, http.StatusOK, BlogPostResponse{Data: servedBlogPostWithAuthor(*post)})
 }
 
 // Create handles POST /v1/blog — create a new blog post.
@@ -301,7 +305,7 @@ func (h *BlogHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	h.moderatePublished(createdPost)
 
-	writeBlogJSON(w, http.StatusCreated, BlogPostResponse{Data: createdPost})
+	writeBlogJSON(w, http.StatusCreated, BlogPostResponse{Data: servedBlogPost(*createdPost)})
 }
 
 // Update handles PATCH /v1/blog/{slug} — update a blog post.
@@ -421,7 +425,7 @@ func (h *BlogHandler) Update(w http.ResponseWriter, r *http.Request) {
 		h.moderatePublished(result)
 	}
 
-	writeBlogJSON(w, http.StatusOK, BlogPostResponse{Data: result})
+	writeBlogJSON(w, http.StatusOK, BlogPostResponse{Data: servedBlogPost(*result)})
 }
 
 // Delete handles DELETE /v1/blog/{slug} — soft delete a blog post.
@@ -537,12 +541,19 @@ func (h *BlogHandler) Vote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeBlogJSON(w, http.StatusOK, map[string]interface{}{
-		"data": map[string]string{
-			"status":    "ok",
-			"direction": req.Direction,
-		},
-	})
+	// The post's counts after the vote, under the names the blog post read uses, so the page
+	// shows the new score (SPEC.md 27.1). When the post cannot be read back the vote still
+	// stands: the counts are left out and the page keeps the score it shows.
+	data := map[string]interface{}{"status": "ok", "direction": req.Direction}
+	if after, err := h.repo.FindBySlugForViewer(r.Context(), slug, authInfo.AuthorType, authInfo.AuthorID); err == nil {
+		data["vote_score"] = after.VoteScore
+		data["upvotes"] = after.Upvotes
+		data["downvotes"] = after.Downvotes
+		data["user_vote"] = after.UserVote
+	} else {
+		h.logger.Warn("vote recorded; failed to read the post back", "slug", slug, "error", err)
+	}
+	writeBlogJSON(w, http.StatusOK, map[string]interface{}{"data": data})
 }
 
 // RecordView handles POST /v1/blog/{slug}/view — increment view count.
@@ -588,7 +599,12 @@ func (h *BlogHandler) GetFeatured(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeBlogJSON(w, http.StatusOK, BlogPostResponse{Data: post})
+	// No published post reads as nil: the answer's data stays null.
+	var data interface{} = post
+	if post != nil {
+		data = servedBlogPostWithAuthor(*post)
+	}
+	writeBlogJSON(w, http.StatusOK, BlogPostResponse{Data: data})
 }
 
 // ListTags handles GET /v1/blog/tags — list all tags with counts.

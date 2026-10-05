@@ -43,8 +43,11 @@ export function BlogPostClient({
       try {
         const response = await api.voteBlogPost(slug, direction);
         if (response?.data) {
-          setVoteScore(response.data.vote_score);
-          setUserVote(response.data.user_vote);
+          // The answer carries the post's counts after the vote (SPEC.md 27.1); when the API
+          // could not read the post back it carries none, and the page keeps what it shows.
+          const { vote_score, user_vote } = response.data;
+          if (typeof vote_score === "number") setVoteScore(vote_score);
+          if (user_vote !== undefined) setUserVote(user_vote);
           // The API counted the vote (SPEC.md 27.7).
           track("blog_vote", { direction });
         }

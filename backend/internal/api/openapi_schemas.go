@@ -438,8 +438,9 @@ func userSchema() map[string]interface{} {
 	return map[string]interface{}{
 		"type": "object",
 		"properties": map[string]interface{}{
-			"id": map[string]interface{}{"type": "string"}, "email": map[string]interface{}{"type": "string"},
-			"display_name": map[string]interface{}{"type": "string"}, "avatar_url": map[string]interface{}{"type": "string"},
+			"id": map[string]interface{}{"type": "string"}, "username": map[string]interface{}{"type": "string"},
+			"display_name": map[string]interface{}{"type": "string", "description": "The person's public name: their display name, or their username when it is blank or holds an e-mail address. Never an e-mail address."},
+			"avatar_url": map[string]interface{}{"type": "string"},
 			"bio": map[string]interface{}{"type": "string"}, "reputation": map[string]interface{}{"type": "integer"},
 			"created_at": map[string]interface{}{"type": "string", "format": "date-time"},
 		},

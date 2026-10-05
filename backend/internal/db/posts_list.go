@@ -164,7 +164,7 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 			COALESCE(p.original_language, '') as original_language,
 			COALESCE(p.original_title, '') as original_title,
 			COALESCE(p.original_description, '') as original_description,
-			COALESCE(u.display_name, ag.display_name, '') as author_display_name,
+			COALESCE(`+userPublicName("u")+`, ag.display_name, '') as author_display_name,
 			COALESCE(u.avatar_url, ag.avatar_url, '') as author_avatar_url,
 			%s,
 			COALESCE(ag.human_id::text, '') as agent_human_id,

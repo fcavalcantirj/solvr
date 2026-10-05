@@ -341,7 +341,7 @@ func searchPostSelect(tsArg, score, similarity, from, counts string) string {
 			p.posted_by_type,
 			p.posted_by_id,
 			COALESCE(
-				CASE WHEN p.posted_by_type = 'human' THEN u.display_name
+				CASE WHEN p.posted_by_type = 'human' THEN ` + userPublicName("u") + `
 					 ELSE a.display_name
 				END,
 				p.posted_by_id

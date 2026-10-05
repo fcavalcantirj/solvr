@@ -32,6 +32,7 @@ func TestSEOBaseline_OperatorReportFromRealTables(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(raw), &payload))
 	assert.Equal(t, "7d", payload.Data.Window)
 	assert.Contains(t, payload.Data.Indexable, "room_history_pages")
+	assert.Contains(t, payload.Data.Indexable, "users", "people's profiles with content are offered for indexing too (SPEC.md 27.1)")
 	status := map[string]string{}
 	for _, m := range payload.Data.Milestones {
 		status[m["name"].(string)] = m["status"].(string)

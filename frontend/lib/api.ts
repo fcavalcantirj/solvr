@@ -48,7 +48,7 @@ import type {
   APICommentsResponse,
   APIAcceptAnswerResponse,
   APIMeResponse,
-  APIVoteResponse,
+  APIBlogVoteResponse,
   StatsData,
   TrendingData,
   APIUserProfileResponse,
@@ -341,8 +341,8 @@ class SolvrAPI extends SolvrAPIBase {
     });
   }
 
-  async voteBlogPost(slug: string, direction: 'up' | 'down'): Promise<APIVoteResponse> {
-    return this.fetch<APIVoteResponse>(`/v1/blog/${encodeURIComponent(slug)}/vote`, {
+  async voteBlogPost(slug: string, direction: 'up' | 'down'): Promise<APIBlogVoteResponse> {
+    return this.fetch<APIBlogVoteResponse>(`/v1/blog/${encodeURIComponent(slug)}/vote`, {
       method: 'POST',
       body: JSON.stringify({ direction }),
     });

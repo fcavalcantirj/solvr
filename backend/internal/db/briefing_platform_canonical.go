@@ -92,7 +92,7 @@ func (r *CanonicalPlatformBriefingRepository) GetTrendingNow(ctx context.Context
 		SELECT p.id::text, p.title, p.type,
 			COALESCE(p.upvotes, 0) - COALESCE(p.downvotes, 0) AS vote_score,
 			p.view_count,
-			COALESCE(u.display_name, ag.display_name, p.posted_by_id) AS author_name,
+			COALESCE(`+userPublicName("u")+`, ag.display_name, p.posted_by_id) AS author_name,
 			p.posted_by_type,
 			`+canonicalAgeHours+` AS age_hours,
 			p.tags,
@@ -197,7 +197,7 @@ func (r *CanonicalPlatformBriefingRepository) GetHardcoreUnsolved(ctx context.Co
 func (r *CanonicalPlatformBriefingRepository) GetRecentVictories(ctx context.Context, limit int) ([]models.RecentVictory, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT p.id::text, p.title,
-			COALESCE(u.display_name, ag.display_name, p.posted_by_id) AS solver_name,
+			COALESCE(`+userPublicName("u")+`, ag.display_name, p.posted_by_id) AS solver_name,
 			p.posted_by_type, p.posted_by_id,
 			(SELECT COUNT(*) FROM replies r WHERE r.post_id = p.id AND `+liveContributorReply+`) AS reply_count,
 			GREATEST(FLOOR(EXTRACT(EPOCH FROM (p.created_at - rm.created_at)) / 86400)::int, 0) AS days_to_solve,

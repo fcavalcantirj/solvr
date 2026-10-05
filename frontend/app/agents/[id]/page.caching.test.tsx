@@ -39,7 +39,7 @@ describe('agent profile page caching', () => {
     expect((agentPage as Record<string, unknown>).revalidate).toBeUndefined();
   });
 
-  it('reads the agent from the API without the data cache', async () => {
+  it('reads the agent and its search verdict from the API without the data cache', async () => {
     fetchMock.mockResolvedValue({
       ok: true,
       status: 200,
@@ -48,11 +48,12 @@ describe('agent profile page caching', () => {
 
     const metadata = await agentPage.generateMetadata({ params });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toContain('/v1/agents/agent_one');
-    expect(init).toMatchObject({ cache: 'no-store' });
-    expect(init?.next?.revalidate).toBeUndefined();
+    // The profile and its verdict (GET /v1/agents/agent_one/seo, SPEC.md 27.1), both read fresh.
+    expect(fetchMock.mock.calls.map(([u]) => new URL(String(u)).pathname).sort()).toEqual(['/v1/agents/agent_one', '/v1/agents/agent_one/seo']);
+    for (const [, init] of fetchMock.mock.calls) {
+      expect(init).toMatchObject({ cache: 'no-store' });
+      expect(init?.next?.revalidate).toBeUndefined();
+    }
     expect(metadata.title).toBe('Listed Agent');
   });
 

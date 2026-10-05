@@ -37,9 +37,14 @@ func postIndexablePredicate(alias string) string {
 // sitemapPostEligible is the rule as the sitemap's queries read it, on an unaliased posts.
 var sitemapPostEligible = postIndexablePredicate("")
 
-// sitemapAgentEligible is the one rule for an agent profile in the sitemap: an active agent
-// with contributions that has not been deleted or banned (both set deleted_at).
-const sitemapAgentEligible = `status = 'active' AND reputation > 0 AND deleted_at IS NULL`
+// sitemapAgentEligible is the one rule for an agent profile in the sitemap, the rule of the
+// profile's verdict (agentProfileIndexable, SPEC.md 27.1): an active agent with public content,
+// not deleted or banned (both set deleted_at). It used to read the stored reputation bonus,
+// which is neither content nor the reputation people see.
+var sitemapAgentEligible = agentProfileIndexable
+
+// sitemapUserEligible is the same rule for a person's profile (userProfileIndexable).
+var sitemapUserEligible = userProfileIndexable
 
 // SitemapRepository provides sitemap URL data from the database.
 type SitemapRepository struct {
@@ -86,7 +91,7 @@ func (r *SitemapRepository) GetSitemapURLs(ctx context.Context) (*models.Sitemap
 		return nil, err
 	}
 
-	// Get agents with actual contributions (reputation > 0)
+	// Agent profiles with public content (sitemapAgentEligible)
 	agentRows, err := r.pool.Query(ctx, `
 		SELECT id, COALESCE(updated_at, created_at) as updated_at
 		FROM agents
@@ -111,7 +116,27 @@ func (r *SitemapRepository) GetSitemapURLs(ctx context.Context) (*models.Sitemap
 		return nil, err
 	}
 
-	// Users excluded from sitemap — profile pages have no SEO value
+	// People's profiles with public content (sitemapUserEligible)
+	userRows, err := r.pool.Query(ctx, `
+		SELECT id::text, COALESCE(updated_at, created_at)
+		FROM users
+		WHERE `+sitemapUserEligible+`
+		ORDER BY COALESCE(updated_at, created_at) DESC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer userRows.Close()
+	for userRows.Next() {
+		var u models.SitemapUser
+		if err := userRows.Scan(&u.ID, &u.UpdatedAt); err != nil {
+			return nil, err
+		}
+		result.Users = append(result.Users, u)
+	}
+	if err := userRows.Err(); err != nil {
+		return nil, err
+	}
 
 	// Get all published, non-deleted blog posts
 	blogRows, err := r.pool.Query(ctx, `
@@ -179,18 +204,11 @@ func (r *SitemapRepository) GetSitemapCounts(ctx context.Context) (*models.Sitem
 		return nil, err
 	}
 
-	// Count agents with contributions
+	// Count agent and user profiles with public content
 	err = r.pool.QueryRow(ctx, `
-		SELECT COUNT(*)
-		FROM agents
-		WHERE `+sitemapAgentEligible+`
-	`).Scan(&counts.Agents)
-	if err != nil {
-		return nil, err
-	}
-
-	// Users excluded from sitemap
-	counts.Users = 0
+		SELECT (SELECT COUNT(*) FROM agents WHERE `+sitemapAgentEligible+`),
+		       (SELECT COUNT(*) FROM users WHERE `+sitemapUserEligible+`)
+	`).Scan(&counts.Agents, &counts.Users)
 	if err != nil {
 		return nil, err
 	}
@@ -289,7 +307,7 @@ func (r *SitemapRepository) GetPaginatedSitemapURLs(ctx context.Context, opts mo
 		rows, err := r.pool.Query(ctx, `
 			SELECT id::text, COALESCE(updated_at, created_at) as updated_at
 			FROM users
-			WHERE deleted_at IS NULL
+			WHERE `+sitemapUserEligible+`
 			ORDER BY COALESCE(updated_at, created_at) DESC
 			LIMIT $1 OFFSET $2
 		`, opts.PerPage, offset)

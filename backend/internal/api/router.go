@@ -604,6 +604,11 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		// Per prd-v4: GET /v1/users/{id}/agents - list agents claimed by user (no auth required)
 		r.Get("/users/{id}/agents", usersHandler.GetUserAgents)
 
+		// The profile pages' search verdicts (SPEC.md 27.1), answering like the profile reads.
+		profileSEOHandler := handlers.NewProfileSEOHandler(agentRepo, usersUserRepo, db.NewProfileSEORepository(pool))
+		r.Get("/agents/{id}/seo", profileSEOHandler.GetAgentSEO)
+		r.Get("/users/{id}/seo", profileSEOHandler.GetUserSEO)
+
 		// GET /v1/users/{id}/contributions is retired (idx 73): GET /v1/replies lists a user's replies.
 
 		// Per prd-v5: GET /v1/agents/{id}/badges and /v1/users/{id}/badges (no auth required)

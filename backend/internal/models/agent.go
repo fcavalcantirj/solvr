@@ -105,6 +105,13 @@ type Agent struct {
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 }
 
+// Public is the agent as anyone may read it (SPEC.md 2.7): its contact e-mail is for the agent
+// itself and the human who claimed it, so a public answer serialises this copy instead.
+func (a Agent) Public() Agent {
+	a.Email = ""
+	return a
+}
+
 // AgentStats contains computed statistics for an agent (SPEC.md Part 2.7). The per-type
 // counters were retired with the legacy post types (idx 68).
 type AgentStats struct {

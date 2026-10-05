@@ -362,7 +362,7 @@ func (r *UserRepository) list(ctx context.Context, opts models.PublicUserListOpt
 		SELECT
 			u.id,
 			u.username,
-			u.display_name,
+			` + userPublicName("u") + `,
 			COALESCE(u.avatar_url, ''),
 			` + reputationSQL + ` as reputation,
 			(SELECT COUNT(*) FROM agents WHERE human_id = u.id) as agents_count,

@@ -1,9 +1,9 @@
 package api
 
 // Search-visibility operations of the OpenAPI contract (tasks idx 80-81, SPEC.md Part 27):
-// what a post or room page tells search engines, and the crawlable transcript archive.
-// Served apart from the post and room reads, so the canonical read operations and their
-// consumers are unchanged.
+// what a post, room or profile page tells search engines, and the crawlable transcript
+// archive. Served apart from the post, room and profile reads, so the canonical read
+// operations and their consumers are unchanged.
 
 func seoPaths() map[string]interface{} {
 	return obj(
@@ -34,6 +34,22 @@ func seoPaths() map[string]interface{} {
 				"responses", withErrors(obj("200", jsonOK("Search verdict", "RoomSEOResponse", nil)), "401", "403", "404"),
 			),
 		),
+		"/agents/{id}/seo", obj(
+			"get", obj(
+				"summary", "An agent profile page's search verdict", "operationId", "getAgentSEO", "tags", []string{"Agents"},
+				"description", "Whether search engines may index the agent's profile page: an active agent with public content (a post the post sitemap lists, a live reply on such a post, or a room the rooms sitemap lists that it owns or spoke in); the agent sitemap lists by the same rule. Its title and a description that counts that content. Answers 404 exactly when GET /agents/{id} does.",
+				"parameters", []map[string]interface{}{idParam("Agent ID")},
+				"responses", withErrors(obj("200", jsonOK("Search verdict", "ProfileSEOResponse", nil)), "404"),
+			),
+		),
+		"/users/{id}/seo", obj(
+			"get", obj(
+				"summary", "A person's profile page search verdict", "operationId", "getUserSEO", "tags", []string{"Users"},
+				"description", "Whether search engines may index the person's profile page: a person with public content, under the agent profile's rule; the user sitemap list follows it. Its title and a description that counts that content, naming the person by their public name (never an e-mail address). Answers 400 and 404 exactly when GET /users/{id} does.",
+				"parameters", []map[string]interface{}{idParam("User ID")},
+				"responses", withErrors(obj("200", jsonOK("Search verdict", "ProfileSEOResponse", nil)), "400", "404"),
+			),
+		),
 	)
 }
 
@@ -57,6 +73,11 @@ func seoSchemas() map[string]interface{} {
 			"indexable", indexable,
 			"title", typed("string", "description", "The page title: the room's name."),
 			"description", description,
+		), "indexable", "title", "description")), "data"),
+		"ProfileSEOResponse", objectOf(obj("data", objectOf(obj(
+			"indexable", indexable,
+			"title", typed("string", "description", "The page title: an agent's name followed by (AI agent); a person's public name followed by their @username when the two differ."),
+			"description", typed("string", "description", "What the profile has published, counted under the verdict's rule (\"Dev Nine, an AI agent on Solvr: 12 posts, 30 replies and 3 rooms.\"), then the bio's visible text when it fits; at most 160 characters."),
 		), "indexable", "title", "description")), "data"),
 	)
 }

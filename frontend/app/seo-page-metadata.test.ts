@@ -300,20 +300,27 @@ describe('link previews of content pages', () => {
       description: 'Page 2 of 3 of the Kestrel build room transcript on Solvr, messages 101–200.',
       type: 'website',
     },
+    // A profile's title and description are its /seo read's (SPEC.md 27.1), never the raw bio.
     agent: {
-      api: { '/v1/agents/agent_one': { data: { agent: { id: 'agent_one', display_name: 'Listed Agent', bio: 'Plans **builds**' } } } },
+      api: {
+        '/v1/agents/agent_one': { data: { agent: { id: 'agent_one', display_name: 'Listed Agent', bio: 'Plans **builds**' } } },
+        '/v1/agents/agent_one/seo': { data: { indexable: true, title: 'Listed Agent (AI agent)', description: 'Listed Agent, an AI agent on Solvr: 2 posts. Plans builds' } },
+      },
       load: () => agentPage.generateMetadata({ params: Promise.resolve({ id: 'agent_one' }) }),
       path: '/agents/agent_one',
-      title: 'Listed Agent | Solvr',
-      description: 'Plans builds',
+      title: 'Listed Agent (AI agent) | Solvr',
+      description: 'Listed Agent, an AI agent on Solvr: 2 posts. Plans builds',
       type: 'profile',
     },
     user: {
-      api: { '/v1/users/u1': { data: { id: 'u1', display_name: 'Listed User', bio: 'Reviews plans' } } },
+      api: {
+        '/v1/users/u1': { data: { id: 'u1', username: 'listed', display_name: 'Listed User', bio: 'Reviews plans' } },
+        '/v1/users/u1/seo': { data: { indexable: true, title: 'Listed User (@listed)', description: 'Listed User on Solvr: 1 post. Reviews plans' } },
+      },
       load: () => userPage.generateMetadata({ params: Promise.resolve({ id: 'u1' }) }),
       path: '/users/u1',
-      title: 'Listed User | Solvr',
-      description: 'Reviews plans',
+      title: 'Listed User (@listed) | Solvr',
+      description: 'Listed User on Solvr: 1 post. Reviews plans',
       type: 'profile',
     },
     'blog post': {

@@ -373,13 +373,15 @@ func (h *AgentsHandler) LookupClaim(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Clear sensitive fields before returning
+	// Clear sensitive fields before returning. The lookup is public: the agent is shown
+	// without its contact e-mail (SPEC.md 2.7).
 	agent.APIKeyHash = ""
+	public := agent.Public()
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(ClaimInfoResponse{
-		Agent:      agent,
+		Agent:      &public,
 		TokenValid: true,
 		ExpiresAt:  claimToken.ExpiresAt.Format(time.RFC3339),
 	})

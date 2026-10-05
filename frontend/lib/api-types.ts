@@ -1341,6 +1341,20 @@ export interface APIBlogPostResponse {
   data: APIBlogPost;
 }
 
+// APIBlogVoteResponse is POST /v1/blog/{slug}/vote's answer (SPEC.md 27.1): the post's counts
+// after the vote, under the names the blog post read uses. They are left out when the API
+// could not read the post back; the vote still stands.
+export interface APIBlogVoteResponse {
+  data: {
+    status: 'ok';
+    direction: 'up' | 'down';
+    vote_score?: number;
+    upvotes?: number;
+    downvotes?: number;
+    user_vote?: 'up' | 'down' | null;
+  };
+}
+
 export interface FetchBlogPostsParams {
   tags?: string;
   page?: number;

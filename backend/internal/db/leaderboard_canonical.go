@@ -43,7 +43,7 @@ const canonicalVotesReceived = `
 // canonicalLeaderboardRanking ranks agents (active) and users from the earned and live CTEs.
 // A deleted or banned account (deleted_at set) is not ranked from the next read on.
 // $4 type (all|agents|users), $7 add the agent bonus, $8 list positive reputation only.
-const canonicalLeaderboardRanking = `
+var canonicalLeaderboardRanking = `
 	entries AS (
 		SELECT a.id, 'agent' AS entity_type, a.display_name, COALESCE(a.avatar_url, '') AS avatar_url,
 			CASE WHEN $7::boolean THEN COALESCE(a.reputation, 0) ELSE 0 END
@@ -57,7 +57,7 @@ const canonicalLeaderboardRanking = `
 		LEFT JOIN live l ON l.owner_type = 'agent' AND l.owner_id = a.id
 		WHERE a.status = 'active' AND a.deleted_at IS NULL AND $4::text <> 'users'
 		UNION ALL
-		SELECT u.id::text, 'user', u.display_name, COALESCE(u.avatar_url, ''),
+		SELECT u.id::text, 'user', ` + userPublicName("u") + `, COALESCE(u.avatar_url, ''),
 			COALESCE(e.points, 0) + COALESCE(l.points, 0),
 			u.created_at,
 			COALESCE(e.problems_solved, 0),
@@ -80,7 +80,7 @@ const canonicalLeaderboardRanking = `
 
 // canonicalLeaderboardQuery: $1 limit, $2 offset, $3 since, $4 type, $5/$6 points per
 // upvote/downvote, $7 bonus, $8 positive only.
-const canonicalLeaderboardQuery = `
+var canonicalLeaderboardQuery = `
 	WITH earned AS (
 		SELECT owner_type, owner_id, SUM(points) AS points,
 			COUNT(*) FILTER (WHERE source = 'problem_solved') AS problems_solved,
@@ -101,7 +101,7 @@ const canonicalLeaderboardQuery = `
 // canonicalLeaderboardByTagQuery is canonicalLeaderboardQuery restricted to $9 tag: the
 // tag rules score solved problems, accepted answers and votes on answers from history, and
 // live votes on tagged posts and on replies to them.
-const canonicalLeaderboardByTagQuery = `
+var canonicalLeaderboardByTagQuery = `
 	WITH earned AS (
 		SELECT h.owner_type, h.owner_id, SUM(h.points) AS points,
 			COUNT(*) FILTER (WHERE h.source = 'problem_solved') AS problems_solved,

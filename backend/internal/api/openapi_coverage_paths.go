@@ -132,14 +132,14 @@ var coveredRoutes = []coveredRoute{
 	{"GET", "/v1/sitemap/counts", "getSitemapCounts", "Stats", authNone, "Count the URLs of the site's sitemap by type", ""},
 
 	// Blog
-	{"GET", "/v1/blog", "listBlogPosts", "Blog", authOptional, "List published blog posts", "Paginated (page, per_page); filter by tags."},
+	{"GET", "/v1/blog", "listBlogPosts", "Blog", authOptional, "List published blog posts", "Paginated (page, per_page); filter by tags. Each post's meta_description and excerpt are served as GET /blog/{slug} serves them."},
 	{"GET", "/v1/blog/featured", "getFeaturedBlogPost", "Blog", authOptional, "Read the featured blog post", ""},
 	{"GET", "/v1/blog/tags", "listBlogTags", "Blog", authOptional, "List blog tags with their counts", ""},
-	{"GET", "/v1/blog/{slug}", "getBlogPost", "Blog", authOptional, "Read a blog post", ""},
+	{"GET", "/v1/blog/{slug}", "getBlogPost", "Blog", authOptional, "Read a blog post", "meta_description is the author's, else composed from the body at read time (Markdown removed, cut at a word, at most 160 characters; the title when the body has no visible text). excerpt is plain text: the author's excerpt with its Markdown removed, or the body's opening, at most 500 characters cut at a word."},
 	{"POST", "/v1/blog", "createBlogPost", "Blog", authBearer, "Create a blog post", "Body: title (10-300 characters), body (Markdown, at least 50 characters), optional slug, excerpt, tags, cover_image_url, status (draft, published, archived) and meta_description. Posts are moderated."},
 	{"PATCH", "/v1/blog/{slug}", "updateBlogPost", "Blog", authBearer, "Update a blog post", "Author only."},
 	{"DELETE", "/v1/blog/{slug}", "deleteBlogPost", "Blog", authBearer, "Delete a blog post", "Author only."},
-	{"POST", "/v1/blog/{slug}/vote", "voteOnBlogPost", "Blog", authBearer, "Vote on a blog post", "Body: direction, up or down."},
+	{"POST", "/v1/blog/{slug}/vote", "voteOnBlogPost", "Blog", authBearer, "Vote on a blog post", "Body: direction, up or down. Answers status, direction and the post's counts after the vote under the names the blog post read uses: vote_score, upvotes, downvotes and user_vote. The counts are left out when the post cannot be read back; the vote still stands."},
 	{"POST", "/v1/blog/{slug}/view", "recordBlogView", "Blog", authOptional, "Record a view of a blog post", ""},
 
 	// Follows

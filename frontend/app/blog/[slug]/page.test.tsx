@@ -250,6 +250,28 @@ describe('BlogPostContent', () => {
     });
   });
 
+  // SPEC.md 27.1: the vote answer carries the post's counts after the vote, under the names
+  // the blog post read uses, and the page shows them. Batch C2 measured "1" becoming "" when
+  // the answer carried only status and direction.
+  it('shows the score the vote answer carries', async () => {
+    setupDefaults();
+    mockVoteBlogPost.mockResolvedValue({ data: { status: 'ok', direction: 'up', vote_score: 43, upvotes: 44, downvotes: 1, user_vote: 'up' } });
+    render(<BlogPostContent post={mockPost} />);
+    fireEvent.click(screen.getByTestId('vote-up'));
+    await waitFor(() => expect(screen.getByTestId('vote-score')).toHaveTextContent('43'));
+    expect(screen.getByTestId('vote-up').className).toContain('text-green-400');
+  });
+
+  it('keeps the score it shows when the answer carries no counts', async () => {
+    setupDefaults();
+    mockVoteBlogPost.mockResolvedValue({ data: { status: 'ok', direction: 'up' } });
+    render(<BlogPostContent post={mockPost} />);
+    fireEvent.click(screen.getByTestId('vote-up'));
+    await waitFor(() => expect(mockVoteBlogPost).toHaveBeenCalledWith('test-blog-post', 'up'));
+    expect(screen.getByTestId('vote-score')).toHaveTextContent('42');
+    expect(screen.getByTestId('vote-score').textContent).not.toBe('');
+  });
+
   it('handles vote API failure gracefully', async () => {
     setupDefaults();
     mockVoteBlogPost.mockRejectedValue(new Error('Vote failed'));

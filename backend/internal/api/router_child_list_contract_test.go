@@ -76,10 +76,10 @@ func TestStatusContract_ChildListsAnswerLikeTheirParent(t *testing.T) {
 		ids      map[string]string
 	}{
 		{"/v1/posts/{id}", []string{"/v1/posts/{id}/replies", "/v1/posts/{id}/rooms", "/v1/posts/{id}/seo"}, postIDs},
-		{"/v1/users/{id}", []string{"/v1/users/{id}/agents", "/v1/users/{id}/badges"}, map[string]string{
+		{"/v1/users/{id}", []string{"/v1/users/{id}/agents", "/v1/users/{id}/badges", "/v1/users/{id}/seo"}, map[string]string{
 			"live": liveUserID, "malformed": malformedResourceID, "absent": uuid.NewString(),
 		}},
-		{"/v1/agents/{id}", []string{"/v1/agents/{id}/badges", "/v1/agents/{id}/checkpoints"}, map[string]string{
+		{"/v1/agents/{id}", []string{"/v1/agents/{id}/badges", "/v1/agents/{id}/checkpoints", "/v1/agents/{id}/seo"}, map[string]string{
 			"live": liveAgentID, "malformed": malformedResourceID, "absent": uuid.NewString(),
 		}},
 	}

@@ -959,9 +959,10 @@ func TestUpdateAgent_ModelReputationBonus_FirstTime(t *testing.T) {
 	var resp GetAgentResponse
 	json.NewDecoder(rr.Body).Decode(&resp)
 
-	// Verify agent got +10 reputation for setting model
-	if resp.Data.Agent.Reputation != 10 {
-		t.Errorf("expected reputation 10 after setting model, got %d", resp.Data.Agent.Reputation)
+	// Verify agent got +10 reputation for setting model: the bonus is stored on the agent
+	// (the response carries the canonical reputation of its stats).
+	if got := repo.agents["my_agent"].Reputation; got != 10 {
+		t.Errorf("expected stored reputation 10 after setting model, got %d", got)
 	}
 
 	// Verify model is set
@@ -1007,8 +1008,8 @@ func TestUpdateAgent_ModelReputationBonus_NoBonus(t *testing.T) {
 	json.NewDecoder(rr.Body).Decode(&resp)
 
 	// Verify reputation did NOT change (no bonus for changing model)
-	if resp.Data.Agent.Reputation != 50 {
-		t.Errorf("expected reputation 50 (unchanged), got %d", resp.Data.Agent.Reputation)
+	if got := repo.agents["my_agent"].Reputation; got != 50 {
+		t.Errorf("expected stored reputation 50 (unchanged), got %d", got)
 	}
 
 	// Verify model was changed
@@ -1373,5 +1374,27 @@ func TestUpdateAgent_ExternalLinksValidation(t *testing.T) {
 
 	if rr.Code != http.StatusBadRequest {
 		t.Errorf("expected status 400 for too many external links, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+// An agent has one reputation: the profile's agent.reputation is the canonical number its
+// stats, /v1/me and the leaderboard serve, never the bonus column the agents row stores.
+func TestGetAgent_AgentReputationIsTheCanonicalReputation(t *testing.T) {
+	repo := NewMockAgentRepository()
+	handler := NewAgentsHandler(repo, "test-jwt-secret")
+	repo.agents["test_agent"] = &models.Agent{ID: "test_agent", DisplayName: "Test Agent", Reputation: 60}
+
+	rr := httptest.NewRecorder()
+	handler.GetAgent(rr, httptest.NewRequest(http.MethodGet, "/v1/agents/test_agent", nil), "test_agent")
+
+	var resp GetAgentResponse
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp.Data.Stats.Reputation != 1250 || resp.Data.Agent.Reputation != resp.Data.Stats.Reputation {
+		t.Errorf("agent.reputation = %d, stats.reputation = %d; want both 1250", resp.Data.Agent.Reputation, resp.Data.Stats.Reputation)
+	}
+	if repo.agents["test_agent"].Reputation != 60 {
+		t.Errorf("the stored agent was changed: reputation %d", repo.agents["test_agent"].Reputation)
 	}
 }

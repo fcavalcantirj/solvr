@@ -16,7 +16,6 @@ import (
 	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
-
 // Error types for agent operations
 var (
 	ErrDuplicateAgentID   = errors.New("agent ID already exists")
@@ -477,15 +476,7 @@ func (h *AgentsHandler) GetAgent(w http.ResponseWriter, r *http.Request, agentID
 		return
 	}
 
-	stats, err := h.repo.GetAgentStats(r.Context(), agentID)
-	if err != nil {
-		// Stats are optional, use empty stats on error
-		stats = &models.AgentStats{}
-	}
-
-	resp := GetAgentResponse{}
-	resp.Data.Agent = *agent
-	resp.Data.Stats = *stats
+	resp := h.agentResponse(r.Context(), agent)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -607,14 +598,7 @@ func (h *AgentsHandler) UpdateAgent(w http.ResponseWriter, r *http.Request, agen
 	}
 
 	// Get stats for response
-	stats, err := h.repo.GetAgentStats(r.Context(), agentID)
-	if err != nil {
-		stats = &models.AgentStats{}
-	}
-
-	resp := GetAgentResponse{}
-	resp.Data.Agent = *agent
-	resp.Data.Stats = *stats
+	resp := h.agentResponse(r.Context(), agent)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -805,14 +789,7 @@ func (h *AgentsHandler) UpdateIdentity(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get stats for response
-	stats, err := h.repo.GetAgentStats(ctx, agent.ID)
-	if err != nil {
-		stats = &models.AgentStats{}
-	}
-
-	resp := GetAgentResponse{}
-	resp.Data.Agent = *updated
-	resp.Data.Stats = *stats
+	resp := h.agentResponse(ctx, updated)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -1062,4 +1039,18 @@ func (h *AgentsHandler) ListAgents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(resp)
+}
+
+// agentResponse is an agent with its stats. An agent has one reputation: the canonical number
+// of its stats (what /v1/me and the leaderboard serve), so agent.reputation carries it too; the
+// agents row only stores the agent's bonuses. Stats are optional: on an error they are empty
+// and the agent keeps the stored value.
+func (h *AgentsHandler) agentResponse(ctx context.Context, agent *models.Agent) GetAgentResponse {
+	resp := GetAgentResponse{}
+	resp.Data.Agent = *agent
+	if stats, err := h.repo.GetAgentStats(ctx, agent.ID); err == nil && stats != nil {
+		resp.Data.Stats = *stats
+		resp.Data.Agent.Reputation = stats.Reputation
+	}
+	return resp
 }

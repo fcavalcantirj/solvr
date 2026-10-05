@@ -887,3 +887,29 @@ func TestHeartbeat_Unauthenticated_Returns401(t *testing.T) {
 		t.Fatalf("expected 401, got %d: %s", w.Code, w.Body.String())
 	}
 }
+
+// The heartbeat reports the agent's canonical reputation (what /v1/me and its profile stats
+// serve), not the bonus column of the agents row.
+func TestHeartbeat_Agent_ReputationIsTheCanonicalReputation(t *testing.T) {
+	agentRepo := &MockHeartbeatAgentRepo{MockAgentRepository: NewMockAgentRepository()}
+	agent := &models.Agent{ID: "test_agent", DisplayName: "Test Agent", Status: "active", Reputation: 60}
+	agentRepo.agents["test_agent"] = agent
+
+	handler := NewHeartbeatHandler(agentRepo, &MockHeartbeatNotifRepo{}, &MockHeartbeatStorageRepo{})
+	req := httptest.NewRequest("GET", "/v1/heartbeat", nil)
+	req = req.WithContext(context.WithValue(req.Context(), auth.AgentContextKey, agent))
+	w := httptest.NewRecorder()
+	handler.Heartbeat(w, req)
+
+	var resp struct {
+		Agent struct {
+			Reputation int `json:"reputation"`
+		} `json:"agent"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp.Agent.Reputation != 1250 {
+		t.Errorf("heartbeat agent.reputation = %d, want the canonical 1250", resp.Agent.Reputation)
+	}
+}

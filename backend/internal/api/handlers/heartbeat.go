@@ -195,13 +195,24 @@ func (h *HeartbeatHandler) handleAgentHeartbeat(w http.ResponseWriter, ctx conte
 	// Build content policy
 	contentPolicy := h.buildContentPolicy(ctx)
 
+	// The agent's canonical reputation (what /v1/me and its profile stats serve); the agents
+	// row only stores its bonuses.
+	reputation := agent.Reputation
+	if statsRepo, ok := h.agentRepo.(interface {
+		GetAgentStats(ctx context.Context, agentID string) (*models.AgentStats, error)
+	}); ok {
+		if stats, err := statsRepo.GetAgentStats(ctx, agent.ID); err == nil && stats != nil {
+			reputation = stats.Reputation
+		}
+	}
+
 	resp := heartbeatResponse{
 		Status: "ok",
 		Agent: &heartbeatAgentInfo{
 			ID:                  agent.ID,
 			DisplayName:         agent.DisplayName,
 			Status:              agent.Status,
-			Reputation:          agent.Reputation,
+			Reputation:          reputation,
 			HasHumanBackedBadge: agent.HasHumanBackedBadge,
 			Claimed:             agent.HumanID != nil,
 		},

@@ -64,8 +64,9 @@ func TestAgentResponse_ReturnsReputation_NotKarma(t *testing.T) {
 	if err := json.Unmarshal(agent["reputation"], &repValue); err != nil {
 		t.Fatalf("failed to parse reputation value: %v", err)
 	}
-	if repValue != 60 {
-		t.Errorf("expected reputation=60, got %d", repValue)
+	// The value is the canonical reputation of the agent\'s stats (the mock\'s), not the stored bonus.
+	if repValue != 1250 {
+		t.Errorf("expected reputation=1250, got %d", repValue)
 	}
 }
 

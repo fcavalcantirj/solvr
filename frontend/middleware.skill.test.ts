@@ -57,7 +57,7 @@ describe('middleware: a fetch of the skill link is reported to the API', () => {
     expect(init.method).toBe('POST');
     expect(new Headers(init.headers).get('content-type')).toBe('application/json');
     expect(new Headers(init.headers).get('user-agent')).toBe('solvr-web/1.0 (skill-fetch report)');
-    expect(sentBody(spy)).toEqual({ event: 'skill_fetched', flow_id: 'k7m2p9xq', request_mode: '' });
+    expect(sentBody(spy)).toEqual({ event: 'skill_fetched', flow_id: 'k7m2p9xq', request_mode: '', user_agent: '' });
     // The report outlives the response through waitUntil, and that promise never rejects.
     expect(waitUntil).toHaveBeenCalledTimes(1);
     await expect(waitUntil.mock.calls[0][0]).resolves.toBeUndefined();
@@ -74,11 +74,79 @@ describe('middleware: a fetch of the skill link is reported to the API', () => {
     expect(spy.mock.calls.map((_, i) => sentBody(spy, i).request_mode)).toEqual(['navigate', 'cors', 'no-cors']);
   });
 
+  // A bot is not an agent: the app a sentence was pasted into fetches the link to build a
+  // preview, and a crawler may follow it. The web server does not tell them apart; it hands
+  // the request's User-Agent to the API, which does (SPEC.md 25.7).
+  it('hands the request\'s User-Agent to the API as user_agent, raw', () => {
+    const spy = stubFetch();
+    const agents = [
+      'Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)',
+      'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+      'curl/8.7.1',
+      'Mixed CASE,  two  spaces; and "quotes" \\ kept/1.0',
+    ];
+    for (const agent of agents) {
+      middleware(
+        new NextRequest('https://solvr.dev/skill.md?f=k7m2p9xq', { headers: { 'User-Agent': agent } }),
+        fakeEvent().event,
+      );
+    }
+    expect(spy.mock.calls.map((_, i) => sentBody(spy, i).user_agent)).toEqual(agents);
+    // Nothing else in the report changes with it.
+    expect(sentBody(spy, 0)).toEqual({
+      event: 'skill_fetched',
+      flow_id: 'k7m2p9xq',
+      request_mode: '',
+      user_agent: agents[0],
+    });
+  });
+
+  it('sends an empty user_agent when the request names none', () => {
+    const spy = stubFetch();
+    middleware(new NextRequest('https://solvr.dev/skill.md?f=k7m2p9xq'), fakeEvent().event);
+    expect(sentBody(spy).user_agent).toBe('');
+  });
+
+  it('cuts a long User-Agent to its first 200 characters', () => {
+    const spy = stubFetch();
+    const long = `${'a'.repeat(150)} Googlebot/2.1 ${'z'.repeat(300)}`;
+    const exact = 'b'.repeat(200);
+    // Googlebot's smartphone agent is 200 characters long: it is sent whole.
+    const googlebotPhone =
+      'Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) ' +
+      'Chrome/141.0.7390.122 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
+    for (const agent of [long, exact, googlebotPhone, `${exact}c`]) {
+      middleware(
+        new NextRequest('https://solvr.dev/skill.md?f=k7m2p9xq', { headers: { 'User-Agent': agent } }),
+        fakeEvent().event,
+      );
+    }
+    const sent = spy.mock.calls.map((_, i) => sentBody(spy, i).user_agent as string);
+    expect(sent[0]).toHaveLength(200);
+    expect(sent[0]).toBe(long.slice(0, 200));
+    expect(sent[0]).toContain('Googlebot');
+    expect(sent[1]).toBe(exact);
+    expect(googlebotPhone).toHaveLength(200);
+    expect(sent[2]).toBe(googlebotPhone);
+    expect(sent[3]).toBe(exact);
+  });
+
+  it('reports under its own name: the fetcher\'s User-Agent travels in the body only', () => {
+    const spy = stubFetch();
+    middleware(
+      new NextRequest('https://solvr.dev/skill.md?f=k7m2p9xq', { headers: { 'User-Agent': 'Twitterbot/1.0' } }),
+      fakeEvent().event,
+    );
+    const init = spy.mock.calls[0][1] as RequestInit;
+    expect(new Headers(init.headers).get('user-agent')).toBe('solvr-web/1.0 (skill-fetch report)');
+    expect(sentBody(spy).user_agent).toBe('Twitterbot/1.0');
+  });
+
   it('judges nothing: whatever f holds is sent, and only the API decides what it is worth', () => {
     const spy = stubFetch();
     middleware(new NextRequest('https://solvr.dev/skill.md?f=NOT-A-CODE&utm_source=x'), fakeEvent().event);
     middleware(new NextRequest(`https://solvr.dev/skill.md?f=${'a'.repeat(64)}`), fakeEvent().event);
-    expect(sentBody(spy, 0)).toEqual({ event: 'skill_fetched', flow_id: 'NOT-A-CODE', request_mode: '' });
+    expect(sentBody(spy, 0)).toEqual({ event: 'skill_fetched', flow_id: 'NOT-A-CODE', request_mode: '', user_agent: '' });
     expect(sentBody(spy, 1).flow_id).toBe('a'.repeat(64));
     expect(spy).toHaveBeenCalledTimes(2);
   });

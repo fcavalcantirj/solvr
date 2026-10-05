@@ -60,10 +60,16 @@ func setupRoomTestServer(t *testing.T) (*httptest.Server, *db.Pool, func()) {
 func createRoomTestUser(t *testing.T, pool *db.Pool) (string, string) {
 	t.Helper()
 	userID := uuid.New().String()
-	username := fmt.Sprintf("roomtest_%d", time.Now().UnixNano()%1000000)
+	// The username and the referral code are both unique columns, so they come from the
+	// user's own random id and not from the clock. Where the clock ticks in microseconds
+	// UnixNano()%1000000 has only 1000 values, and a test that creates twenty users
+	// (TestAgentClaim_RetriesAndRacesLinkTheAgentOnce) hit a duplicate about one run in five.
+	random := strings.ReplaceAll(userID, "-", "")
+	username := "roomtest_" + random[:12]
 	email := fmt.Sprintf("%s@test.solvr.dev", username)
 
-	referralCode := fmt.Sprintf("RT%06d", time.Now().UnixNano()%1000000)
+	// Characters 20 to 25 of a random UUID are all random (12 and 16 carry its version and variant).
+	referralCode := "RT" + strings.ToUpper(random[20:26])
 	_, err := pool.Exec(context.Background(),
 		`INSERT INTO users (id, username, display_name, email, auth_provider, auth_provider_id, role, referral_code)
 		 VALUES ($1, $2, $3, $4, 'test', $5, 'user', $6)`,

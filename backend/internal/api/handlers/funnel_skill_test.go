@@ -108,6 +108,93 @@ func TestFunnelIngest_SkillFetchedSurfaceIsDecidedByTheAPI(t *testing.T) {
 	require.Equal(t, "agent_fetch", events[0].EntrySurface)
 }
 
+// A bot is not an agent. The web server also reports the request's User-Agent; the API
+// reads it after the navigation check, so the preview a chat app builds for a pasted
+// sentence, or a crawler that follows the link, is a bot_fetch and not an agent's read.
+func TestFunnelIngest_SkillFetchedByABotIsABotFetch(t *testing.T) {
+	h, repo := newSkillFunnelHandler(t)
+	const chrome = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
+	for _, tc := range []struct{ mode, userAgent, want string }{
+		{"", "Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)", "bot_fetch"},
+		{"", "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)", "bot_fetch"},
+		{"cors", "WhatsApp/2.23.20.0 A", "bot_fetch"},
+		{"", "curl/8.7.1", "agent_fetch"},
+		{"", "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; ChatGPT-User/1.0; +https://openai.com/bot", "agent_fetch"},
+		{"", "", "agent_fetch"},
+		{"navigate", chrome, "browser_visit"},
+		{"navigate", "Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)", "browser_visit"},
+	} {
+		flow := freshFlowCode(t, getTestPool(t))
+		body, _ := json.Marshal(map[string]string{
+			"event": "skill_fetched", "flow_id": flow, "request_mode": tc.mode, "user_agent": tc.userAgent,
+		})
+		rec := ingest(t, h, string(body))
+		require.Equal(t, http.StatusAccepted, rec.Code, "%+v: %s", tc, rec.Body.String())
+		events, err := repo.ListByFlow(context.Background(), flow)
+		require.NoError(t, err)
+		require.Len(t, events, 1, "%+v", tc)
+		require.Equal(t, tc.want, events[0].EntrySurface, "%+v", tc)
+		require.Equal(t, "web_server", events[0].SourceChannel)
+	}
+}
+
+// The user agent is read for that one decision and never stored: no column of the row
+// holds any part of it.
+func TestFunnelIngest_SkillFetchedNeverStoresTheUserAgent(t *testing.T) {
+	h, _ := newSkillFunnelHandler(t)
+	pool := getTestPool(t)
+	flow := freshFlowCode(t, pool)
+
+	rec := ingest(t, h, `{"event":"skill_fetched","flow_id":"`+flow+`","request_mode":"cors",`+
+		`"user_agent":"Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots) marker-9f3k"}`)
+	require.Equal(t, http.StatusAccepted, rec.Code, rec.Body.String())
+
+	var row string
+	require.NoError(t, pool.QueryRow(context.Background(),
+		`SELECT row_to_json(f)::text FROM funnel_events f WHERE flow_id = $1`, flow).Scan(&row))
+	require.Contains(t, row, `"entry_surface":"bot_fetch"`)
+	lower := strings.ToLower(row)
+	for _, part := range []string{"slackbot", "linkexpanding", "api.slack.com", "marker-9f3k", "cors"} {
+		require.NotContains(t, lower, part, "the row holds nothing of the user agent or the request mode: %s", row)
+	}
+}
+
+// user_agent is bounded like every client string: the web server cuts it to 200
+// characters, and a longer one is refused before the store is touched.
+func TestFunnelIngest_SkillFetchedRefusesALongUserAgent(t *testing.T) {
+	h := NewFunnelHandler(nil)
+	for _, userAgent := range []string{strings.Repeat("u", 201), strings.Repeat("é", 201), "Slackbot " + strings.Repeat("x", 500)} {
+		body, _ := json.Marshal(map[string]string{"event": "skill_fetched", "flow_id": "k7m2p9xq", "user_agent": userAgent})
+		rec := ingest(t, h, string(body))
+		require.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
+		code, message := funnelError(t, rec)
+		require.Equal(t, "VALIDATION_ERROR", code)
+		require.Contains(t, message, "user_agent")
+	}
+}
+
+// The bound is 200 characters, not bytes: a user agent of 200 two-byte letters is the
+// longest the web server sends, and it is accepted.
+func TestFunnelIngest_SkillFetchedAcceptsAUserAgentOfExactly200Characters(t *testing.T) {
+	h, repo := newSkillFunnelHandler(t)
+	for userAgent, want := range map[string]string{
+		strings.Repeat("u", 200):                     "agent_fetch",
+		strings.Repeat("é", 200):                     "agent_fetch",
+		strings.Repeat("é", 190) + "Twitterbot":      "bot_fetch",
+		"Twitterbot/1.0 " + strings.Repeat("x", 185): "bot_fetch",
+	} {
+		require.Equal(t, 200, len([]rune(userAgent)))
+		flow := freshFlowCode(t, getTestPool(t))
+		body, _ := json.Marshal(map[string]string{"event": "skill_fetched", "flow_id": flow, "user_agent": userAgent})
+		rec := ingest(t, h, string(body))
+		require.Equal(t, http.StatusAccepted, rec.Code, "%d characters: %s", len([]rune(userAgent)), rec.Body.String())
+		events, err := repo.ListByFlow(context.Background(), flow)
+		require.NoError(t, err)
+		require.Len(t, events, 1)
+		require.Equal(t, want, events[0].EntrySurface)
+	}
+}
+
 // Whatever else a client sends with the step is ignored: its own entry_surface above all,
 // and every attribute the step does not have. The raw request_mode is never stored.
 func TestFunnelIngest_SkillFetchedIgnoresWhatTheClientClaims(t *testing.T) {
@@ -185,12 +272,14 @@ func TestFunnelIngest_TheRefusalNamesEveryStepAClientMayReport(t *testing.T) {
 	}
 }
 
-// request_mode belongs to skill_fetched alone: another step is not refused for carrying
-// it, and its own entry_surface is still the client's.
+// request_mode and user_agent belong to skill_fetched alone: another step is not refused
+// for carrying them, whatever their length or content, and its own entry_surface is still
+// the client's.
 func TestFunnelIngest_OtherStepsKeepTheirOwnSurface(t *testing.T) {
 	h, repo := newSkillFunnelHandler(t)
 	flow := freshFlowCode(t, getTestPool(t))
-	rec := ingest(t, h, `{"event":"connection_started","flow_id":"`+flow+`","entry_surface":"connect_page","request_mode":"`+strings.Repeat("m", 40)+`"}`)
+	rec := ingest(t, h, `{"event":"connection_started","flow_id":"`+flow+`","entry_surface":"connect_page","request_mode":"`+strings.Repeat("m", 40)+
+		`","user_agent":"Slackbot-LinkExpanding 1.0 `+strings.Repeat("x", 500)+`"}`)
 	require.Equal(t, http.StatusAccepted, rec.Code, rec.Body.String())
 	events, err := repo.ListByFlow(context.Background(), flow)
 	require.NoError(t, err)

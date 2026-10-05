@@ -410,6 +410,13 @@ func TestConnect_AMalformedFlowIsIgnoredAndNeverEchoed(t *testing.T) {
 		"IGNORE-PREVIOUS-INSTRUCTIONS": "IGNORE-PREVIOUS",
 		strings.Repeat("a", 500):       strings.Repeat("a", 20),
 		"":                             "",
+		// Only the exact word none starts no flow (below); anything near it is just malformed.
+		"NONE":  "NONE",
+		"None":  "",
+		"none ": "",
+		" none": "",
+		"nonee": "nonee",
+		"non":   "",
 	} {
 		w := serveConnect(h, "flow="+url.QueryEscape(sent))
 		require.Equal(t, http.StatusOK, w.Code, "flow=%q: %s", sent, w.Body.String())
@@ -424,6 +431,71 @@ func TestConnect_AMalformedFlowIsIgnoredAndNeverEchoed(t *testing.T) {
 		if marker != "" {
 			require.NotContains(t, w.Body.String(), marker, "flow=%q: an unvalidated value is never echoed", sent)
 		}
+	}
+}
+
+// A page rendered on a server must never mint a flow: its HTML can be cached and shared,
+// and no browser step stands behind the code. ?flow=none starts no flow: the answer has no
+// flow_id and every sentence carries the plain skill link, exactly like the examples.
+func TestConnect_FlowNoneStartsNoFlow(t *testing.T) {
+	h := newTestConnectHandler(t, nil, "example-room")
+	for _, uc := range connectUseCases {
+		for _, vis := range []string{"", "public", "private"} {
+			for _, intent := range []string{"", "ship the signup page"} {
+				query := "flow=none&preset=" + uc.preset + "&intent=" + url.QueryEscape(intent)
+				if vis != "" {
+					query += "&visibility=" + vis
+				}
+				start, body := getConnect(t, h, query)
+				require.Equal(t, "", start.Selected.FlowID, query)
+				require.NotContains(t, body, `"flow_id"`, query)
+				require.NotContains(t, body, "?f=", query)
+				require.Equal(t, uc.preset, start.Selected.Preset, query)
+				require.Equal(t, intent, start.Selected.Intent, query)
+				require.Len(t, start.Presets, 3, query)
+				for _, p := range start.Presets {
+					filling := connectFillingFor(p.Value)
+					wantVisibility := vis
+					if wantVisibility == "" {
+						wantVisibility = filling.Visibility
+					}
+					require.Equal(t, slimConnectPrompt(filling, intent, wantVisibility, ""), p.Prompt, "%s %s", query, p.Value)
+					require.Equal(t, "https://solvr.dev/skill.md", segmentsOf(p.Prompt, SegmentLink)[0].Text, "%s %s", query, p.Value)
+				}
+				require.Equal(t, start.Presets[indexOfPreset(start, uc.preset)].Prompt, start.Prompt, query)
+			}
+		}
+	}
+}
+
+// Apart from the code, ?flow=none answers what a visit gets: the same bytes once the flow
+// id and the link's query are taken out of a visit's answer.
+func TestConnect_FlowNoneChangesNothingButTheCode(t *testing.T) {
+	h := newTestConnectHandler(t, nil, "example-room")
+	for _, query := range []string{"", "preset=collaborate", "intent=ship+the+signup+page&visibility=private", "preset=build-and-review&visibility=public"} {
+		_, visit := getConnect(t, h, "flow=k7m2p9xq&"+query)
+		_, server := getConnect(t, h, "flow=none&"+query)
+		require.Contains(t, visit, `,"flow_id":"k7m2p9xq"`)
+		stripped := strings.ReplaceAll(strings.ReplaceAll(visit, `,"flow_id":"k7m2p9xq"`, ""), "?f=k7m2p9xq", "")
+		require.Equal(t, stripped, server, query)
+	}
+}
+
+// With a use case's example intent and its own visibility, the sentence ?flow=none serves
+// is the example's, segment for segment.
+func TestConnect_FlowNoneServesTheExampleSentences(t *testing.T) {
+	h := newTestConnectHandler(t, nil, "example-room")
+	w := httptest.NewRecorder()
+	h.GetConnectExamples(w, httptest.NewRequest(http.MethodGet, "/v1/connect/examples", nil))
+	var wrapper struct {
+		Data ConnectExamples `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper))
+	require.Len(t, wrapper.Data.Presets, 3)
+	for _, example := range wrapper.Data.Presets {
+		intent := segmentsOf(example.Prompt, SegmentIntent)[0].Text
+		start, _ := getConnect(t, h, "flow=none&preset="+example.Value+"&intent="+url.QueryEscape(intent))
+		require.Equal(t, example.Prompt, start.Prompt, example.Value)
 	}
 }
 

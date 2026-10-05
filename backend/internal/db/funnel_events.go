@@ -111,9 +111,10 @@ func (r *FunnelEventRepository) RecordBrowserEvent(ctx context.Context, ev Brows
 
 // RecordSkillFetched stores the web server's skill_fetched step: the skill link of a
 // copied sentence (skill.md?f=<flow code>) was fetched. The caller has validated the flow
-// code and decided the entry surface (models.FunnelSurfaceAgentFetch or
-// models.FunnelSurfaceBrowserVisit); nothing else a client sent reaches the row. Every
-// fetch is a row: the reports count distinct flows, not fetches.
+// code and decided the entry surface (models.FunnelSurfaceAgentFetch,
+// models.FunnelSurfaceBotFetch or models.FunnelSurfaceBrowserVisit); nothing else a client
+// sent reaches the row, the request's user agent least of all. Every fetch is a row: the
+// reports count distinct flows, not fetches.
 func (r *FunnelEventRepository) RecordSkillFetched(ctx context.Context, flowID, actorType, actorRef, entrySurface string) error {
 	if !models.ValidFunnelActorType(actorType) {
 		actorType = models.FunnelActorAnonymous
@@ -131,10 +132,18 @@ func (r *FunnelEventRepository) RecordSkillFetched(ctx context.Context, flowID, 
 }
 
 // FlowKnown reports whether a flow code is KNOWN: at least one funnel step other than
-// room_created already carries it (the visit that copied the sentence, or the fetch of
-// its skill link). POST /v1/rooms asks this before it keeps a flow code, so a room is
-// only ever attributed to a flow that exists; a room cannot vouch for the code it
-// brought. One lookup by flow_id, served by idx_funnel_flow.
+// room_created already carries it (the visit that copied the sentence, or an agent's
+// fetch of its skill link). POST /v1/rooms asks this before it keeps a flow code, so a
+// room is only ever attributed to a flow that exists; a room cannot vouch for the code it
+// brought.
+//
+// Of the skill fetches only an agent's counts (entry_surface agent_fetch). A bot's fetch
+// and a person's visit vouch for nothing: nobody copied a sentence and no agent read the
+// skill, so the link preview of a made-up code pasted into a chat cannot make that code
+// attributable. A skill_fetched row with any other surface, or none, does not count
+// either.
+//
+// One lookup by flow_id, served by idx_funnel_flow.
 func (r *FunnelEventRepository) FlowKnown(ctx context.Context, flowID string) (bool, error) {
 	if flowID == "" {
 		return false, nil
@@ -142,8 +151,11 @@ func (r *FunnelEventRepository) FlowKnown(ctx context.Context, flowID string) (b
 	var known bool
 	err := r.pool.QueryRow(ctx, `
 		SELECT EXISTS (
-			SELECT 1 FROM funnel_events WHERE flow_id = $1 AND event_name <> 'room_created'
-		)`, flowID).Scan(&known)
+			SELECT 1 FROM funnel_events
+			 WHERE flow_id = $1
+			   AND event_name <> 'room_created'
+			   AND (event_name <> 'skill_fetched' OR entry_surface = $2)
+		)`, flowID, models.FunnelSurfaceAgentFetch).Scan(&known)
 	if err != nil {
 		LogQueryError(ctx, "FlowKnown", "funnel_events", err)
 		return false, fmt.Errorf("look up funnel flow: %w", err)

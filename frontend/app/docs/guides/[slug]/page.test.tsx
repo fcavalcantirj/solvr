@@ -127,6 +127,21 @@ describe('the resume guide (unlisted)', () => {
     expect(text).toContain(resume.tested!.test);
     expect(text).toContain('SEEDED SENTENCE');
   });
+
+  // The page is rendered on the server: its HTML can be cached and shared, and no browser
+  // step stands behind a flow code minted for it. It reads the sentence with flow=none, so
+  // the API mints nothing and the sentence carries the plain skill link (SPEC.md 25.6).
+  it('reads its sentence without starting a flow', async () => {
+    render(await GuidePage(params(resume.slug)));
+
+    const reads = fetchMock.mock.calls
+      .map((call) => new URL(String(call[0])))
+      .filter((url) => url.pathname === '/v1/connect');
+    expect(reads).toHaveLength(1);
+    expect(reads[0].searchParams.get('flow')).toBe('none');
+    expect(reads[0].searchParams.get('preset')).toBe(resume.preset);
+    expect(reads[0].searchParams.get('visibility')).toBe('public');
+  });
 });
 
 describe('guide metadata and missing guides', () => {

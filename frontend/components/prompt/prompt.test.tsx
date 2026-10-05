@@ -74,6 +74,18 @@ describe('PromptSentence', () => {
     expect(link.querySelector('span')).toBeNull();
   });
 
+  // The link is for the agent that receives the sentence. A crawler that renders the page
+  // is told not to walk it: a coded link (?f=) is one visit's, not a page of the site.
+  it.each([
+    ['with a flow code', CONNECT_START.prompt.segments],
+    ['plain', plan.prompt.segments],
+  ])('tells crawlers not to follow the skill link (%s)', (_name, segments) => {
+    render(<p><PromptSentence segments={segments} /></p>);
+    const link = screen.getByRole('link');
+    expect(link).toHaveAttribute('rel', 'nofollow noreferrer');
+    expect(link).toHaveAttribute('target', '_blank');
+  });
+
   it('flips the visibility only when editable, as a switch', () => {
     const onFlip = vi.fn();
     render(<p><PromptSentence segments={plan.prompt.segments} editable onVisibilityToggle={onFlip} /></p>);

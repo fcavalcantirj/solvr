@@ -54,9 +54,11 @@ type ingestFunnelRequest struct {
 	InstructionVersion string `json:"instruction_version"`
 	// Source names the public room (by slug) or post (by id) this step is attributed to.
 	Source *funnelSourceRef `json:"source,omitempty"`
-	// RequestMode belongs to skill_fetched alone: the Sec-Fetch-Mode header of the
-	// request for the skill. The API reads it to set entry_surface and never stores it.
+	// RequestMode and UserAgent belong to skill_fetched alone: the Sec-Fetch-Mode and the
+	// User-Agent header of the request for the skill. The API reads them to set
+	// entry_surface (funnel_skill.go) and never stores them. Any other step ignores both.
 	RequestMode string `json:"request_mode"`
+	UserAgent   string `json:"user_agent"`
 }
 
 // IngestBrowserEvent handles POST /v1/analytics/funnel. Public, optional auth:

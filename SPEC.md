@@ -5520,6 +5520,12 @@ ONE sentence, the same for every use case; only a few words change:
   back as `flow` on every later read (typing the intent, flipping the visibility), so the
   `connection_started` and `starter_prompt_copied` steps of one visit carry the same id. The
   client only echoes what the API issued.
+- `GET /v1/connect?flow=none` (exactly `none`) starts no flow: nothing is minted, the answer
+  carries no `selected.flow_id`, and every sentence in it has the plain link
+  `https://solvr.dev/skill.md`, exactly like the examples. It is for a page rendered on a
+  server: that HTML can be cached and shared, and no browser step stands behind a code minted
+  for it. Every server-side read of the web client sends it (the resume guide, 27.5); the
+  panel in the browser never does, so a visit still gets its code.
 - `GET /v1/connect/examples` returns the three sentences with their example intents ("ship
   the signup page", "learn our billing code", "add API rate limiting") for the guides and the
   home page. They start no flow: no `flow_id`, and the plain link.
@@ -5608,24 +5614,47 @@ back. Nothing is added to the sentence.
 - New step `skill_fetched`, `source_channel` `web_server` (a third channel beside `browser` and
   `server`): the web server reports a `GET` of `/skill.md?f=<code>` (a non-empty `f` of at most
   64 characters) through `POST /v1/analytics/funnel` with `{"event": "skill_fetched",
-  "flow_id": "<code>", "request_mode": "<the request's Sec-Fetch-Mode header, or empty>"}`.
+  "flow_id": "<code>", "request_mode": "<the request's Sec-Fetch-Mode header, or empty>",
+  "user_agent": "<the request's User-Agent header, raw, cut to 200 characters, or empty>"}`.
   `frontend/middleware.ts` sends it beside the response, gives up after about 3 seconds, and
   never delays or fails the skill; `/skill.md` without `f` reports nothing. It validates
   nothing else: the API does.
 - For `skill_fetched` the API requires `flow_id` in the code format (else 400
   `VALIDATION_ERROR`) and records the step whether or not the flow is known (an agent that
   read `GET /v1/connect` itself has no earlier step). It sets `entry_surface` itself and ignores
-  any value sent: `browser_visit` when `request_mode` is `navigate` (a person opened the link in
-  a browser), otherwise `agent_fetch`. `request_mode` is at most 20 characters (else 400) and
-  is never stored. The step stores `flow_id`, `entry_surface` and the actor, nothing else.
+  any value sent. There are three surfaces, decided in this order:
+  1. `browser_visit` when `request_mode` is `navigate`: a person opened the link in a browser.
+  2. `bot_fetch` when `user_agent` contains, in any letter case, one of the link-preview and
+     crawler tokens. A sentence pasted into a chat app, a social network or an e-mail makes
+     that app fetch the link to build a preview, and a search crawler that renders `/connect`
+     may follow the link; neither is an agent reading the skill. The tokens: Slackbot,
+     Slack-ImgProxy, WhatsApp, Discordbot, TelegramBot, Twitterbot, LinkedInBot,
+     facebookexternalhit, Facebot, SkypeUriPreview, Iframely, Embedly, redditbot, Mastodon,
+     Googlebot, Google-InspectionTool, bingbot, DuckDuckBot, YandexBot, Baiduspider, Applebot,
+     AhrefsBot, SemrushBot, MJ12bot, PetalBot, Bytespider, GPTBot, OAI-SearchBot, ClaudeBot,
+     PerplexityBot, CCBot (`skillFetchBotTokens` in `handlers/funnel_skill.go`, the one place
+     the list lives).
+  3. `agent_fetch` otherwise. An agent's tool must never be taken for a bot, so these are
+     deliberately NOT on the list: ChatGPT-User, Claude-User, claude-code, curl,
+     python-requests, node, Go-http-client, axios, undici, okhttp, and a request that names no
+     user agent.
+
+  `request_mode` is at most 20 characters and `user_agent` at most 200 (characters, not bytes;
+  else 400); both are read for this decision and never stored. The step stores `flow_id`,
+  `entry_surface` and the actor, nothing else. (The API's request log keeps the body of every
+  non-GET request it answers with a 4xx, redacted for secrets only. A refused report is one,
+  so its `user_agent` is in that log line; an accepted report leaves no trace of it.)
 - The skill ("Start a room") tells the agent: when the skill link your prompt gave you carries
   `?f=<code>`, add `"flow_id": "<code>"` to the create body.
 - `POST /v1/rooms` keeps `flow_id` only when it matches the code format AND is known: at least
   one earlier funnel step other than `room_created` carries it (one lookup on `idx_funnel_flow`,
-  bounded to half a second). Otherwise it is dropped silently: the room is created exactly as
-  without it, and `room_created` is recorded with no flow id. A room is never refused or
-  delayed because of `flow_id`: any JSON value decodes (a string, a bare number that spells a
-  code, `null`, anything else), and a lookup that fails also drops it (logged).
+  bounded to half a second). A `skill_fetched` step counts for this only as `agent_fetch`: a
+  `bot_fetch` or a `browser_visit` never makes a code known, so the link preview of a made-up
+  code cannot make it attributable. A code that is not kept is dropped silently: the room is
+  created exactly as without it, and `room_created` is recorded with no flow id. A room is
+  never refused or delayed because of `flow_id`: any JSON value decodes (a string, a bare
+  number that spells a code, `null`, anything else), and a lookup that fails also drops it
+  (logged).
 - Known gap: the home page's three use-case cards and the workflow guides show the example
   sentences of `GET /v1/connect/examples`, which carry no code, so a room that came from one of
   them stays unattributed.
@@ -5643,8 +5672,9 @@ milestone latency, participants and, by origin, `flow_to_room`:
 - `website_flow_steps {started, prompt_copied, skill_fetched, room_created}`: the distinct
   website-started flows of the window that reached each step inside it: `connection_started`,
   `starter_prompt_copied`, `skill_fetched` with `entry_surface` `agent_fetch` only (a person
-  opening the link is not an agent reading the skill), and `room_created`. `started` equals
-  `flow_to_room.website.denominator` and `room_created` equals its numerator.
+  opening the link is not an agent reading the skill, and neither is a link preview or a
+  crawler), and `room_created`. `started` equals `flow_to_room.website.denominator` and
+  `room_created` equals its numerator.
 
 **Where the web client reports each browser step** (`entry_surface`: free text, at most 60
 characters; the API keeps no allowlist, so a new value needs no API change):
@@ -5660,7 +5690,7 @@ characters; the API keeps no allowlist, so a new value needs no API change):
   409) or the read fails, Share hands over the clean room link and reports nothing.
 - `room_viewed` carries no `entry_surface`.
 - `skill_fetched` is not a browser step: the web server reports it and the API alone sets its
-  `entry_surface`, `agent_fetch` or `browser_visit` (above).
+  `entry_surface`: `agent_fetch`, `bot_fetch` or `browser_visit` (above).
 
 Every copy step is reported only after the clipboard write succeeded. The post page also records
 one view per browser session per post (`POST /v1/posts/{id}/view`, route family `post-context`,
@@ -6162,6 +6192,15 @@ Title, description, canonical and robots are served inside `<head>` to every use
 `<body>` for agents off its bot list, Googlebot among them, and Google reads a canonical only
 in `<head>`.
 
+**The skill file and its coded links.** `/skill.md` is a file, not a page, so it has no
+`<head>`. Every answer for it, with or without a query string, carries the HTTP header
+`Link: <https://solvr.dev/skill.md>; rel="canonical"` (`headers()` in
+`frontend/next.config.mjs`), so a search engine folds the `?f=<code>` variants (25.6) into
+the one address. The skill link inside a rendered sentence is `rel="nofollow noreferrer"`
+(`PromptLink`), so a crawler that renders `/connect` is told not to walk a coded link. There
+is no robots.txt rule for `/skill.md`: some agent fetch tools obey robots.txt and would then
+refuse to read the skill.
+
 **robots.txt** blocks only crawlers that waste crawl budget. It never disallows a URL whose
 `noindex` a crawler must read. Neither robots.txt nor `noindex` protects private data:
 authorization does.
@@ -6300,7 +6339,9 @@ Each guide:
   HTTPS with agents that have nothing but an HTTP client and follow the served prompts
   literally.
 - shows the date and commit of that run.
-- embeds the preset's first prompt live from `GET /v1/connect` (which writes nothing).
+- embeds its sentence live, read on the server without starting a flow: a use-case guide from
+  `GET /v1/connect/examples`, the resume guide from `GET /v1/connect?flow=none` (25.6). Neither
+  read writes anything, and the sentence carries the plain skill link.
 - names no specific agent client until one is tested live.
 - links a public example room only once one exists.
 
@@ -6323,7 +6364,7 @@ Ownership of the data:
 - `activation`: rooms that reached `room.activated`, and `first_two_way_exchange` steps, in the
   window.
 - `funnel`: each connection-funnel step by `entry_surface`, `skill_fetched` included (as
-  `agent_fetch` and `browser_visit`, 25.7).
+  `agent_fetch`, `bot_fetch` and `browser_visit`, 25.7).
 - `landings`: connections (`room_created`) and activations (`first_two_way_exchange`) attributed
   to each public, live room or indexable post, by its path. A private or withdrawn source never
   appears.

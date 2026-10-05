@@ -2,6 +2,7 @@ package models
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -19,6 +20,35 @@ func TestFunnelVocabulary_SkillFetchedIsReportedByTheWebServer(t *testing.T) {
 	}
 	if !IsClientReportedFunnelEvent(FunnelSkillFetched) {
 		t.Error("the web server reports skill_fetched through the public ingest")
+	}
+}
+
+// A skill fetch is one of three things, and the contract a reader is served says how the
+// API tells them apart: a person's browser, a link preview or crawler, or an agent.
+func TestFunnelVocabulary_ASkillFetchHasThreeSurfaces(t *testing.T) {
+	surfaces := map[string]string{
+		"agent_fetch":   FunnelSurfaceAgentFetch,
+		"bot_fetch":     FunnelSurfaceBotFetch,
+		"browser_visit": FunnelSurfaceBrowserVisit,
+	}
+	var description string
+	for _, spec := range FunnelEventContract() {
+		if spec.Name == FunnelSkillFetched {
+			description = spec.Description
+		}
+	}
+	for want, got := range surfaces {
+		if got != want {
+			t.Errorf("surface %q is spelled %q", want, got)
+		}
+		if !strings.Contains(description, want) {
+			t.Errorf("the contract of skill_fetched does not name %s: %s", want, description)
+		}
+	}
+	for _, word := range []string{"request_mode", "user_agent", "never stored"} {
+		if !strings.Contains(description, word) {
+			t.Errorf("the contract of skill_fetched does not say %q: %s", word, description)
+		}
 	}
 }
 

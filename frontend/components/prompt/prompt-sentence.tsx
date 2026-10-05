@@ -175,7 +175,9 @@ function Token({
 }
 
 // The skill link is for the agent; it stays quiet and in the label face. The part
-// after "?" only rides along for the agent, so it steps back further.
+// after "?" only rides along for the agent, so it steps back further. A crawler that
+// renders the page is told not to follow it (nofollow): a coded link is one visit's
+// address, not a page of the site.
 function PromptLink({ text }: { text: string }) {
   const cut = text.indexOf("?");
   const base = cut === -1 ? text : text.slice(0, cut);
@@ -185,7 +187,7 @@ function PromptLink({ text }: { text: string }) {
       data-kind="link"
       href={text}
       target="_blank"
-      rel="noreferrer"
+      rel="nofollow noreferrer"
       className="whitespace-nowrap font-mono text-[max(0.45em,0.8125rem)] tracking-normal text-foreground underline decoration-foreground/30 decoration-1 underline-offset-[0.3em] transition-colors hover:decoration-foreground"
     >
       {base}

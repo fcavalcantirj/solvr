@@ -29,16 +29,33 @@ func TestOpenAPI_DocumentsTheFlowCode(t *testing.T) {
 	}
 
 	describes("GET /connect", description("get", "/connect"),
-		"selected.flow_id", "8 characters", models.FlowCodeAlphabet, "skill.md?f=", "flow query parameter", "ignored")
+		"selected.flow_id", "8 characters", models.FlowCodeAlphabet, "skill.md?f=", "flow query parameter", "ignored",
+		// A page rendered on a server starts no flow.
+		"flow=none", "no selected.flow_id", "plain link https://solvr.dev/skill.md", "rendered on a server")
 	describes("POST /analytics/funnel", description("post", "/analytics/funnel"),
 		models.FunnelSkillFetched, "flow_id", "request_mode", "Sec-Fetch-Mode", "entry_surface",
-		models.FunnelSurfaceAgentFetch, models.FunnelSurfaceBrowserVisit)
+		models.FunnelSurfaceAgentFetch, models.FunnelSurfaceBrowserVisit,
+		// A bot is not an agent: the third surface, read from the reported user agent.
+		"user_agent", "User-Agent", "200 characters", models.FunnelSurfaceBotFetch, "link-preview", "crawler")
+
+	// The examples endpoint says what it serves. Its summary used to describe a list of rooms.
+	examples := operation(t, spec, "get", "/connect/examples")
+	require.Equal(t, "Read the three example connect sentences", examples["summary"])
+	describes("GET /connect/examples", description("get", "/connect/examples"),
+		"example intent", "no flow_id", "https://solvr.dev/skill.md")
+	for _, op := range []string{"summary", "description"} {
+		text, _ := examples[op].(string)
+		require.NotContains(t, strings.ToLower(text), "rooms that started", "GET /connect/examples %s", op)
+		require.NotContains(t, strings.ToLower(text), "list public rooms", "GET /connect/examples %s", op)
+	}
 	describes("GET /analytics/funnel/contract", description("get", "/analytics/funnel/contract"),
 		models.FunnelSourceBrowser, models.FunnelSourceWebServer, models.FunnelSourceServer)
 
 	flowID := at(t, spec, "components", "schemas", "CreateRoomRequest", "properties", "flow_id").(map[string]interface{})
 	require.Equal(t, "string", flowID["type"])
 	text, _ := flowID["description"].(string)
-	describes("CreateRoomRequest.flow_id", text, "?f=", "earlier funnel step", "ignored", "never refused")
+	describes("CreateRoomRequest.flow_id", text, "?f=", "earlier funnel step", "ignored", "never refused",
+		// A bot's fetch or a person's visit of the skill link does not make a code known.
+		"link preview", "crawler", "does not count")
 	require.False(t, strings.Contains(text, "prompt carried."), "the former wording is gone")
 }

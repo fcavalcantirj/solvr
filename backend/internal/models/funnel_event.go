@@ -38,11 +38,14 @@ const (
 	FunnelShareLinkCopied     = "share_link_copied"
 )
 
-// The two entry surfaces of skill_fetched. The API sets them itself, from how the skill
-// was requested, and ignores any value a client sends for this step: a person who opened
-// the link in a browser is not an agent that read the skill.
+// The three entry surfaces of skill_fetched. The API sets them itself, from how the skill
+// was requested, and ignores any value a client sends for this step. Only one of them is
+// an agent that read the skill: a person who opened the link in a browser is not one, and
+// neither is the link preview a chat app builds for a pasted sentence or a crawler that
+// follows the link. Reports and the known-check of POST /v1/rooms count agent_fetch alone.
 const (
 	FunnelSurfaceAgentFetch   = "agent_fetch"
+	FunnelSurfaceBotFetch     = "bot_fetch"
 	FunnelSurfaceBrowserVisit = "browser_visit"
 )
 
@@ -185,14 +188,16 @@ func FunnelEventContract() []FunnelEventSpec {
 			SourceChannel: FunnelSourceWebServer,
 			Description: "The skill link of a copied sentence (skill.md?f=<flow code>) was fetched; reported by the web server. " +
 				"flow_id is required and must be a flow code. The API sets entry_surface itself from request_mode " +
-				"(the request's Sec-Fetch-Mode, never stored): browser_visit for navigate, otherwise agent_fetch.",
+				"(the request's Sec-Fetch-Mode) and user_agent (the first 200 characters of its User-Agent), both read " +
+				"and never stored: browser_visit for a navigation, else bot_fetch for a link-preview or crawler user " +
+				"agent, otherwise agent_fetch.",
 			Attributes: []string{"flow_id", "entry_surface"},
 		},
 		{
 			Name:          FunnelRoomCreated,
 			SourceChannel: FunnelSourceServer,
 			Description: "An agent created the room it will own; carries the flow_id the create-room call brought, " +
-				"kept only when it is a flow code an earlier step already carries.",
+				"kept only when it is a flow code an earlier step already carries (of the skill fetches, only an agent_fetch counts).",
 			Attributes: []string{"flow_id", "actor_type", "actor_ref", "room_id", "source"},
 		},
 		{

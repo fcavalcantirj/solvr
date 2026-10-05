@@ -12,6 +12,8 @@ const SKILL_FLOW_PARAM = 'f'
 const SKILL_FLOW_MAX_LENGTH = 64
 // The report is abandoned after this long. It never holds the response either way.
 const SKILL_REPORT_TIMEOUT_MS = 3000
+// How much of the request's User-Agent is handed to the API (it accepts no more).
+const SKILL_USER_AGENT_MAX_LENGTH = 200
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev'
 // The report names its sender, so the API host and the edge in front of it can tell it
@@ -19,11 +21,12 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev'
 const SKILL_REPORT_USER_AGENT = 'solvr-web/1.0 (skill-fetch report)'
 
 // reportSkillFetched tells the API that the skill link was fetched with a flow code, and
-// how (the request's Sec-Fetch-Mode: the API uses it to tell a person's browser from an
-// agent, and decides everything else too). The request starts at once, beside the
+// how: the request's Sec-Fetch-Mode and its User-Agent, as they came. The API uses them to
+// tell a person's browser, a link preview or crawler, and an agent apart, and decides
+// everything else too; nothing is judged here. The request starts at once, beside the
 // response. The promise it returns settles when the API answered, failed or the timeout
 // passed, and it never rejects: a statistic must not break the page it measures.
-function reportSkillFetched(flowId: string, requestMode: string): Promise<void> {
+function reportSkillFetched(flowId: string, requestMode: string, userAgent: string): Promise<void> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), SKILL_REPORT_TIMEOUT_MS)
   let sent: Promise<unknown>
@@ -31,7 +34,12 @@ function reportSkillFetched(flowId: string, requestMode: string): Promise<void> 
     sent = fetch(`${API_BASE_URL}/v1/analytics/funnel`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'User-Agent': SKILL_REPORT_USER_AGENT },
-      body: JSON.stringify({ event: 'skill_fetched', flow_id: flowId, request_mode: requestMode }),
+      body: JSON.stringify({
+        event: 'skill_fetched',
+        flow_id: flowId,
+        request_mode: requestMode,
+        user_agent: userAgent,
+      }),
       signal: controller.signal,
     })
   } catch {
@@ -105,7 +113,11 @@ export function middleware(request: NextRequest, event?: NextFetchEvent) {
   if (pathname === SKILL_PATH && request.method === 'GET') {
     const flowId = request.nextUrl.searchParams.get(SKILL_FLOW_PARAM)
     if (flowId && flowId.length <= SKILL_FLOW_MAX_LENGTH) {
-      const report = reportSkillFetched(flowId, request.headers.get('sec-fetch-mode') ?? '')
+      const report = reportSkillFetched(
+        flowId,
+        request.headers.get('sec-fetch-mode') ?? '',
+        (request.headers.get('user-agent') ?? '').slice(0, SKILL_USER_AGENT_MAX_LENGTH),
+      )
       event?.waitUntil(report)
     }
   }

@@ -89,9 +89,12 @@ function UseCaseGuide({ guide, example }: { guide: WorkflowGuide; example?: APIC
 
 // livePrompt reads the plan-and-build sentence the resume guide shows. A guide stays
 // useful without it, so a failure leaves the embed out and the page points at /connect.
+// This read happens on the server, so it asks for no flow (flow=none): the page's HTML
+// can be cached and shared, and no browser step stands behind a code minted for it. The
+// sentence then carries the plain skill link, like the examples.
 async function livePrompt(preset: string): Promise<string | null> {
   try {
-    const res = await fetch(`${API_BASE_URL}/v1/connect?preset=${preset}&visibility=public`, { cache: "no-store" });
+    const res = await fetch(`${API_BASE_URL}/v1/connect?preset=${preset}&visibility=public&flow=none`, { cache: "no-store" });
     if (!res.ok) return null;
     const json = await res.json();
     return json.data?.prompt?.text ?? null;

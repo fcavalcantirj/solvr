@@ -78,8 +78,8 @@ type ActivationByOrigin struct {
 // browser connection_started is in it) through the steps that tie a visit to a room:
 // how many distinct flows reached each step inside the window. SkillFetched counts only
 // an agent's fetch (entry_surface agent_fetch): a person who opened the skill link in a
-// browser is not an agent that read it. Started is flow_to_room.website's denominator and
-// RoomCreated its numerator.
+// browser is not an agent that read it, and neither is a link preview or a crawler
+// (bot_fetch). Started is flow_to_room.website's denominator and RoomCreated its numerator.
 type WebsiteFlowSteps struct {
 	Started      int `json:"started"`
 	PromptCopied int `json:"prompt_copied"`

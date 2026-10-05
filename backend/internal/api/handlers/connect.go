@@ -74,7 +74,8 @@ type ConnectIntentField struct {
 // of this visit. FlowID is a flow code (models.ValidFlowCode): the browser reports its
 // connection_started and starter_prompt_copied steps with it, the skill link of every
 // sentence in the answer carries it (?f=), and the browser sends it back as ?flow= on its
-// later reads so one visit stays one flow.
+// later reads so one visit stays one flow. It is absent when the caller asked for no flow
+// (?flow=none) or when no code could be minted; the sentences then carry the plain link.
 type ConnectSelection struct {
 	Intent     string `json:"intent"`
 	Preset     string `json:"preset"`
@@ -212,15 +213,26 @@ func newFlowID() string {
 	return string(code)
 }
 
-// flowIDFor is the flow id of one answer: the code the caller sent back, when it is
-// exactly a flow code, so the reads of one visit stay one flow; otherwise a new one.
-// Anything else is ignored without an error and never echoed, because the flow id lands
-// in a sentence people copy.
+// connectFlowNone is the one value of ?flow= that starts no flow: nothing is minted, the
+// answer has no flow id, and its sentences carry the plain skill link, exactly like the
+// examples. A page rendered on a server sends it, because that HTML can be cached and
+// shared and no browser step stands behind a code minted for it. It is not a flow code
+// (too short), so it can never be taken for one.
+const connectFlowNone = "none"
+
+// flowIDFor is the flow id of one answer: none at all when the caller asked for no flow
+// (connectFlowNone); the code the caller sent back, when it is exactly a flow code, so the
+// reads of one visit stay one flow; otherwise a new one. Anything else is ignored without
+// an error and never echoed, because the flow id lands in a sentence people copy.
 func flowIDFor(sent string) string {
-	if models.ValidFlowCode(sent) {
+	switch {
+	case sent == connectFlowNone:
+		return ""
+	case models.ValidFlowCode(sent):
 		return sent
+	default:
+		return newFlowID()
 	}
-	return newFlowID()
 }
 
 // GetConnect handles GET /v1/connect (public, no auth).
@@ -230,7 +242,9 @@ func flowIDFor(sent string) string {
 //	?visibility= public | private; when absent each use case asks for its own
 //	?from_room= / ?post=  seed the intent from a public room or a published post
 //	?flow=       the flow code of an earlier answer of this visit; reused when well-formed,
-//	             otherwise ignored and a new one minted (never a 400)
+//	             otherwise ignored and a new one minted (never a 400). The word none
+//	             starts no flow: no flow id, the plain skill link (a page rendered on a
+//	             server sends it)
 //
 // An unknown preset or visibility is a 400: the API never guesses which room somebody
 // meant to create.

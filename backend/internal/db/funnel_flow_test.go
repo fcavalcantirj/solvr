@@ -42,10 +42,11 @@ func TestFunnelEventRepository_RecordSkillFetched(t *testing.T) {
 
 	require.NoError(t, repo.RecordSkillFetched(ctx, flow, models.FunnelActorAnonymous, "", models.FunnelSurfaceAgentFetch))
 	require.NoError(t, repo.RecordSkillFetched(ctx, flow, models.FunnelActorAgent, db.PseudonymizeActor("agent_skill"), models.FunnelSurfaceBrowserVisit))
+	require.NoError(t, repo.RecordSkillFetched(ctx, flow, models.FunnelActorAnonymous, "", models.FunnelSurfaceBotFetch))
 
 	events, err := repo.ListByFlow(ctx, flow)
 	require.NoError(t, err)
-	require.Len(t, events, 2, "every fetch is a row: the reports count distinct flows")
+	require.Len(t, events, 3, "every fetch is a row: the reports count distinct flows")
 	for _, e := range events {
 		assert.Equal(t, models.FunnelSkillFetched, e.EventName)
 		assert.Equal(t, models.FunnelSourceWebServer, e.SourceChannel)
@@ -58,9 +59,11 @@ func TestFunnelEventRepository_RecordSkillFetched(t *testing.T) {
 	assert.Equal(t, "browser_visit", events[1].EntrySurface)
 	assert.Equal(t, models.FunnelActorAgent, events[1].ActorType)
 	assert.Equal(t, db.PseudonymizeActor("agent_skill"), events[1].ActorRef)
+	assert.Equal(t, "bot_fetch", events[2].EntrySurface)
 }
 
-// A flow is KNOWN when at least one step other than room_created carries its code.
+// A flow is KNOWN when at least one step other than room_created carries its code. Of the
+// skill fetches only an agent's counts: a bot's fetch and a person's visit vouch for nothing.
 func TestFunnelEventRepository_FlowKnown(t *testing.T) {
 	pool, ctx := newFunnelTestPool(t)
 	repo := db.NewFunnelEventRepository(pool)
@@ -85,9 +88,53 @@ func TestFunnelEventRepository_FlowKnown(t *testing.T) {
 		assert.True(t, known(flow))
 	})
 
-	t.Run("the web server's skill_fetched alone makes it known", func(t *testing.T) {
+	t.Run("an agent's fetch of the skill link alone makes it known", func(t *testing.T) {
 		flow := newTestFlowCode(t, ctx, pool)
 		require.NoError(t, repo.RecordSkillFetched(ctx, flow, models.FunnelActorAnonymous, "", models.FunnelSurfaceAgentFetch))
+		assert.True(t, known(flow))
+	})
+
+	// A link preview or a crawler fetched the link, or a person opened it: nobody copied a
+	// sentence and no agent read the skill. A made-up code must not become attributable
+	// because somebody pasted it into a chat.
+	t.Run("a bot's fetch or a person's visit never makes it known", func(t *testing.T) {
+		for _, surface := range []string{models.FunnelSurfaceBotFetch, models.FunnelSurfaceBrowserVisit} {
+			flow := newTestFlowCode(t, ctx, pool)
+			require.NoError(t, repo.RecordSkillFetched(ctx, flow, models.FunnelActorAnonymous, "", surface))
+			require.NoError(t, repo.RecordSkillFetched(ctx, flow, models.FunnelActorAnonymous, "", surface))
+			assert.False(t, known(flow), "%s alone", surface)
+		}
+
+		both := newTestFlowCode(t, ctx, pool)
+		require.NoError(t, repo.RecordSkillFetched(ctx, both, models.FunnelActorAnonymous, "", models.FunnelSurfaceBotFetch))
+		require.NoError(t, repo.RecordSkillFetched(ctx, both, models.FunnelActorAnonymous, "", models.FunnelSurfaceBrowserVisit))
+		assert.False(t, known(both), "a bot's fetch and a person's visit together")
+
+		// The same code becomes known the moment an agent fetches the link.
+		require.NoError(t, repo.RecordSkillFetched(ctx, both, models.FunnelActorAnonymous, "", models.FunnelSurfaceAgentFetch))
+		assert.True(t, known(both))
+	})
+
+	// Only the surfaces the API gives an agent's fetch count: a skill_fetched row with any
+	// other surface, or none, vouches for nothing.
+	t.Run("a skill fetch with an unknown or missing surface does not make it known", func(t *testing.T) {
+		for _, surface := range []string{"", "some_new_surface", "AGENT_FETCH"} {
+			flow := newTestFlowCode(t, ctx, pool)
+			require.NoError(t, repo.RecordSkillFetched(ctx, flow, models.FunnelActorAnonymous, "", surface))
+			assert.False(t, known(flow), "surface %q", surface)
+		}
+	})
+
+	// The rule is about the skill fetch alone: a browser step keeps making a code known
+	// whatever its free-text surface says, and next to a bot's fetch too.
+	t.Run("a browser step beside a bot's fetch still makes it known", func(t *testing.T) {
+		flow := newTestFlowCode(t, ctx, pool)
+		require.NoError(t, repo.RecordSkillFetched(ctx, flow, models.FunnelActorAnonymous, "", models.FunnelSurfaceBotFetch))
+		assert.False(t, known(flow))
+		require.NoError(t, repo.RecordBrowserEvent(ctx, db.BrowserFunnelEvent{
+			FlowID: flow, EventName: models.FunnelStarterPromptCopied, ActorType: models.FunnelActorAnonymous,
+			EntrySurface: models.FunnelSurfaceBotFetch,
+		}))
 		assert.True(t, known(flow))
 	})
 
@@ -148,10 +195,13 @@ func TestActivationAnalytics_WebsiteFlowsAreCountedOncePerFlowWithTheirSteps(t *
 	fetched("aaaaaaa2", "agent_fetch", base.Add(2*time.Minute))
 	created("aaaaaaa2", base.Add(3*time.Minute))
 	created("aaaaaaa2", base.Add(4*time.Minute))
-	// B: copied, then a PERSON opened the skill link in a browser. No agent read it.
+	// B: copied, then a PERSON opened the skill link in a browser and pasted the sentence
+	// into a chat, whose link preview fetched it twice. No agent read it.
 	started("bbbbbbb2", base)
 	copied("bbbbbbb2", base.Add(time.Minute))
 	fetched("bbbbbbb2", "browser_visit", base.Add(2*time.Minute))
+	fetched("bbbbbbb2", "bot_fetch", base.Add(3*time.Minute))
+	fetched("bbbbbbb2", "bot_fetch", base.Add(4*time.Minute))
 	// C: opened the page and left.
 	started("ccccccc2", base)
 	// D: every step reported more than once (a reload, an agent that fetched three times).
@@ -193,7 +243,7 @@ func TestActivationAnalytics_WebsiteFlowsAreCountedOncePerFlowWithTheirSteps(t *
 	assert.Equal(t, 3, rep.RoomsCreated-rep.FlowToRoom.DirectAPI.Numerator-rep.FlowToRoom.Unknown.Numerator)
 
 	assert.Equal(t, db.WebsiteFlowSteps{Started: 5, PromptCopied: 2, SkillFetched: 2, RoomCreated: 2}, rep.WebsiteFlowSteps,
-		"started A B C D F; copied A B (F copied after the window); an agent fetched for A and D (B was a person); rooms from A and D")
+		"started A B C D F; copied A B (F copied after the window); an agent fetched for A and D (B was a person and a link preview); rooms from A and D")
 	assert.Equal(t, *rep.FlowToRoom.Website.Denominator, rep.WebsiteFlowSteps.Started)
 	assert.Equal(t, rep.FlowToRoom.Website.Numerator, rep.WebsiteFlowSteps.RoomCreated)
 }

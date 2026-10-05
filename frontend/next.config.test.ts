@@ -63,6 +63,29 @@ describe('next.config metadata placement', () => {
   });
 });
 
+/**
+ * /skill.md is a file, so it has no <head> to carry a canonical. The sentence of
+ * GET /v1/connect links it as /skill.md?f=<flow code>, one address per visit: a Link
+ * header on every answer for the file tells a search engine that they are all the one
+ * address (SPEC.md 27.1). Next applies a headers() rule before it looks at the
+ * filesystem, files in public/ included, and matches the path alone, so the rule covers
+ * the file with and without a query.
+ */
+describe('next.config skill file canonical', () => {
+  it('answers /skill.md with a Link header naming its one canonical address', async () => {
+    const skill = await headerRuleFor('/skill.md');
+
+    expect(skill?.headers).toEqual([{ key: 'Link', value: '<https://solvr.dev/skill.md>; rel="canonical"' }]);
+  });
+
+  it('keeps that rule to the skill file alone', async () => {
+    const headers = (await nextConfig.headers!()) as HeaderRule[];
+
+    const withLink = headers.filter((rule) => rule.headers.some((h) => h.key.toLowerCase() === 'link'));
+    expect(withLink.map((rule) => rule.source)).toEqual(['/skill.md']);
+  });
+});
+
 describe('next.config cache headers', () => {
   // The index is server-rendered with the hero numbers and revalidates every
   // ~60s (app/page.tsx). A shared cache may keep it only as long, so a cached

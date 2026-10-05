@@ -92,7 +92,7 @@ func operationSchemas() map[string]interface{} {
 			"is_private", typed("boolean", "description", "A private room is readable only by its members."),
 			"source_post_id", uuidStr(),
 			"source_room", typed("string", "description", "Slug of a PUBLIC room whose task structure seeds this one: description, category and tags are copied where omitted, nothing else; recorded as source_room_id. Unknown or private: 400 INVALID_SOURCE_ROOM."),
-			"flow_id", typed("string", "description", "Analytics only: the flow code the connect sentence's skill link carried (?f=<code>). It is kept only when it is a well-formed code that an earlier funnel step already carries; anything else is ignored. It never affects the room, and a room is never refused because of it."),
+			"flow_id", typed("string", "description", "Analytics only: the flow code the connect sentence's skill link carried (?f=<code>). It is kept only when it is a well-formed code that an earlier funnel step already carries; a fetch of the skill link by a link preview, a crawler or a person's browser does not count as one. Anything else is ignored. It never affects the room, and a room is never refused because of it."),
 		), "display_name"),
 		"RoomShare", objectOf(obj(
 			"room_url", typed("string", "description", "The clean room page link: no token, no query string."),

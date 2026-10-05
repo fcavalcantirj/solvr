@@ -239,6 +239,128 @@ func TestFlowCode_TheWholeChainFromTheSentenceToTheRoom(t *testing.T) {
 	}, got)
 }
 
+// A bot is not an agent. Somebody pasted the sentence into a chat: the app fetched the skill
+// link to build its preview, and a search crawler followed it too. Both are recorded as
+// bot_fetch, and neither makes the code known: the room that brings a code whose only earlier
+// steps are a bot's fetch and a person's visit is created all the same, with no flow id. A
+// link preview must not make a made-up code attributable.
+func TestFlowCode_ALinkPreviewDoesNotMakeACodeKnown(t *testing.T) {
+	ts, pool, cleanup := setupRoomTestServer(t)
+	defer cleanup()
+	n := time.Now().UnixNano() % 100000000
+	const (
+		slackbot  = "Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)"
+		googlebot = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
+		chrome    = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
+	)
+	surfaces := func(code string) []string {
+		t.Helper()
+		events, err := db.NewFunnelEventRepository(pool).ListByFlow(context.Background(), code)
+		require.NoError(t, err)
+		var out []string
+		for _, e := range events {
+			out = append(out, e.EventName+"/"+e.EntrySurface)
+		}
+		return out
+	}
+	// flowIsNull reads the stored column itself: NULL, not an empty string.
+	flowIsNull := func(roomID string) bool {
+		t.Helper()
+		var isNull bool
+		require.NoError(t, pool.QueryRow(context.Background(), `
+			SELECT flow_id IS NULL FROM funnel_events
+			 WHERE room_id = $1::uuid AND event_name = 'room_created'`, roomID).Scan(&isNull))
+		return isNull
+	}
+
+	// Minted by the API and never reported by a browser: well formed, unknown.
+	code, _ := visitConnect(t, pool, ts.URL, "")
+	reportFunnel(t, ts.URL, `{"event":"skill_fetched","flow_id":"`+code+`","request_mode":"","user_agent":"`+slackbot+`"}`)
+	reportFunnel(t, ts.URL, `{"event":"skill_fetched","flow_id":"`+code+`","request_mode":"","user_agent":"`+googlebot+`"}`)
+	require.Equal(t, []string{"skill_fetched/bot_fetch", "skill_fetched/bot_fetch"}, surfaces(code))
+
+	_, key := registerTestAgent(t, ts, fmt.Sprintf("roomtest_fb%d", n))
+	roomID := createRoomAs(t, ts, pool, key, `,"flow_id":"`+code+`"`)
+	rows, flow := roomCreatedStep(t, pool, roomID)
+	require.Equal(t, 1, rows, "room_created is still recorded")
+	require.Equal(t, "", flow, "a bot's fetch vouches for nothing")
+	require.True(t, flowIsNull(roomID), "the stored flow_id is NULL")
+
+	// A person opening the link in a browser changes nothing either.
+	reportFunnel(t, ts.URL, `{"event":"skill_fetched","flow_id":"`+code+`","request_mode":"navigate","user_agent":"`+chrome+`"}`)
+	require.Equal(t, []string{"skill_fetched/bot_fetch", "skill_fetched/bot_fetch", "skill_fetched/browser_visit"}, surfaces(code))
+	second := createRoomAs(t, ts, pool, key, `,"flow_id":"`+code+`"`)
+	_, flow = roomCreatedStep(t, pool, second)
+	require.Equal(t, "", flow, "a person's visit vouches for nothing")
+	require.True(t, flowIsNull(second))
+
+	// An agent's fetch does: the same code is kept from then on.
+	reportFunnel(t, ts.URL, `{"event":"skill_fetched","flow_id":"`+code+`","request_mode":"","user_agent":"curl/8.7.1"}`)
+	third := createRoomAs(t, ts, pool, key, `,"flow_id":"`+code+`"`)
+	_, flow = roomCreatedStep(t, pool, third)
+	require.Equal(t, code, flow, "an agent read the skill: the code is known")
+	require.False(t, flowIsNull(third))
+}
+
+// The user agent decides only between a bot and an agent: whatever the web server reports,
+// the step is accepted, and an over-long user agent is the usual validation answer.
+func TestFlowCode_TheReportedUserAgentIsBounded(t *testing.T) {
+	ts, pool, cleanup := setupRoomTestServer(t)
+	defer cleanup()
+
+	code, _ := visitConnect(t, pool, ts.URL, "")
+	status, out := doJSON(t, http.MethodPost, ts.URL+"/v1/analytics/funnel", "",
+		`{"event":"skill_fetched","flow_id":"`+code+`","user_agent":"`+strings.Repeat("u", 201)+`"}`)
+	require.Equal(t, http.StatusBadRequest, status, "%v", out)
+	failure, _ := out["error"].(map[string]any)
+	require.Equal(t, "VALIDATION_ERROR", failure["code"])
+	require.Contains(t, failure["message"], "user_agent")
+
+	var stored int
+	require.NoError(t, pool.QueryRow(context.Background(),
+		`SELECT COUNT(*) FROM funnel_events WHERE flow_id = $1`, code).Scan(&stored))
+	require.Equal(t, 0, stored, "a refused report stores nothing")
+
+	reportFunnel(t, ts.URL, `{"event":"skill_fetched","flow_id":"`+code+`","user_agent":"`+strings.Repeat("u", 200)+`"}`)
+}
+
+// A page rendered on a server reads the contract with ?flow=none: nothing is minted, the
+// answer has no flow id, and every sentence carries the plain skill link, like the examples.
+// The same read without it still gets a code, as the panel in a browser does.
+func TestFlowCode_FlowNoneStartsNoFlow(t *testing.T) {
+	ts, _, cleanup := setupRoomTestServer(t)
+	defer cleanup()
+
+	start := httpOnlyGet(t, ts.URL+"/v1/connect?flow=none&preset=plan-and-build&visibility=public")
+	selected, _ := start["selected"].(map[string]any)
+	require.NotNil(t, selected)
+	require.NotContains(t, selected, "flow_id")
+	require.Equal(t, "plan-and-build", selected["preset"])
+	served := decodeSentence(t, start["prompt"])
+	require.Equal(t, "", served.flowCode())
+	require.Equal(t, "https://solvr.dev/skill.md", served.segment("link"))
+	require.True(t, strings.HasPrefix(served.Text, "Learn Solvr from https://solvr.dev/skill.md. Create a public Solvr room to "), served.Text)
+	presets, _ := start["presets"].([]any)
+	require.Len(t, presets, 3)
+	for _, raw := range presets {
+		preset, _ := raw.(map[string]any)
+		s := decodeSentence(t, preset["prompt"])
+		require.Equal(t, "https://solvr.dev/skill.md", s.segment("link"), "%v", preset["value"])
+		require.NotContains(t, s.Text, "?", "%v", preset["value"])
+	}
+
+	// The examples serve the same plain link.
+	examples := httpOnlyGet(t, ts.URL+"/v1/connect/examples")
+	first, _ := examples["presets"].([]any)[0].(map[string]any)
+	require.Equal(t, "https://solvr.dev/skill.md", decodeSentence(t, first["prompt"]).segment("link"))
+
+	// Without flow=none a read still starts a flow.
+	visit := httpOnlyGet(t, ts.URL+"/v1/connect?preset=plan-and-build&visibility=public")
+	minted, _ := visit["selected"].(map[string]any)["flow_id"].(string)
+	require.True(t, models.ValidFlowCode(minted), "selected.flow_id %q", minted)
+	require.Equal(t, minted, decodeSentence(t, visit["prompt"]).flowCode())
+}
+
 // A person who opens the skill link in a browser is recorded apart from an agent's fetch.
 func TestFlowCode_APersonOpeningTheSkillLinkIsABrowserVisit(t *testing.T) {
 	ts, pool, cleanup := setupRoomTestServer(t)

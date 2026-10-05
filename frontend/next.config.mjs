@@ -36,6 +36,13 @@ const nextConfig = {
     const noStore = [{ key: 'Cache-Control', value: 'private, no-cache, no-store, max-age=0, must-revalidate' }];
 
     return [
+      // The skill is a file in public/, so it has no <head> for a canonical. The connect
+      // sentence links it as /skill.md?f=<flow code>, one address per visit: this header
+      // tells a search engine they are all the one address. A headers() rule is applied
+      // before the filesystem is looked at and matches the path alone, so it reaches the
+      // file with and without a query. No robots.txt rule is used for this: some agent
+      // fetch tools obey robots.txt and would then refuse to read the skill.
+      { source: '/skill.md', headers: [{ key: 'Link', value: '<https://solvr.dev/skill.md>; rel="canonical"' }] },
       // Homepage: server-rendered with the hero numbers and regenerated every 60s
       // (app/page.tsx), so a shared cache keeps it no longer than that.
       { source: '/', headers: cache1m },

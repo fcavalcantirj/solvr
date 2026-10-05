@@ -106,5 +106,9 @@ func TestFunnelContract_PublishesVocabulary(t *testing.T) {
 	require.Equal(t, models.FunnelSourceBrowser, byName[models.FunnelShareLinkCopied].SourceChannel)
 	require.Equal(t, "web_server", byName[models.FunnelSkillFetched].SourceChannel)
 	require.Equal(t, []string{"flow_id", "entry_surface"}, byName[models.FunnelSkillFetched].Attributes)
-	require.Contains(t, byName[models.FunnelSkillFetched].Description, "request_mode")
+	// The contract says how the API decides the step's surface: from request_mode and
+	// user_agent, into one of three.
+	for _, word := range []string{"request_mode", "user_agent", "browser_visit", "bot_fetch", "agent_fetch", "never stored"} {
+		require.Contains(t, byName[models.FunnelSkillFetched].Description, word)
+	}
 }

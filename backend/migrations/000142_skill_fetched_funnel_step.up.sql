@@ -5,7 +5,9 @@
 -- a new step, skill_fetched, through the public funnel ingest. It is not a browser step
 -- (no page reported it) and not a confirmed server action of the API either, so it is
 -- recorded on its own channel: web_server. The API sets its entry_surface itself:
--- agent_fetch, or browser_visit when a person opened the link in a browser.
+-- browser_visit when a person opened the link in a browser, bot_fetch for a link preview
+-- or a crawler, otherwise agent_fetch. entry_surface is free text (only its length is
+-- checked, 000092), so no constraint names the three.
 ALTER TABLE funnel_events DROP CONSTRAINT funnel_events_event_name_check;
 ALTER TABLE funnel_events ADD CONSTRAINT funnel_events_event_name_check CHECK (event_name IN (
     'connection_started', 'starter_prompt_copied', 'room_created',

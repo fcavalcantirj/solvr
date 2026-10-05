@@ -22,7 +22,9 @@ import (
 //     room is created exactly as without it.
 //   - room_created keeps the code only when it is well formed AND known, that is, an
 //     earlier funnel step other than room_created already carries it. A code nobody
-//     issued, or one typed by hand, attributes nothing.
+//     issued, or one typed by hand, attributes nothing. Of the skill fetches only an
+//     agent's makes a code known (db.FlowKnown): the link preview a chat app builds for
+//     a pasted sentence, a crawler, or a person opening the link vouches for nothing.
 
 // flowLookupTimeout bounds the one lookup that decides whether a flow code is known. A
 // lookup that takes longer is treated like one that failed: the code is dropped.

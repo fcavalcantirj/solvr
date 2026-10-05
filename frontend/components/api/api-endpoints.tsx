@@ -253,7 +253,12 @@ function EndpointCard({
             </div>
 
             {/* Response */}
-            <CodeTile label="RESPONSE" code={endpoint.response} codeClassName="text-xs sm:text-xs" />
+            <CodeTile
+              label="RESPONSE"
+              code={endpoint.response}
+              report={{ surface: "api_docs", item: "endpoint_response" }}
+              codeClassName="text-xs sm:text-xs"
+            />
           </div>
 
           {/* Try it button (a retired route answers 410 to everyone) */}

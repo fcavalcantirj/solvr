@@ -21,6 +21,7 @@ export function SkillHero() {
       <MarketingHero>
         <HeroCode
           code={installCommand}
+          report={{ surface: "skill", item: "install_command" }}
           className="text-[1.875rem] sm:text-[2rem] md:text-[2.5rem] lg:text-[2.75rem] xl:text-[3.25rem]"
         />
         <HeroLead

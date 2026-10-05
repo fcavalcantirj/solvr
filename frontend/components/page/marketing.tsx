@@ -1,6 +1,6 @@
 import type { ElementType, ReactNode } from "react";
 import { CAPTION } from "@/components/page/caption";
-import { CopyButton } from "@/components/page/copy-button";
+import { CopyButton, type CopyReport } from "@/components/page/copy-button";
 import { cn } from "@/lib/utils";
 
 // The marketing family (/skill, /mcp, /api-docs, /amcp, /ipfs, /how-it-works) in the
@@ -8,6 +8,9 @@ import { cn } from "@/lib/utils";
 // config to paste, the endpoint, the mechanism — and everything after it recedes into
 // ledger sections: a heading column on the left, hairline rows on the right. Code is
 // content: real, copyable JetBrains Mono, wrapped so the page only ever scrolls down.
+//
+// Every block that carries a Copy button takes a `report`: the surface and a stable id of
+// what it copies, sent as code_copy once the copy worked (SPEC.md 27.7).
 
 export const FRAME = "mx-auto w-full max-w-[76rem]";
 export const SECTION = "border-b border-border px-4 py-14 sm:px-6 lg:px-12 lg:py-20";
@@ -39,13 +42,13 @@ export function MarketingHero({ children }: { children: ReactNode }) {
 
 // A one-line command or address set as the page's title: light mono on the paper, the
 // accent band under it, and the word that copies it.
-export function HeroCode({ code, className }: { code: string; className: string }) {
+export function HeroCode({ code, className, report }: { code: string; className: string; report: CopyReport }) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-4">
       <code className={cn("min-w-0 font-mono font-light leading-[1.18] tracking-[-0.04em] [overflow-wrap:anywhere]", className)}>
         <span className="prompt-swipe">{code}</span>
       </code>
-      <CopyButton text={code} className="ml-auto" />
+      <CopyButton text={code} report={report} className="ml-auto" />
     </div>
   );
 }
@@ -119,6 +122,7 @@ export function CodeTile({
   chip,
   code,
   copy = code,
+  report,
   className,
   codeClassName,
 }: {
@@ -127,6 +131,7 @@ export function CodeTile({
   chip?: ReactNode;
   code: string;
   copy?: string | null;
+  report: CopyReport;
   className?: string;
   codeClassName?: string;
 }) {
@@ -140,10 +145,10 @@ export function CodeTile({
             {chip}
             {note ? <span className="text-xs text-background/60">{note}</span> : null}
           </span>
-          {copy ? <CopyButton text={copy} onInk /> : null}
+          {copy ? <CopyButton text={copy} report={report} onInk /> : null}
         </figcaption>
       ) : copy ? (
-        <CopyButton text={copy} onInk className="absolute right-3 top-2" />
+        <CopyButton text={copy} report={report} onInk className="absolute right-3 top-2" />
       ) : null}
       <pre className={cn(CODE_TEXT, "p-5 text-[13px] leading-[1.75] sm:text-sm", !header && copy && "pr-24", codeClassName)}>
         <code>{code}</code>
@@ -153,11 +158,11 @@ export function CodeTile({
 }
 
 // One line of code on ink, with the word that copies it.
-export function CommandTile({ code, className }: { code: string; className?: string }) {
+export function CommandTile({ code, className, report }: { code: string; className?: string; report: CopyReport }) {
   return (
     <div className={cn("flex min-w-0 items-center justify-between gap-4 bg-foreground py-1.5 pl-5 pr-3 text-background", className)}>
       <code className={cn(CODE_TEXT, "min-w-0 py-2 text-[13px] leading-relaxed sm:text-sm")}>{code}</code>
-      <CopyButton text={code} onInk />
+      <CopyButton text={code} report={report} onInk />
     </div>
   );
 }

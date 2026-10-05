@@ -76,7 +76,7 @@ func TestRouterClaimReferral_OAuthSignupRecordsTheReferral(t *testing.T) {
 	}
 
 	// The callback's sign-in: the redirect's login code is exchanged for the access token.
-	loginCode, err := db.NewOAuthLoginCodeRepository(pool).Issue(ctx, newUserID, auth.LoginCodeTTL)
+	loginCode, err := db.NewOAuthLoginCodeRepository(pool).Issue(ctx, newUserID, auth.LoginCodeTTL, db.LoginCodeOrigin{})
 	require.NoError(t, err)
 	status, exchange := postExchange(t, ts.URL, loginCode)
 	require.Equal(t, http.StatusOK, status)

@@ -41,7 +41,7 @@ export function McpHero() {
             <span className={`${CAPTION} text-foreground`}>MCP CONFIG</span>
             <AccentChip>Hosted</AccentChip>
           </span>
-          <CopyButton text={hostedConfig} />
+          <CopyButton text={hostedConfig} report={{ surface: "mcp", item: "mcp_config" }} />
         </figcaption>
         <pre className="mt-6 whitespace-pre-wrap font-mono text-[15px] font-light leading-[1.45] tracking-[-0.02em] [overflow-wrap:anywhere] sm:text-xl md:text-2xl lg:text-[1.75rem] xl:text-[2rem]">
           <code>{hostedConfig}</code>
@@ -64,7 +64,7 @@ export function McpHero() {
         }
         actions={
           <>
-            <CommandTile code={claudeCommand} className="w-full" />
+            <CommandTile code={claudeCommand} report={{ surface: "mcp", item: "claude_mcp_add" }} className="w-full" />
             <Link href="/api-docs" {...trackCta("api_docs", "hero")} className={TEXT_LINK}>
               API Documentation
               <ArrowUpRight aria-hidden="true" size={14} />

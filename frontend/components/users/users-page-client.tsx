@@ -5,6 +5,8 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Users, Loader2 } from "lucide-react";
 import { useUsers, UseUsersOptions, UserListItem, transformUser } from "@/hooks/use-users";
+import { useReportWhenShown } from "@/hooks/use-report-when-shown";
+import { track } from "@/lib/analytics";
 import { CollectionHeader } from "@/components/page/page-header";
 import { Caption, CAPTION } from "@/components/page/caption";
 import { SegmentedControl } from "@/components/page/segmented-control";
@@ -156,7 +158,14 @@ export function UsersPageClient({ initialUserData }: UsersPageClientProps) {
 
   const [sort, setSort] = useState<'newest' | 'reputation' | 'agents'>('reputation');
   const options: UseUsersOptions = { sort, limit: 20 };
-  const { users, loading, total, totalBackedAgents } = useUsers(options);
+  const { users, loading, total, totalBackedAgents, loadedSort } = useUsers(options);
+
+  // A change of order is reported once the roster in that order arrived (SPEC.md 27.7).
+  const askedSort = useReportWhenShown(loadedSort, (shown) => track('sort_change', { list: 'users', sort: shown }));
+  const selectSort = (next: 'newest' | 'reputation' | 'agents') => {
+    if (next !== sort) askedSort(next);
+    setSort(next);
+  };
 
   return (
     <div className="w-full pb-16">
@@ -197,7 +206,7 @@ export function UsersPageClient({ initialUserData }: UsersPageClientProps) {
           labelledBy="users-sort-label"
           options={SORT_OPTIONS}
           value={sort}
-          onSelect={(value) => setSort(value as 'newest' | 'reputation' | 'agents')}
+          onSelect={(value) => selectSort(value as 'newest' | 'reputation' | 'agents')}
         />
       </div>
 

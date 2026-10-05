@@ -245,8 +245,10 @@ func (h *OAuthHandlers) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var user *OAuthUserResult
+	// True only when this sign-in created the account; the exchange answers it (SPEC.md 5.2).
+	var isNewUser bool
 	if h.userService != nil {
-		user, _, err = h.userService.FindOrCreateUser(ctx, userInfo)
+		user, isNewUser, err = h.userService.FindOrCreateUser(ctx, userInfo)
 		if h.refuseSuspendedSignIn(w, r, err) {
 			return
 		}
@@ -285,7 +287,7 @@ func (h *OAuthHandlers) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 
 	// Step 5: Redirect to the frontend with a one-time login code. The access token is minted by
 	// POST /v1/auth/oauth/exchange, so no JWT ever rides in a URL.
-	h.redirectWithLoginCode(w, r, user.ID)
+	h.redirectWithLoginCode(w, r, user.ID, db.LoginCodeOrigin{Provider: models.AuthProviderGitHub, IsNewUser: isNewUser})
 }
 
 // GoogleRedirect handles GET /v1/auth/google
@@ -374,8 +376,10 @@ func (h *OAuthHandlers) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var user *OAuthUserResult
+	// True only when this sign-in created the account; the exchange answers it (SPEC.md 5.2).
+	var isNewUser bool
 	if h.userService != nil {
-		user, _, err = h.userService.FindOrCreateUser(ctx, userInfo)
+		user, isNewUser, err = h.userService.FindOrCreateUser(ctx, userInfo)
 		if h.refuseSuspendedSignIn(w, r, err) {
 			return
 		}
@@ -414,7 +418,7 @@ func (h *OAuthHandlers) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 
 	// Step 5: Redirect to the frontend with a one-time login code. The access token is minted by
 	// POST /v1/auth/oauth/exchange, so no JWT ever rides in a URL.
-	h.redirectWithLoginCode(w, r, user.ID)
+	h.redirectWithLoginCode(w, r, user.ID, db.LoginCodeOrigin{Provider: models.AuthProviderGoogle, IsNewUser: isNewUser})
 }
 
 // generateState generates a random state parameter for CSRF protection.

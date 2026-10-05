@@ -3,14 +3,16 @@
 import { useCallback, useState } from "react";
 import { ClipboardCopy } from "lucide-react";
 import { api } from "@/lib/api";
+import { reportOutcomeCopied } from "@/lib/funnel";
 import type { APIRoomShare } from "@/lib/api-types";
 
 /**
  * ShareOutcome (idx 88 step 3): an OPTIONAL shareable excerpt of a public room's outcome.
  * The API composes it — clean links, the excerpt and the exact text to copy — and this
  * control only shows it and copies it when asked. Nothing is ever posted anywhere: the
- * person decides whether, and where, to share it. share_link_copied is reported only
- * after the clipboard write succeeded.
+ * person decides whether, and where, to share it. The copy is reported (the
+ * share_link_copied funnel step and the outcome_copy event) only after the clipboard
+ * write succeeded.
  */
 export function ShareOutcome({ slug }: { slug: string }) {
   const [open, setOpen] = useState(false);
@@ -36,11 +38,7 @@ export function ShareOutcome({ slug }: { slug: string }) {
     try {
       await navigator.clipboard.writeText(share.copy_text);
       setCopied(true);
-      void api.postFunnelEvent?.({
-        event: "share_link_copied",
-        entry_surface: "room_page",
-        source: { kind: "room", ref: slug },
-      });
+      reportOutcomeCopied({ slug });
     } catch {
       setCopied(false);
     }

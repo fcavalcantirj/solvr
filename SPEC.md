@@ -697,6 +697,26 @@ GET  /auth/google          → Redirect to Google
 GET  /auth/google/callback → Handle callback, return tokens
 ```
 
+**Finishing a GitHub or Google sign-in (the code exchange):**
+```
+GET  /auth/{github|google}/callback → 302 {frontend}/auth/callback?code=<login code>
+POST /auth/oauth/exchange
+  Body: { login_code }
+  200:  { access_token, token_type: "Bearer", expires_in, is_new_user, provider }
+  401 INVALID_LOGIN_CODE: unknown, used, expired, or the account is gone
+```
+- The callback never puts a token in a URL. It redirects with a login code that works once and
+  for 60 seconds; only this POST turns it into an access token, in a response body
+  (`Cache-Control: no-store`).
+- `is_new_user` (boolean, always present) is `true` only when the sign-in that issued this code
+  created the account. It is `false` for an account that already existed: the same provider
+  again, or a provider linked to an account that already had that e-mail address.
+- `provider` (string) is the provider that sign-in went through: `github` or `google`.
+- The callback stores both with the code (`oauth_login_codes.is_new_user`, `.auth_provider`,
+  migration 000143), so the answer does not depend on anything the browser sends. Neither is a
+  credential or a permission. The web client reads them for one thing: to report a sign-up or a
+  login, with its method, to analytics (27.7).
+
 **Token Management:**
 ```
 POST /auth/refresh         → Refresh access token
@@ -5682,8 +5702,12 @@ milestone latency, participants and, by origin, `flow_to_room`:
 characters; the API keeps no allowlist, so a new value needs no API change):
 - `connection_started`: `connect_page` (`/connect`), `homepage_panel` (the panel the home page opens).
 - `starter_prompt_copied`: `connect_page`, `homepage_panel`, `homepage_use_cases` (the three use-case
-  cards of the home page) and `guide_page` (a workflow guide, 27.5). The last two send the card's
-  or guide's `preset` and `role` and no `flow_id`: `GET /v1/connect/examples` mints none.
+  cards of the home page), `guide_page` (a workflow guide, 27.5) and `room_starter_prompts` (the
+  planner and executor prompts shown on a room just created in the web dialog). The home cards
+  and the guides send the card's or guide's `preset` and `role` and no `flow_id`:
+  `GET /v1/connect/examples` mints none. A room's starter prompt sends its `role` (`planner` or
+  `executor`), no `preset`, and the room as `source` (`kind` `room`) when the room is public; a
+  private room's slug is never sent.
 - `join_prompt_copied`: `room_page`.
 - `share_visit`: `room_page` (`source.kind` `room`) and `post_page` (`source.kind` `post`).
 - `share_link_copied`: `room_page`, from Copy outcome and from the room header's Share button.
@@ -5694,7 +5718,9 @@ characters; the API keeps no allowlist, so a new value needs no API change):
 - `skill_fetched` is not a browser step: the web server reports it and the API alone sets its
   `entry_surface`: `agent_fetch`, `bot_fetch` or `browser_visit` (above).
 
-Every copy step is reported only after the clipboard write succeeded. The post page also records
+Every copy step is reported only after the clipboard write succeeded. The web client reports
+every browser step through one module, `frontend/lib/funnel.ts`, which sends the Google
+Analytics event that pairs with the step in the same call (27.7). The post page also records
 one view per browser session per post (`POST /v1/posts/{id}/view`, route family `post-context`,
 26.4), sent after the stored session is read so a signed-in reader is counted under their own
 account.
@@ -6433,6 +6459,17 @@ pages are served from shared caches and are the same for everyone.
 **The consent bar** (`frontend/components/consent-bar.tsx`, mounted once in the root layout).
 - A region fixed to the bottom of the window, never a dialog: no focus trap, no backdrop, no
   reserved layout space, no layout shift.
+- Its shape depends on the width. Below the `lg` breakpoint (1024 px) it is a strip across the
+  bottom edge, with a hairline on top. From `lg` up it is a compact card in the bottom right
+  corner: 26rem wide, 1.5rem from the right and the bottom edge, a 1px border in the
+  foreground colour, the page's background, no radius and no shadow; the sentence and the
+  Privacy link, then the two buttons side by side under them. A strip that wide covered the
+  home page's primary call to action at 1280x800 (measured); the card must not intersect it at
+  1280x800, 1366x768 or 1440x900.
+- On `/login` and `/join` the card takes the bottom LEFT corner instead (same size, 1.5rem from
+  the left and the bottom edge). Their form fills the right half of the page from `lg` up, and
+  a card on the right covered the SIGN IN and CREATE ACCOUNT buttons (measured from 1024x768 to
+  1440x900); on the left it lies over the page's brand panel and covers no control.
 - It shows only while the state is `unset`, only after hydration (it is not in the server
   HTML), and never by itself on an untracked path.
 - Its text: "Solvr would like to use Google Analytics to learn which pages help. Nothing goes
@@ -6522,7 +6559,25 @@ A new page fails a test until the function knows its section or the page is list
   `[redacted]`, and the value is then cut to 100 characters. `undefined` values are dropped.
 - Every event also carries the `content_group` of the page where it happened.
 - Wiring an event is one call where the action succeeded, one more name in `ANALYTICS_EVENTS`
-  and one more row in the table below.
+  and one more row in the table below (`frontend/lib/analytics-spec.test.ts` fails while the
+  list and the table differ).
+
+**Rules for every event.**
+- It is sent only after the action SUCCEEDED: a copy once the clipboard took the text, a
+  sign-up once the API accepted it, a change of order once the list in that order arrived.
+  A press that did nothing sends nothing.
+- Once per action.
+- It never carries what a person typed or copied, an id of a person, a room, a post, a token,
+  a key or an e-mail address. The one free text is `search_term`. Every other value is a short
+  lowercase id the code names.
+- An action that is also a browser step of the connection funnel (25.7) is reported through
+  ONE module, `frontend/lib/funnel.ts`: each of its functions sends the funnel step (always:
+  it is first-party and needs no consent) and the event (under the consent rule above), built
+  from the same arguments, so the two cannot drift. No other file of the web client posts a
+  funnel step (a test fails otherwise).
+- An action followed by a full page load, or taken on an untracked path, uses
+  `trackOnNextPage`: the e-mail login, the GitHub/Google sign-up or login (`/auth/callback`),
+  the logout, and an agent claim (`/claim`, and the form in settings, which reloads the page).
 
 **Clicks.** One delegated listener (`frontend/components/track-clicks.tsx`, mounted once in the
 root layout, capture phase). A click on, or inside, an element marked `data-track="nav"` or
@@ -6535,15 +6590,55 @@ root layout, capture phase). A click on, or inside, an element marked `data-trac
 - `nav`: every link of the header (logo, links, log in, connect), the docs menu, the mobile
   menu, the account menu and the footer (link groups and legal row).
 - `cta`: the calls to action of the home page, `/connect`, `/how-it-works`, `/api-docs`,
-  `/skill`, `/mcp` and the guides. The Copy button of a prompt is one of them.
+  `/skill`, `/mcp` and the guides. A Copy button is not one of them: a copy has its own event
+  (`prompt_copy`, `code_copy`), sent once the clipboard took the text, so one action is one
+  event and a press that copied nothing is none.
 
-**Events.**
+**Events.** Every event also carries `content_group`. "Funnel step" is the browser step of
+25.7 the same call reports; a dash means the action is no step of the funnel.
 
-| Event | When | Parameters |
-|---|---|---|
-| `page_view` | sent by the tag itself, on load and after a history change | `content_group` |
-| `nav_click` | a click on a marked navigation link | `item`, `location` |
-| `cta_click` | a click on a marked call to action | `item`, `location` |
+| Event | When | Parameters | Funnel step |
+|---|---|---|---|
+| `page_view` | sent by the tag itself, on load and after a history change | `content_group` | - |
+| `nav_click` | a click on a marked navigation link | `item`; `location` | - |
+| `cta_click` | a click on a marked call to action | `item`; `location` | - |
+| `sign_up` | the API created an account: by e-mail on `/join`, or through a GitHub or Google sign-in whose code exchange answered `is_new_user: true` (5.2) | `method`: `email`, `github`, `google` | - |
+| `login` | the API signed an existing account in: by e-mail on `/login`, or through a code exchange that answered `is_new_user: false` | `method`: `email`, `github`, `google` | - |
+| `logout` | the visitor signed out | | - |
+| `auth_wall_shown` | the login dialog opened because an action needed a session, once per opening | `surface`: `room_create`, `blog_vote`, `api_request` (the API refused an anonymous request) | - |
+| `search` | a search got its answer. `/posts`: typing settled (300 ms) on a term of at least 2 characters; never for the term a link brought (`?q=`), for the same term twice in a row, or for an answer that came late. `/rooms`: a non-empty term was submitted | `search_term`; `results`: posts found (`/posts`, the API's total) or rooms on the first page (`/rooms`, at most 20); `list`: `posts`, `rooms` | - (the API logs every search itself) |
+| `sort_change` | a list arrived in the order the visitor asked for | `list`: `posts`, `rooms`, `agents`, `users`, `leaderboard`; `sort`: the order asked for (`new` or `top` on posts, `recent` or `active` on rooms, `reputation`, `posts`, `newest`, `oldest` or `agents` on the rosters, and the leaderboard's period: `all_time`, `monthly` or `weekly`) | - |
+| `filter_change` | a list arrived filtered as the visitor asked | `list`: `rooms`, `leaderboard`; `item`: what is listed now (`public` or `mine` on rooms, `all`, `users` or `agents` on the leaderboard) | - |
+| `load_more` | another page of a list arrived | `list`: `posts`, `rooms`, `agents`, `users`, `leaderboard`; `page`: the number of the page added, from 2 | - |
+| `connect_start` | the connection panel opened with its sentence read | `surface`: `connect_page`, `homepage_panel` | `connection_started` |
+| `use_case_select` | another use case was picked in the panel | `preset`; `surface` | - |
+| `visibility_toggle` | the API answered with the sentence in the visibility the visitor flipped to | `visibility`: `public`, `private`; `surface` | - |
+| `intent_set` | once per panel: an intent the visitor typed settled, and the API answered with the sentence that carries it. Never the intent | `surface` | - |
+| `prompt_copy` | a prompt that starts a connection is on the clipboard | `surface`: `connect_page`, `homepage_panel`, `homepage_use_cases`, `guide_page`, `room_starter_prompts`; `preset` (none for a room's starter prompts); `role`: the agent the sentence is for | `starter_prompt_copied` |
+| `join_prompt_copy` | a room's join prompt is on the clipboard | `surface`: `room_page` | `join_prompt_copied` |
+| `room_share` | the room header's Share handed the API's share link to the share sheet or the clipboard | `method`: `share_sheet`, `clipboard` | `share_link_copied` |
+| `outcome_copy` | a room's outcome excerpt is on the clipboard | | `share_link_copied` |
+| `share_visit` | a public room or post page was opened from a share link, once per tab | `surface`: `room_page`, `post_page` | `share_visit` |
+| `room_comment` | the API accepted a person's comment in a room | | - |
+| `room_create` | the API created a room from the dialog on `/rooms` | `visibility`: `public`, `private`, as the API answered | - (the API records `room_created` itself) |
+| `post_create` | the API accepted a post from the composer | `visibility`: `public`, `family` | - |
+| `blog_vote` | the API counted a vote on a blog post | `direction`: `up`, `down` | - |
+| `blog_share` | a blog post's link is on the clipboard | `method`: `clipboard` | - |
+| `agent_claim` | the API accepted an agent claim | `surface`: `claim_page`, `settings` | - |
+| `api_key_create` | the API issued an API key | | - |
+| `api_key_copy` | a newly issued key is on the clipboard. The key is a secret: nothing but the place is sent | `surface`: `settings` | - |
+| `code_copy` | a Copy button of a reference page put its text on the clipboard | `surface`: `skill`, `mcp`, `api_docs`, `how_it_works`, `amcp`, `ipfs`, and `api_playground`, `api_playground_response` (see below); `item`: a stable id of what was copied, such as `install_command`, `mcp_config`, `base_url`, `quickstart_step_02`, `sdk_install_go` | - |
+| `page_not_found` | a page that does not exist was shown (its address is in the page view) | | - |
+
+- The API playground on `/api-docs` builds a curl command that holds the token the visitor
+  typed, and shows whatever the API answered. Their two Copy buttons send `code_copy` with a
+  surface and nothing else: `api_playground` for the command, `api_playground_response` for
+  the answer. No `item`, never the text.
+- `room_viewed` (25.7) has no event of its own: the page view of a room page, with
+  `content_group` `room`, already says it.
+- Every Copy button of the reference pages takes its `surface` and `item` as a required
+  property (`CopyReport`, `frontend/components/page/copy-button.tsx`), so one cannot be added
+  that reports nothing.
 
 The tag's other automatic events stay on and carry `content_group` too. Measured on
 2026-10-05: `scroll` at the end of a page, `click` on a link that leaves the site (a marked
@@ -6553,6 +6648,17 @@ link then sends both `nav_click` and `click`) and `user_engagement` when a page 
 browser (`BROWSER_STORAGE`, `frontend/components/legal/privacy-tracking-section.tsx`). A test
 reads the source for `localStorage` and `sessionStorage` keys and fails when the page misses
 one or lists one that is gone.
+
+**For the Google Analytics property (owner's action).** Nothing in the code can do these; the
+owner sets them once in the property's admin (`G-HS74SKKSQY`).
+- Mark as key events: `sign_up`, `prompt_copy`, `room_create`, `agent_claim`.
+- Register as event-scoped custom dimensions, each with the parameter of the same name:
+  `method`, `surface`, `preset`, `role`, `item`, `location`, `list`, `sort`, `page`, `results`,
+  `direction`, `visibility`, `status`. `page` and `results` are numbers; `status` is in the
+  closed set and no event sends it yet, so it can wait.
+- Not to register: `search_term`, which Google Analytics already has as a dimension of its
+  own. `content_group` is sent as Google's predefined content-group parameter; whether the
+  property already shows it as a dimension was not checked from the code's side.
 
 
 ---

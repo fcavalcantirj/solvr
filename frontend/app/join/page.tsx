@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/hooks/use-auth";
+import { track } from "@/lib/analytics";
 
 function JoinPageInner() {
   const [showPassword, setShowPassword] = useState(false);
@@ -79,6 +80,9 @@ function JoinPageInner() {
     const result = await register(email, password, username, displayName, ref);
 
     if (result.success) {
+      // The API accepted the account (SPEC.md 27.7). The visitor stays in the app, so the
+      // event needs no waiting for a next page.
+      track('sign_up', { method: 'email' });
       // Redirect to home or saved return URL
       const returnUrl = localStorage.getItem('auth_return_url') || '/';
       localStorage.removeItem('auth_return_url');

@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 
 import { useConnectStart } from '@/hooks/use-connect-start';
-import { api } from '@/lib/api';
+import { useReportWhenShown } from '@/hooks/use-report-when-shown';
+import { track } from '@/lib/analytics';
+import { reportConnectionStarted, reportPromptCopied } from '@/lib/funnel';
 import type { APIConnectPreset, APIConnectStart, APIFunnelSourceRef } from '@/lib/api-types';
 import { Prompt } from '@/components/prompt/prompt';
 import { RolePairSwitch } from '@/components/prompt/role-pair-switch';
@@ -18,6 +20,10 @@ import { trackCta, type TrackLocation } from '@/lib/track-attrs';
 // two can never drift apart — both read GET /v1/connect and render what it answers.
 // The sentence, its deciding words, the use cases and their lines are the API's; this
 // file sends back what the visitor types or flips, and copies the text it was given.
+//
+// What it reports (SPEC.md 25.7 and 27.7), each once and only after it took effect: the
+// panel opened, a use case was picked, the visibility was flipped, an intent settled, the
+// sentence was copied. A report names the place and the use case, never the words typed.
 
 type ConnectPanelVariant = 'panel' | 'page';
 
@@ -30,8 +36,8 @@ function funnelSourceOf(start: APIConnectStart): APIFunnelSourceRef | undefined 
   return undefined;
 }
 
-// entrySurfaceFor names where a connection-funnel browser step was reported from, so
-// the funnel can tell an index-panel open apart from the full /connect page.
+// entrySurfaceFor names where a report came from, so an index-panel open can be told
+// apart from the full /connect page. Funnel steps and events carry the same name.
 function entrySurfaceFor(variant: ConnectPanelVariant): string {
   return variant === 'page' ? 'connect_page' : 'homepage_panel';
 }
@@ -44,7 +50,7 @@ function trackLocationFor(variant: ConnectPanelVariant): TrackLocation {
 
 export function ConnectPanel({ variant = 'panel' }: { variant?: ConnectPanelVariant }) {
   // Only the full page forwards the source and preset it was linked with.
-  const { start, active, loading, error, setIntent, setPreset, setVisibility } = useConnectStart({
+  const { start, active, loading, error, settledIntent, setIntent, setPreset, setVisibility } = useConnectStart({
     readLocation: variant === 'page',
   });
 
@@ -69,6 +75,7 @@ export function ConnectPanel({ variant = 'panel' }: { variant?: ConnectPanelVari
       active={active}
       variant={variant}
       error={error}
+      settledIntent={settledIntent}
       onIntent={setIntent}
       onPreset={setPreset}
       onVisibility={setVisibility}
@@ -81,6 +88,7 @@ function ConnectPanelContent({
   active,
   variant,
   error,
+  settledIntent,
   onIntent,
   onPreset,
   onVisibility,
@@ -89,6 +97,8 @@ function ConnectPanelContent({
   active: APIConnectPreset;
   variant: ConnectPanelVariant;
   error: string | null;
+  // The typed intent the sentence now shown was read with ('' while none settled).
+  settledIntent: string;
   onIntent: (value: string) => void;
   onPreset: (value: string) => void;
   onVisibility: (value: string) => void;
@@ -96,38 +106,60 @@ function ConnectPanelContent({
   const entrySurface = entrySurfaceFor(variant);
   const place = trackLocationFor(variant);
 
-  // connection_started: the panel/page meaningfully opened (its contract loaded). Fired
-  // once per open — this component mounts once the contract exists and stays mounted
-  // across re-reads — not on every keystroke.
+  // The panel/page meaningfully opened (its contract loaded). Reported once per open —
+  // this component mounts once the contract exists and stays mounted across re-reads —
+  // not on every keystroke.
   useEffect(() => {
-    const source = funnelSourceOf(start);
-    void api.postFunnelEvent?.({
-      event: 'connection_started',
-      flow_id: start.selected.flow_id,
-      entry_surface: entrySurface,
+    reportConnectionStarted({
+      flowId: start.selected.flow_id,
+      surface: entrySurface,
       preset: start.selected.preset,
-      instruction_version: start.instruction_version,
-      ...(source ? { source } : {}),
+      instructionVersion: start.instruction_version,
+      source: funnelSourceOf(start),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // starter_prompt_copied: reported ONLY after the clipboard write succeeded, for the
-  // use case and the agent the copied sentence is for.
+  // Reported ONLY after the clipboard write succeeded, for the use case and the agent the
+  // copied sentence is for.
   const onCopied = () => {
-    void api.postFunnelEvent?.({
-      event: 'starter_prompt_copied',
-      flow_id: start.selected.flow_id,
-      entry_surface: entrySurface,
+    reportPromptCopied({
+      flowId: start.selected.flow_id,
+      surface: entrySurface,
       preset: active.value,
       role: roles(active.prompt).a?.toLowerCase(),
-      instruction_version: start.instruction_version,
+      instructionVersion: start.instruction_version,
     });
   };
 
-  // The flip asks for the other visibility of the one the sentence names now.
+  // Picking a use case only chooses which of the sentences already here shows, so it has
+  // taken effect at once.
+  const pickPreset = (value: string) => {
+    if (value !== active.value) track('use_case_select', { preset: value, surface: entrySurface });
+    onPreset(value);
+  };
+
+  // The flip asks for the other visibility of the one the sentence names now. It took
+  // effect when the API's sentence names the visibility that was asked for: a read that
+  // failed, or a use case that simply carries another visibility, reports nothing.
   const shown = active.prompt.segments.find((s) => s.kind === 'visibility')?.value;
-  const flip = () => onVisibility(shown === 'private' ? 'public' : 'private');
+  const askedVisibility = useReportWhenShown(shown, (visibility) =>
+    track('visibility_toggle', { visibility, surface: entrySurface }),
+  );
+  const flip = () => {
+    const next = shown === 'private' ? 'public' : 'private';
+    askedVisibility(next);
+    onVisibility(next);
+  };
+
+  // An intent settled: the visitor typed one, typing paused and the API answered with the
+  // sentence that carries it. Once per panel, and never the words.
+  const intentReported = useRef(false);
+  useEffect(() => {
+    if (intentReported.current || !settledIntent) return;
+    intentReported.current = true;
+    track('intent_set', { surface: entrySurface });
+  }, [settledIntent, entrySurface]);
 
   const Heading = variant === 'page' ? 'h1' : 'h2';
 
@@ -146,7 +178,7 @@ function ConnectPanelContent({
       )}
 
       <div className="mt-6 lg:mt-8">
-        <RolePairSwitch presets={start.presets} value={active.value} onChange={onPreset} more={start.more} />
+        <RolePairSwitch presets={start.presets} value={active.value} onChange={pickPreset} more={start.more} />
       </div>
 
       <div className="mt-10 lg:mt-12">
@@ -157,7 +189,6 @@ function ConnectPanelContent({
           onIntentChange={onIntent}
           onVisibilityToggle={flip}
           onCopied={onCopied}
-          copyTrack={trackCta('copy_prompt', place)}
           intentLabel={start.intent_field.label}
           intentMaxChars={start.intent_field.max_chars}
           aside={

@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 
 import { useState, useCallback } from "react";
 import { X, Copy, Check, Play, Loader2 } from "lucide-react";
+import { track } from "@/lib/analytics";
 import { Endpoint, Param } from "./api-endpoint-types";
 
 interface ApiPlaygroundProps {
@@ -93,19 +94,31 @@ export function ApiPlayground({ endpoint, isOpen, onClose }: ApiPlaygroundProps)
     return curl;
   }, [buildUrl, endpoint.method, endpoint.params, authToken, pathParams, paramValues]);
 
-  // Copy to clipboard helpers
-  const copyCurl = () => {
-    navigator.clipboard.writeText(buildCurlCommand());
+  // Copy to clipboard helpers. "Copied" is said, and the copy reported, only once the
+  // clipboard took the text. The command can hold the token that was typed, and the answer
+  // whatever the API returned for it: the event carries its name and the place, never an
+  // item and never the text (SPEC.md 27.7).
+  const copyCurl = async () => {
+    try {
+      await navigator.clipboard.writeText(buildCurlCommand());
+    } catch {
+      return;
+    }
     setCopiedCurl(true);
     setTimeout(() => setCopiedCurl(false), 2000);
+    track("code_copy", { surface: "api_playground" });
   };
 
-  const copyResponse = () => {
-    if (response) {
-      navigator.clipboard.writeText(response);
-      setCopiedResponse(true);
-      setTimeout(() => setCopiedResponse(false), 2000);
+  const copyResponse = async () => {
+    if (!response) return;
+    try {
+      await navigator.clipboard.writeText(response);
+    } catch {
+      return;
     }
+    setCopiedResponse(true);
+    setTimeout(() => setCopiedResponse(false), 2000);
+    track("code_copy", { surface: "api_playground_response" });
   };
 
   // Execute the API call

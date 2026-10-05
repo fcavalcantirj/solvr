@@ -14,14 +14,57 @@
 // Wiring an event is one line at the place where the action SUCCEEDED:
 //   track('nav_click', { item: 'rooms', location: 'header' });
 // A new event is one more name in ANALYTICS_EVENTS and one more row in SPEC.md 27.7.
+//
+// An action that also is a step of the first-party connection funnel is reported through
+// lib/funnel.ts instead: one call there sends the funnel step and its event together.
 
 import { CONTENT_GROUPS, contentGroupForPath, isUntrackedPath, type ContentGroup } from './analytics-paths';
 import { cleanParams, type CleanParams, type TrackParams } from './analytics-redact';
 import { getConsent } from './consent';
 import { googleTagLoaded, sendGoogleTagEvent } from './google-tag';
 
-// The closed list of event names. An unknown name is a type error, and is ignored at run time.
-export const ANALYTICS_EVENTS = ['nav_click', 'cta_click'] as const;
+// The closed list of event names (SPEC.md 27.7 has the table: when each is sent and with
+// which parameters). An unknown name is a type error, and is ignored at run time.
+export const ANALYTICS_EVENTS = [
+  // A click on a marked link or call to action (components/track-clicks.tsx).
+  'nav_click',
+  'cta_click',
+  // Account.
+  'sign_up',
+  'login',
+  'logout',
+  'auth_wall_shown',
+  // Finding things in a list.
+  'search',
+  'sort_change',
+  'filter_change',
+  'load_more',
+  // The connection panel (the home page's and /connect).
+  'connect_start',
+  'use_case_select',
+  'visibility_toggle',
+  'intent_set',
+  'prompt_copy',
+  // A room page.
+  'join_prompt_copy',
+  'room_share',
+  'outcome_copy',
+  'share_visit',
+  'room_comment',
+  'room_create',
+  // Posts and the blog.
+  'post_create',
+  'blog_vote',
+  'blog_share',
+  // Agents and keys.
+  'agent_claim',
+  'api_key_create',
+  'api_key_copy',
+  // Reference pages.
+  'code_copy',
+  // A page that does not exist.
+  'page_not_found',
+] as const;
 
 export type AnalyticsEvent = (typeof ANALYTICS_EVENTS)[number];
 export type { TrackParams, TrackParamName } from './analytics-redact';

@@ -3,6 +3,7 @@
 import { SegmentedControl } from '@/components/page/segmented-control';
 import { useState } from 'react';
 import { useAuth } from '@/hooks/use-auth';
+import { track } from '@/lib/analytics';
 import { RoomListClient } from './room-list';
 import { MyRoomsList } from './my-rooms-list';
 import type { APIRoomWithStats, RoomListParams } from '@/lib/api-types';
@@ -25,6 +26,11 @@ export function RoomsBrowser({ initialRooms, initialSort = 'recent' }: RoomsBrow
   const [view, setView] = useState<View>('public');
   const showMine = isAuthenticated && view === 'mine';
 
+  // Which rooms are listed changes at once: the switch only picks one of the two lists.
+  const selectView = (next: View) => {
+    if (next !== view) track('filter_change', { list: 'rooms', item: next });
+    setView(next);
+  };
 
   return (
     <div>
@@ -32,7 +38,7 @@ export function RoomsBrowser({ initialRooms, initialSort = 'recent' }: RoomsBrow
         <div className="px-4 pb-6 sm:px-6 lg:px-12">
           <SegmentedControl label="Room filter" value={view}
             options={[{ value: 'public', label: 'Public rooms' }, { value: 'mine', label: 'My rooms' }]}
-            onSelect={(value) => setView(value as View)} />
+            onSelect={(value) => selectView(value as View)} />
         </div>
       )}
       {showMine ? (

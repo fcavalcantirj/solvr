@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
+import { track } from "@/lib/analytics";
 import { useAuth } from "@/hooks/use-auth";
 import {
   ThumbsUp,
@@ -24,7 +25,7 @@ export function BlogPostClient({
   initialUserVote,
   viewCount,
 }: BlogPostClientProps) {
-  const { isAuthenticated, setShowAuthModal } = useAuth();
+  const { isAuthenticated, showAuthWall } = useAuth();
   const [voteScore, setVoteScore] = useState(initialVoteScore);
   const [userVote, setUserVote] = useState<"up" | "down" | null>(initialUserVote);
   const [copied, setCopied] = useState(false);
@@ -36,7 +37,7 @@ export function BlogPostClient({
   const handleVote = useCallback(
     async (direction: "up" | "down") => {
       if (!isAuthenticated) {
-        setShowAuthModal(true);
+        showAuthWall("blog_vote");
         return;
       }
       try {
@@ -44,12 +45,14 @@ export function BlogPostClient({
         if (response?.data) {
           setVoteScore(response.data.vote_score);
           setUserVote(response.data.user_vote);
+          // The API counted the vote (SPEC.md 27.7).
+          track("blog_vote", { direction });
         }
       } catch {
         // Vote failed silently
       }
     },
-    [slug, isAuthenticated, setShowAuthModal]
+    [slug, isAuthenticated, showAuthWall]
   );
 
   const handleShare = useCallback(() => {
@@ -57,6 +60,8 @@ export function BlogPostClient({
     navigator.clipboard.writeText(url).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+      // The link is on the clipboard (SPEC.md 27.7). The link itself is not sent.
+      track("blog_share", { method: "clipboard" });
     }).catch(() => {});
   }, []);
 

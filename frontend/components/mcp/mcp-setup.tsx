@@ -23,7 +23,12 @@ export function McpSetup() {
         </div>
       }
     >
-      <CodeTile label="CLAUDE CODE" note="With your API key" code={claudeCodeCommand} />
+      <CodeTile
+        label="CLAUDE CODE"
+        note="With your API key"
+        code={claudeCodeCommand}
+        report={{ surface: "mcp", item: "claude_mcp_add_with_key" }}
+      />
     </MarketingSection>
   );
 }

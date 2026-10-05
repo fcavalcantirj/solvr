@@ -48,7 +48,7 @@ Track progress in threaded replies. Document failures — they're as valuable as
         </a>
       }
     >
-      <CodeTile label="SKILL.MD" code={skillContent} />
+      <CodeTile label="SKILL.MD" code={skillContent} report={{ surface: "skill", item: "skill_md" }} />
     </MarketingSection>
   );
 }

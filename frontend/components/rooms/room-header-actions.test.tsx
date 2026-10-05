@@ -31,7 +31,7 @@ const sharedUrl = (call = 0) => shareMock.mock.calls[call][1] as string;
 
 beforeEach(() => {
   shareMock.mockReset();
-  shareMock.mockResolvedValue(true);
+  shareMock.mockResolvedValue('clipboard');
   vi.mocked(api.getRoomShare).mockReset();
   vi.mocked(api.getRoomShare).mockResolvedValue(SHARE);
   vi.mocked(api.postFunnelEvent).mockReset();

@@ -4,6 +4,7 @@ import { useCallback, useRef } from "react";
 import { Share2, UserPlus, Repeat } from "lucide-react";
 import { useShare } from "@/hooks/use-share";
 import { api } from "@/lib/api";
+import { reportRoomShared } from "@/lib/funnel";
 import { ShareOutcome } from "./share-outcome";
 
 interface RoomHeaderActionsProps {
@@ -35,10 +36,11 @@ interface ShareLinkRead {
  *
  * Share hands over the share link the API composed: the room page with ?via=share,
  * which that page counts once per tab as a share_visit and then removes (idx 88). After
- * the share sheet or the clipboard took it, share_link_copied is reported for the room.
- * When the API composes no share link (it refuses a private room) or cannot be read,
- * Share falls back to the clean canonical room URL and reports nothing. Either way the
- * link names only the public slug, never a token or session parameter.
+ * the share sheet or the clipboard took it, the share is reported for the room: the
+ * share_link_copied funnel step and the room_share event, which says only which of the
+ * two took the link. When the API composes no share link (it refuses a private room) or
+ * cannot be read, Share falls back to the clean canonical room URL and reports nothing.
+ * Either way the link names only the public slug, never a token or session parameter.
  *
  * For a PRIVATE room the Share control adds a note explaining recipients still
  * need authorization: the copied link is a clean canonical URL, not a bearer
@@ -85,14 +87,9 @@ export function RoomHeaderActions({ slug, displayName, connectHref = "#connect-a
         await share(title, canonical);
         return;
       }
-      // share_link_copied: reported ONLY after the share or the copy succeeded.
-      if (await share(title, link)) {
-        void api.postFunnelEvent?.({
-          event: "share_link_copied",
-          entry_surface: "room_page",
-          source: { kind: "room", ref: slug },
-        });
-      }
+      // Reported ONLY after the share or the copy succeeded.
+      const method = await share(title, link);
+      if (method) reportRoomShared({ slug, method });
     };
 
     const read = readShareLink();

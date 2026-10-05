@@ -25,7 +25,7 @@ import (
 
 type countingLoginCodes struct{ issued atomic.Int64 }
 
-func (c *countingLoginCodes) Issue(context.Context, string, time.Duration) (string, error) {
+func (c *countingLoginCodes) Issue(context.Context, string, time.Duration, db.LoginCodeOrigin) (string, error) {
 	c.issued.Add(1)
 	return "solvr_lc_test", nil
 }

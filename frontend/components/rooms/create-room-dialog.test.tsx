@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { CreateRoomDialog } from './create-room-dialog';
 
 // Mock auth
-const mockAuth: { user: { id: string; type: string; displayName: string } | null; isAuthenticated: boolean; setShowAuthModal: ReturnType<typeof vi.fn> } = { user: null, isAuthenticated: false, setShowAuthModal: vi.fn() };
+const mockAuth: { user: { id: string; type: string; displayName: string } | null; isAuthenticated: boolean; showAuthWall: ReturnType<typeof vi.fn> } = { user: null, isAuthenticated: false, showAuthWall: vi.fn() };
 vi.mock('@/hooks/use-auth', () => ({
   useAuth: () => mockAuth,
 }));
@@ -34,7 +34,8 @@ describe('CreateRoomDialog', () => {
     render(<CreateRoomDialog />);
     const button = screen.getByRole('button', { name: /create room/i });
     fireEvent.click(button);
-    expect(mockAuth.setShowAuthModal).toHaveBeenCalledWith(true);
+    // The login dialog is asked for with the action that needed a session (SPEC.md 27.7).
+    expect(mockAuth.showAuthWall).toHaveBeenCalledWith('room_create');
   });
 
   it('opens dialog when authenticated user clicks create', async () => {

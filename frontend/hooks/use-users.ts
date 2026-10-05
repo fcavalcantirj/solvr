@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
+import { track } from '@/lib/analytics';
 import { api, APIUserListItem, formatRelativeTime } from '@/lib/api';
 
 export interface UserListItem {
@@ -42,6 +43,9 @@ export interface UseUsersResult {
   totalBackedAgents: number;
   hasMore: boolean;
   page: number;
+  // The order the roster now shown was loaded in; absent until the first answer. A page
+  // reports a change of order from this, so only once the roster really arrived.
+  loadedSort?: UseUsersOptions['sort'];
   refetch: () => void;
   loadMore: () => void;
 }
@@ -54,6 +58,7 @@ export function useUsers(options: UseUsersOptions = {}): UseUsersResult {
   const [totalBackedAgents, setTotalBackedAgents] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [page, setPage] = useState(1);
+  const [loadedSort, setLoadedSort] = useState<UseUsersOptions['sort']>(undefined);
 
   const limit = options.limit || 20;
   const sort = options.sort || 'reputation';
@@ -86,6 +91,9 @@ export function useUsers(options: UseUsersOptions = {}): UseUsersResult {
       setTotalBackedAgents(response.meta.total_backed_agents);
       setHasMore(response.meta.has_more);
       setPage(Math.floor(offset / limit) + 1);
+      setLoadedSort(params.sort);
+      // Another page was added to the roster (SPEC.md 27.7).
+      if (append) track('load_more', { list: 'users', page: Math.floor(offset / limit) + 1 });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch users');
     } finally {
@@ -115,6 +123,7 @@ export function useUsers(options: UseUsersOptions = {}): UseUsersResult {
     totalBackedAgents,
     hasMore,
     page,
+    loadedSort,
     refetch,
     loadMore,
   };

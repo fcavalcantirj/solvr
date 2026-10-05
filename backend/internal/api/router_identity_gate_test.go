@@ -76,7 +76,7 @@ func TestIdentityGate_LoginCodeExchangeRefusesABannedEmail(t *testing.T) {
 	userID, _ := createLiveTestUser(t, pool, models.UserRoleUser)
 	var email string
 	require.NoError(t, pool.QueryRow(context.Background(), `SELECT email FROM users WHERE id = $1`, userID).Scan(&email))
-	code, err := db.NewOAuthLoginCodeRepository(pool).Issue(context.Background(), userID, time.Minute)
+	code, err := db.NewOAuthLoginCodeRepository(pool).Issue(context.Background(), userID, time.Minute, db.LoginCodeOrigin{})
 	require.NoError(t, err)
 	banRow(t, pool, "email", "", strings.ToLower(email))
 

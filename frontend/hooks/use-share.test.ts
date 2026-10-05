@@ -42,7 +42,7 @@ describe('useShare', () => {
 
     const { result } = renderHook(() => useShare());
 
-    let done: boolean | undefined;
+    let done: string | false | undefined;
     await act(async () => {
       done = await result.current.share('Test Post', 'https://solvr.dev/posts/123');
     });
@@ -50,8 +50,8 @@ describe('useShare', () => {
     expect(writeText).toHaveBeenCalledWith('https://solvr.dev/posts/123');
     expect(result.current.shared).toBe(true);
     expect(result.current.error).toBeNull();
-    // The caller learns the link really left the page (it reports a funnel step then).
-    expect(done).toBe(true);
+    // The caller learns the link really left the page, and how (it reports the share then).
+    expect(done).toBe('clipboard');
   });
 
   it('should use Web Share API when available', async () => {
@@ -64,7 +64,7 @@ describe('useShare', () => {
 
     const { result } = renderHook(() => useShare());
 
-    let done: boolean | undefined;
+    let done: string | false | undefined;
     await act(async () => {
       done = await result.current.share('Test Post', 'https://solvr.dev/posts/123');
     });
@@ -74,7 +74,7 @@ describe('useShare', () => {
       url: 'https://solvr.dev/posts/123',
     });
     expect(result.current.shared).toBe(true);
-    expect(done).toBe(true);
+    expect(done).toBe('share_sheet');
   });
 
   it('answers false, without an error, when the visitor dismisses the share sheet', async () => {
@@ -87,7 +87,7 @@ describe('useShare', () => {
 
     const { result } = renderHook(() => useShare());
 
-    let done: boolean | undefined;
+    let done: string | false | undefined;
     await act(async () => {
       done = await result.current.share('Test Post', 'https://solvr.dev/posts/123');
     });
@@ -111,7 +111,7 @@ describe('useShare', () => {
 
     const { result } = renderHook(() => useShare());
 
-    let done: boolean | undefined;
+    let done: string | false | undefined;
     await act(async () => {
       done = await result.current.share('Test Post', 'https://solvr.dev/posts/123');
     });

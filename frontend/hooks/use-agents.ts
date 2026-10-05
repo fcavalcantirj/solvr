@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
+import { track } from '@/lib/analytics';
 import { api, APIAgent, FetchAgentsParams, formatRelativeTime } from '@/lib/api';
 
 export interface AgentListItem {
@@ -48,6 +49,9 @@ export interface UseAgentsResult {
   page: number;
   activeCount: number;
   humanBackedCount: number;
+  // The order the roster now shown was loaded in; absent until the first answer. A page
+  // reports a change of order from this, so only once the roster really arrived.
+  loadedSort?: UseAgentsOptions['sort'];
   refetch: () => void;
   loadMore: () => void;
 }
@@ -61,6 +65,7 @@ export function useAgents(options: UseAgentsOptions = {}): UseAgentsResult {
   const [page, setPage] = useState(options.page || 1);
   const [activeCount, setActiveCount] = useState(0);
   const [humanBackedCount, setHumanBackedCount] = useState(0);
+  const [loadedSort, setLoadedSort] = useState<UseAgentsOptions['sort']>(undefined);
 
   // Stabilize options to prevent infinite re-renders
   const optionsKey = JSON.stringify(options);
@@ -103,6 +108,9 @@ export function useAgents(options: UseAgentsOptions = {}): UseAgentsResult {
       setPage(pageNum);
       setActiveCount(response.meta.active_count);
       setHumanBackedCount(response.meta.human_backed_count);
+      setLoadedSort(stableOptions.sort);
+      // Another page was added to the roster (SPEC.md 27.7).
+      if (append) track('load_more', { list: 'agents', page: pageNum });
     } catch (err) {
       console.error('[useAgents] Error:', err);
       if (err && typeof err === 'object') {
@@ -137,6 +145,7 @@ export function useAgents(options: UseAgentsOptions = {}): UseAgentsResult {
     page,
     activeCount,
     humanBackedCount,
+    loadedSort,
     refetch,
     loadMore,
   };

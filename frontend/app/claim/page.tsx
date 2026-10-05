@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Bot, Shield, Loader2, AlertCircle, CheckCircle2, Clock } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
+import { trackOnNextPage } from "@/lib/analytics";
 import type { APIClaimInfoResponse } from "@/lib/api-types";
 
 function formatTimeRemaining(expiresAt: string): string {
@@ -101,6 +102,9 @@ export default function ClaimPage() {
     try {
       const response = await api.claimAgent(token);
       forgetClaimToken();
+      // This page is never seen by Google's tag (its address carried the token), so the
+      // event waits for the next page the visitor opens (SPEC.md 27.7).
+      trackOnNextPage("agent_claim", { surface: "claim_page" });
       setClaimSuccess(true);
       setClaimedAgentId(response.agent.id);
     } catch (err) {

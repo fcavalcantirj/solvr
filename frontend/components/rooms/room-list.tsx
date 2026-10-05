@@ -2,9 +2,10 @@
 
 import styles from './rooms-mosaic.module.css';
 import { SegmentedControl } from '@/components/page/segmented-control';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { Search } from 'lucide-react';
+import { track } from '@/lib/analytics';
 import { api } from '@/lib/api';
 import { RoomCard } from './room-card';
 import type { APIRoomWithStats, RoomListParams } from '@/lib/api-types';
@@ -40,10 +41,19 @@ export function RoomListClient({ initialRooms, initialSort = 'recent' }: RoomLis
   const [activeQuery, setActiveQuery] = useState('');
   const [error, setError] = useState(false);
 
+  // What the visitor did that the list still has to confirm (SPEC.md 27.7): a search or a
+  // change of order is reported only once its list arrived. It is kept across a failure,
+  // so the Retry that finally loads the list reports it; an answer that is no longer the
+  // newest reports nothing.
+  const due = useRef({ search: false, sort: false });
+  const latestRead = useRef(0);
+
   // Re-query the API from the top whenever the sort or search changes. Business
   // logic (filtering, ordering, exclusions) stays on the server; the client only
   // forwards the chosen sort/query and renders what comes back.
-  const runQuery = async (nextSort: RoomSort, nextQuery: string) => {
+  const runQuery = async (nextSort: RoomSort, nextQuery: string, did?: 'search' | 'sort') => {
+    if (did) due.current[did] = true;
+    const read = ++latestRead.current;
     setLoading(true);
     setError(false);
     try {
@@ -57,6 +67,14 @@ export function RoomListClient({ initialRooms, initialSort = 'recent' }: RoomLis
       setRooms(nextRooms);
       setOffset(nextRooms.length);
       setHasMore(nextRooms.length >= PAGE_SIZE);
+
+      if (read === latestRead.current) {
+        const { search, sort: sorted } = due.current;
+        due.current = { search: false, sort: false };
+        // The API sends no total: results is how many rooms the first page holds (at most 20).
+        if (search && nextQuery) track('search', { search_term: nextQuery, results: nextRooms.length, list: 'rooms' });
+        if (sorted) track('sort_change', { list: 'rooms', sort: nextSort });
+      }
     } catch {
       setError(true);
     } finally {
@@ -67,14 +85,14 @@ export function RoomListClient({ initialRooms, initialSort = 'recent' }: RoomLis
   const handleSortChange = (nextSort: RoomSort) => {
     if (nextSort === sort) return;
     setSort(nextSort);
-    void runQuery(nextSort, activeQuery);
+    void runQuery(nextSort, activeQuery, 'sort');
   };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = queryInput.trim();
     setActiveQuery(trimmed);
-    void runQuery(sort, trimmed);
+    void runQuery(sort, trimmed, 'search');
   };
 
   const loadMore = async () => {
@@ -93,6 +111,8 @@ export function RoomListClient({ initialRooms, initialSort = 'recent' }: RoomLis
       if (newRooms.length < PAGE_SIZE) {
         setHasMore(false);
       }
+      // The page that was just added: the list held `offset` rooms before it.
+      track('load_more', { list: 'rooms', page: Math.floor(offset / PAGE_SIZE) + 1 });
     } catch {
       // Non-fatal: keep the rooms already shown.
     } finally {

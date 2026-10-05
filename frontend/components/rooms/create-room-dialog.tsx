@@ -4,6 +4,7 @@ import { useState, useCallback, KeyboardEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, X } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
+import { track } from '@/lib/analytics';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import {
@@ -20,7 +21,7 @@ import { Textarea } from '@/components/ui/textarea';
 
 const MAX_TAGS = 10;
 export function CreateRoomDialog() {
-  const { isAuthenticated, setShowAuthModal } = useAuth();
+  const { isAuthenticated, showAuthWall } = useAuth();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
@@ -33,11 +34,11 @@ export function CreateRoomDialog() {
 
   const handleOpen = useCallback(() => {
     if (!isAuthenticated) {
-      setShowAuthModal(true);
+      showAuthWall('room_create');
       return;
     }
     setOpen(true);
-  }, [isAuthenticated, setShowAuthModal]);
+  }, [isAuthenticated, showAuthWall]);
 
   const addTag = useCallback(() => {
     const trimmed = tagInput.trim().toLowerCase();
@@ -78,6 +79,9 @@ export function CreateRoomDialog() {
 
       const result = await api.createRoom(payload);
       const slug = result.data.slug;
+      // The API created the room and says whether it is private (SPEC.md 27.7). The room's
+      // name is never sent.
+      track('room_create', { visibility: result.data.is_private ? 'private' : 'public' });
 
       // Land on the new room's ?created=1 view: it renders the API-owned planner and
       // executor prompts, where each agent takes its OWN room token by handshake.

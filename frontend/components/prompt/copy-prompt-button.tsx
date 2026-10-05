@@ -3,21 +3,20 @@
 import { useEffect, useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { TrackAttrs } from "@/lib/track-attrs";
 
 interface CopyPromptButtonProps {
   // Exactly what the agent receives: the API's prompt.text.
   text: string;
   size?: "lg" | "sm";
+  // Called once the clipboard took the text, never for a press that copied nothing.
   onCopied?: () => void;
   className?: string;
-  // The click mark of the surface this button sits on (trackCta, SPEC.md 27.7).
-  track?: TrackAttrs;
 }
 
 // CopyPromptButton copies the plain prompt text. A blocked clipboard says how to
-// copy by hand instead of pretending it worked.
-export function CopyPromptButton({ text, size = "lg", onCopied, className, track }: CopyPromptButtonProps) {
+// copy by hand instead of pretending it worked. It carries no click mark: the copy is
+// reported by onCopied (prompt_copy, SPEC.md 27.7), one event for one action.
+export function CopyPromptButton({ text, size = "lg", onCopied, className }: CopyPromptButtonProps) {
   const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
 
   // A new prompt is not the one that was copied.
@@ -45,7 +44,6 @@ export function CopyPromptButton({ text, size = "lg", onCopied, className, track
       <button
         type="button"
         onClick={copy}
-        {...track}
         className={cn(
           "group inline-flex cursor-pointer items-center justify-center gap-3 font-mono uppercase transition-colors focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground",
           large

@@ -2,23 +2,35 @@
 
 import { useState } from "react";
 import { Check, Copy } from "lucide-react";
+import { track } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
+
+// What a Copy button says about a copy (SPEC.md 27.7: code_copy): the page family it sits
+// on, and a stable lowercase id for WHAT was copied. Never the text itself.
+export interface CopyReport {
+  surface: "skill" | "mcp" | "api_docs" | "how_it_works" | "amcp" | "ipfs";
+  item: string;
+}
 
 // The one copy control of the marketing pages: a caption-sized word beside the code it
 // copies, never an unlabeled icon. On an ink tile it is drawn in the paper colour.
+// `report` is required, so a Copy button cannot be added that nobody hears about.
 export function CopyButton({
   text,
+  report,
   onInk = false,
   className,
 }: {
   text: string;
+  report: CopyReport;
   onInk?: boolean;
   className?: string;
 }) {
   const [copied, setCopied] = useState(false);
 
-  // "Copied" is said only once the clipboard took the text: a browser can refuse the
-  // write, or have no clipboard at all, and the label must not claim otherwise.
+  // "Copied" is said, and the copy reported, only once the clipboard took the text: a
+  // browser can refuse the write, or have no clipboard at all, and neither may claim
+  // otherwise.
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(text);
@@ -27,6 +39,7 @@ export function CopyButton({
     }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+    track("code_copy", { surface: report.surface, item: report.item });
   };
 
   return (

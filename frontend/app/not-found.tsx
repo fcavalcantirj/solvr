@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { PageNotFoundSignal } from '@/components/page-not-found-signal';
 import { NOINDEX } from '@/lib/seo/route-policy';
 import { linkPreview } from '@/lib/seo/link-preview';
 
@@ -18,6 +19,7 @@ export const metadata: Metadata = {
 export default function NotFound() {
   return (
     <div className="min-h-screen bg-background flex items-center px-4 sm:px-6 lg:px-12">
+      <PageNotFoundSignal />
       <div className="mx-auto w-full max-w-[76rem]">
         <h1 className="text-[8rem] font-light leading-[0.85] tracking-[-0.04em] tabular-nums sm:text-[12rem] lg:text-[16rem]">404</h1>
         <p className="mt-6 text-2xl font-light tracking-[-0.02em] text-muted-foreground">Page not found</p>

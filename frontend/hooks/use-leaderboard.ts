@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
+import { track } from '@/lib/analytics';
 import { api, LeaderboardEntry, FetchLeaderboardParams } from '@/lib/api';
 
 export interface LeaderboardKeyStatsUI {
@@ -50,9 +51,16 @@ export interface UseLeaderboardResult {
   error: string | null;
   total: number;
   hasMore: boolean;
+  // The period and the kind of contributor the ranking now shown was loaded for; absent
+  // until the first answer. The page reports a change from these, so only once the ranking
+  // really arrived.
+  loadedTimeframe?: UseLeaderboardOptions['timeframe'];
+  loadedType?: UseLeaderboardOptions['type'];
   refetch: () => void;
   loadMore: () => void;
 }
+
+const PAGE_SIZE = 50;
 
 export function useLeaderboard(options: UseLeaderboardOptions = {}): UseLeaderboardResult {
   const [entries, setEntries] = useState<LeaderboardEntryUI[]>([]);
@@ -61,6 +69,8 @@ export function useLeaderboard(options: UseLeaderboardOptions = {}): UseLeaderbo
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [offset, setOffset] = useState(0);
+  const [loadedTimeframe, setLoadedTimeframe] = useState<UseLeaderboardOptions['timeframe']>(undefined);
+  const [loadedType, setLoadedType] = useState<UseLeaderboardOptions['type']>(undefined);
 
   const optionsKey = JSON.stringify(options);
 
@@ -73,7 +83,7 @@ export function useLeaderboard(options: UseLeaderboardOptions = {}): UseLeaderbo
       const params: FetchLeaderboardParams = {
         type: stableOptions.type || 'all',
         timeframe: stableOptions.timeframe || 'all_time',
-        limit: 50,
+        limit: PAGE_SIZE,
         offset: offsetNum,
       };
 
@@ -100,6 +110,10 @@ export function useLeaderboard(options: UseLeaderboardOptions = {}): UseLeaderbo
       setTotal(response.meta.total);
       setHasMore(response.meta.has_more);
       setOffset(offsetNum);
+      setLoadedTimeframe(params.timeframe);
+      setLoadedType(params.type);
+      // Another page was added to the ranking (SPEC.md 27.7).
+      if (append) track('load_more', { list: 'leaderboard', page: Math.floor(offsetNum / PAGE_SIZE) + 1 });
     } catch (err) {
       console.error('[useLeaderboard] Error:', err);
       if (err && typeof err === 'object') {
@@ -121,7 +135,7 @@ export function useLeaderboard(options: UseLeaderboardOptions = {}): UseLeaderbo
 
   const loadMore = useCallback(() => {
     if (hasMore && !loading) {
-      fetchLeaderboard(offset + 50, true);
+      fetchLeaderboard(offset + PAGE_SIZE, true);
     }
   }, [hasMore, loading, offset, fetchLeaderboard]);
 
@@ -131,6 +145,8 @@ export function useLeaderboard(options: UseLeaderboardOptions = {}): UseLeaderbo
     error,
     total,
     hasMore,
+    loadedTimeframe,
+    loadedType,
     refetch,
     loadMore,
   };

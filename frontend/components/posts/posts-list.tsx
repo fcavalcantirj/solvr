@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { track } from "@/lib/analytics";
 import { api } from "@/lib/api";
 import type { APIPost, APISearchReplyMatch } from "@/lib/api-types";
 import { PostCard } from "./post-card";
@@ -19,6 +20,14 @@ interface PostsListProps {
 
 // Renders the canonical Posts collection. All ordering, filtering and search is
 // the API's job; this component only fetches, paginates and displays.
+//
+// It also says what the visitor did with the list (SPEC.md 27.7), each time only after the
+// list that was asked for arrived:
+//   search       a term of at least two characters the visitor settled on, with the number
+//                of posts that matched. Never the term the page opened with (a link brought
+//                it), never the same term twice in a row, never an answer that came late.
+//   sort_change  the list is now in another order than the one it last showed.
+//   load_more    another page was added.
 export function PostsList({ initialPosts = [], searchQuery, sort }: PostsListProps) {
   // A search result also carries the replies that matched; a browsed post has none.
   const [posts, setPosts] = useState<Array<APIPost & { matched_replies?: APISearchReplyMatch[] }>>(initialPosts);
@@ -27,18 +36,41 @@ export function PostsList({ initialPosts = [], searchQuery, sort }: PostsListPro
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // The newest read of a first page. An answer to an older one reports nothing.
+  const latestRead = useRef(0);
+  // The term and the order of the list last shown; null until the first list arrived.
+  const shown = useRef<{ query: string; sort: string } | null>(null);
+  // The term the page opened with came from a link, not from the visitor; it counts as a
+  // search only once the visitor has searched for something else.
+  const openedWith = useRef(searchQuery.trim());
+  const visitorSearched = useRef(false);
+
   const fetchPage = useCallback(
     async (targetPage: number, replace: boolean) => {
       setLoading(true);
       setError(null);
+      const q = searchQuery.trim();
+      const read = replace ? ++latestRead.current : latestRead.current;
+      if (q !== openedWith.current) visitorSearched.current = true;
       try {
-        const q = searchQuery.trim();
         const res = q
           ? await api.search({ q, page: targetPage, per_page: PER_PAGE })
           : await api.getPosts({ sort, page: targetPage, per_page: PER_PAGE });
         setPosts((prev) => (replace ? res.data : [...prev, ...res.data]));
         setHasMore(res.meta.has_more);
         setPage(targetPage);
+
+        if (read !== latestRead.current) return;
+        if (!replace) {
+          track("load_more", { list: "posts", page: targetPage });
+          return;
+        }
+        const before = shown.current;
+        shown.current = { query: q, sort };
+        if (q.length >= 2 && visitorSearched.current && before?.query !== q) {
+          track("search", { search_term: q, results: res.meta.total, list: "posts" });
+        }
+        if (before && before.sort !== sort) track("sort_change", { list: "posts", sort });
       } catch {
         setError("Could not load posts.");
       } finally {

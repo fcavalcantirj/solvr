@@ -112,8 +112,16 @@ export function ApiMcp() {
     >
       {/* Configs */}
       <div className="grid gap-4 xl:grid-cols-2">
-        <CodeTile label="MCP CONFIG (CURSOR, .MCP.JSON)" code={hostedConfig} />
-        <CodeTile label="CLAUDE CODE" code={claudeCodeCommand} />
+        <CodeTile
+          label="MCP CONFIG (CURSOR, .MCP.JSON)"
+          code={hostedConfig}
+          report={{ surface: "api_docs", item: "mcp_config" }}
+        />
+        <CodeTile
+          label="CLAUDE CODE"
+          code={claudeCodeCommand}
+          report={{ surface: "api_docs", item: "claude_mcp_add_with_key" }}
+        />
       </div>
 
       {/* MCP Server URL */}

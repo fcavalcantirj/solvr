@@ -124,6 +124,8 @@ LOGIN_CODE="solvr_lc_..."
 curl -s -X POST http://localhost:8080/v1/auth/oauth/exchange \
   -H "Content-Type: application/json" \
   -d "{\"login_code\": \"$LOGIN_CODE\"}"   # data.access_token is the JWT
+# The answer also carries data.is_new_user (true only when this sign-in created the
+# account) and data.provider ("github" or "google"). See SPEC.md 5.2.
 
 TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 

@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { Terminal, Copy, Check, Loader2, AlertCircle } from "lucide-react";
 import { api } from "@/lib/api";
+import { reportJoinPromptCopied } from "@/lib/funnel";
 import { PromptSentence } from "@/components/prompt/prompt-sentence";
 import type { APIRoom, APIRoomConnectResponse } from "@/lib/api-types";
 
@@ -56,13 +57,9 @@ export function ConnectAgentPanel({ room, tryWorkflowUrl }: ConnectAgentPanelPro
       await navigator.clipboard.writeText(envelope.prompt.text);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-      // join_prompt_copied: reported only after the clipboard write succeeded, for
-      // the role this join prompt recruits (collaborator, in the recruit-another flow).
-      void api.postFunnelEvent?.({
-        event: 'join_prompt_copied',
-        role: 'collaborator',
-        entry_surface: 'room_page',
-      });
+      // Reported only after the clipboard write succeeded, for the role this join prompt
+      // recruits (collaborator, in the recruit-another flow).
+      reportJoinPromptCopied({ role: 'collaborator' });
     } catch {
       // Clipboard denied — the prompt is already rendered and selectable below.
     }

@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/hooks/use-auth";
+import { trackOnNextPage } from "@/lib/analytics";
 import { safeReturnPath } from "@/lib/auth/return-url";
 
 export default function LoginPage() {
@@ -31,6 +32,8 @@ export default function LoginPage() {
     const result = await loginWithEmail(email, password);
 
     if (result.success) {
+      // A full page load follows, so the event waits for the page it leads to (SPEC.md 27.7).
+      trackOnNextPage('login', { method: 'email' });
       // Hard reload to ensure all components refresh with authenticated state.
       // Honor a ?next= return target (e.g. the room composer's "Log in to
       // comment" link) so the user lands back where they started — same as the

@@ -23,6 +23,7 @@ import {
   X
 } from "lucide-react";
 import { formatRelativeTime } from "@/lib/api";
+import { track } from "@/lib/analytics";
 
 const UNLOCK_ROW = "grid grid-cols-[2.5rem_minmax(0,1fr)] items-baseline gap-4 border-b border-border py-5";
 const UNLOCK_LINK = "text-2xl font-light tracking-[-0.025em] underline decoration-transparent decoration-1 underline-offset-[5px] transition-colors hover:decoration-current focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-4 focus-visible:outline-foreground";
@@ -59,6 +60,8 @@ export default function APIKeysPage() {
     setActionError(null);
     try {
       const response = await createKey(newKeyName.trim());
+      // The API issued the key (SPEC.md 27.7). Neither the key nor its name is ever sent.
+      track("api_key_create");
       setCreatedKey(response.data.key);
       setCreatedKeyName(response.data.name);
       setShowCreateModal(false);
@@ -100,10 +103,17 @@ export default function APIKeysPage() {
     }
   };
 
+  // "Copied" is said, and the copy reported, only once the clipboard took the key. The key
+  // is a secret: the event carries its name and the place, nothing else (SPEC.md 27.7).
   const copyToClipboard = async (text: string) => {
-    await navigator.clipboard.writeText(text);
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      return;
+    }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+    track("api_key_copy", { surface: "settings" });
   };
 
   return (

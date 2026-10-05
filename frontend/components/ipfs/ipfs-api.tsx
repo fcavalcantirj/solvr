@@ -83,7 +83,12 @@ export function IpfsApi() {
       <div className="space-y-10">
         {examples.map((ex) => (
           <div key={ex.label} className="min-w-0">
-            <CodeTile label={ex.label} note={ex.description} code={ex.command} />
+            <CodeTile
+              label={ex.label}
+              note={ex.description}
+              code={ex.command}
+              report={{ surface: "ipfs", item: ex.label.toLowerCase() }}
+            />
             <pre className="whitespace-pre-wrap border-l border-border py-5 pl-5 font-mono text-[13px] leading-[1.75] text-muted-foreground [overflow-wrap:anywhere]">
               <code>{ex.response}</code>
             </pre>

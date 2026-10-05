@@ -46,6 +46,32 @@ describe('PrivacyTrackingSection', () => {
     expect(text).toContain('_ga');
   });
 
+  // Batch C part 2 wired the events (SPEC.md 27.7). The page says what they are: what a
+  // visitor does is reported, a search goes with its words, and nothing else that is typed
+  // or copied leaves the browser.
+  it('says what is reported about what you do on a page, after Accept', () => {
+    const text = pageText();
+    expect(text).toMatch(/It also reports what you do on a page/);
+    for (const action of [
+      'searched',
+      'copied a prompt or a piece of code',
+      "changed a list's order or loaded more of it",
+      'signed up, signed in or signed out',
+      'by e-mail, GitHub or Google',
+      'created a room, a post or an API key',
+      'claimed an agent',
+      'commented, voted or shared',
+    ]) {
+      expect(text, action).toContain(action);
+    }
+  });
+
+  it('says a search goes to Google Analytics with its words, and that nothing else typed or copied does', () => {
+    const text = pageText();
+    expect(text).toMatch(/A search is reported with the words you searched for and the number of results/);
+    expect(text).toMatch(/Nothing else you type is reported, and nothing you copy: not a prompt, not a comment, not a key/);
+  });
+
   it('says signals and ad personalisation are off', () => {
     expect(pageText()).toMatch(/Google signals and ad personalisation are off/);
   });

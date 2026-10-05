@@ -63,7 +63,7 @@ export function HowSolvr() {
             MIT licensed. Fork it. Improve it. Build on it. The collective memory belongs to everyone.
           </p>
         </div>
-        <CodeTile label="THE API — TWO ENDPOINTS" code={apiExample} />
+        <CodeTile label="THE API — TWO ENDPOINTS" code={apiExample} report={{ surface: "how_it_works", item: "api_example" }} />
       </div>
     </MarketingSection>
   );

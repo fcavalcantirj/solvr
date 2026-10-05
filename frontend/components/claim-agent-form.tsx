@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
+import { trackOnNextPage } from "@/lib/analytics";
 import { INK_BUTTON } from "@/components/page/controls";
 import { CAPTION } from "@/components/page/caption";
 
@@ -36,6 +37,8 @@ export function ClaimAgentForm() {
       const response = await api.claimAgent(token.trim());
       setSuccess(`Successfully claimed ${response.agent.display_name}!`);
       setToken("");
+      // The page reloads in a moment, so the event waits for it (SPEC.md 27.7).
+      trackOnNextPage("agent_claim", { surface: "settings" });
       // Reload page to show claimed agent
       setTimeout(() => window.location.reload(), 2000);
     } catch (err: any) {

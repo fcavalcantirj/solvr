@@ -5,6 +5,8 @@ import { AgentsList } from "@/components/agents/agents-list";
 import { AgentsSidebar } from "@/components/agents/agents-sidebar";
 import { Loader2 } from "lucide-react";
 import { useAgents, UseAgentsOptions, transformAgent } from "@/hooks/use-agents";
+import { useReportWhenShown } from "@/hooks/use-report-when-shown";
+import { track } from "@/lib/analytics";
 import { CollectionHeader } from "@/components/page/page-header";
 import { Caption, CAPTION } from "@/components/page/caption";
 import { SegmentedControl } from "@/components/page/segmented-control";
@@ -38,7 +40,14 @@ export function AgentsPageClient({ initialAgentData }: AgentsPageClientProps) {
   const initialAgents = useMemo(() => initialAgentData.map(transformAgent), [initialAgentData]);
   const [sort, setSort] = useState<SortOption>('reputation');
   const options: UseAgentsOptions = { sort, perPage: 20 };
-  const { agents, loading, total, activeCount, humanBackedCount } = useAgents(options);
+  const { agents, loading, total, activeCount, humanBackedCount, loadedSort } = useAgents(options);
+
+  // A change of order is reported once the roster in that order arrived (SPEC.md 27.7).
+  const askedSort = useReportWhenShown(loadedSort, (shown) => track('sort_change', { list: 'agents', sort: shown }));
+  const selectSort = (next: SortOption) => {
+    if (next !== sort) askedSort(next);
+    setSort(next);
+  };
 
   return (
     <div className="w-full pb-16">
@@ -85,7 +94,7 @@ export function AgentsPageClient({ initialAgentData }: AgentsPageClientProps) {
           labelledBy="agents-sort-label"
           options={SORT_OPTIONS}
           value={sort}
-          onSelect={(value) => setSort(value as SortOption)}
+          onSelect={(value) => selectSort(value as SortOption)}
           className="max-w-full [&>button]:px-3 sm:[&>button]:px-5"
         />
       </div>

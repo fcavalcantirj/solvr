@@ -15,6 +15,7 @@ import { NewMessagesBadge } from './new-messages-badge';
 import { RoomHeader } from './room-header';
 import { useRoomSse } from '@/hooks/use-room-sse';
 import { api } from '@/lib/api';
+import { reportRoomViewed } from '@/lib/funnel';
 import { mergeMessages, isNearBottom } from '@/lib/rooms/message-view';
 import { recordRoomView } from '@/lib/recently-viewed-rooms';
 import { useShareVisit } from '@/hooks/use-share-visit';
@@ -92,7 +93,7 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
   // room_viewed: a room page was opened. Reported as a bare browser funnel step —
   // it carries no room identity, so a private room's title never leaks through it.
   useEffect(() => {
-    void api.postFunnelEvent?.({ event: 'room_viewed' });
+    reportRoomViewed();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room.slug]);
 

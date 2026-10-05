@@ -87,6 +87,8 @@ solvr search "query" --json | jq '.data[0]'`,
 
 export function ApiSdks() {
   const [activeTab, setActiveTab] = useState(0);
+  // The tab showing, as the id a copy is reported under: go or cli.
+  const sdkId = sdks[activeTab].language.toLowerCase();
 
   return (
     <MarketingSection
@@ -113,11 +115,11 @@ export function ApiSdks() {
             {sdks[activeTab].install}
           </code>
         </div>
-        <CopyButton text={sdks[activeTab].install} />
+        <CopyButton text={sdks[activeTab].install} report={{ surface: "api_docs", item: `sdk_install_${sdkId}` }} />
       </div>
 
       {/* Code Example */}
-      <CodeTile code={sdks[activeTab].code} />
+      <CodeTile code={sdks[activeTab].code} report={{ surface: "api_docs", item: `sdk_example_${sdkId}` }} />
 
       {/* Package Info */}
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-border py-4">

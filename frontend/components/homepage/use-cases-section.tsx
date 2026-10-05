@@ -5,18 +5,17 @@ import { ArrowRight } from 'lucide-react';
 
 import { Prompt } from '@/components/prompt/prompt';
 import { roles } from '@/components/prompt/prompt-align';
-import { api } from '@/lib/api';
+import { reportPromptCopied } from '@/lib/funnel';
 import { guideForPreset } from '@/lib/docs/use-cases';
 import type { APIConnectPreset } from '@/lib/api-types';
 import { trackCta } from '@/lib/track-attrs';
 
-// starter_prompt_copied: a card's sentence was copied. Reported ONLY after the clipboard
-// write succeeded, for the card's use case and the agent its sentence is for. The
-// sentence itself is never sent.
+// A card's sentence was copied. Reported ONLY after the clipboard write succeeded (the
+// starter_prompt_copied funnel step and the prompt_copy event), for the card's use case and
+// the agent its sentence is for. The sentence itself is never sent.
 function reportCopied(example: APIConnectPreset) {
-  void api.postFunnelEvent?.({
-    event: 'starter_prompt_copied',
-    entry_surface: 'homepage_use_cases',
+  reportPromptCopied({
+    surface: 'homepage_use_cases',
     preset: example.value,
     role: roles(example.prompt).a?.toLowerCase(),
   });
@@ -49,7 +48,6 @@ export function UseCasesSection({ examples }: { examples?: APIConnectPreset[] | 
                     title={example.label}
                     preset={example}
                     onCopied={() => reportCopied(example)}
-                    copyTrack={trackCta('copy_prompt', 'page')}
                     footer={<CardLinks preset={example.value} guideSlug={guide?.slug} />}
                   />
                 </div>

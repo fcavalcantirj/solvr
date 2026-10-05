@@ -24,6 +24,7 @@ const loginCodeTestSecret = "test-jwt-secret-32-chars-long!!"
 // internal/db/oauth_login_codes_test.go and through the real router in internal/api.
 type fakeLoginCodes struct {
 	issuedFor  []string
+	origins    []db.LoginCodeOrigin
 	issueTTL   time.Duration
 	issueErr   error
 	redeemUser *db.OAuthLoginUser
@@ -31,11 +32,12 @@ type fakeLoginCodes struct {
 	redeemed   []string
 }
 
-func (f *fakeLoginCodes) Issue(_ context.Context, userID string, ttl time.Duration) (string, error) {
+func (f *fakeLoginCodes) Issue(_ context.Context, userID string, ttl time.Duration, origin db.LoginCodeOrigin) (string, error) {
 	if f.issueErr != nil {
 		return "", f.issueErr
 	}
 	f.issuedFor = append(f.issuedFor, userID)
+	f.origins = append(f.origins, origin)
 	f.issueTTL = ttl
 	return "solvr_lc_fakecode", nil
 }
@@ -169,6 +171,67 @@ func TestOAuthCallbacks_IssueTheCodeForTheAuthenticatedUserWithAShortLife(t *tes
 	}
 }
 
+// SPEC.md 5.2: the code carries what the callback knew, so the exchange can tell a sign-up from
+// a login. The account is new only when THIS sign-in created it.
+func TestOAuthCallbacks_IssueTheCodeWithTheProviderAndWhetherTheSignInCreatedTheAccount(t *testing.T) {
+	gh, gg := mockGitHub(t), mockGoogle(t)
+	known := map[string]OAuthUserServiceInterface{
+		"github": &MockOAuthUserService{users: map[string]*MockUserData{"github:12345": {ID: "user-gh", Email: "someone@example.com", Username: "someone"}}},
+		"google": &MockGoogleOAuthUserService{users: map[string]*MockGoogleUserData{"google:g-sub": {ID: "user-google", Email: "someone@gmail.com", Username: "someone"}}},
+	}
+	unknown := map[string]OAuthUserServiceInterface{
+		"github": &MockOAuthUserService{users: map[string]*MockUserData{}},
+		"google": &MockGoogleOAuthUserService{users: map[string]*MockGoogleUserData{}},
+	}
+	callback := func(provider string, users OAuthUserServiceInterface, codes OAuthLoginCodeStore) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/v1/auth/"+provider+"/callback?code=valid&state=s", nil)
+		if provider == "github" {
+			NewOAuthHandlersWithDeps(loginCodeConfig(), nil, nil, users, gh.URL).WithLoginCodes(codes).GitHubCallback(rec, req)
+		} else {
+			NewOAuthHandlersWithAllDeps(loginCodeConfig(), nil, nil, users, "", gg.URL).WithLoginCodes(codes).GoogleCallback(rec, req)
+		}
+		return rec
+	}
+	for _, provider := range []string{"github", "google"} {
+		for name, tc := range map[string]struct {
+			users   OAuthUserServiceInterface
+			wantNew bool
+		}{
+			"an account that already existed": {known[provider], false},
+			"an account this sign-in created": {unknown[provider], true},
+		} {
+			t.Run(provider+"/"+name, func(t *testing.T) {
+				codes := &fakeLoginCodes{}
+				if rec := callback(provider, tc.users, codes); rec.Code != http.StatusFound {
+					t.Fatalf("status = %d, want 302; body %s", rec.Code, rec.Body.String())
+				}
+				if len(codes.origins) != 1 {
+					t.Fatalf("%d codes issued, want 1", len(codes.origins))
+				}
+				if got, want := codes.origins[0], (db.LoginCodeOrigin{Provider: provider, IsNewUser: tc.wantNew}); got != want {
+					t.Errorf("origin = %+v, want %+v", got, want)
+				}
+			})
+		}
+	}
+}
+
+// Without a user service the callback creates nothing, so it never claims a new account.
+func TestOAuthCallbacks_WithoutAUserServiceNeverSayTheAccountIsNew(t *testing.T) {
+	codes := &fakeLoginCodes{}
+	gh := mockGitHub(t)
+	rec := httptest.NewRecorder()
+	NewOAuthHandlersWithDeps(loginCodeConfig(), nil, nil, nil, gh.URL).WithLoginCodes(codes).
+		GitHubCallback(rec, httptest.NewRequest(http.MethodGet, "/v1/auth/github/callback?code=valid&state=s", nil))
+	if rec.Code != http.StatusFound || len(codes.origins) != 1 {
+		t.Fatalf("status %d, %d codes issued; want 302 and 1", rec.Code, len(codes.origins))
+	}
+	if got, want := codes.origins[0], (db.LoginCodeOrigin{Provider: "github"}); got != want {
+		t.Errorf("origin = %+v, want %+v", got, want)
+	}
+}
+
 func TestOAuthCallbacks_FailClosedWithoutACodeStore(t *testing.T) {
 	failing := &fakeLoginCodes{issueErr: context.DeadlineExceeded}
 	// Without a login code the callback ends on the error page, never falling back to a token in
@@ -226,6 +289,50 @@ func TestExchangeLoginCode_MintsAJWTForTheRedeemedAccount(t *testing.T) {
 	}
 	if len(codes.redeemed) != 1 || codes.redeemed[0] != "solvr_lc_abc" {
 		t.Errorf("redeemed %v, want the posted code exactly once", codes.redeemed)
+	}
+}
+
+// SPEC.md 5.2: the answer says whether the sign-in created the account, and through which
+// provider. Both are always present, and neither changes the token.
+func TestExchangeLoginCode_SaysWhetherTheSignInCreatedTheAccountAndThroughWhichProvider(t *testing.T) {
+	for name, tc := range map[string]struct {
+		redeemed     db.OAuthLoginUser
+		wantNew      bool
+		wantProvider string
+	}{
+		"a sign-up through GitHub":      {db.OAuthLoginUser{ID: "u1", Email: "u1@example.com", Role: "user", IsNewUser: true, Provider: "github"}, true, "github"},
+		"a login through Google":        {db.OAuthLoginUser{ID: "u2", Email: "u2@example.com", Role: "user", Provider: "google"}, false, "google"},
+		"a code that carries no origin": {db.OAuthLoginUser{ID: "u3", Email: "u3@example.com", Role: "user"}, false, ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := NewOAuthHandlers(loginCodeConfig(), nil, nil).WithLoginCodes(&fakeLoginCodes{redeemUser: &tc.redeemed})
+			rec := exchange(h, `{"login_code":"solvr_lc_abc"}`)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200; body %s", rec.Code, rec.Body.String())
+			}
+			var resp struct {
+				Data map[string]json.RawMessage `json:"data"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			// is_new_user is a JSON boolean, never absent and never a string.
+			if got, want := string(resp.Data["is_new_user"]), map[bool]string{true: "true", false: "false"}[tc.wantNew]; got != want {
+				t.Errorf("is_new_user = %s, want %s; body %s", got, want, rec.Body.String())
+			}
+			if got, want := string(resp.Data["provider"]), `"`+tc.wantProvider+`"`; got != want {
+				t.Errorf("provider = %s, want %s; body %s", got, want, rec.Body.String())
+			}
+			// The five documented fields, and nothing about the person.
+			if len(resp.Data) != 5 {
+				t.Errorf("answer has %d fields, want access_token, token_type, expires_in, is_new_user, provider: %s", len(resp.Data), rec.Body.String())
+			}
+			for _, private := range []string{tc.redeemed.Email, `"email"`, `"user_id"`, `"id"`} {
+				if strings.Contains(rec.Body.String(), private) {
+					t.Errorf("answer names the person outside the token (%s): %s", private, rec.Body.String())
+				}
+			}
+		})
 	}
 }
 

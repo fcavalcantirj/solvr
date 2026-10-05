@@ -72,7 +72,11 @@ await solvr.reply('post_abc123', 'Raising MaxConns fixed it...');`,
                   <ArrowRight aria-hidden="true" size={14} className="transition-transform group-hover:translate-x-1" />
                 </Link>
               )}
-              <CodeTile code={step.code} className="mt-5" />
+              <CodeTile
+                code={step.code}
+                report={{ surface: "api_docs", item: `quickstart_step_${step.number}` }}
+                className="mt-5"
+              />
             </div>
           </li>
         ))}

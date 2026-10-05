@@ -5,6 +5,9 @@ import { render, screen } from '@testing-library/react';
 // the guides are marked for the site's one click listener (SPEC.md 27.7). item says WHAT
 // was pressed, as a stable id that survives a change of wording; location says WHERE: in
 // the page's hero or further down the page. This file is the list.
+//
+// A Copy prompt button is not on it: its one event is prompt_copy, sent once the clipboard
+// took the sentence (lib/funnel.ts), not a cta_click for a press that may have copied nothing.
 
 vi.mock('next/link', () => ({
   default: ({ children, href, ...props }: { children: React.ReactNode; href: string; [key: string]: unknown }) => (
@@ -90,14 +93,13 @@ describe('home page', () => {
     expect(cta()).toEqual([['connect_agents', 'page', '/connect']]);
   });
 
-  it('marks the three actions of every use-case card', () => {
+  it('marks the two ways onward of every use-case card', () => {
     render(<UseCasesSection examples={CONNECT_EXAMPLES} />);
     const cards = screen.getAllByTestId('use-case-card');
     expect(cards).toHaveLength(3);
     cards.forEach((card, i) => {
       const guide = LISTED_GUIDES.find((g) => g.preset === CONNECT_EXAMPLES[i].value)!;
       expect(cta(card)).toEqual([
-        ['copy_prompt', 'page', 'button'],
         ['make_it_yours', 'page', `/connect?preset=${CONNECT_EXAMPLES[i].value}`],
         ['guide', 'page', `/docs/guides/${guide.slug}`],
       ]);
@@ -111,28 +113,24 @@ describe('home page', () => {
 });
 
 describe('/connect and the panel the hero opens', () => {
-  it('marks Copy prompt and the example link on the page', async () => {
+  it('marks the example link on the page', async () => {
     render(<ConnectPanel variant="page" />);
     await screen.findByTestId('connect-panel');
-    expect(cta()).toEqual([
-      ['copy_prompt', 'page', 'button'],
-      ['example', 'page', CONNECT_START.example.url],
-    ]);
+    expect(cta()).toEqual([['example', 'page', CONNECT_START.example.url]]);
   });
 
-  it('marks the same two as hero actions inside the home page', async () => {
+  it('marks it as a hero action inside the home page', async () => {
     render(<ConnectPanel variant="panel" />);
     await screen.findByTestId('connect-panel');
-    expect(cta().map(([item, location]) => [item, location])).toEqual([
-      ['copy_prompt', 'hero'],
-      ['example', 'hero'],
-    ]);
+    expect(cta().map(([item, location]) => [item, location])).toEqual([['example', 'hero']]);
   });
 
-  it('puts the mark on the button that is pressed, not around it', async () => {
+  it('leaves Copy prompt unmarked: the copy is reported once it worked, not the press', async () => {
     render(<ConnectPanel variant="page" />);
     await screen.findByTestId('connect-panel');
-    expect(screen.getByRole('button', { name: /copy prompt/i })).toHaveAttribute('data-track', 'cta');
+    const copy = screen.getByRole('button', { name: /copy prompt/i });
+    expect(copy).not.toHaveAttribute('data-track');
+    expect(copy.closest('[data-track]')).toBeNull();
   });
 });
 
@@ -150,14 +148,16 @@ describe('guides', () => {
     ]);
   });
 
-  it("marks a guide's Copy prompt", () => {
+  it("leaves a guide's Copy prompt unmarked", () => {
     render(<GuidePrompt example={CONNECT_EXAMPLES[0]} />);
-    expect(cta()).toEqual([['copy_prompt', 'page', 'button']]);
+    expect(screen.getByRole('button', { name: /copy prompt/i })).not.toHaveAttribute('data-track');
+    expect(cta()).toEqual([]);
   });
 
-  it('marks Copy prompt on a use-case guide page', async () => {
+  it('marks nothing on a use-case guide page that shows its sentence', async () => {
     render(await GuidePage({ params: Promise.resolve({ slug: LISTED_GUIDES[0].slug }) }));
-    expect(cta()).toEqual([['copy_prompt', 'page', 'button']]);
+    expect(screen.getByRole('button', { name: /copy prompt/i })).toBeInTheDocument();
+    expect(cta()).toEqual([]);
   });
 
   it('marks the way to Connect when a guide cannot show its sentence', async () => {

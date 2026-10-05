@@ -3,8 +3,8 @@
 import { useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { User, Send, Loader2 } from 'lucide-react';
-import { toast } from 'sonner';
 import { useAuth } from '@/hooks/use-auth';
+import { track } from '@/lib/analytics';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import type { APIRoomMessage } from '@/lib/api-types';
@@ -21,6 +21,9 @@ export function CommentInput({ slug, onMessageSent, archived = false }: CommentI
   const { user, isAuthenticated } = useAuth();
   const [content, setContent] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  // Why the last send failed, shown under the composer until a send goes through. (It
+  // used to be a toast, and the site mounts no toaster: nothing was ever shown.)
+  const [sendError, setSendError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -41,6 +44,9 @@ export function CommentInput({ slug, onMessageSent, archived = false }: CommentI
       // D-28: Wait for server confirmation before showing message (no optimistic UI)
       const response = await api.postRoomMessage(slug, trimmed);
       onMessageSent(response.data);
+      // The API accepted the comment (SPEC.md 27.7). Its words are never sent.
+      track('room_comment');
+      setSendError(null);
       setContent('');
       // Reset textarea height
       if (textareaRef.current) {
@@ -48,12 +54,8 @@ export function CommentInput({ slug, onMessageSent, archived = false }: CommentI
       }
     } catch (err: unknown) {
       const status = (err as { status?: number })?.status;
-      if (status === 429) {
-        // D-32: Rate limit toast
-        toast.error('Slow down — try again in a few seconds');
-      } else {
-        toast.error('Failed to post — please try again.');
-      }
+      // D-32: a rate limit says so; anything else asks to try again. What was typed stays.
+      setSendError(status === 429 ? 'Slow down — try again in a few seconds' : 'Failed to post — please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -148,6 +150,11 @@ export function CommentInput({ slug, onMessageSent, archived = false }: CommentI
           )}
         </button>
       </form>
+      {sendError && (
+        <p role="alert" className="mt-2 text-sm text-destructive">
+          {sendError}
+        </p>
+      )}
       {/* D-29: Character limit indicator — only shown near limit */}
       {content.length >= 1800 && (
         <p

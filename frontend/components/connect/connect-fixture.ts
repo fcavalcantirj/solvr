@@ -102,6 +102,10 @@ function start(selected: string, intent: string, chosen?: 'public' | 'private'):
   };
 }
 
+// The contract for any selection: the use case selected, the intent typed ('' for none) and
+// the visibility chosen (none: each use case keeps its own).
+export const connectStartFor = start;
+
 // The default contract: Plan & execute, nothing typed, each use case its own visibility.
 export const CONNECT_START: APIConnectStart = start('plan-and-build', '');
 

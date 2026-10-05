@@ -24,6 +24,10 @@ import type { APIConnectPreset, APIConnectStart } from '@/lib/api-types';
 // One visit is one flow. The API mints a flow id with every answer unless it is handed
 // one back, so the hook sends the flow id of the first answer it kept as `flow` on every
 // later read. It only echoes what the API issued: it never makes, checks or changes one.
+//
+// `settledIntent` is the typed intent the answer now shown was read with: '' until the
+// visitor typed one, typing paused and the API answered for it. An intent the API filled in
+// by itself (a source's task) is not one the visitor settled.
 const INTENT_DEBOUNCE_MS = 300;
 
 interface ConnectSourceParams {
@@ -54,6 +58,7 @@ export function useConnectStart({ readLocation = false }: { readLocation?: boole
   const [preset, setPreset] = useState<string | undefined>(linkedPreset);
   const [visibility, setVisibility] = useState<string | undefined>(undefined);
   const [start, setStart] = useState<APIConnectStart | null>(null);
+  const [settledIntent, setSettledIntent] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // Bumped to read again after the API refused the linked preset (dropped only once).
@@ -84,6 +89,7 @@ export function useConnectStart({ readLocation = false }: { readLocation?: boole
         if (!cancelled) {
           if (!flowRef.current) flowRef.current = response.data.selected?.flow_id || undefined;
           setStart(response.data);
+          setSettledIntent(debouncedIntent.trim());
           setError(null);
         }
       } catch (err) {
@@ -116,5 +122,5 @@ export function useConnectStart({ readLocation = false }: { readLocation?: boole
   const active: APIConnectPreset | undefined =
     presets.find((p) => p.value === preset) ?? presets.find((p) => p.selected) ?? presets[0];
 
-  return { start, active, loading, error, intent, setIntent, setPreset, setVisibility };
+  return { start, active, loading, error, intent, settledIntent, setIntent, setPreset, setVisibility };
 }

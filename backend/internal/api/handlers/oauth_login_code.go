@@ -21,9 +21,10 @@ const maxLoginCodeBodyBytes = 4 << 10
 // of a JWT (idx 75 step 5). db.OAuthLoginCodeRepository is the implementation: shared by every
 // API instance, hash-only, single-use.
 type OAuthLoginCodeStore interface {
-	// Issue stores a code for userID that redeems for ttl and returns its plaintext once.
-	Issue(ctx context.Context, userID string, ttl time.Duration) (string, error)
-	// Redeem consumes a code and returns its account, or db.ErrLoginCodeInvalid.
+	// Issue stores a code for userID that redeems for ttl and returns its plaintext once. origin
+	// is what the callback knew: the provider, and whether this sign-in created the account.
+	Issue(ctx context.Context, userID string, ttl time.Duration, origin db.LoginCodeOrigin) (string, error)
+	// Redeem consumes a code and returns its account and origin, or db.ErrLoginCodeInvalid.
 	Redeem(ctx context.Context, code string) (*db.OAuthLoginUser, error)
 }
 
@@ -38,14 +39,15 @@ func (h *OAuthHandlers) WithLoginCodes(store OAuthLoginCodeStore) *OAuthHandlers
 // redirectWithLoginCode sends the browser to the frontend callback page carrying a one-time
 // login code for userID. The code is not a credential: it opens nothing until POSTed to
 // ExchangeLoginCode, and only once, within auth.LoginCodeTTL. A JWT never rides in a URL, which
-// browser history, the frontend host's access log and analytics page views all record.
-func (h *OAuthHandlers) redirectWithLoginCode(w http.ResponseWriter, r *http.Request, userID string) {
+// browser history, the frontend host's access log and analytics page views all record. Nor does
+// the origin: it is stored with the code and answered by the exchange alone.
+func (h *OAuthHandlers) redirectWithLoginCode(w http.ResponseWriter, r *http.Request, userID string, origin db.LoginCodeOrigin) {
 	if h.loginCodes == nil {
 		slog.Error("OAuth login attempted without a login code store")
 		h.redirectWithError(w, r, OAuthErrorLoginUnavailable)
 		return
 	}
-	code, err := h.loginCodes.Issue(r.Context(), userID, auth.LoginCodeTTL)
+	code, err := h.loginCodes.Issue(r.Context(), userID, auth.LoginCodeTTL, origin)
 	if err != nil {
 		slog.Error("Login code issue failed", "error", err)
 		h.redirectWithError(w, r, OAuthErrorLoginFailed)
@@ -65,6 +67,8 @@ type LoginCodeExchangeRequest struct {
 // ExchangeLoginCode handles POST /v1/auth/oauth/exchange.
 // It redeems the one-time code the OAuth callback put in the redirect and answers with the
 // access token in the response body, where no URL, history entry or page view can record it.
+// The answer also says what the callback stored with the code (SPEC.md 5.2): is_new_user, true
+// only when that sign-in created the account, and its provider.
 func (h *OAuthHandlers) ExchangeLoginCode(w http.ResponseWriter, r *http.Request) {
 	var req LoginCodeExchangeRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxLoginCodeBodyBytes)).Decode(&req); err != nil {
@@ -113,5 +117,7 @@ func (h *OAuthHandlers) ExchangeLoginCode(w http.ResponseWriter, r *http.Request
 		"access_token": accessToken,
 		"token_type":   "Bearer",
 		"expires_in":   int(jwtExpiry.Seconds()),
+		"is_new_user":  user.IsNewUser,
+		"provider":     user.Provider,
 	})
 }

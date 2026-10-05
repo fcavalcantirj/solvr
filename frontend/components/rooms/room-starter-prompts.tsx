@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Terminal, Copy, Check, Loader2, AlertCircle } from "lucide-react";
 import { api } from "@/lib/api";
+import { reportPromptCopied } from "@/lib/funnel";
 import type { APIPrompt, APIRoom } from "@/lib/api-types";
 import { PromptSentence } from "@/components/prompt/prompt-sentence";
 
@@ -32,6 +33,10 @@ type CopyTarget = "planner" | "executor";
  * The planner and executor prompts are ordinary role-specific JOIN prompts for
  * the already-created room: each agent self-registers if needed, takes its OWN
  * room token by handshake, and joins — no duplicate room, no shared credential.
+ *
+ * A copy is reported only after the clipboard took the prompt: the
+ * starter_prompt_copied funnel step (surface room_starter_prompts, the role, and
+ * the room as its source when the room is public) and the prompt_copy event.
  */
 export function RoomStarterPrompts({ room, justCreated }: RoomStarterPromptsProps) {
   const show = justCreated ?? readCreatedParam();
@@ -70,12 +75,19 @@ export function RoomStarterPrompts({ room, justCreated }: RoomStarterPromptsProp
     if (!text) return;
     try {
       await navigator.clipboard.writeText(text);
-      setCopied(target);
-      setTimeout(() => setCopied((c) => (c === target ? null : c)), 2000);
     } catch {
       // Clipboard blocked — the prompt is already rendered and selectable below.
+      return;
     }
-  }, []);
+    setCopied(target);
+    setTimeout(() => setCopied((c) => (c === target ? null : c)), 2000);
+    reportPromptCopied({
+      surface: "room_starter_prompts",
+      role: target,
+      // Only a public room is ever named as a source; a private room's slug is not sent.
+      source: room.is_private ? undefined : { kind: "room", ref: room.slug },
+    });
+  }, [room.is_private, room.slug]);
 
   if (!show) return null;
 

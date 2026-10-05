@@ -6,6 +6,10 @@ import { CopyButton } from './copy-button';
 // whether or not the browser let it write the clipboard. It now waits for the write
 // and says "Copied" only when the text really is on the clipboard.
 
+// Every Copy button says what it copies (SPEC.md 27.7); what it says is tested in
+// components/code-copy.events.test.tsx.
+const REPORT = { surface: 'skill', item: 'install_command' } as const;
+
 const button = () => screen.getByRole('button');
 const label = () => button().textContent;
 
@@ -23,7 +27,7 @@ afterEach(() => {
 
 describe('CopyButton', () => {
   it('copies the text it was given and then says Copied', async () => {
-    render(<CopyButton text="npx skills add solvr" />);
+    render(<CopyButton text="npx skills add solvr" report={REPORT} />);
     expect(label()).toBe('Copy');
 
     fireEvent.click(button());
@@ -35,7 +39,7 @@ describe('CopyButton', () => {
   it('does not say Copied while the browser is still deciding', async () => {
     let allow: () => void = () => {};
     clipboard(vi.fn().mockReturnValue(new Promise<void>((resolve) => { allow = resolve; })));
-    render(<CopyButton text="x" />);
+    render(<CopyButton text="x" report={REPORT} />);
 
     fireEvent.click(button());
     await act(async () => {});
@@ -48,7 +52,7 @@ describe('CopyButton', () => {
   it('never says Copied when the browser refuses the clipboard', async () => {
     const writeText = vi.fn().mockRejectedValue(new Error('denied'));
     clipboard(writeText);
-    render(<CopyButton text="x" />);
+    render(<CopyButton text="x" report={REPORT} />);
 
     fireEvent.click(button());
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
@@ -59,7 +63,7 @@ describe('CopyButton', () => {
 
   it('never says Copied where there is no clipboard at all', async () => {
     clipboard(null);
-    render(<CopyButton text="x" />);
+    render(<CopyButton text="x" report={REPORT} />);
 
     fireEvent.click(button());
     await act(async () => {});
@@ -69,7 +73,7 @@ describe('CopyButton', () => {
 
   it('goes back to Copy two seconds after a successful copy', async () => {
     vi.useFakeTimers();
-    render(<CopyButton text="x" />);
+    render(<CopyButton text="x" report={REPORT} />);
 
     fireEvent.click(button());
     await act(async () => { await vi.advanceTimersByTimeAsync(0); });

@@ -44,7 +44,7 @@ func loginCodeFixture(t *testing.T) (context.Context, *db.Pool, *db.OAuthLoginCo
 
 func TestOAuthLoginCode_RedeemsOnceForTheUserItWasIssuedTo(t *testing.T) {
 	ctx, _, repo, userID := loginCodeFixture(t)
-	code, err := repo.Issue(ctx, userID, time.Minute)
+	code, err := repo.Issue(ctx, userID, time.Minute, db.LoginCodeOrigin{})
 	if err != nil {
 		t.Fatalf("Issue: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestOAuthLoginCode_RedeemsOnceForTheUserItWasIssuedTo(t *testing.T) {
 
 func TestOAuthLoginCode_IsStoredAsAHashOnly(t *testing.T) {
 	ctx, pool, repo, userID := loginCodeFixture(t)
-	code, err := repo.Issue(ctx, userID, time.Minute)
+	code, err := repo.Issue(ctx, userID, time.Minute, db.LoginCodeOrigin{})
 	if err != nil {
 		t.Fatalf("Issue: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestOAuthLoginCode_IsStoredAsAHashOnly(t *testing.T) {
 
 func TestOAuthLoginCode_ExpiredUnknownAndMalformedCodesAreInvalid(t *testing.T) {
 	ctx, _, repo, userID := loginCodeFixture(t)
-	expired, err := repo.Issue(ctx, userID, -time.Second)
+	expired, err := repo.Issue(ctx, userID, -time.Second, db.LoginCodeOrigin{})
 	if err != nil {
 		t.Fatalf("Issue: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestOAuthLoginCode_ExpiredUnknownAndMalformedCodesAreInvalid(t *testing.T) 
 
 func TestOAuthLoginCode_ADeletedAccountCannotRedeem(t *testing.T) {
 	ctx, pool, repo, userID := loginCodeFixture(t)
-	code, err := repo.Issue(ctx, userID, time.Minute)
+	code, err := repo.Issue(ctx, userID, time.Minute, db.LoginCodeOrigin{})
 	if err != nil {
 		t.Fatalf("Issue: %v", err)
 	}
@@ -115,7 +115,7 @@ func TestOAuthLoginCode_ADeletedAccountCannotRedeem(t *testing.T) {
 
 func TestOAuthLoginCode_ManyRacingRedeemsHaveOneWinner(t *testing.T) {
 	ctx, _, repo, userID := loginCodeFixture(t)
-	code, err := repo.Issue(ctx, userID, time.Minute)
+	code, err := repo.Issue(ctx, userID, time.Minute, db.LoginCodeOrigin{})
 	if err != nil {
 		t.Fatalf("Issue: %v", err)
 	}
@@ -138,10 +138,10 @@ func TestOAuthLoginCode_ManyRacingRedeemsHaveOneWinner(t *testing.T) {
 
 func TestOAuthLoginCode_IssueSweepsLongExpiredCodes(t *testing.T) {
 	ctx, pool, repo, userID := loginCodeFixture(t)
-	if _, err := repo.Issue(ctx, userID, -48*time.Hour); err != nil {
+	if _, err := repo.Issue(ctx, userID, -48*time.Hour, db.LoginCodeOrigin{}); err != nil {
 		t.Fatalf("Issue (already long expired): %v", err)
 	}
-	if _, err := repo.Issue(ctx, userID, time.Minute); err != nil {
+	if _, err := repo.Issue(ctx, userID, time.Minute, db.LoginCodeOrigin{}); err != nil {
 		t.Fatalf("Issue: %v", err)
 	}
 	var stale int
@@ -150,5 +150,66 @@ func TestOAuthLoginCode_IssueSweepsLongExpiredCodes(t *testing.T) {
 	}
 	if stale != 0 {
 		t.Fatalf("%d long-expired codes survive the next Issue; the table would only ever grow", stale)
+	}
+}
+
+// The exchange tells a sign-up from a login (SPEC.md 5.2): the callback knows whether its
+// sign-in created the account and through which provider, and the code carries both to the
+// one redeem, so the answer never depends on anything the browser sends.
+func TestOAuthLoginCode_RedeemReturnsWhatTheCallbackKnewWhenItIssuedTheCode(t *testing.T) {
+	ctx, _, repo, userID := loginCodeFixture(t)
+	for _, origin := range []db.LoginCodeOrigin{
+		{Provider: "github", IsNewUser: true},
+		{Provider: "github", IsNewUser: false},
+		{Provider: "google", IsNewUser: true},
+		{Provider: "google", IsNewUser: false},
+	} {
+		code, err := repo.Issue(ctx, userID, time.Minute, origin)
+		if err != nil {
+			t.Fatalf("Issue %+v: %v", origin, err)
+		}
+		user, err := repo.Redeem(ctx, code)
+		if err != nil {
+			t.Fatalf("Redeem %+v: %v", origin, err)
+		}
+		if user.ID != userID {
+			t.Fatalf("redeemed user = %s, want %s", user.ID, userID)
+		}
+		if user.IsNewUser != origin.IsNewUser || user.Provider != origin.Provider {
+			t.Errorf("redeemed origin = {%s %v}, want %+v", user.Provider, user.IsNewUser, origin)
+		}
+	}
+}
+
+func TestOAuthLoginCode_ACodeIssuedWithNoOriginIsALoginThroughNoNamedProvider(t *testing.T) {
+	ctx, pool, repo, userID := loginCodeFixture(t)
+	code, err := repo.Issue(ctx, userID, time.Minute, db.LoginCodeOrigin{})
+	if err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+	user, err := repo.Redeem(ctx, code)
+	if err != nil {
+		t.Fatalf("Redeem: %v", err)
+	}
+	if user.IsNewUser || user.Provider != "" {
+		t.Fatalf("origin = {%q %v}, want none: an account is new only when a callback said so", user.Provider, user.IsNewUser)
+	}
+
+	// A row written by an API instance from before the columns existed has their defaults.
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO oauth_login_codes (code_hash, user_id, expires_at)
+		 VALUES (md5($1::text) || md5($1::text), $1::uuid, NOW() + INTERVAL '1 minute')`,
+		userID); err != nil {
+		t.Fatalf("insert a row the way the older code did: %v", err)
+	}
+	var isNew bool
+	var provider string
+	if err := pool.QueryRow(ctx,
+		`SELECT is_new_user, auth_provider FROM oauth_login_codes WHERE code_hash = md5($1::text) || md5($1::text)`,
+		userID).Scan(&isNew, &provider); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	if isNew || provider != "" {
+		t.Fatalf("defaults = {%q %v}, want false and empty", provider, isNew)
 	}
 }

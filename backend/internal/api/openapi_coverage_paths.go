@@ -65,7 +65,7 @@ var coveredRoutes = []coveredRoute{
 	// Auth
 	{"POST", "/v1/auth/register", "registerUser", "Auth", authNone, "Create a human account with email and password", "Body: email, password, username, optional display_name and ref (a referral code)."},
 	{"POST", "/v1/auth/login", "loginUser", "Auth", authNone, "Sign in with email and password", "Answers an access token (JWT)."},
-	{"POST", "/v1/auth/oauth/exchange", "exchangeLoginCode", "Auth", authNone, "Exchange a one-time login code for an access token", "The GitHub and Google callbacks redirect with a code, never a token in a URL."},
+	{"POST", "/v1/auth/oauth/exchange", "exchangeLoginCode", "Auth", authNone, "Exchange a one-time login code for an access token", "The GitHub and Google callbacks redirect with a code, never a token in a URL. Body: login_code, which works once and for 60 seconds. Answers access_token (a JWT), token_type (Bearer), expires_in (seconds), is_new_user and provider. is_new_user is a boolean, true only when the sign-in that issued this code created the account, and false for an account that already existed (the same provider again, or a provider linked to an account with the same e-mail address). provider is the provider that sign-in went through: github or google. Neither is a credential or a permission. An unknown, used or expired code, or a code of a deleted account: 401 INVALID_LOGIN_CODE."},
 	{"POST", "/v1/auth/claim-referral", "claimReferral", "Auth", authBearer, "Claim a referral code", "Human JWT. Body: ref."},
 
 	// Posts and replies

@@ -56,7 +56,7 @@ amcp restore --mnemonic "word word word ..." --cid bafy2bza...`;
       </div>
 
       {/* Code example */}
-      <CodeTile label="QUICKSTART" code={recoveryCode} className="mt-10" />
+      <CodeTile label="QUICKSTART" code={recoveryCode} report={{ surface: "amcp", item: "quickstart" }} className="mt-10" />
     </MarketingSection>
   );
 }

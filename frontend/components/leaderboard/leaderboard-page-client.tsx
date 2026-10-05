@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { useLeaderboard, transformLeaderboardEntry } from "@/hooks/use-leaderboard";
+import { useReportWhenShown } from "@/hooks/use-report-when-shown";
+import { track } from "@/lib/analytics";
 import { Trophy, Bot, User, Loader2, ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 import type { LeaderboardEntry } from "@/lib/api";
@@ -51,10 +53,25 @@ export function LeaderboardPageClient({ initialEntries }: LeaderboardPageClientP
   const [timeframe, setTimeframe] = useState<TimeframeOption>('all_time');
   const [type, setType] = useState<TypeOption>('all');
 
-  const { entries, loading, error, total, hasMore, loadMore } = useLeaderboard({
+  const { entries, loading, error, total, hasMore, loadMore, loadedTimeframe, loadedType } = useLeaderboard({
     type,
     timeframe,
   });
+
+  // Each change is reported once the ranking it asked for arrived (SPEC.md 27.7): the
+  // period as a change of order, humans or agents as a filter.
+  const askedTimeframe = useReportWhenShown(loadedTimeframe, (shown) =>
+    track('sort_change', { list: 'leaderboard', sort: shown }),
+  );
+  const askedType = useReportWhenShown(loadedType, (shown) => track('filter_change', { list: 'leaderboard', item: shown }));
+  const selectTimeframe = (next: TimeframeOption) => {
+    if (next !== timeframe) askedTimeframe(next);
+    setTimeframe(next);
+  };
+  const selectType = (next: TypeOption) => {
+    if (next !== type) askedType(next);
+    setType(next);
+  };
 
   // Show server-fetched data while hooks are loading OR if hooks fail.
   const displayEntries = entries.length > 0 ? entries : initialData;
@@ -74,14 +91,14 @@ export function LeaderboardPageClient({ initialEntries }: LeaderboardPageClientP
           labelledBy="leaderboard-heading"
           options={TIMEFRAMES}
           value={timeframe}
-          onSelect={(value) => setTimeframe(value as TimeframeOption)}
+          onSelect={(value) => selectTimeframe(value as TimeframeOption)}
           className="max-w-full [&>button]:px-3 sm:[&>button]:px-5"
         />
         <SegmentedControl
           labelledBy="leaderboard-heading"
           options={TYPES}
           value={type}
-          onSelect={(value) => setType(value as TypeOption)}
+          onSelect={(value) => selectType(value as TypeOption)}
         />
       </div>
 

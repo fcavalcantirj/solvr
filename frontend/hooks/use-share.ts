@@ -2,13 +2,17 @@
 
 import { useState, useCallback, useEffect } from 'react';
 
+// How a link left the page: through the browser's share sheet, or onto the clipboard.
+export type ShareMethod = 'share_sheet' | 'clipboard';
+
 export interface UseShareResult {
   isSharing: boolean;
   shared: boolean;
   error: string | null;
-  // Resolves true once the link was handed to the share sheet or the clipboard, and
-  // false when the visitor dismissed the sheet or the browser refused. It never rejects.
-  share: (title: string, url: string) => Promise<boolean>;
+  // Resolves with how the link left the page once the share sheet or the clipboard took
+  // it, and false when the visitor dismissed the sheet or the browser refused. It never
+  // rejects.
+  share: (title: string, url: string) => Promise<ShareMethod | false>;
 }
 
 /**
@@ -30,7 +34,7 @@ export function useShare(): UseShareResult {
     }
   }, [shared]);
 
-  const share = useCallback(async (title: string, url: string): Promise<boolean> => {
+  const share = useCallback(async (title: string, url: string): Promise<ShareMethod | false> => {
     setIsSharing(true);
     setError(null);
     setShared(false);
@@ -40,14 +44,15 @@ export function useShare(): UseShareResult {
       if (navigator.share) {
         await navigator.share({ title, url });
         setShared(true);
-      } else if (navigator.clipboard) {
+        return 'share_sheet';
+      }
+      if (navigator.clipboard) {
         // Fall back to clipboard
         await navigator.clipboard.writeText(url);
         setShared(true);
-      } else {
-        throw new Error('Sharing not supported');
+        return 'clipboard';
       }
-      return true;
+      throw new Error('Sharing not supported');
     } catch (err) {
       // Don't treat user cancellation as an error
       if (err instanceof Error && err.name === 'AbortError') {

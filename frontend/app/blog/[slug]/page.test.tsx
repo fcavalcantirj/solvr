@@ -191,14 +191,16 @@ describe('BlogPostContent', () => {
   });
 
   it('shows auth modal when unauthenticated user votes', async () => {
-    const mockSetShowAuthModal = vi.fn();
+    // The dialog is asked for with the action that needed a session (SPEC.md 27.7).
+    const mockShowAuthWall = vi.fn();
     mockUseAuth.mockReturnValue({
       user: null,
       isAuthenticated: false,
       isLoading: false,
       showAuthModal: false,
       authModalMessage: '',
-      setShowAuthModal: mockSetShowAuthModal,
+      setShowAuthModal: vi.fn(),
+      showAuthWall: mockShowAuthWall,
     });
     mockRecordBlogView.mockResolvedValue(undefined);
 
@@ -208,7 +210,7 @@ describe('BlogPostContent', () => {
     fireEvent.click(upButton);
 
     await waitFor(() => {
-      expect(mockSetShowAuthModal).toHaveBeenCalledWith(true);
+      expect(mockShowAuthWall).toHaveBeenCalledWith('blog_vote');
     });
     expect(mockVoteBlogPost).not.toHaveBeenCalled();
   });

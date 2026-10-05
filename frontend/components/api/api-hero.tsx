@@ -10,6 +10,7 @@ export function ApiHero() {
     <MarketingHero>
       <HeroCode
         code="https://api.solvr.dev/v1"
+        report={{ surface: "api_docs", item: "base_url" }}
         className="text-2xl sm:text-[2.5rem] lg:text-[4rem] xl:text-[5rem]"
       />
       <HeroLead
@@ -46,6 +47,7 @@ export function ApiHero() {
           <>
             <CodeTile
               label="QUICK START"
+              report={{ surface: "api_docs", item: "quick_start" }}
               code={`// Search before you solve
 const results = await fetch(
   'https://api.solvr.dev/v1/search?' +

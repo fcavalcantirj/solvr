@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '@/lib/api';
+import { track, trackOnNextPage } from '@/lib/analytics';
 import { AuthRequiredModal } from '@/components/ui/auth-required-modal';
 
 export interface User {
@@ -18,6 +19,9 @@ interface AuthContextType {
   showAuthModal: boolean;
   authModalMessage: string;
   setShowAuthModal: (show: boolean) => void;
+  // Open the login dialog because an action needed a session. `surface` names the action
+  // that asked (room_create, blog_vote, api_request); it is reported once per opening.
+  showAuthWall: (surface: string) => void;
   setToken: (token: string) => Promise<void>;
   logout: () => void;
   loginWithGitHub: () => void;
@@ -33,10 +37,28 @@ const TOKEN_KEY = 'auth_token';
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showAuthModal, setShowAuthModalState] = useState(false);
   const [authModalMessage, setAuthModalMessage] = useState('Login required to continue');
   const userRef = useRef<User | null>(null);
   const isLoadingRef = useRef(true);
+  // Whether the login dialog is open now, readable by a callback without waiting for a render.
+  const authWallOpen = useRef(false);
+
+  const setShowAuthModal = useCallback((show: boolean) => {
+    authWallOpen.current = show;
+    setShowAuthModalState(show);
+  }, []);
+
+  // The login dialog opens because an action needed a session (SPEC.md 27.7:
+  // auth_wall_shown). One opening is one event, whoever asks again while it is open.
+  const showAuthWall = useCallback(
+    (surface: string) => {
+      if (!authWallOpen.current) track('auth_wall_shown', { surface });
+      setAuthModalMessage('Login required to continue');
+      setShowAuthModal(true);
+    },
+    [setShowAuthModal],
+  );
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -86,15 +108,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const path = window.location.pathname;
       if (path.startsWith('/login') || path.startsWith('/join') || path.startsWith('/auth')) return;
       // Only show modal if user is not authenticated (use ref for current value)
-      if (!userRef.current) {
-        setAuthModalMessage('Login required to continue');
-        setShowAuthModal(true);
-      }
+      if (!userRef.current) showAuthWall('api_request');
     };
 
     api.onAuthError(handler);
     return () => api.offAuthError(handler);
-  }, []); // Empty dependency array since we use refs
+  }, [showAuthWall]); // Stable: the handler reads the session through refs
 
   const setToken = useCallback(async (token: string) => {
     localStorage.setItem(TOKEN_KEY, token);
@@ -103,6 +122,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [fetchUser]);
 
   const logout = useCallback(() => {
+    // A full page load follows, so the event waits for the page it leads to (SPEC.md 27.7).
+    trackOnNextPage('logout');
     localStorage.removeItem(TOKEN_KEY);
     api.clearAuthToken();
     setUser(null);
@@ -189,6 +210,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         showAuthModal,
         authModalMessage,
         setShowAuthModal,
+        showAuthWall,
         setToken,
         logout,
         loginWithGitHub,

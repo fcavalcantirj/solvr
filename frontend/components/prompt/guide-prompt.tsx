@@ -1,8 +1,7 @@
 "use client";
 
-import { api } from "@/lib/api";
 import type { APIConnectPreset } from "@/lib/api-types";
-import { trackCta } from "@/lib/track-attrs";
+import { reportPromptCopied } from "@/lib/funnel";
 import { Prompt } from "./prompt";
 import { roles } from "./prompt-align";
 
@@ -10,17 +9,17 @@ import { roles } from "./prompt-align";
 // reported. The guide page is rendered on the server and cannot hand the Copy button a
 // function, so this is the small client piece that does.
 //
-// starter_prompt_copied is reported ONLY after the clipboard write succeeded, for the
-// guide's use case and the agent the sentence is for. The sentence itself is never sent.
+// The copy is reported ONLY after the clipboard write succeeded (the starter_prompt_copied
+// funnel step and the prompt_copy event), for the guide's use case and the agent the
+// sentence is for. The sentence itself is never sent.
 export function GuidePrompt({ example }: { example: APIConnectPreset }) {
   const onCopied = () => {
-    void api.postFunnelEvent?.({
-      event: "starter_prompt_copied",
-      entry_surface: "guide_page",
+    reportPromptCopied({
+      surface: "guide_page",
       preset: example.value,
       role: roles(example.prompt).a?.toLowerCase(),
     });
   };
 
-  return <Prompt variant="guide" preset={example} onCopied={onCopied} copyTrack={trackCta("copy_prompt", "page")} />;
+  return <Prompt variant="guide" preset={example} onCopied={onCopied} />;
 }

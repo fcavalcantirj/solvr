@@ -6,6 +6,11 @@ import { Suspense } from "react";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
+import { trackOnNextPage } from "@/lib/analytics";
+
+// The providers the API names in the exchange answer (SPEC.md 5.2). Anything else is not
+// passed on as a method.
+const PROVIDERS = ["github", "google"];
 
 function AuthCallbackContent() {
   const searchParams = useSearchParams();
@@ -58,6 +63,14 @@ function AuthCallbackContent() {
 
         // Store token and fetch user info
         await setToken(token);
+
+        // The API says whether this sign-in created the account, and through which provider
+        // (SPEC.md 5.2). This page is never seen by Google's tag and a full page load
+        // follows, so the event waits for the page the visitor lands on (27.7).
+        const provider: unknown = payload?.data?.provider;
+        trackOnNextPage(payload?.data?.is_new_user === true ? "sign_up" : "login", {
+          method: typeof provider === "string" && PROVIDERS.includes(provider) ? provider : undefined,
+        });
 
         // Claim referral if one was stored before OAuth redirect
         const refCode = localStorage.getItem("solvr_referral_code");

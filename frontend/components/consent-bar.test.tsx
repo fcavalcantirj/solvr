@@ -148,6 +148,105 @@ describe('ConsentBar', () => {
     });
   });
 
+  // Measured on the home page at 1280x800: the full-width bar covered the hero's primary call
+  // to action. From the lg breakpoint up it is a compact card in the bottom right corner;
+  // below lg it stays the full-width bar. Class names are what a unit test can see: the
+  // boxes themselves are measured in a real browser (the batch's check).
+  describe('from the lg breakpoint up: a compact card in the bottom right corner', () => {
+    const classes = (el: Element | null | undefined) => (el?.className ?? '').split(/\s+/);
+
+    it('leaves the left edge and sits 1.5rem from the right and the bottom, about 26rem wide', () => {
+      render(<ConsentBar />);
+      const region = classes(bar());
+      expect(region).toEqual(expect.arrayContaining(['lg:left-auto', 'lg:right-6', 'lg:bottom-6', 'lg:w-[26rem]']));
+      // Below lg nothing changed: the same full-width strip on the bottom edge.
+      expect(region).toEqual(expect.arrayContaining(['fixed', 'inset-x-0', 'bottom-0', 'border-t', 'border-border']));
+      // It stays a corner card: never centred, never full height, at any width.
+      expect(region.join(' ')).not.toMatch(/(^|\s)(\w+:)?(inset-0|top-0|inset-y-0|h-screen|min-h-screen|left-1\/2|-translate-)/);
+    });
+
+    it('has a 1px border in the foreground colour on every side, the page background, no radius, no shadow', () => {
+      render(<ConsentBar />);
+      const region = bar() as HTMLElement;
+      expect(classes(region)).toEqual(expect.arrayContaining(['lg:border', 'lg:border-foreground', 'bg-background']));
+      expect(region.outerHTML).not.toMatch(/\brounded|\bshadow/);
+    });
+
+    it('stacks the sentence and the Privacy link over the two equal buttons, side by side', () => {
+      render(<ConsentBar />);
+      const region = bar() as HTMLElement;
+      const row = region.firstElementChild as HTMLElement;
+      // A row between md and lg, a column again from lg up.
+      expect(classes(row)).toEqual(expect.arrayContaining(['flex', 'flex-col', 'md:flex-row', 'lg:flex-col', 'lg:items-stretch']));
+      const [text, buttons] = Array.from(row.children);
+      expect(text.textContent).toContain(`${SENTENCE} Privacy`);
+      expect(classes(buttons)).toEqual(expect.arrayContaining(['grid', 'grid-cols-2', 'lg:w-full']));
+      expect(Array.from(buttons.children).map((b) => b.textContent)).toEqual(['Decline', 'Accept']);
+      // Still one class list for both: the card did not make either choice the bigger one.
+      expect(buttons.children[0].className).toBe(buttons.children[1].className);
+    });
+
+    it('takes no room in the page at any width: it is fixed, and nothing reserves space for it', () => {
+      const { container } = render(
+        <>
+          <main>page</main>
+          <ConsentBar />
+        </>,
+      );
+      expect(classes(bar())).toContain('fixed');
+      expect(container.querySelector('main')?.className ?? '').toBe('');
+      expect(document.body.style.paddingBottom).toBe('');
+    });
+
+    // Measured on /login and /join (1024x768 to 1440x900): their form fills the right half
+    // from lg up, and a card in the right corner covered SIGN IN and CREATE ACCOUNT. In the
+    // left corner it covers the brand panel's text and no control.
+    it.each(['/login', '/join', '/login/', '/join/'])('takes the bottom LEFT corner on %s, where the form is on the right', (path) => {
+      mockPathname.mockReturnValue(path);
+      render(<ConsentBar />);
+      const region = classes(bar());
+      expect(region).toEqual(expect.arrayContaining(['lg:left-6', 'lg:right-auto', 'lg:bottom-6', 'lg:w-[26rem]', 'lg:border', 'lg:border-foreground']));
+      expect(region).not.toContain('lg:right-6');
+      expect(region).not.toContain('lg:left-auto');
+      // Below lg it is the same strip as everywhere.
+      expect(region).toEqual(expect.arrayContaining(['fixed', 'inset-x-0', 'bottom-0', 'border-t']));
+    });
+
+    it.each(['/', '/connect', '/rooms', '/posts/abc', '/skill', '/login-help', '/joined', '/settings'])(
+      'keeps the bottom right corner on %s',
+      (path) => {
+        mockPathname.mockReturnValue(path);
+        render(<ConsentBar />);
+        const region = classes(bar());
+        expect(region).toEqual(expect.arrayContaining(['lg:left-auto', 'lg:right-6']));
+        expect(region).not.toContain('lg:left-6');
+        expect(region).not.toContain('lg:right-auto');
+      },
+    );
+
+    it('opens in the left corner too when Cookie settings is pressed on a sign-in page', () => {
+      setConsent('denied');
+      mockPathname.mockReturnValue('/login');
+      render(<ConsentBar />);
+      act(() => openConsentSettings());
+      expect(classes(bar())).toEqual(expect.arrayContaining(['lg:left-6', 'lg:right-auto']));
+    });
+
+    it('lays out the reopened bar the same way, with its status line inside the card', () => {
+      setConsent('granted');
+      render(<ConsentBar />);
+      act(() => openConsentSettings());
+      const region = bar() as HTMLElement;
+      expect(classes(region)).toEqual(
+        expect.arrayContaining(['lg:left-auto', 'lg:right-6', 'lg:bottom-6', 'lg:w-[26rem]', 'lg:border', 'lg:border-foreground']),
+      );
+      const row = region.firstElementChild as HTMLElement;
+      expect(classes(row)).toContain('lg:flex-col');
+      expect(within(row.children[0] as HTMLElement).getByText('Analytics is on.')).toBeInTheDocument();
+      expect(classes(row.children[1])).toContain('lg:w-full');
+    });
+  });
+
   describe('when it does not show', () => {
     it.each(['granted', 'denied'] as const)('stays away once the choice is %s', (choice) => {
       setConsent(choice);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from 'react';
-import { api } from '@/lib/api';
+import { reportShareVisit } from '@/lib/funnel';
 import type { APIFunnelSourceRef } from '@/lib/api-types';
 
 // share_visit (idx 88): a page opened through a share link (?via=share) is counted
@@ -36,13 +36,7 @@ export function useShareVisit(source: APIFunnelSourceRef | null, entrySurface: s
       } catch {
         // Storage unavailable: count this visit; a reload may count again.
       }
-      if (!seen) {
-        void api.postFunnelEvent?.({
-          event: 'share_visit',
-          entry_surface: entrySurface,
-          source: { kind, ref },
-        });
-      }
+      if (!seen) reportShareVisit({ source: { kind, ref }, surface: entrySurface });
     }
     stripVia();
   }, [kind, ref, entrySurface]);

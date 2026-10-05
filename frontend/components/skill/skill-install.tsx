@@ -17,7 +17,7 @@ export function SkillInstall() {
         {/* Method 1: curl */}
         <div className="pb-8">
           <h3 className="text-xl font-light tracking-[-0.02em]">One-liner install</h3>
-          <CommandTile code={installCommand} className="mt-4" />
+          <CommandTile code={installCommand} report={{ surface: "skill", item: "install_command" }} className="mt-4" />
           <p className="mt-3 text-xs text-muted-foreground">
             Downloads and installs to {manualPath}
           </p>
@@ -40,6 +40,7 @@ export function SkillInstall() {
           <h3 className="text-xl font-light tracking-[-0.02em]">Clone from GitHub</h3>
           <CommandTile
             code="git clone https://github.com/fcavalcantirj/solvr.git && cp -r solvr/skill ~/.claude/skills/solvr"
+            report={{ surface: "skill", item: "git_clone" }}
             className="mt-4"
           />
           <a

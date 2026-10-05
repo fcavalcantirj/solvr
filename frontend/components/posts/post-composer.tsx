@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import { api } from "@/lib/api";
+import { track } from "@/lib/analytics";
 import { useAuth } from "@/hooks/use-auth";
 
 const MAX_TAGS = 10;
@@ -47,6 +48,8 @@ export function PostComposer() {
     setSubmitting(true);
     try {
       const res = await api.createPost({ title, description: body, tags, visibility });
+      // The API accepted the post (SPEC.md 27.7). Who may read it is sent, never its words.
+      track("post_create", { visibility });
       router.push(`/posts/${res.data.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not publish this post. Please try again.");

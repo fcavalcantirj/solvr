@@ -30,6 +30,8 @@ type exchangeReply struct {
 		AccessToken string `json:"access_token"`
 		TokenType   string `json:"token_type"`
 		ExpiresIn   int    `json:"expires_in"`
+		IsNewUser   *bool  `json:"is_new_user"`
+		Provider    string `json:"provider"`
 	} `json:"data"`
 	Error struct {
 		Code string `json:"code"`
@@ -60,7 +62,7 @@ func TestOAuthLoginCode_ExchangeOnTheRealRouterMintsOneUsableToken(t *testing.T)
 	userID, _ := createLiveTestUser(t, pool, "user")
 	codes := db.NewOAuthLoginCodeRepository(pool)
 
-	code, err := codes.Issue(ctx, userID, auth.LoginCodeTTL)
+	code, err := codes.Issue(ctx, userID, auth.LoginCodeTTL, db.LoginCodeOrigin{})
 	require.NoError(t, err)
 
 	status, reply := postExchange(t, ts.URL, code)
@@ -87,6 +89,44 @@ func TestOAuthLoginCode_ExchangeOnTheRealRouterMintsOneUsableToken(t *testing.T)
 	require.Equal(t, "INVALID_LOGIN_CODE", reply.Error.Code)
 }
 
+// SPEC.md 5.2: on the real router and Postgres, the exchange answers what the callback stored
+// with the code: whether that sign-in created the account, and its provider.
+func TestOAuthLoginCode_ExchangeOnTheRealRouterTellsASignUpFromALogin(t *testing.T) {
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	ctx := context.Background()
+	pool, err := db.NewPool(ctx, dbURL)
+	require.NoError(t, err)
+	t.Cleanup(pool.Close)
+	ts := httptest.NewServer(NewRouter(pool, nil, nil))
+	t.Cleanup(ts.Close)
+	userID, _ := createLiveTestUser(t, pool, "user")
+	codes := db.NewOAuthLoginCodeRepository(pool)
+
+	for _, origin := range []db.LoginCodeOrigin{
+		{Provider: "github", IsNewUser: true},
+		{Provider: "google", IsNewUser: false},
+		{},
+	} {
+		code, err := codes.Issue(ctx, userID, auth.LoginCodeTTL, origin)
+		require.NoError(t, err)
+		status, reply := postExchange(t, ts.URL, code)
+		require.Equal(t, 200, status)
+		require.NotEmpty(t, reply.Data.AccessToken)
+		require.NotNil(t, reply.Data.IsNewUser, "is_new_user is always present")
+		require.Equal(t, origin.IsNewUser, *reply.Data.IsNewUser, "origin %+v", origin)
+		require.Equal(t, origin.Provider, reply.Data.Provider, "origin %+v", origin)
+	}
+
+	// A refusal says nothing about the account.
+	status, raw := rawRequest(t, "POST", ts.URL+"/v1/auth/oauth/exchange", "", `{"login_code":"solvr_lc_unknown"}`)
+	require.Equal(t, 401, status)
+	require.NotContains(t, raw, "is_new_user")
+	require.NotContains(t, raw, "provider")
+}
+
 func TestOAuthLoginCode_ACodeIsNotACredentialOnAnyOtherRoute(t *testing.T) {
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
@@ -99,7 +139,7 @@ func TestOAuthLoginCode_ACodeIsNotACredentialOnAnyOtherRoute(t *testing.T) {
 	ts := httptest.NewServer(NewRouter(pool, nil, nil))
 	t.Cleanup(ts.Close)
 	userID, _ := createLiveTestUser(t, pool, "user")
-	code, err := db.NewOAuthLoginCodeRepository(pool).Issue(ctx, userID, auth.LoginCodeTTL)
+	code, err := db.NewOAuthLoginCodeRepository(pool).Issue(ctx, userID, auth.LoginCodeTTL, db.LoginCodeOrigin{})
 	require.NoError(t, err)
 
 	status, body := rawRequest(t, "GET", ts.URL+"/v1/me", code, "")
@@ -118,7 +158,7 @@ func TestOAuthLoginCode_ADeletedAccountsCodeMintsNothing(t *testing.T) {
 	ts := httptest.NewServer(NewRouter(pool, nil, nil))
 	t.Cleanup(ts.Close)
 	userID, _ := createLiveTestUser(t, pool, "user")
-	code, err := db.NewOAuthLoginCodeRepository(pool).Issue(ctx, userID, auth.LoginCodeTTL)
+	code, err := db.NewOAuthLoginCodeRepository(pool).Issue(ctx, userID, auth.LoginCodeTTL, db.LoginCodeOrigin{})
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `UPDATE users SET deleted_at = NOW() WHERE id = $1`, userID)
 	require.NoError(t, err)
@@ -145,7 +185,7 @@ func TestOAuthLoginCode_RacingExchangesAcrossTwoInstancesMintOneToken(t *testing
 	t.Cleanup(a.Close)
 	t.Cleanup(b.Close)
 	userID, _ := createLiveTestUser(t, pool, "user")
-	code, err := db.NewOAuthLoginCodeRepository(pool).Issue(ctx, userID, auth.LoginCodeTTL)
+	code, err := db.NewOAuthLoginCodeRepository(pool).Issue(ctx, userID, auth.LoginCodeTTL, db.LoginCodeOrigin{})
 	require.NoError(t, err)
 
 	var wins atomic.Int32

@@ -24,6 +24,8 @@ func addOperations(spec map[string]interface{}) {
 		paths[path] = item
 	}
 	wirePostConventions(paths)
+	// Last: every public route with no richer definition above gets a summary-level operation.
+	addCoveragePaths(paths)
 
 	schemas := spec["components"].(map[string]interface{})["schemas"].(map[string]interface{})
 	for name, schema := range operationSchemas() {

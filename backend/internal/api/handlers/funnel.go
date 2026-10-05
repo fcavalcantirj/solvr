@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/db"
@@ -12,16 +13,18 @@ import (
 
 // The connection-funnel API.
 //
-//	POST /v1/analytics/funnel           the page reports a browser step
+//	POST /v1/analytics/funnel           the page reports a browser step, or the web
+//	                                    server reports that it served the skill
 //	GET  /v1/analytics/funnel/contract  the one documented event contract
 //
-// Only BROWSER steps may be self-reported here: a client can announce that it
-// opened a panel or copied a prompt, but it can never claim a room was created,
-// a participant joined, or a two-way exchange happened — those are recorded from
-// confirmed server actions elsewhere, so no client can fake them or suppress the
-// measurement by blocking browser analytics. The endpoint stores no credential,
-// no message body, no task text and no room title; the actor is classified from
-// the request's own credential and reduced to a pseudonymous reference.
+// Only BROWSER steps and the web server's skill_fetched (funnel_skill.go) may be
+// reported here: a client can announce that it opened a panel or copied a prompt,
+// but it can never claim a room was created, a participant joined, or a two-way
+// exchange happened — those are recorded from confirmed server actions elsewhere,
+// so no client can fake them or suppress the measurement by blocking browser
+// analytics. The endpoint stores no credential, no message body, no task text and
+// no room title; the actor is classified from the request's own credential and
+// reduced to a pseudonymous reference.
 
 // funnelBoundedField caps every optional client string at the column bound so a
 // malformed report is a clean 400, not a database constraint error.
@@ -51,6 +54,9 @@ type ingestFunnelRequest struct {
 	InstructionVersion string `json:"instruction_version"`
 	// Source names the public room (by slug) or post (by id) this step is attributed to.
 	Source *funnelSourceRef `json:"source,omitempty"`
+	// RequestMode belongs to skill_fetched alone: the Sec-Fetch-Mode header of the
+	// request for the skill. The API reads it to set entry_surface and never stores it.
+	RequestMode string `json:"request_mode"`
 }
 
 // IngestBrowserEvent handles POST /v1/analytics/funnel. Public, optional auth:
@@ -63,11 +69,18 @@ func (h *FunnelHandler) IngestBrowserEvent(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// A client may only report a browser step. Naming a server-only step — or a
-	// step that does not exist — is refused rather than trusted.
-	if !models.IsBrowserFunnelEvent(req.Event) {
+	// A client may only report a browser step or the web server's. Naming a
+	// server-only step — or a step that does not exist — is refused rather than
+	// trusted. The refusal names the accepted steps from the contract itself.
+	if !models.IsClientReportedFunnelEvent(req.Event) {
 		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR",
-			"event must be one of connection_started, starter_prompt_copied, room_viewed, join_prompt_copied, share_visit, share_link_copied")
+			"event must be one of "+strings.Join(models.ClientReportedFunnelEvents(), ", "))
+		return
+	}
+
+	// skill_fetched has its own rules: the API decides everything about the step.
+	if req.Event == models.FunnelSkillFetched {
+		h.ingestSkillFetched(w, r, req)
 		return
 	}
 

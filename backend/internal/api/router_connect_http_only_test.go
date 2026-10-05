@@ -32,9 +32,12 @@ var (
 	recipeBearer        = regexp.MustCompile(`^Authorization: Bearer ([A-Z][A-Z_]+)$`)
 	httpOnlyPlaceholder = regexp.MustCompile(`\b[A-Z][A-Z_]{3,}\b`)
 	sentenceRoomLink    = regexp.MustCompile(`https://solvr\.dev/rooms/([a-z0-9][a-z0-9-]*)`)
-)
 
-const skillSentencePrefix = "Learn Solvr from https://solvr.dev/skill.md. "
+	// Every sentence sends the agent to the skill first. A sentence that creates a room,
+	// served by GET /v1/connect, carries the visit's flow code on that link (?f=<code>).
+	skillSentenceStart = regexp.MustCompile(`^Learn Solvr from https://solvr\.dev/skill\.md(\?f=[a-hjkmnp-z2-9]{8})?\. `)
+	skillLinkFlowCode  = regexp.MustCompile(`^https://solvr\.dev/skill\.md\?f=(.+)$`)
+)
 
 // httpOnlyAgent is one agent with an HTTP client and the values it has learned so far.
 type httpOnlyAgent struct {
@@ -42,6 +45,7 @@ type httpOnlyAgent struct {
 	title   string            // its room's display_name: the intent its sentence gave it
 	message string            // what it posts
 	private bool              // the visibility its sentence asked for
+	flow    string            // the code its sentence's skill link carried (?f=<code>), if any
 	id      string            // its public agent id, from registration
 	vars    map[string]string // placeholder -> value (ROOM_SLUG, YOUR_AGENT_API_KEY, ...)
 	calls   []string          // "METHOD path" of every call it made, in order
@@ -68,8 +72,16 @@ func decodeSentence(t *testing.T, raw any) sentence {
 	require.NoError(t, err)
 	var s sentence
 	require.NoError(t, json.Unmarshal(b, &s))
-	require.True(t, strings.HasPrefix(s.Text, skillSentencePrefix), "the sentence sends the agent to the skill first: %q", s.Text)
+	require.Regexp(t, skillSentenceStart, s.Text, "the sentence sends the agent to the skill first")
 	return s
+}
+
+// flowCode is the code the sentence's skill link carries (?f=<code>), or "" for a plain link.
+func (s sentence) flowCode() string {
+	if m := skillLinkFlowCode.FindStringSubmatch(s.segment("link")); m != nil {
+		return m[1]
+	}
+	return ""
 }
 
 func (s sentence) segment(kind string) string {
@@ -86,10 +98,15 @@ func (s sentence) segment(kind string) string {
 
 // startRoom is the first agent: its sentence says "Create a ... room", so it follows the
 // skill's Identity and Start a room recipes with the visibility and intent the sentence gave.
+// When the skill link it was given carries ?f=<code>, it adds that code to the create body
+// as flow_id, as the Start a room recipe says (skillFlowRule).
 func (a *httpOnlyAgent) startRoom(t *testing.T, base string, s sentence) {
 	t.Helper()
 	require.Contains(t, s.Text, ". Create a ", "a first agent's sentence creates the room")
 	a.private = s.segment("visibility") == "private"
+	if a.flow = s.flowCode(); a.flow != "" {
+		require.Contains(t, skillRooms(t), skillFlowRule, "the agent only sends flow_id because the skill tells it to")
+	}
 	if a.title == "" {
 		a.title = s.segment("intent")
 	}
@@ -186,6 +203,10 @@ func (a *httpOnlyAgent) call(t *testing.T, client *http.Client, base, line, meth
 			case "client_entry_id":
 				fields[k] = fmt.Sprintf("%s-%d", a.name, n)
 			}
+		}
+		// The skill's rule for a link that carried ?f=<code>: the create body gains flow_id.
+		if a.flow != "" && method == http.MethodPost && path == "/v1/rooms" {
+			fields["flow_id"] = a.flow
 		}
 		raw, _ := json.Marshal(fields)
 		require.Empty(t, httpOnlyPlaceholder.FindAllString(string(raw), -1), "%s: the body asks for a value no earlier step gave the agent: %s", a.name, raw)

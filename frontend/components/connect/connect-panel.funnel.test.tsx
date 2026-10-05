@@ -1,13 +1,14 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { CONNECT_START } from './connect-fixture';
+import { CONNECT_FLOW_ID, CONNECT_START, CONNECT_START_PRIVATE_COLLABORATE } from './connect-fixture';
 import { ConnectPanel } from './connect-panel';
 
 // The connection panel reports two BROWSER funnel steps: connection_started when
 // its contract loads (the panel/page is meaningfully opened) and
 // starter_prompt_copied only after the clipboard write succeeds. Both carry the
-// flow id the API minted for this contract; the copied sentence itself never carries it.
+// flow id the API minted for this visit, the same one the copied sentence carries on
+// its skill link, so a re-read of the contract never splits one visit into two flows.
 
 vi.mock('next/link', () => ({
   default: ({ children, href, ...props }: { children: React.ReactNode; href: string; [key: string]: unknown }) => (
@@ -43,12 +44,42 @@ describe('ConnectPanel connection funnel', () => {
       expect(vi.mocked(api.postFunnelEvent)).toHaveBeenCalledWith(
         expect.objectContaining({
           event: 'connection_started',
-          flow_id: 'f_0123456789abcdef01234567',
+          flow_id: CONNECT_FLOW_ID,
           entry_surface: 'connect_page',
           preset: 'plan-and-build',
-          instruction_version: '2.0',
+          instruction_version: '2.1',
         }),
       );
+    });
+  });
+
+  // The two steps of one visit carry one flow id, and it is the code on the link of the
+  // sentence that gets copied: the panel sends the first answer's flow back when the
+  // contract is read again, and the API reuses it.
+  it('keeps one flow id across a re-read: started, the copied sentence and copied all carry it', async () => {
+    vi.mocked(api.getConnectStart)
+      .mockResolvedValueOnce({ data: CONNECT_START })
+      .mockResolvedValue({ data: CONNECT_START_PRIVATE_COLLABORATE });
+    await renderPanel('page');
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Private room' }));
+    await waitFor(() => expect(api.getConnectStart).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(api.getConnectStart).mock.calls[1][0]).toEqual({ visibility: 'private', flow: CONNECT_FLOW_ID });
+    await waitFor(() =>
+      expect(screen.getByRole('switch', { name: 'Private room' })).toHaveAttribute('aria-checked', 'true'),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /copy prompt/i }));
+    await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalled());
+    const copied = vi.mocked(navigator.clipboard.writeText).mock.calls[0][0];
+    expect(copied).toContain(`https://solvr.dev/skill.md?f=${CONNECT_FLOW_ID}. Create a private Solvr room`);
+
+    await waitFor(() => {
+      const flows = vi.mocked(api.postFunnelEvent).mock.calls.map(([step]) => [step.event, step.flow_id]);
+      expect(flows).toEqual([
+        ['connection_started', CONNECT_FLOW_ID],
+        ['starter_prompt_copied', CONNECT_FLOW_ID],
+      ]);
     });
   });
 
@@ -78,7 +109,7 @@ describe('ConnectPanel connection funnel', () => {
       expect(vi.mocked(api.postFunnelEvent)).toHaveBeenCalledWith(
         expect.objectContaining({
           event: 'starter_prompt_copied',
-          flow_id: 'f_0123456789abcdef01234567',
+          flow_id: CONNECT_FLOW_ID,
           entry_surface: 'connect_page',
           preset: 'plan-and-build',
           role: 'planner',

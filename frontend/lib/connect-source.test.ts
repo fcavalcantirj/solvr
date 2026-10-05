@@ -23,6 +23,17 @@ describe('connect source and share requests', () => {
     expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/v1\/connect\?post=6f1b9a52-34d4-4c55-9d0e-0b6a8b0e2a11$/);
   });
 
+  // One visit is one flow (SPEC.md 25.6): the flow id the API issued is sent back as-is.
+  it('sends the flow of the visit back to GET /v1/connect', async () => {
+    await api.getConnectStart({ visibility: 'private', flow: 'k7m2p9xq' });
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/v1\/connect\?visibility=private&flow=k7m2p9xq$/);
+  });
+
+  it('sends no flow parameter before the API issued one', async () => {
+    await api.getConnectStart({ visibility: 'private' });
+    expect(String(fetchMock.mock.calls[0][0])).not.toContain('flow');
+  });
+
   it('reads the share contract of a room', async () => {
     await api.getRoomShare('ttt-room');
     expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/v1\/rooms\/ttt-room\/share$/);

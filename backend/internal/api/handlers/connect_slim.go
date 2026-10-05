@@ -26,6 +26,11 @@ const (
 	// connectSkillURL is where the sentence sends an agent to learn Solvr.
 	connectSkillURL = connectAppBaseURL + "/skill.md"
 
+	// connectSkillFlowParam is the query parameter that carries the flow code on the
+	// skill link of a sentence that creates a room. The skill tells the agent to send
+	// the code back as flow_id when it creates the room.
+	connectSkillFlowParam = "f"
+
 	// ConnectIntentMaxChars bounds the intent: it is a phrase in a sentence, not a
 	// document. The agents work out the detail in the room.
 	ConnectIntentMaxChars = 200
@@ -158,10 +163,15 @@ func normalizeIntent(intent string) string {
 //
 // A private room adds one sentence: the second agent gives its id to the human, who
 // passes it to the first agent to admit.
-func slimConnectPrompt(f connectFilling, intent, visibility string) SlimPrompt {
+//
+// This sentence asks an agent to CREATE a room, so its skill link carries the flow code
+// of the visit that served it (connectSkillLink). The code adds no word: every other
+// character is the same with and without it. flowID is empty for the example sentences
+// (GET /v1/connect/examples), which start no flow.
+func slimConnectPrompt(f connectFilling, intent, visibility, flowID string) SlimPrompt {
 	b := &promptBuilder{}
 	b.text("Learn Solvr from ").
-		add(PromptSegment{Kind: SegmentLink, Text: connectSkillURL}).
+		add(PromptSegment{Kind: SegmentLink, Text: connectSkillLink(flowID)}).
 		text(". Create a ").
 		add(PromptSegment{Kind: SegmentVisibility, Text: visibility, Value: visibility}).
 		text(" Solvr room to ")
@@ -184,6 +194,16 @@ func slimConnectPrompt(f connectFilling, intent, visibility string) SlimPrompt {
 			text(" gives me its agent id for you to admit.")
 	}
 	return b.build()
+}
+
+// connectSkillLink is the skill link of a sentence that creates a room: the skill, with
+// the flow code riding on it when there is one. Only a well-formed code is ever put in
+// the link, whatever the caller holds.
+func connectSkillLink(flowID string) string {
+	if !models.ValidFlowCode(flowID) {
+		return connectSkillURL
+	}
+	return connectSkillURL + "?" + connectSkillFlowParam + "=" + flowID
 }
 
 // roomRoleJobs is what each role does in a room it joins (GET /v1/rooms/{slug}/connect).
@@ -213,6 +233,9 @@ func validRoomRole(role string) bool {
 //
 //	Learn Solvr from [link]. Join the [visibility] Solvr room "[title]" at [room link] as
 //	the [ROLE], read it, and [job].
+//
+// It joins a room and creates none, so its skill link is always the plain one: the flow
+// code is only for the call that creates a room.
 func slimRoomPrompt(room *models.Room, role string) SlimPrompt {
 	visibility := ConnectVisibilityPublic
 	if room.IsPrivate {

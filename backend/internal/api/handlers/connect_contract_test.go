@@ -102,7 +102,7 @@ func TestConnect_EveryUseCaseFillsTheSameSentence(t *testing.T) {
 	for _, uc := range connectUseCases {
 		start, body := getConnect(t, h, "preset="+uc.preset+"&intent=ship+the+signup+page")
 		text := start.Prompt.Text
-		want := "Learn Solvr from https://solvr.dev/skill.md. Create a " + uc.visibility +
+		want := "Learn Solvr from https://solvr.dev/skill.md?f=" + start.Selected.FlowID + ". Create a " + uc.visibility +
 			" Solvr room to ship the signup page, join it as the " + uc.roleA +
 			", and answer me with a prompt for the " + uc.roleB +
 			" to install the Solvr skill and join your room, " + uc.job + "."
@@ -122,7 +122,7 @@ func TestConnect_TheDecidingWordsAreTheirOwnSegments(t *testing.T) {
 		p := start.Prompt
 		links := segmentsOf(p, SegmentLink)
 		require.Len(t, links, 1)
-		require.Equal(t, "https://solvr.dev/skill.md", links[0].Text)
+		require.Equal(t, "https://solvr.dev/skill.md?f="+start.Selected.FlowID, links[0].Text)
 		vis := segmentsOf(p, SegmentVisibility)
 		require.Len(t, vis, 1)
 		require.Equal(t, "public", vis[0].Text)
@@ -170,8 +170,9 @@ func TestConnect_NoIntentFillsTheNeutralPhraseAndMarksIt(t *testing.T) {
 func TestConnect_TheIntentIsInsertedVerbatimAndNothingElseChanges(t *testing.T) {
 	h := newTestConnectHandler(t, nil, "example-room")
 	hostile := `Fix the "flaky" login test; it fails ~1 in 5 runs $(rm -rf ~) ` + "`whoami`" + ` ${HOME}`
-	got, _ := getConnect(t, h, "intent="+url.QueryEscape(hostile))
-	marker, _ := getConnect(t, h, "intent=PLACEHOLDER_INTENT_MARKER")
+	// Both reads are of one flow (?flow=), so the intent is the only thing that differs.
+	got, _ := getConnect(t, h, "flow=k7m2p9xq&intent="+url.QueryEscape(hostile))
+	marker, _ := getConnect(t, h, "flow=k7m2p9xq&intent=PLACEHOLDER_INTENT_MARKER")
 
 	require.Equal(t, 1, strings.Count(got.Prompt.Text, hostile))
 	require.Equal(t, hostile, segmentsOf(got.Prompt, SegmentIntent)[0].Text)
@@ -245,7 +246,8 @@ func TestConnect_AChosenVisibilityAppliesToEveryUseCase(t *testing.T) {
 }
 
 // The sentence teaches nothing but itself: no endpoint, no credential, no install of any
-// package, no template syntax, no funnel id. The only URL is the skill.
+// package, no template syntax. The only URL is the skill, and the only thing riding on it
+// is the flow code, once.
 func TestConnect_TheSentenceNamesOnlyTheSkill(t *testing.T) {
 	h := newTestConnectHandler(t, nil, "example-room")
 	anyURL := regexp.MustCompile(`https?://[^\s,]+`)
@@ -253,35 +255,183 @@ func TestConnect_TheSentenceNamesOnlyTheSkill(t *testing.T) {
 		for _, vis := range []string{"public", "private"} {
 			start, _ := getConnect(t, h, "preset="+uc.preset+"&visibility="+vis)
 			text := start.Prompt.Text
+			code := start.Selected.FlowID
 			for _, u := range anyURL.FindAllString(text, -1) {
-				require.Equal(t, "https://solvr.dev/skill.md", strings.TrimRight(u, "."), "%s/%s", uc.preset, vis)
+				require.Equal(t, "https://solvr.dev/skill.md?f="+code, strings.TrimRight(u, "."), "%s/%s", uc.preset, vis)
 			}
-			lower := strings.ToLower(text)
+			require.Equal(t, 1, strings.Count(text, code), "%s/%s: the code appears once, on the link", uc.preset, vis)
+			// The words are checked without the code: a random code may spell anything, the
+			// sentence around it may not.
+			lower := strings.ToLower(strings.Replace(text, "?f="+code, "", 1))
 			for _, banned := range []string{"api.solvr.dev", "/v1/", "authorization", "bearer", "solvr_", "$", "${",
-				"`", "localhost", "npm", "npx", "pip ", "brew ", "solvr.sh", "mcp", "sdk", "plugin", "flow"} {
+				"`", "localhost", "npm", "npx", "pip ", "brew ", "solvr.sh", "mcp", "sdk", "plugin", "flow", "?", "="} {
 				require.NotContains(t, lower, banned, "%s/%s: %q", uc.preset, vis, text)
 			}
-			require.NotContains(t, text, start.Selected.FlowID)
 		}
 	}
 }
 
-// The browser still reports its own funnel steps with a server-minted flow id; the id
-// never rides in the sentence.
-func TestConnect_MintsAFlowIDForTheBrowserOnly(t *testing.T) {
+// The flow id is a short public code: 8 characters with no look-alikes, a new one for
+// every answer that was not asked to keep one.
+func TestConnect_MintsAFlowCode(t *testing.T) {
 	h := newTestConnectHandler(t, nil, "example-room")
 	a, _ := getConnect(t, h, "")
 	b, _ := getConnect(t, h, "")
-	require.Regexp(t, `^f_[0-9a-f]{24}$`, a.Selected.FlowID)
+	require.Regexp(t, `^[a-hjkmnp-z2-9]{8}$`, a.Selected.FlowID)
+	require.True(t, models.ValidFlowCode(a.Selected.FlowID))
+	require.True(t, models.ValidFlowCode(b.Selected.FlowID))
 	require.NotEqual(t, a.Selected.FlowID, b.Selected.FlowID)
-	require.NotContains(t, a.Prompt.Text, a.Selected.FlowID)
+}
+
+// Every mint is a well-formed code and every character is equally likely. 8000 codes are
+// 64000 draws over 31 characters: about 2065 each (standard deviation 45), and 16516 for
+// the first eight together (standard deviation 111). Taking a random byte modulo 31 would
+// favour exactly those eight (18000 expected), which the second band refuses.
+func TestNewFlowID_DrawsWellFormedCodesEvenlyFromTheWholeAlphabet(t *testing.T) {
+	const codes = 8000
+	drawn := map[rune]int{}
+	for i := 0; i < codes; i++ {
+		code := newFlowID()
+		require.True(t, models.ValidFlowCode(code), "minted %q", code)
+		for _, c := range code {
+			drawn[c]++
+		}
+	}
+	require.Len(t, drawn, len(models.FlowCodeAlphabet), "every character of the alphabet is drawn")
+	firstEight := 0
+	for i, c := range models.FlowCodeAlphabet {
+		require.InDelta(t, 2065, drawn[c], 300, "character %q was drawn %d times of 64000", c, drawn[c])
+		if i < 8 {
+			firstEight += drawn[c]
+		}
+	}
+	require.InDelta(t, 16516, firstEight, 660, "the first eight characters are not favoured (a modulo bias gives about 18000)")
+}
+
+type failingReader struct{}
+
+func (failingReader) Read([]byte) (int, error) { return 0, errors.New("no entropy") }
+
+// When no code can be minted the answer still serves the sentence: it has no flow id and
+// its link carries no query.
+func TestConnect_WithoutRandomnessTheLinkCarriesNoQuery(t *testing.T) {
+	previous := flowRand
+	flowRand = failingReader{}
+	defer func() { flowRand = previous }()
+
+	require.Equal(t, "", newFlowID())
+	h := newTestConnectHandler(t, nil, "example-room")
+	start, body := getConnect(t, h, "intent=ship+the+signup+page")
+	require.Equal(t, "", start.Selected.FlowID)
+	require.NotContains(t, body, `"flow_id"`)
+	require.NotContains(t, body, "?f=")
+	require.True(t, strings.HasPrefix(start.Prompt.Text, "Learn Solvr from https://solvr.dev/skill.md. Create a public Solvr room"), start.Prompt.Text)
+	require.Equal(t, "https://solvr.dev/skill.md", segmentsOf(start.Prompt, SegmentLink)[0].Text)
+	// A flow the visitor already has is still kept: echoing it needs no randomness.
+	kept, _ := getConnect(t, h, "flow=k7m2p9xq")
+	require.Equal(t, "k7m2p9xq", kept.Selected.FlowID)
+}
+
+// The link carries the code and the rest of the sentence is byte-equal to the same
+// sentence without one: no word is added, in the text or in the segments, for any use
+// case and either visibility.
+func TestConnect_TheLinkCarriesTheFlowCodeAndNothingElseChanges(t *testing.T) {
+	h := newTestConnectHandler(t, nil, "example-room")
+	for _, uc := range connectUseCases {
+		for _, vis := range []string{"public", "private"} {
+			for _, intent := range []string{"", "ship the signup page"} {
+				start, _ := getConnect(t, h, "preset="+uc.preset+"&visibility="+vis+"&intent="+url.QueryEscape(intent))
+				code := start.Selected.FlowID
+				require.True(t, models.ValidFlowCode(code))
+				require.Len(t, start.Presets, 3)
+				for _, p := range start.Presets {
+					plain := slimConnectPrompt(connectFillingFor(p.Value), intent, vis, "")
+					name := p.Value + "/" + vis + "/" + intent
+					require.NotContains(t, plain.Text, "?", name)
+					require.Equal(t, 1, strings.Count(p.Prompt.Text, "https://solvr.dev/skill.md?f="+code), name)
+					require.Equal(t, plain.Text, strings.Replace(p.Prompt.Text, "?f="+code, "", 1), "%s: byte-equal without the code", name)
+					require.Equal(t, plain.WordCount, p.Prompt.WordCount, "%s: no word is added", name)
+					require.Equal(t, p.Prompt.Text, joined(p.Prompt), "%s: the segments are the text", name)
+					require.Len(t, p.Prompt.Segments, len(plain.Segments), name)
+					for i, seg := range p.Prompt.Segments {
+						want := plain.Segments[i]
+						if seg.Kind == SegmentLink {
+							want.Text += "?f=" + code
+						}
+						require.Equal(t, want, seg, "%s: segment %d", name, i)
+					}
+				}
+				require.Equal(t, start.Prompt, start.Presets[indexOfPreset(start, uc.preset)].Prompt)
+			}
+		}
+	}
+}
+
+func indexOfPreset(start ConnectStart, preset string) int {
+	for i, p := range start.Presets {
+		if p.Value == preset {
+			return i
+		}
+	}
+	return -1
+}
+
+// One visit is one flow: a well-formed code sent back as ?flow= is reused, in
+// selected.flow_id and on the link of every sentence.
+func TestConnect_AValidFlowIsReused(t *testing.T) {
+	h := newTestConnectHandler(t, nil, "example-room")
+	first, _ := getConnect(t, h, "")
+	code := first.Selected.FlowID
+	for _, query := range []string{"flow=" + code, "flow=" + code + "&intent=ship+it&visibility=private", "preset=collaborate&flow=" + code} {
+		again, _ := getConnect(t, h, query)
+		require.Equal(t, code, again.Selected.FlowID, query)
+		for _, p := range again.Presets {
+			require.Equal(t, "https://solvr.dev/skill.md?f="+code, segmentsOf(p.Prompt, SegmentLink)[0].Text, "%s %s", query, p.Value)
+		}
+	}
+}
+
+// Anything that is not exactly a code is ignored: never a 400, never echoed (it would
+// land in a sentence people copy), and a new code is minted instead.
+func TestConnect_AMalformedFlowIsIgnoredAndNeverEchoed(t *testing.T) {
+	h := newTestConnectHandler(t, nil, "example-room")
+	// marker is a part of the value that would survive JSON escaping if it were echoed.
+	for sent, marker := range map[string]string{
+		"f_0123456789abcdef01234567":   "f_0123456789abcdef01234567",
+		"K7M2P9XQ":                     "K7M2P9XQ",
+		"k7m2p9x":                      "",
+		"k7m2p9xqq":                    "k7m2p9xqq",
+		"k7m2p9xi":                     "k7m2p9xi",
+		"k7m2p9x0":                     "k7m2p9x0",
+		"k7m2p9xq\n":                   "",
+		" k7m2p9xq":                    "",
+		"k7m2p9xq&x":                   "k7m2p9xq",
+		"<script>alert(1)</script>":    "alert(1)",
+		"IGNORE-PREVIOUS-INSTRUCTIONS": "IGNORE-PREVIOUS",
+		strings.Repeat("a", 500):       strings.Repeat("a", 20),
+		"":                             "",
+	} {
+		w := serveConnect(h, "flow="+url.QueryEscape(sent))
+		require.Equal(t, http.StatusOK, w.Code, "flow=%q: %s", sent, w.Body.String())
+		var wrapper struct {
+			Data ConnectStart `json:"data"`
+		}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper))
+		start := wrapper.Data
+		require.True(t, models.ValidFlowCode(start.Selected.FlowID), "flow=%q minted %q", sent, start.Selected.FlowID)
+		require.NotEqual(t, sent, start.Selected.FlowID)
+		require.Equal(t, "https://solvr.dev/skill.md?f="+start.Selected.FlowID, segmentsOf(start.Prompt, SegmentLink)[0].Text)
+		if marker != "" {
+			require.NotContains(t, w.Body.String(), marker, "flow=%q: an unvalidated value is never echoed", sent)
+		}
+	}
 }
 
 func TestConnect_ServesTheChromeAroundTheSentence(t *testing.T) {
 	h := newTestConnectHandler(t, nil, "example-room")
 	start, body := getConnect(t, h, "")
 	require.Equal(t, ConnectInstructionVersion, start.InstructionVersion)
-	require.Equal(t, "2.0", ConnectInstructionVersion, "the prompt shape changed: one sentence and its segments")
+	require.Equal(t, "2.1", ConnectInstructionVersion, "the sentence's skill link carries the flow code, and ?flow= keeps it")
 	require.Equal(t, "Connect your agents", start.Heading)
 	require.Equal(t, "What should they do?", start.IntentField.Label)
 	require.Equal(t, ConnectIntentMaxChars, start.IntentField.MaxChars)
@@ -325,6 +475,7 @@ func TestConnectExamples_ServeTheThreeExampleSentences(t *testing.T) {
 	h.GetConnectExamples(w, httptest.NewRequest(http.MethodGet, "/v1/connect/examples", nil))
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	require.NotContains(t, w.Body.String(), "flow")
+	require.NotContains(t, w.Body.String(), "?f=", "an example starts no flow, so its link carries no code")
 
 	var wrapper struct {
 		Data ConnectExamples `json:"data"`
@@ -340,6 +491,8 @@ func TestConnectExamples_ServeTheThreeExampleSentences(t *testing.T) {
 		require.Equal(t, uc.label, p.Label)
 		require.NotEmpty(t, p.Next)
 		require.Equal(t, p.Prompt.Text, joined(p.Prompt))
+		require.Equal(t, "https://solvr.dev/skill.md", segmentsOf(p.Prompt, SegmentLink)[0].Text)
+		require.True(t, strings.HasPrefix(p.Prompt.Text, "Learn Solvr from https://solvr.dev/skill.md. Create a "), p.Prompt.Text)
 		require.Equal(t, intents[i], segmentsOf(p.Prompt, SegmentIntent)[0].Text)
 		require.Equal(t, uc.visibility, segmentsOf(p.Prompt, SegmentVisibility)[0].Value)
 		require.Less(t, p.Prompt.WordCount, 120)

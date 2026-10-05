@@ -7,6 +7,11 @@ import type { APIConnectPreset, APIConnectStart, APIPrompt, APIPromptSegment } f
 
 const SKILL = 'https://solvr.dev/skill.md';
 
+// The flow code GET /v1/connect minted for the fixture's visit. Every sentence of that
+// answer carries it on the skill link (?f=); the example sentences start no flow and
+// keep the plain link.
+export const CONNECT_FLOW_ID = 'k7m2p9xq';
+
 interface Filling {
   value: string;
   label: string;
@@ -39,10 +44,10 @@ const FILLINGS: Filling[] = [
   },
 ];
 
-function sentence(f: Filling, intent: string, visibility: 'public' | 'private'): APIPrompt {
+function sentence(f: Filling, intent: string, visibility: 'public' | 'private', flowId?: string): APIPrompt {
   const segments: APIPromptSegment[] = [
     { kind: 'text', text: 'Learn Solvr from ' },
-    { kind: 'link', text: SKILL },
+    { kind: 'link', text: flowId ? `${SKILL}?f=${flowId}` : SKILL },
     { kind: 'text', text: '. Create a ' },
     { kind: 'visibility', text: visibility, value: visibility },
     { kind: 'text', text: ' Solvr room to ' },
@@ -75,15 +80,15 @@ function start(selected: string, intent: string, chosen?: 'public' | 'private'):
     label: f.label,
     selected: f.value === selected,
     next: f.next,
-    prompt: sentence(f, intent, chosen ?? f.visibility),
+    prompt: sentence(f, intent, chosen ?? f.visibility, CONNECT_FLOW_ID),
   }));
   const active = presets.find((p) => p.selected)!;
   const visibility = active.prompt.segments.find((s) => s.kind === 'visibility')!.value!;
   return {
-    instruction_version: '2.0',
+    instruction_version: '2.1',
     heading: 'Connect your agents',
     intent_field: { label: 'What should they do?', placeholder: 'what should they do?', max_chars: 200 },
-    selected: { intent, preset: selected, visibility, flow_id: 'f_0123456789abcdef01234567' },
+    selected: { intent, preset: selected, visibility, flow_id: CONNECT_FLOW_ID },
     presets,
     prompt: active.prompt,
     next: active.next,

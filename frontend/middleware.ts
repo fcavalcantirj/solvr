@@ -1,7 +1,51 @@
 import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
+import type { NextFetchEvent, NextRequest } from 'next/server'
 
 const BLOCKED_PATHS = ['/adfa']
+
+// The skill, as the sentence of GET /v1/connect links it: /skill.md?f=<flow code>
+// (SPEC.md 25.6). A GET of that link is reported to the API as the funnel step
+// skill_fetched (25.7), so a website visit can be tied to the room it produced.
+const SKILL_PATH = '/skill.md'
+const SKILL_FLOW_PARAM = 'f'
+// Longer than any flow id the API stores; a longer value is not worth a request.
+const SKILL_FLOW_MAX_LENGTH = 64
+// The report is abandoned after this long. It never holds the response either way.
+const SKILL_REPORT_TIMEOUT_MS = 3000
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev'
+// The report names its sender, so the API host and the edge in front of it can tell it
+// from an anonymous client (the runtime would otherwise send its own default).
+const SKILL_REPORT_USER_AGENT = 'solvr-web/1.0 (skill-fetch report)'
+
+// reportSkillFetched tells the API that the skill link was fetched with a flow code, and
+// how (the request's Sec-Fetch-Mode: the API uses it to tell a person's browser from an
+// agent, and decides everything else too). The request starts at once, beside the
+// response. The promise it returns settles when the API answered, failed or the timeout
+// passed, and it never rejects: a statistic must not break the page it measures.
+function reportSkillFetched(flowId: string, requestMode: string): Promise<void> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), SKILL_REPORT_TIMEOUT_MS)
+  let sent: Promise<unknown>
+  try {
+    sent = fetch(`${API_BASE_URL}/v1/analytics/funnel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'User-Agent': SKILL_REPORT_USER_AGENT },
+      body: JSON.stringify({ event: 'skill_fetched', flow_id: flowId, request_mode: requestMode }),
+      signal: controller.signal,
+    })
+  } catch {
+    sent = Promise.resolve()
+  }
+  // The answer is not read; its body is released so the connection is free again.
+  return sent
+    .then((answer) => (answer as Response | undefined)?.body?.cancel())
+    .then(
+      () => undefined,
+      () => undefined,
+    )
+    .finally(() => clearTimeout(timer))
+}
 
 // Legacy first path segments that now live under the unified /posts collection.
 // The pre-redesign product split knowledge into /problems, /ideas and
@@ -37,7 +81,7 @@ export function canonicalPath(pathname: string): string | null {
   return null
 }
 
-export function middleware(request: NextRequest) {
+export function middleware(request: NextRequest, event?: NextFetchEvent) {
   const { pathname } = request.nextUrl
 
   if (BLOCKED_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'))) {
@@ -53,6 +97,17 @@ export function middleware(request: NextRequest) {
     url.pathname = canonical
     // 308 = permanent redirect that preserves the request method.
     return NextResponse.redirect(url, 308)
+  }
+
+  // The skill link with a flow code: report the fetch and let the request go on to the
+  // file. Nothing is awaited here; waitUntil only lets the report outlive the response.
+  // The code is not judged: the API validates it.
+  if (pathname === SKILL_PATH && request.method === 'GET') {
+    const flowId = request.nextUrl.searchParams.get(SKILL_FLOW_PARAM)
+    if (flowId && flowId.length <= SKILL_FLOW_MAX_LENGTH) {
+      const report = reportSkillFetched(flowId, request.headers.get('sec-fetch-mode') ?? '')
+      event?.waitUntil(report)
+    }
   }
 
   return NextResponse.next()
@@ -71,5 +126,6 @@ export const config = {
     '/ideas/:path*',
     '/questions',
     '/questions/:path*',
+    '/skill.md',
   ],
 }

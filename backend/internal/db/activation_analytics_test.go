@@ -171,7 +171,8 @@ func TestActivationAnalytics_MeasuresProspectiveActivationInAHistoricalWindow(t 
 	// flow->room by origin. Website: two flows started, one made a room.
 	require.NotNil(t, rep.FlowToRoom.Website.Denominator)
 	assert.Equal(t, 2, *rep.FlowToRoom.Website.Denominator, "website flows started")
-	assert.Equal(t, 1, rep.FlowToRoom.Website.Numerator, "website rooms created")
+	assert.Equal(t, 1, rep.FlowToRoom.Website.Numerator, "website flows that produced a room")
+	assert.Equal(t, db.WebsiteFlowSteps{Started: 2, PromptCopied: 0, SkillFetched: 0, RoomCreated: 1}, rep.WebsiteFlowSteps)
 	require.NotNil(t, rep.FlowToRoom.Website.Rate)
 	assert.InDelta(t, 0.5, *rep.FlowToRoom.Website.Rate, 1e-9)
 	// Direct API: one room, denominator unknown (no browser start to count).
@@ -182,7 +183,9 @@ func TestActivationAnalytics_MeasuresProspectiveActivationInAHistoricalWindow(t 
 	assert.Nil(t, rep.FlowToRoom.Unknown.Denominator)
 	assert.Equal(t, 1, rep.FlowToRoom.Unknown.Numerator)
 	assert.Nil(t, rep.FlowToRoom.Unknown.Rate)
-	// The three origin numerators partition rooms created.
+	// Website counts flows and the other two count rooms. Each website flow made one room
+	// here, so the three numerators add up to the rooms created (funnel_flow_test.go has a
+	// flow that made two).
 	assert.Equal(t, rep.RoomsCreated,
 		rep.FlowToRoom.Website.Numerator+rep.FlowToRoom.DirectAPI.Numerator+rep.FlowToRoom.Unknown.Numerator)
 

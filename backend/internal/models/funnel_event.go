@@ -9,23 +9,26 @@ import "time"
 // the server hooks and the analytics reader all agree on the same vocabulary.
 // The steps a visitor's connection crosses, in order:
 //
-//	connection_started      browser  a start panel/page meaningfully opened
-//	starter_prompt_copied   browser  the starter/planner prompt was copied
-//	room_created            server   the agent created the room it will own
-//	participant_joined      server   an authenticated agent joined the room
-//	first_two_way_exchange  server   two distinct agents have each posted
-//	room_viewed             browser  a room page was opened
-//	join_prompt_copied      browser  a role-specific join prompt was copied
-//	share_visit             browser  a public room/post page was opened from a share link
-//	share_link_copied       browser  a share link or outcome excerpt was copied
+//	connection_started      browser     a start panel/page meaningfully opened
+//	starter_prompt_copied   browser     the starter/planner prompt was copied
+//	skill_fetched           web_server  the skill link of a copied sentence was fetched
+//	room_created            server      the agent created the room it will own
+//	participant_joined      server      an authenticated agent joined the room
+//	first_two_way_exchange  server      two distinct agents have each posted
+//	room_viewed             browser     a room page was opened
+//	join_prompt_copied      browser     a role-specific join prompt was copied
+//	share_visit             browser     a public room/post page was opened from a share link
+//	share_link_copied       browser     a share link or outcome excerpt was copied
 //
-// Browser steps are self-reported by the page; server steps are recorded from
-// confirmed server events, so the funnel stays measurable when browser analytics
-// is blocked. No step ever carries a credential, a message body, the task text
-// or a raw private room title.
+// Browser steps are self-reported by the page; the web server's step is reported by the
+// site's own server when it serves the skill; server steps are recorded from confirmed
+// server events, so the funnel stays measurable when browser analytics is blocked. No
+// step ever carries a credential, a message body, the task text or a raw private room
+// title.
 const (
 	FunnelConnectionStarted   = "connection_started"
 	FunnelStarterPromptCopied = "starter_prompt_copied"
+	FunnelSkillFetched        = "skill_fetched"
 	FunnelRoomCreated         = "room_created"
 	FunnelParticipantJoined   = "participant_joined"
 	FunnelFirstTwoWayExchange = "first_two_way_exchange"
@@ -33,6 +36,14 @@ const (
 	FunnelJoinPromptCopied    = "join_prompt_copied"
 	FunnelShareVisit          = "share_visit"
 	FunnelShareLinkCopied     = "share_link_copied"
+)
+
+// The two entry surfaces of skill_fetched. The API sets them itself, from how the skill
+// was requested, and ignores any value a client sends for this step: a person who opened
+// the link in a browser is not an agent that read the skill.
+const (
+	FunnelSurfaceAgentFetch   = "agent_fetch"
+	FunnelSurfaceBrowserVisit = "browser_visit"
 )
 
 // The public sources a step may be attributed to (idx 88): a room or a post, resolved
@@ -47,10 +58,13 @@ func ValidFunnelSourceKind(k string) bool {
 	return k == FunnelSourceKindRoom || k == FunnelSourceKindPost
 }
 
-// The two channels a funnel step is recorded on.
+// The channels a funnel step is recorded on: the page in a browser, the site's web
+// server (which serves the skill and reports that it did), and the API's own confirmed
+// actions.
 const (
-	FunnelSourceBrowser = "browser"
-	FunnelSourceServer  = "server"
+	FunnelSourceBrowser   = "browser"
+	FunnelSourceWebServer = "web_server"
+	FunnelSourceServer    = "server"
 )
 
 // Actor classification of a funnel step. Reuses the actor vocabulary the rest of
@@ -89,10 +103,10 @@ type FunnelEventSpec struct {
 	Attributes    []string `json:"attributes"`
 }
 
-// browserFunnelEvents and serverFunnelEvents partition the vocabulary. A browser
-// event can be self-reported to the ingest endpoint; a server event cannot — it
-// is only ever recorded from a confirmed server action, so a client can never
-// fake a room creation, a join or an activation.
+// browserFunnelEvents, webServerFunnelEvents and serverFunnelEvents partition the
+// vocabulary. A browser event and the web server's event can be reported to the ingest
+// endpoint; a server event cannot — it is only ever recorded from a confirmed server
+// action, so a client can never fake a room creation, a join or an activation.
 var browserFunnelEvents = map[string]bool{
 	FunnelConnectionStarted:   true,
 	FunnelStarterPromptCopied: true,
@@ -100,6 +114,10 @@ var browserFunnelEvents = map[string]bool{
 	FunnelJoinPromptCopied:    true,
 	FunnelShareVisit:          true,
 	FunnelShareLinkCopied:     true,
+}
+
+var webServerFunnelEvents = map[string]bool{
+	FunnelSkillFetched: true,
 }
 
 var serverFunnelEvents = map[string]bool{
@@ -111,12 +129,33 @@ var serverFunnelEvents = map[string]bool{
 // IsBrowserFunnelEvent reports whether name is a browser-reported funnel step.
 func IsBrowserFunnelEvent(name string) bool { return browserFunnelEvents[name] }
 
+// IsWebServerFunnelEvent reports whether name is a step the site's web server reports.
+func IsWebServerFunnelEvent(name string) bool { return webServerFunnelEvents[name] }
+
 // IsServerFunnelEvent reports whether name is a server-recorded funnel step.
 func IsServerFunnelEvent(name string) bool { return serverFunnelEvents[name] }
 
+// IsClientReportedFunnelEvent reports whether name is a step the public ingest endpoint
+// accepts: a browser step or the web server's. Never a server-recorded one.
+func IsClientReportedFunnelEvent(name string) bool {
+	return browserFunnelEvents[name] || webServerFunnelEvents[name]
+}
+
+// ClientReportedFunnelEvents lists the steps the ingest endpoint accepts, in the
+// contract's order, so its refusal can name them without keeping a second list.
+func ClientReportedFunnelEvents() []string {
+	var names []string
+	for _, spec := range FunnelEventContract() {
+		if IsClientReportedFunnelEvent(spec.Name) {
+			names = append(names, spec.Name)
+		}
+	}
+	return names
+}
+
 // ValidFunnelEventName reports whether name is any recognized funnel step.
 func ValidFunnelEventName(name string) bool {
-	return browserFunnelEvents[name] || serverFunnelEvents[name]
+	return browserFunnelEvents[name] || webServerFunnelEvents[name] || serverFunnelEvents[name]
 }
 
 // ValidFunnelActorType reports whether t is a recognized actor classification.
@@ -142,10 +181,19 @@ func FunnelEventContract() []FunnelEventSpec {
 			Attributes:    []string{"flow_id", "entry_surface", "preset", "role", "instruction_version"},
 		},
 		{
+			Name:          FunnelSkillFetched,
+			SourceChannel: FunnelSourceWebServer,
+			Description: "The skill link of a copied sentence (skill.md?f=<flow code>) was fetched; reported by the web server. " +
+				"flow_id is required and must be a flow code. The API sets entry_surface itself from request_mode " +
+				"(the request's Sec-Fetch-Mode, never stored): browser_visit for navigate, otherwise agent_fetch.",
+			Attributes: []string{"flow_id", "entry_surface"},
+		},
+		{
 			Name:          FunnelRoomCreated,
 			SourceChannel: FunnelSourceServer,
-			Description:   "An agent created the room it will own; carries the flow_id the create-room call brought.",
-			Attributes:    []string{"flow_id", "actor_type", "actor_ref", "room_id", "source"},
+			Description: "An agent created the room it will own; carries the flow_id the create-room call brought, " +
+				"kept only when it is a flow code an earlier step already carries.",
+			Attributes: []string{"flow_id", "actor_type", "actor_ref", "room_id", "source"},
 		},
 		{
 			Name:          FunnelParticipantJoined,

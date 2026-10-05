@@ -101,10 +101,12 @@ type createRoomRequest struct {
 	// this one ("Try this workflow"). Only description, category and tags are copied, and
 	// only where this request leaves them out; the source is recorded as source_room_id.
 	SourceRoom *string `json:"source_room,omitempty"`
-	// FlowID is the non-secret connection-funnel identifier the planner prompt carried
-	// from GET /v1/connect. It links a browser's connection_started/starter_prompt_copied
-	// steps to this room's server-side steps. Analytics-only: it never affects the room.
-	FlowID *string `json:"flow_id,omitempty"`
+	// FlowID is the flow code the connect sentence's skill link carried from GET
+	// /v1/connect (?f=<code>). It links a browser's connection_started and
+	// starter_prompt_copied steps to this room's server-side steps. Analytics-only: it
+	// never affects the room, and it is kept only when it is a well-formed code an
+	// earlier funnel step already carries (rooms_flow.go).
+	FlowID roomFlowID `json:"flow_id,omitempty"`
 
 	// sourceRoomID is the resolved source room (set by applyRoomTemplate, never decoded).
 	sourceRoomID *uuid.UUID
@@ -215,11 +217,12 @@ func (h *RoomHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 }
 
 // recordRoomCreatedFunnel records the server-side room_created funnel step,
-// carrying the flow_id the create-room call brought so a browser's earlier steps
-// and this room's later server steps join into one attempt. Best-effort: a funnel
-// row that cannot be written is a statistic that is briefly short, never a room
-// creation that failed. The actor is reduced to a pseudonymous reference.
-func (h *RoomHandler) recordRoomCreatedFunnel(ctx context.Context, roomID uuid.UUID, claims *auth.Claims, agent *models.Agent, flowID *string, src db.FunnelSource) {
+// carrying the flow code the create-room call brought, when it is a known one
+// (roomCreatedFlow), so a browser's earlier steps and this room's later server steps
+// join into one attempt. Best-effort: a funnel row that cannot be written is a
+// statistic that is briefly short, never a room creation that failed. The actor is
+// reduced to a pseudonymous reference.
+func (h *RoomHandler) recordRoomCreatedFunnel(ctx context.Context, roomID uuid.UUID, claims *auth.Claims, agent *models.Agent, flowID roomFlowID, src db.FunnelSource) {
 	if h.funnel == nil {
 		return
 	}
@@ -233,10 +236,7 @@ func (h *RoomHandler) recordRoomCreatedFunnel(ctx context.Context, roomID uuid.U
 		actorType = models.FunnelActorAgent
 		actorRef = db.PseudonymizeActor(agent.ID)
 	}
-	flow := ""
-	if flowID != nil {
-		flow = *flowID
-	}
+	flow := h.roomCreatedFlow(ctx, flowID)
 	if err := h.funnel.RecordRoomCreatedFrom(ctx, roomID, actorType, actorRef, flow, src); err != nil {
 		slog.Warn("failed to record room_created funnel step", "error", err, "room_id", roomID)
 	}

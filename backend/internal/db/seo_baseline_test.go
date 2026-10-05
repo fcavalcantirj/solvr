@@ -77,6 +77,11 @@ func TestSEOBaseline_MeasuresWhatTheServerKnows(t *testing.T) {
 	funnel("room_created", "", "post", eligible, in)
 	funnel("room_created", "", "post", rejected, in)
 	funnel("room_created", "", "room", public, out)
+	// The web server's step is listed like any other, by the surface the API gave it.
+	funnel("skill_fetched", "agent_fetch", nil, nil, in)
+	funnel("skill_fetched", "agent_fetch", nil, nil, in)
+	funnel("skill_fetched", "browser_visit", nil, nil, in)
+	funnel("skill_fetched", "agent_fetch", nil, nil, out)
 
 	search := func(results int, at time.Time) {
 		_, err := pool.Exec(ctx, `INSERT INTO search_queries (query, query_normalized, results_count, search_method,
@@ -102,6 +107,8 @@ func TestSEOBaseline_MeasuresWhatTheServerKnows(t *testing.T) {
 		{Event: "connection_started", EntrySurface: "connect_page", Count: 2},
 		{Event: "first_two_way_exchange", EntrySurface: "", Count: 1},
 		{Event: "room_created", EntrySurface: "", Count: 4},
+		{Event: "skill_fetched", EntrySurface: "agent_fetch", Count: 2},
+		{Event: "skill_fetched", EntrySurface: "browser_visit", Count: 1},
 	}, b.Funnel)
 	assert.ElementsMatch(t, []SEOLanding{
 		{Path: "/rooms/seo-base-public", Kind: "room", Connections: 1, Activations: 1},

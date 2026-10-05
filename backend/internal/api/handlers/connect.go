@@ -3,7 +3,7 @@ package handlers
 import (
 	"context"
 	"crypto/rand"
-	"encoding/hex"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -33,7 +33,10 @@ const (
 	// 1.1 (idx 88): the create-room body may carry source_room / source_post_id.
 	// 2.0 (v1.3.5): one sentence per use case, served as text and segments; the protocol
 	// it relies on moved to https://solvr.dev/skill.md.
-	ConnectInstructionVersion = "2.0"
+	// 2.1 (the flow code, SPEC.md 25.6): the flow id is a short code, the skill link of a
+	// sentence that creates a room carries it (?f=<code>), and ?flow= keeps one visit one
+	// flow.
+	ConnectInstructionVersion = "2.1"
 
 	// ConnectPresetPlanAndBuild is the default use case: a planner directs, an executor
 	// builds.
@@ -68,8 +71,10 @@ type ConnectIntentField struct {
 
 // ConnectSelection is what the contract was built for: the intent as typed (folded to
 // one phrase), the use case and visibility in force, and the connection-funnel flow id
-// issued for this response. The browser reports its connection_started and
-// starter_prompt_copied steps with FlowID; the sentence never carries it.
+// of this visit. FlowID is a flow code (models.ValidFlowCode): the browser reports its
+// connection_started and starter_prompt_copied steps with it, the skill link of every
+// sentence in the answer carries it (?f=), and the browser sends it back as ?flow= on its
+// later reads so one visit stays one flow.
 type ConnectSelection struct {
 	Intent     string `json:"intent"`
 	Preset     string `json:"preset"`
@@ -179,15 +184,43 @@ func (h *ConnectHandler) SetPostLookup(posts connectPostLookup) {
 	h.posts = posts
 }
 
-// newFlowID mints a non-secret connection-funnel identifier for one connect response:
-// a random hex token the browser reports with its funnel steps. On the vanishingly rare
-// chance randomness is unavailable, the funnel goes unattributed for that response.
+// flowRand is where flow codes draw their randomness from: the system's source. A test
+// replaces it to show what the contract serves when nothing can be drawn.
+var flowRand io.Reader = rand.Reader
+
+// newFlowID mints the non-secret connection-funnel identifier of one visit: a flow code
+// (models.FlowCodeLength characters of models.FlowCodeAlphabet, no prefix). Every
+// character is equally likely: a random byte at or above the largest multiple of the
+// alphabet's size is drawn again instead of being folded onto the first characters. On
+// the vanishingly rare chance randomness is unavailable it returns "": the funnel goes
+// unattributed for that response and the skill link carries no query.
 func newFlowID() string {
-	b := make([]byte, 12)
-	if _, err := rand.Read(b); err != nil {
-		return ""
+	const symbols = len(models.FlowCodeAlphabet)
+	const limit = 256 - 256%symbols
+	code := make([]byte, 0, models.FlowCodeLength)
+	buf := make([]byte, 2*models.FlowCodeLength)
+	for len(code) < models.FlowCodeLength {
+		if _, err := io.ReadFull(flowRand, buf); err != nil {
+			return ""
+		}
+		for _, b := range buf {
+			if int(b) < limit && len(code) < models.FlowCodeLength {
+				code = append(code, models.FlowCodeAlphabet[int(b)%symbols])
+			}
+		}
 	}
-	return "f_" + hex.EncodeToString(b)
+	return string(code)
+}
+
+// flowIDFor is the flow id of one answer: the code the caller sent back, when it is
+// exactly a flow code, so the reads of one visit stay one flow; otherwise a new one.
+// Anything else is ignored without an error and never echoed, because the flow id lands
+// in a sentence people copy.
+func flowIDFor(sent string) string {
+	if models.ValidFlowCode(sent) {
+		return sent
+	}
+	return newFlowID()
 }
 
 // GetConnect handles GET /v1/connect (public, no auth).
@@ -196,6 +229,8 @@ func newFlowID() string {
 //	?preset=     plan-and-build (default) | collaborate | build-and-review
 //	?visibility= public | private; when absent each use case asks for its own
 //	?from_room= / ?post=  seed the intent from a public room or a published post
+//	?flow=       the flow code of an earlier answer of this visit; reused when well-formed,
+//	             otherwise ignored and a new one minted (never a 400)
 //
 // An unknown preset or visibility is a 400: the API never guesses which room somebody
 // meant to create.
@@ -247,7 +282,7 @@ func (h *ConnectHandler) GetConnect(w http.ResponseWriter, r *http.Request) {
 		intent = sourceIntent
 	}
 
-	selection := ConnectSelection{Intent: intent, Preset: preset, FlowID: newFlowID()}
+	selection := ConnectSelection{Intent: intent, Preset: preset, FlowID: flowIDFor(query.Get("flow"))}
 	if source != nil && source.Kind == "room" {
 		selection.SourceRoom = source.RoomSlug
 	} else if source != nil {
@@ -260,7 +295,8 @@ func (h *ConnectHandler) GetConnect(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetConnectExamples handles GET /v1/connect/examples (public, no auth): the three
-// example sentences. Nothing is minted for them; they start no flow.
+// example sentences. Nothing is minted for them; they start no flow, so their skill link
+// carries no code.
 func (h *ConnectHandler) GetConnectExamples(w http.ResponseWriter, _ *http.Request) {
 	presets := make([]ConnectPreset, 0, len(connectFillings))
 	for _, f := range connectFillings {
@@ -268,7 +304,7 @@ func (h *ConnectHandler) GetConnectExamples(w http.ResponseWriter, _ *http.Reque
 			Value:  f.Preset,
 			Label:  f.Label,
 			Next:   f.Next,
-			Prompt: slimConnectPrompt(f, f.ExampleIntent, f.Visibility),
+			Prompt: slimConnectPrompt(f, f.ExampleIntent, f.Visibility, ""),
 		})
 	}
 	roomWriteJSON(w, http.StatusOK, map[string]any{"data": ConnectExamples{
@@ -279,7 +315,9 @@ func (h *ConnectHandler) GetConnectExamples(w http.ResponseWriter, _ *http.Reque
 
 // buildConnectStart is pure: the same selection, chosen visibility and example always
 // produce the same contract, sentences included. An empty chosen visibility means each
-// use case asks for its own.
+// use case asks for its own. Every use case's sentence carries the selection's flow id on
+// its skill link: the switch swaps sentences without asking again, and whichever one is
+// copied belongs to the same flow.
 func buildConnectStart(sel ConnectSelection, chosenVisibility string, example ConnectExample) ConnectStart {
 	start := ConnectStart{
 		InstructionVersion: ConnectInstructionVersion,
@@ -302,7 +340,7 @@ func buildConnectStart(sel ConnectSelection, chosenVisibility string, example Co
 			Label:    f.Label,
 			Selected: f.Preset == sel.Preset,
 			Next:     f.Next,
-			Prompt:   slimConnectPrompt(f, sel.Intent, visibility),
+			Prompt:   slimConnectPrompt(f, sel.Intent, visibility, sel.FlowID),
 		}
 		if p.Selected {
 			sel.Visibility = visibility

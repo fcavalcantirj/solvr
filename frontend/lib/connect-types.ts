@@ -54,6 +54,9 @@ export interface APIConnectSelection {
   intent: string;
   preset: string;
   visibility: string;
+  // The flow code of this visit, minted by the API. The browser reports its funnel steps
+  // with it and sends it back as `flow` on later reads; the sentence's skill link carries
+  // it (?f=). The client never makes or checks one.
   flow_id?: string;
   source_room?: string;
   source_post_id?: string;
@@ -130,6 +133,8 @@ export interface ConnectStartParams {
   visibility?: string;
   from_room?: string;
   post?: string;
+  // The flow id an earlier answer of this visit carried, echoed so the visit stays one flow.
+  flow?: string;
 }
 
 export interface APIRoomShare {

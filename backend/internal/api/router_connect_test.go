@@ -95,12 +95,14 @@ func TestConnectEndpoint_ServesTheWholeStartContractToALoggedOutVisitor(t *testi
 	require.Len(t, contract.Presets, 3)
 	require.Equal(t, "plan-and-build", contract.Selected.Preset)
 	require.Equal(t, "public", contract.Selected.Visibility)
-	require.True(t, strings.HasPrefix(contract.Prompt.Text, "Learn Solvr from https://solvr.dev/skill.md. Create a public Solvr room"))
+	require.Regexp(t, `^[a-hjkmnp-z2-9]{8}$`, contract.Selected.FlowID, "the flow id is a short code")
+	require.True(t, strings.HasPrefix(contract.Prompt.Text,
+		"Learn Solvr from https://solvr.dev/skill.md?f="+contract.Selected.FlowID+". Create a public Solvr room"), contract.Prompt.Text)
 	require.Contains(t, contract.Prompt.Text, "join it as the PLANNER, and answer me with a prompt for the EXECUTOR")
 	require.Less(t, contract.Prompt.WordCount, 120)
 	require.NotEmpty(t, contract.Prompt.Segments)
 	require.NotEmpty(t, contract.Next)
-	require.NotContains(t, contract.Prompt.Text, contract.Selected.FlowID)
+	require.Equal(t, 1, strings.Count(contract.Prompt.Text, contract.Selected.FlowID), "the code rides on the skill link, once")
 
 	// No credential, identifier or private detail may ride along with a public
 	// contract.

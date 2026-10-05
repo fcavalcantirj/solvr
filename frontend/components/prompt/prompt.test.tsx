@@ -50,6 +50,30 @@ describe('PromptSentence', () => {
     expect(onIntent).toHaveBeenLastCalledWith('a much lon');
   });
 
+  // The skill link may carry the visit's flow code (?f=<code>). It is one link to the
+  // whole address the API served; only the look of the part after "?" steps back.
+  it('renders a skill link with a flow code as one link to the whole address', () => {
+    const withCode = CONNECT_START.prompt;
+    const address = withCode.segments.find((s) => s.kind === 'link')!.text;
+    expect(address).toMatch(/^https:\/\/solvr\.dev\/skill\.md\?f=[a-hjkmnp-z2-9]{8}$/);
+    const { container } = render(<p><PromptSentence segments={withCode.segments} /></p>);
+
+    expect(container.textContent).toBe(withCode.text);
+    const link = screen.getByRole('link', { name: address });
+    expect(link).toHaveAttribute('href', address);
+    expect(link.textContent).toBe(address);
+    const quiet = link.querySelector('span');
+    expect(quiet).toHaveTextContent(address.slice(address.indexOf('?')));
+    expect(quiet).toHaveClass('text-muted-foreground');
+  });
+
+  it('renders a plain skill link with nothing stepping back', () => {
+    render(<p><PromptSentence segments={plan.prompt.segments} /></p>);
+    const link = screen.getByRole('link', { name: 'https://solvr.dev/skill.md' });
+    expect(link).toHaveAttribute('href', 'https://solvr.dev/skill.md');
+    expect(link.querySelector('span')).toBeNull();
+  });
+
   it('flips the visibility only when editable, as a switch', () => {
     const onFlip = vi.fn();
     render(<p><PromptSentence segments={plan.prompt.segments} editable onVisibilityToggle={onFlip} /></p>);

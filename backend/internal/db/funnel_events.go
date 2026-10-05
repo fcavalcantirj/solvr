@@ -15,10 +15,11 @@ import (
 
 // Recording the connection funnel.
 //
-// The funnel joins two channels a connection attempt crosses: the BROWSER
-// (a panel opened, a prompt copied, a room viewed) and the SERVER (a room
-// created, a participant joined, the first two-way exchange). Browser steps are
-// self-reported through the ingest endpoint; server steps are recorded here from
+// The funnel joins the channels a connection attempt crosses: the BROWSER
+// (a panel opened, a prompt copied, a room viewed), the site's WEB SERVER (the
+// skill link of the copied sentence fetched) and the SERVER (a room created, a
+// participant joined, the first two-way exchange). Browser and web-server steps
+// are reported through the ingest endpoint; server steps are recorded here from
 // confirmed server actions, so a client can neither fake a room creation nor
 // suppress the measurement by blocking browser analytics.
 //
@@ -106,6 +107,48 @@ func (r *FunnelEventRepository) RecordBrowserEvent(ctx context.Context, ev Brows
 		return fmt.Errorf("record funnel browser event: %w", err)
 	}
 	return nil
+}
+
+// RecordSkillFetched stores the web server's skill_fetched step: the skill link of a
+// copied sentence (skill.md?f=<flow code>) was fetched. The caller has validated the flow
+// code and decided the entry surface (models.FunnelSurfaceAgentFetch or
+// models.FunnelSurfaceBrowserVisit); nothing else a client sent reaches the row. Every
+// fetch is a row: the reports count distinct flows, not fetches.
+func (r *FunnelEventRepository) RecordSkillFetched(ctx context.Context, flowID, actorType, actorRef, entrySurface string) error {
+	if !models.ValidFunnelActorType(actorType) {
+		actorType = models.FunnelActorAnonymous
+	}
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO funnel_events (
+			flow_id, event_name, source_channel, actor_type, actor_ref, entry_surface
+		) VALUES ($1, 'skill_fetched', 'web_server', $2, $3, $4)
+	`, nullFunnel(flowID), actorType, nullFunnel(actorRef), nullFunnel(entrySurface))
+	if err != nil {
+		LogQueryError(ctx, "RecordSkillFetched", "funnel_events", err)
+		return fmt.Errorf("record funnel skill_fetched: %w", err)
+	}
+	return nil
+}
+
+// FlowKnown reports whether a flow code is KNOWN: at least one funnel step other than
+// room_created already carries it (the visit that copied the sentence, or the fetch of
+// its skill link). POST /v1/rooms asks this before it keeps a flow code, so a room is
+// only ever attributed to a flow that exists; a room cannot vouch for the code it
+// brought. One lookup by flow_id, served by idx_funnel_flow.
+func (r *FunnelEventRepository) FlowKnown(ctx context.Context, flowID string) (bool, error) {
+	if flowID == "" {
+		return false, nil
+	}
+	var known bool
+	err := r.pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM funnel_events WHERE flow_id = $1 AND event_name <> 'room_created'
+		)`, flowID).Scan(&known)
+	if err != nil {
+		LogQueryError(ctx, "FlowKnown", "funnel_events", err)
+		return false, fmt.Errorf("look up funnel flow: %w", err)
+	}
+	return known, nil
 }
 
 // RecordRoomCreated records the server room_created step. It carries the flow_id

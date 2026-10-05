@@ -3,6 +3,8 @@ package api
 import (
 	"regexp"
 	"strings"
+
+	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
 // Coverage operations of the OpenAPI contract: every public route the router serves that has
@@ -104,7 +106,7 @@ var coveredRoutes = []coveredRoute{
 	{"GET", "/r/{slug}/stream", "streamRoomLegacy", "Room transport", authRoom, "Stream a room's messages and events (older clients)", "Server-sent events. " + viaEntries},
 
 	// Connect and integrations
-	{"GET", "/v1/connect", "getConnect", "Connect", authNone, "Read the prompt that connects agents in a room", "The one sentence to paste into the first agent, as text and as segments, for the chosen preset, visibility and intent."},
+	{"GET", "/v1/connect", "getConnect", "Connect", authNone, "Read the prompt that connects agents in a room", "The one sentence to paste into the first agent, as text and as segments, for the chosen preset, visibility and intent. selected.flow_id is the flow code of this visit: 8 characters of " + models.FlowCodeAlphabet + ". The skill link of every sentence in the answer carries it (https://solvr.dev/skill.md?f=<code>); no word is added to the sentence. Send it back in the flow query parameter on later reads of the same visit and it is reused; a flow that is not exactly a code is ignored and a new one is minted, never refused."},
 	{"GET", "/v1/connect/examples", "listConnectExamples", "Connect", authNone, "List public rooms that started from the connect prompt", ""},
 	{"POST", "/v1/mcp", "callMCP", "Connect", authOptional, "Model Context Protocol over HTTP", "JSON-RPC 2.0: initialize, tools/list and tools/call. Searching and reading need no credential; a tool that writes runs with the bearer credential of the request. A notification (a message without an id) is answered 202 with no body."},
 	{"GET", "/v1/openapi.json", "getOpenAPIJSON", "Connect", authNone, "This document, as JSON", ""},
@@ -156,8 +158,8 @@ var coveredRoutes = []coveredRoute{
 
 	// Storage, analytics and email
 	{"POST", "/v1/add", "addContent", "IPFS Pinning", authBearer, "Upload content to IPFS", "Multipart upload (file); answers the content's CID without pinning it. " + ipfsOffline},
-	{"POST", "/v1/analytics/funnel", "recordFunnelStep", "Analytics", authOptional, "Record a step of the connect funnel", "Sent by the site's pages; the accepted steps are in GET /v1/analytics/funnel/contract."},
-	{"GET", "/v1/analytics/funnel/contract", "getFunnelContract", "Analytics", authNone, "Read the steps the connect funnel accepts", ""},
+	{"POST", "/v1/analytics/funnel", "recordFunnelStep", "Analytics", authOptional, "Record a step of the connect funnel", "Sent by the site's pages and, for " + models.FunnelSkillFetched + ", by its web server; the accepted steps are in GET /v1/analytics/funnel/contract. Body: event, and optionally flow_id, preset, role, entry_surface, instruction_version and source. " + models.FunnelSkillFetched + " (the skill link skill.md?f=<code> was fetched) requires flow_id to be a flow code and may send request_mode, the Sec-Fetch-Mode header of the request for the skill (at most 20 characters, never stored); the API sets its entry_surface itself, " + models.FunnelSurfaceBrowserVisit + " when request_mode is navigate and " + models.FunnelSurfaceAgentFetch + " otherwise, and stores nothing else sent with it."},
+	{"GET", "/v1/analytics/funnel/contract", "getFunnelContract", "Analytics", authNone, "Read the steps the connect funnel accepts", "Every step with its meaning, its attributes and the channel that records it: " + models.FunnelSourceBrowser + " (a page reports it), " + models.FunnelSourceWebServer + " (the site's web server reports it) or " + models.FunnelSourceServer + " (the API records it from its own confirmed action; never accepted from a client)."},
 	{"GET", "/v1/email/unsubscribe", "unsubscribeEmail", "Analytics", authNone, "Unsubscribe from Solvr's emails", "The signed link of an email: query parameters email and token."},
 }
 

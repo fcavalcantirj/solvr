@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { CONNECT_START, CONNECT_START_BUILD_AND_REVIEW } from './connect-fixture';
+import { CONNECT_FLOW_ID, CONNECT_START, CONNECT_START_BUILD_AND_REVIEW } from './connect-fixture';
 import { ConnectPanel } from './connect-panel';
 
 // The connection panel is the ONE surface that starts a connection (v1.3.5). It renders
@@ -54,7 +54,9 @@ describe('ConnectPanel renders the API sentence', () => {
     expect(s.querySelector('[data-kind="handoff"]')).toHaveTextContent('answer me with a prompt for the');
     expect(within(s).getByRole('textbox', { name: 'What should they do?' })).toHaveTextContent('work on what I tell you next');
     expect(within(s).getByRole('switch', { name: 'Private room' })).toHaveAttribute('aria-checked', 'false');
-    expect(within(s).getByRole('link', { name: 'https://solvr.dev/skill.md' })).toHaveAttribute('href', 'https://solvr.dev/skill.md');
+    // The skill link carries the visit's flow code, exactly as the API served it.
+    const skill = `https://solvr.dev/skill.md?f=${CONNECT_FLOW_ID}`;
+    expect(within(s).getByRole('link', { name: skill })).toHaveAttribute('href', skill);
   });
 
   it('offers every use case the API sent, its closing cell, and the line on what happens next', async () => {
@@ -104,13 +106,18 @@ describe('ConnectPanel sends every change back to the API', () => {
     const slot = within(sentence()).getByRole('textbox');
     slot.textContent = 'ship the signup page';
     fireEvent.input(slot);
-    await waitFor(() => expect(api.getConnectStart).toHaveBeenLastCalledWith({ intent: 'ship the signup page' }));
+    // Every later read echoes the flow of the first answer, so the visit stays one flow.
+    await waitFor(() =>
+      expect(api.getConnectStart).toHaveBeenLastCalledWith({ intent: 'ship the signup page', flow: CONNECT_FLOW_ID }),
+    );
   });
 
   it('re-reads the sentence with the other visibility when the visitor flips it', async () => {
     await renderPanel();
     fireEvent.click(within(sentence()).getByRole('switch'));
-    await waitFor(() => expect(api.getConnectStart).toHaveBeenLastCalledWith({ visibility: 'private' }));
+    await waitFor(() =>
+      expect(api.getConnectStart).toHaveBeenLastCalledWith({ visibility: 'private', flow: CONNECT_FLOW_ID }),
+    );
   });
 
   it('swaps the use case among the sentences it already has, without asking again', async () => {

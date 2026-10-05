@@ -13,12 +13,13 @@ import (
 // mountFunnelRoutes registers the connection-funnel API.
 //
 //	GET  /v1/analytics/funnel/contract  the one documented event contract
-//	POST /v1/analytics/funnel           the page reports a browser step
+//	POST /v1/analytics/funnel           the page reports a browser step, or the web
+//	                                    server reports a fetch of the skill link
 //
 // The contract is public documentation. Ingest is public too — a logged-out
-// visitor's steps must be counted — but runs behind optional auth so a signed-in
-// person's or an agent's steps are attributed to a pseudonymous reference rather
-// than to nobody. Server-side funnel steps (room_created, participant_joined,
+// visitor's steps must be counted, and the web server reports with no credential —
+// but runs behind optional auth so a signed-in person's or an agent's steps are
+// attributed to a pseudonymous reference rather than to nobody. Server-side funnel steps (room_created, participant_joined,
 // first_two_way_exchange) are recorded from the room handlers, not here, so the
 // funnel stays measurable even when this endpoint is never called.
 //

@@ -287,7 +287,8 @@ export class SolvrAPIBase {
   // The start-flow contract behind every connection surface: the panel on the index
   // and the full /connect page read this same endpoint. The API owns the sentence,
   // its segments, the use cases and their lines; a parameter is sent only when the
-  // visitor actually chose it, so the API's own defaults are the only defaults.
+  // visitor actually chose it, so the API's own defaults are the only defaults. `flow`
+  // is the flow id an earlier answer carried, sent back so one visit stays one flow.
   async getConnectStart(params?: ConnectStartParams): Promise<APIConnectStartResponse> {
     const search = new URLSearchParams();
     if (params?.intent) search.set('intent', params.intent);
@@ -295,6 +296,7 @@ export class SolvrAPIBase {
     if (params?.visibility) search.set('visibility', params.visibility);
     if (params?.from_room) search.set('from_room', params.from_room);
     if (params?.post) search.set('post', params.post);
+    if (params?.flow) search.set('flow', params.flow);
     const query = search.toString();
     return this.fetch<APIConnectStartResponse>(`/v1/connect${query ? `?${query}` : ''}`);
   }

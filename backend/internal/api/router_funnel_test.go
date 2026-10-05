@@ -27,7 +27,10 @@ func TestFunnelServerSteps_RecordedEndToEnd(t *testing.T) {
 	roomPreCleanup(t, pool)
 
 	suffix := time.Now().UnixNano() % 1000000000
-	flow := fmt.Sprintf("f_e2e_%d", suffix)
+	// The flow of a visit: minted by GET /v1/connect and reported by the visitor's browser,
+	// which is what makes its code known when the create-room call brings it.
+	flow, _ := visitConnect(t, pool, ts.URL, "")
+	reportFunnel(t, ts.URL, `{"event":"connection_started","flow_id":"`+flow+`","entry_surface":"connect_page"}`)
 
 	// --- PLANNER: register, create room WITH the flow id, handshake, join, post ---
 	plannerName := fmt.Sprintf("fnplanner%d", suffix)

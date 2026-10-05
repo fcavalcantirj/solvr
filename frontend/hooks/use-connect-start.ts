@@ -20,6 +20,10 @@ import type { APIConnectPreset, APIConnectStart } from '@/lib/api-types';
 // (?from_room=) or a post (?post=), "Try this workflow" — and the PRESET (?preset=, from
 // the home cards), read once from its own address. The API is the only judge of both:
 // a preset it refuses with a 400 is dropped once, and the contract is read again.
+//
+// One visit is one flow. The API mints a flow id with every answer unless it is handed
+// one back, so the hook sends the flow id of the first answer it kept as `flow` on every
+// later read. It only echoes what the API issued: it never makes, checks or changes one.
 const INTENT_DEBOUNCE_MS = 300;
 
 interface ConnectSourceParams {
@@ -58,6 +62,8 @@ export function useConnectStart({ readLocation = false }: { readLocation?: boole
   // The preset in force when a read starts; switching it never triggers a read.
   const presetRef = useRef(preset);
   presetRef.current = preset;
+  // The flow id of the first answer kept, echoed on every later read of this visit.
+  const flowRef = useRef<string | undefined>(undefined);
 
   const debouncedIntent = useDebounce(intent, INTENT_DEBOUNCE_MS);
 
@@ -73,8 +79,10 @@ export function useConnectStart({ readLocation = false }: { readLocation?: boole
           ...(debouncedIntent.trim() ? { intent: debouncedIntent } : {}),
           ...(asked ? { preset: asked } : {}),
           ...(visibility ? { visibility } : {}),
+          ...(flowRef.current ? { flow: flowRef.current } : {}),
         });
         if (!cancelled) {
+          if (!flowRef.current) flowRef.current = response.data.selected?.flow_id || undefined;
           setStart(response.data);
           setError(null);
         }

@@ -61,10 +61,30 @@ func numeratorOnly(numerator int) ActivationConversion {
 // ActivationByOrigin splits flow-to-room conversion by where the connection
 // attempt originated. Website attempts have a browser "started" event to divide
 // by; direct-API and unknown-origin rooms do not, so they report a count only.
+//
+// Website counts FLOWS on both sides: the distinct flows a browser started in the
+// window, and how many of those flows produced at least one room in it. A sentence
+// pasted into two agents makes two rooms and still one converted flow, so the rate
+// never passes 1. DirectAPI and Unknown count ROOMS: rooms whose flow code no website
+// visit started, and rooms that carried no code. The rooms of website flows are what is
+// left of RoomsCreated.
 type ActivationByOrigin struct {
 	Website   ActivationConversion `json:"website"`
 	DirectAPI ActivationConversion `json:"direct_api"`
 	Unknown   ActivationConversion `json:"unknown"`
+}
+
+// WebsiteFlowSteps follows the website-started flows of the window (the flows whose
+// browser connection_started is in it) through the steps that tie a visit to a room:
+// how many distinct flows reached each step inside the window. SkillFetched counts only
+// an agent's fetch (entry_surface agent_fetch): a person who opened the skill link in a
+// browser is not an agent that read it. Started is flow_to_room.website's denominator and
+// RoomCreated its numerator.
+type WebsiteFlowSteps struct {
+	Started      int `json:"started"`
+	PromptCopied int `json:"prompt_copied"`
+	SkillFetched int `json:"skill_fetched"`
+	RoomCreated  int `json:"room_created"`
 }
 
 // ActivationDurationStats is a median/p90 distribution over a set of per-room
@@ -97,6 +117,7 @@ type ActivationReport struct {
 	ActivatedRooms   int                  `json:"activated_rooms"`
 	RoomToActivation ActivationConversion `json:"room_to_activation"`
 	FlowToRoom       ActivationByOrigin   `json:"flow_to_room"`
+	WebsiteFlowSteps WebsiteFlowSteps     `json:"website_flow_steps"`
 
 	TimeToSecondAgentMS   ActivationDurationStats `json:"time_to_second_agent_ms"`
 	TimeToFirstExchangeMS ActivationDurationStats `json:"time_to_first_exchange_ms"`
@@ -157,11 +178,12 @@ func (r *ActivationAnalyticsRepository) Measure(ctx context.Context, from, to ti
 	return rep, nil
 }
 
-// measureCounts fills rooms created, activated rooms, room->activation and the
-// flow->room conversion split by origin, all from the funnel steps of rooms
-// created in the window.
+// measureCounts fills rooms created, activated rooms, room->activation, the
+// flow->room conversion split by origin and the website flows' steps, all from the
+// funnel steps of the window.
 func (r *ActivationAnalyticsRepository) measureCounts(ctx context.Context, from, to time.Time, rep *ActivationReport) error {
-	var roomsCreated, activated, websiteStarted, websiteRooms, directRooms, unknownRooms int
+	var roomsCreated, activated, directRooms, unknownRooms int
+	var steps WebsiteFlowSteps
 	err := r.pool.QueryRow(ctx, `
 		WITH created AS (
 			SELECT DISTINCT ON (room_id) room_id, flow_id
@@ -175,6 +197,14 @@ func (r *ActivationAnalyticsRepository) measureCounts(ctx context.Context, from,
 			 WHERE event_name = 'connection_started' AND source_channel = 'browser'
 			   AND flow_id IS NOT NULL
 			   AND occurred_at >= $1 AND occurred_at < $2
+		),
+		reached AS (
+			SELECT DISTINCT f.event_name, f.flow_id
+			  FROM funnel_events f
+			 WHERE f.flow_id IN (SELECT flow_id FROM started)
+			   AND f.occurred_at >= $1 AND f.occurred_at < $2
+			   AND (f.event_name = 'starter_prompt_copied'
+			        OR (f.event_name = 'skill_fetched' AND f.entry_surface = 'agent_fetch'))
 		)
 		SELECT
 			(SELECT COUNT(*) FROM created),
@@ -183,13 +213,16 @@ func (r *ActivationAnalyticsRepository) measureCounts(ctx context.Context, from,
 			  WHERE f.event_name = 'first_two_way_exchange'
 			    AND f.room_id IN (SELECT room_id FROM created)),
 			(SELECT COUNT(*) FROM started),
-			(SELECT COUNT(*) FROM created c
+			(SELECT COUNT(DISTINCT c.flow_id) FROM created c
 			  WHERE c.flow_id IN (SELECT flow_id FROM started)),
 			(SELECT COUNT(*) FROM created c
 			  WHERE c.flow_id IS NOT NULL
 			    AND c.flow_id NOT IN (SELECT flow_id FROM started)),
-			(SELECT COUNT(*) FROM created c WHERE c.flow_id IS NULL)
-	`, from, to).Scan(&roomsCreated, &activated, &websiteStarted, &websiteRooms, &directRooms, &unknownRooms)
+			(SELECT COUNT(*) FROM created c WHERE c.flow_id IS NULL),
+			(SELECT COUNT(*) FROM reached WHERE event_name = 'starter_prompt_copied'),
+			(SELECT COUNT(*) FROM reached WHERE event_name = 'skill_fetched')
+	`, from, to).Scan(&roomsCreated, &activated, &steps.Started, &steps.RoomCreated, &directRooms, &unknownRooms,
+		&steps.PromptCopied, &steps.SkillFetched)
 	if err != nil {
 		LogQueryError(ctx, "ActivationCounts", "funnel_events", err)
 		return fmt.Errorf("measure activation counts: %w", err)
@@ -199,10 +232,13 @@ func (r *ActivationAnalyticsRepository) measureCounts(ctx context.Context, from,
 	rep.ActivatedRooms = activated
 	rep.RoomToActivation = newConversion(roomsCreated, activated)
 	rep.FlowToRoom = ActivationByOrigin{
-		Website:   newConversion(websiteStarted, websiteRooms),
+		// Flows on both sides: steps.RoomCreated is the website-started flows that
+		// produced at least one room, never the number of rooms they produced.
+		Website:   newConversion(steps.Started, steps.RoomCreated),
 		DirectAPI: numeratorOnly(directRooms),
 		Unknown:   numeratorOnly(unknownRooms),
 	}
+	rep.WebsiteFlowSteps = steps
 	return nil
 }
 

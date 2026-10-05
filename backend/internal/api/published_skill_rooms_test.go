@@ -168,6 +168,40 @@ func TestPublishedSkill_ASourceRoomOrPostTravelsIntoTheCreateCall(t *testing.T) 
 	requireAllIn(t, skillRooms(t), "provenance", `"source_room"`, `"source_post_id"`)
 }
 
+// skillFlowRule is the one rule that ties a website visit to the room it produced: the
+// sentence's skill link may carry the visit's flow code, and the agent hands it back when
+// it creates the room (SPEC.md 25.7).
+const skillFlowRule = "If the skill link your prompt gave you carries `?f=<code>`, add `\"flow_id\": \"<code>\"` to the create body"
+
+func TestPublishedSkill_TheFlowCodeOfTheSkillLinkTravelsIntoTheCreateCall(t *testing.T) {
+	rooms := skillRooms(t)
+	require.Equal(t, 1, strings.Count(rooms, skillFlowRule), "the rule is said once")
+	// It sits right beside the source_room rule, under Start a room: both are about the create body.
+	at := strings.Index(rooms, "\n### Start a room")
+	require.GreaterOrEqual(t, at, 0)
+	start := rooms[at+1:]
+	if end := strings.Index(start[4:], "\n### "); end >= 0 {
+		start = start[:end+4]
+	}
+	lines := strings.Split(start, "\n")
+	source, flow := -1, -1
+	for i, line := range lines {
+		if strings.HasPrefix(line, "- ") && strings.Contains(line, `"source_room"`) {
+			source = i
+		}
+		if strings.HasPrefix(line, "- ") && strings.Contains(line, skillFlowRule) {
+			flow = i
+		}
+	}
+	require.GreaterOrEqual(t, source, 0, "the source_room bullet")
+	require.Equal(t, source+1, flow, "the flow_id bullet follows the source_room bullet")
+	// One bullet, and the recipe's own create body stays what it was: the code is only
+	// sent when a link carried one.
+	require.Equal(t, 1, strings.Count(rooms, `"flow_id"`))
+	require.NotContains(t, skillHTTPBlock(t, "Start a room"), "flow_id")
+	require.Equal(t, 1, strings.Count(repoFile(t, "skill/SKILL.md"), `"flow_id"`), "said nowhere else in the skill")
+}
+
 // Every recipe call is plain HTTPS against /v1 or the /r room data plane: nothing to install.
 func TestPublishedSkill_RecipesNeedOnlyHTTPS(t *testing.T) {
 	call := regexp.MustCompile(`(?m)^(GET|POST|PUT|PATCH|DELETE) (\S+)$`)

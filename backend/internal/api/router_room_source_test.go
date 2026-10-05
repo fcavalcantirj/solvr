@@ -192,9 +192,13 @@ func TestCreateRoom_TheRoomCreatedStepIsAttributedToItsSource(t *testing.T) {
 	require.Equal(t, http.StatusCreated, code, "%v", env)
 	srcID := env["data"].(map[string]interface{})["id"].(string)
 
+	// The flow of the visit that copied the sentence: known, so the create call may bring it.
+	visitFlow, _ := visitConnect(t, pool, ts.URL, "?from_room="+srcSlug)
+	reportFunnel(t, ts.URL, `{"event":"connection_started","flow_id":"`+visitFlow+`","entry_surface":"connect_page"}`)
+
 	_, agentKey := registerRoomTestAgent(t, ts)
 	code, env = createSourceTestRoom(t, ts, agentKey, fmt.Sprintf(
-		`{"display_name":"Attr fresh","slug":%q,"source_room":%q,"flow_id":"f_attr_test"}`, sourceTestSlug("attrfresh"), srcSlug))
+		`{"display_name":"Attr fresh","slug":%q,"source_room":%q,"flow_id":%q}`, sourceTestSlug("attrfresh"), srcSlug, visitFlow))
 	require.Equal(t, http.StatusCreated, code, "%v", env)
 	freshID := env["data"].(map[string]interface{})["id"].(string)
 
@@ -204,7 +208,7 @@ func TestCreateRoom_TheRoomCreatedStepIsAttributedToItsSource(t *testing.T) {
 		  FROM funnel_events WHERE room_id = $1::uuid AND event_name = 'room_created'`, freshID).Scan(&kind, &id, &flow))
 	require.Equal(t, "room", kind)
 	require.Equal(t, srcID, id)
-	require.Equal(t, "f_attr_test", flow)
+	require.Equal(t, visitFlow, flow)
 
 	var srcKind string
 	require.NoError(t, pool.QueryRow(context.Background(), `

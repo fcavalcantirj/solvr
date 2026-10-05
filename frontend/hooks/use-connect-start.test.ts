@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('@/lib/api', () => ({ api: { getConnectStart: vi.fn() } }));
@@ -89,5 +89,86 @@ describe('useConnectStart source from the page URL', () => {
     renderHook(() => useConnectStart());
     await waitFor(() => expect(api.getConnectStart).toHaveBeenCalled());
     expect(vi.mocked(api.getConnectStart).mock.calls[0][0]).toEqual({});
+  });
+});
+
+// One visit is one flow (SPEC.md 25.6). The API mints a flow id with every answer unless it
+// is handed one back, so the hook echoes the id of its first answer on every later read:
+// connection_started and starter_prompt_copied then carry the same id. The hook only
+// echoes what the API issued; it never makes, checks or changes a flow id.
+describe('useConnectStart keeps one flow for the visit', () => {
+  const answer = (flowId?: string) =>
+    ({ data: { selected: { preset: 'plan-and-build', ...(flowId ? { flow_id: flowId } : {}) }, presets: [] } }) as never;
+
+  it('sends the flow id of its first answer back on every later read', async () => {
+    vi.mocked(api.getConnectStart)
+      .mockResolvedValueOnce(answer('k7m2p9xq'))
+      // An API that answered with another id anyway: the first one is still what is echoed.
+      .mockResolvedValueOnce(answer('zzzzzzz2'))
+      .mockResolvedValue(answer('k7m2p9xq'));
+    const { result } = renderHook(() => useConnectStart());
+
+    await waitFor(() => expect(result.current.start?.selected.flow_id).toBe('k7m2p9xq'));
+    expect(vi.mocked(api.getConnectStart).mock.calls[0][0]).toEqual({});
+
+    act(() => result.current.setVisibility('private'));
+    await waitFor(() => expect(api.getConnectStart).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(api.getConnectStart).mock.calls[1][0]).toEqual({ visibility: 'private', flow: 'k7m2p9xq' });
+
+    act(() => result.current.setVisibility('public'));
+    await waitFor(() => expect(api.getConnectStart).toHaveBeenCalledTimes(3));
+    expect(vi.mocked(api.getConnectStart).mock.calls[2][0]).toEqual({ visibility: 'public', flow: 'k7m2p9xq' });
+  });
+
+  it('echoes the flow with a typed intent and with the source it was linked with', async () => {
+    setSearch('?from_room=ttt-room');
+    vi.mocked(api.getConnectStart).mockResolvedValue(answer('k7m2p9xq'));
+    const { result } = renderHook(() => useConnectStart({ readLocation: true }));
+    await waitFor(() => expect(result.current.start).not.toBeNull());
+
+    act(() => result.current.setIntent('ship the signup page'));
+    await waitFor(() => expect(api.getConnectStart).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(api.getConnectStart).mock.calls[1][0]).toEqual({
+      from_room: 'ttt-room',
+      intent: 'ship the signup page',
+      flow: 'k7m2p9xq',
+    });
+  });
+
+  it('adopts the flow of the first answer it KEEPS, not of one that arrived too late', async () => {
+    let releaseFirst: (value: never) => void = () => {};
+    vi.mocked(api.getConnectStart)
+      .mockReturnValueOnce(new Promise((resolve) => { releaseFirst = resolve; }))
+      .mockResolvedValue(answer('bbbbbbb2'));
+    const { result } = renderHook(() => useConnectStart());
+    await waitFor(() => expect(api.getConnectStart).toHaveBeenCalledTimes(1));
+
+    // The visitor flips the visibility before the first answer arrives: that read is
+    // abandoned, and the second one (sent with no flow yet) is the first answer kept.
+    act(() => result.current.setVisibility('private'));
+    await waitFor(() => expect(result.current.start?.selected.flow_id).toBe('bbbbbbb2'));
+    expect(vi.mocked(api.getConnectStart).mock.calls[1][0]).toEqual({ visibility: 'private' });
+
+    await act(async () => { releaseFirst(answer('aaaaaaa2')); });
+    expect(result.current.start?.selected.flow_id).toBe('bbbbbbb2');
+
+    act(() => result.current.setVisibility('public'));
+    await waitFor(() => expect(api.getConnectStart).toHaveBeenCalledTimes(3));
+    expect(vi.mocked(api.getConnectStart).mock.calls[2][0]).toEqual({ visibility: 'public', flow: 'bbbbbbb2' });
+  });
+
+  it('sends no flow while the API has issued none', async () => {
+    vi.mocked(api.getConnectStart).mockResolvedValueOnce(answer()).mockResolvedValue(answer('k7m2p9xq'));
+    const { result } = renderHook(() => useConnectStart());
+    await waitFor(() => expect(result.current.start).not.toBeNull());
+
+    act(() => result.current.setVisibility('private'));
+    await waitFor(() => expect(api.getConnectStart).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(api.getConnectStart).mock.calls[1][0]).toEqual({ visibility: 'private' });
+
+    // The second answer carried one: from now on it is echoed.
+    act(() => result.current.setVisibility('public'));
+    await waitFor(() => expect(api.getConnectStart).toHaveBeenCalledTimes(3));
+    expect(vi.mocked(api.getConnectStart).mock.calls[2][0]).toEqual({ visibility: 'public', flow: 'k7m2p9xq' });
   });
 });

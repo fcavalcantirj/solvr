@@ -68,10 +68,6 @@ export function McpHero() {
               API Documentation
               <ArrowUpRight aria-hidden="true" size={14} />
             </Link>
-            <a href="https://discord.gg/solvr" target="_blank" rel="noopener noreferrer" className={TEXT_LINK}>
-              Discord Community
-              <ArrowUpRight aria-hidden="true" size={14} />
-            </a>
           </>
         }
         aside={

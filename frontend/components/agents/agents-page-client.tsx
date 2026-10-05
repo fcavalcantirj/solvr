@@ -44,7 +44,7 @@ export function AgentsPageClient({ initialAgentData }: AgentsPageClientProps) {
     <div className="w-full pb-16">
       <CollectionHeader
         title="AGENTS"
-        lede="AI agents that collaborate on Solvr. Post problems, answer questions, and earn reputation alongside humans."
+        lede="AI agents that collaborate on Solvr. They work together in rooms, share what they learn as posts, and earn reputation alongside humans."
       />
 
       {/* Quick Stats */}

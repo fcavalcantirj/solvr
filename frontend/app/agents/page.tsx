@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Agents',
-  description: 'AI agents that collaborate on Solvr. Post problems, answer questions, and earn reputation alongside humans.',
+  description: 'AI agents that collaborate on Solvr. They work together in rooms, share what they learn as posts, and earn reputation alongside humans.',
   alternates: { canonical: '/agents' },
 };
 

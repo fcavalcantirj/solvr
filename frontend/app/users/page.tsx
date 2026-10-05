@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Users',
-  description: 'Human developers collaborating on Solvr. Back AI agents, post problems, and earn reputation.',
+  description: 'Human developers collaborating on Solvr. Back AI agents, share what you learn, and earn reputation.',
   alternates: { canonical: '/users' },
 };
 

@@ -1,54 +1,53 @@
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 import { ApiRateLimits } from './api-rate-limits';
 
+// The limits on /api-docs are the ones the API enforces: per-author hourly creates
+// (rate_limit_config), per-IP room writes and stream tickets (router_rooms.go), and no general
+// read or search limit. There is no paid tier and no bulk search endpoint.
+
+const backend = (file: string) => readFileSync(resolve(__dirname, '../../../backend/internal/api', file), 'utf8');
+
 describe('ApiRateLimits', () => {
-  it('renders rate limits section', () => {
+  it('renders the section', () => {
     render(<ApiRateLimits />);
-
     expect(screen.getByText('RATE LIMITS')).toBeInTheDocument();
-    expect(screen.getByText('Fair usage for all')).toBeInTheDocument();
+    expect(screen.getByText('What is limited')).toBeInTheDocument();
   });
 
-  it('displays free tier operations', () => {
+  it('shows the create limits per author per hour', () => {
     render(<ApiRateLimits />);
-
-    expect(screen.getByText('FREE TIER')).toBeInTheDocument();
-    expect(screen.getByText('DEFAULT')).toBeInTheDocument();
+    expect(screen.getByText('Create a post')).toBeInTheDocument();
+    expect(screen.getByText('Create a reply')).toBeInTheDocument();
+    expect(screen.getByText('3/hour')).toBeInTheDocument();
+    expect(screen.getByText('6/hour')).toBeInTheDocument();
   });
 
-  it('shows free tier rate limits', () => {
+  it('shows the room limits the router enforces', () => {
+    const rooms = backend('router_rooms.go');
+    expect(rooms).toContain('agentWriteLimit := apimiddleware.LimitByClientIP(60, time.Minute)');
+    expect(rooms).toContain('streamTicketLimit := apimiddleware.LimitByClientIP(30, time.Minute)');
     render(<ApiRateLimits />);
-
     expect(screen.getByText('60/min')).toBeInTheDocument();
-    expect(screen.getByText('120/min')).toBeInTheDocument();
-    expect(screen.getByText('10/hour')).toBeInTheDocument();
-    expect(screen.getByText('10/min')).toBeInTheDocument();
+    expect(screen.getByText('30/min')).toBeInTheDocument();
   });
 
-  it('displays Pro tier with coming soon badge', () => {
-    render(<ApiRateLimits />);
-
-    expect(screen.getByText('PRO TIER')).toBeInTheDocument();
-    expect(screen.getByText('COMING SOON')).toBeInTheDocument();
-    expect(screen.getByText('$9/mo')).toBeInTheDocument();
+  it('says reads and search have no per-minute limit', () => {
+    const { container } = render(<ApiRateLimits />);
+    expect(container.textContent).toMatch(/Reading and searching are not rate limited/);
   });
 
-  it('shows pro tier rate limits', () => {
-    render(<ApiRateLimits />);
-
-    expect(screen.getByText('600/min')).toBeInTheDocument();
-    expect(screen.getByText('1200/min')).toBeInTheDocument();
-    expect(screen.getByText('100/hour')).toBeInTheDocument();
-    expect(screen.getByText('100/min')).toBeInTheDocument();
+  it('offers no paid tier and no bulk search', () => {
+    const { container } = render(<ApiRateLimits />);
+    expect(container.textContent).not.toMatch(/PRO TIER|\$9|COMING SOON|bulk search|10x/i);
   });
 
-  it('displays best practices section', () => {
-    render(<ApiRateLimits />);
-
-    expect(screen.getByText('BEST PRACTICES')).toBeInTheDocument();
-    expect(screen.getByText('Cache locally')).toBeInTheDocument();
-    expect(screen.getByText('Use webhooks')).toBeInTheDocument();
-    expect(screen.getByText('Batch queries')).toBeInTheDocument();
+  it('tells clients to read the headers and wait for Retry-After', () => {
+    const { container } = render(<ApiRateLimits />);
+    expect(container.textContent).toContain('RateLimit-Remaining');
+    expect(container.textContent).toContain('Retry-After');
+    expect(container.textContent).toContain('429 RATE_LIMITED');
   });
 });

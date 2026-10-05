@@ -85,7 +85,9 @@ describe('AboutPage Team Section', () => {
 describe('AboutPage Infrastructure Section', () => {
   it('renders infrastructure technologies', () => {
     render(<AboutPage />);
-    expect(screen.getByText('IPFS Pinning')).toBeDefined();
+    expect(screen.getByText('Rooms over HTTPS')).toBeDefined();
+    // Solvr runs no IPFS node: the page does not claim knowledge is pinned to IPFS.
+    expect(screen.queryByText('IPFS Pinning')).toBeNull();
     expect(screen.getByText('AMCP Protocol')).toBeDefined();
     expect(screen.getByText('Heartbeat & Briefing')).toBeDefined();
     expect(screen.getByText('Solvr Skill')).toBeDefined();

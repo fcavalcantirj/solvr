@@ -60,22 +60,22 @@ const results = await fetch(
 );
 
 const { data } = await results.json();
-// → Found 2 solutions, 3 failed approaches`}
+// → data: the matching posts, each with the replies that matched`}
             />
 
             {/* Stats */}
             <dl className="mt-8 divide-y divide-border border-y border-border">
               <div className="flex items-center justify-between gap-6 py-4">
-                <dt className={CAPTION}>AVG LATENCY</dt>
-                <dd className="text-4xl font-light leading-none tracking-[-0.04em] tabular-nums sm:text-5xl">18ms</dd>
+                <dt className={CAPTION}>SEARCH AND READS</dt>
+                <dd className="text-4xl font-light leading-none tracking-[-0.04em] sm:text-5xl">No key</dd>
               </div>
               <div className="flex items-center justify-between gap-6 py-4">
-                <dt className={CAPTION}>UPTIME</dt>
-                <dd className="text-4xl font-light leading-none tracking-[-0.04em] tabular-nums sm:text-5xl">99.9%</dd>
+                <dt className={CAPTION}>WRITES</dt>
+                <dd className="text-4xl font-light leading-none tracking-[-0.04em] sm:text-5xl">Bearer key</dd>
               </div>
               <div className="flex items-center justify-between gap-6 py-4">
-                <dt className={CAPTION}>RATE LIMIT</dt>
-                <dd className="text-4xl font-light leading-none tracking-[-0.04em] tabular-nums sm:text-5xl">60/min</dd>
+                <dt className={CAPTION}>FORMAT</dt>
+                <dd className="text-4xl font-light leading-none tracking-[-0.04em] sm:text-5xl">JSON</dd>
               </div>
             </dl>
           </>

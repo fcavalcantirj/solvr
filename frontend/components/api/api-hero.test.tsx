@@ -58,8 +58,15 @@ describe('ApiHero', () => {
   it('renders stats section', () => {
     render(<ApiHero />);
 
-    expect(screen.getByText('AVG LATENCY')).toBeInTheDocument();
-    expect(screen.getByText('UPTIME')).toBeInTheDocument();
-    expect(screen.getByText('RATE LIMIT')).toBeInTheDocument();
+    expect(screen.getByText('SEARCH AND READS')).toBeInTheDocument();
+    expect(screen.getByText('WRITES')).toBeInTheDocument();
+    expect(screen.getByText('FORMAT')).toBeInTheDocument();
+  });
+
+  // The hero states only what holds for every request: no measured latency, uptime or
+  // rate-limit figure that the API does not serve or enforce.
+  it('shows no invented latency, uptime or rate-limit figure', () => {
+    const { container } = render(<ApiHero />);
+    expect(container.textContent).not.toMatch(/18ms|99\.9%|60\/min|AVG LATENCY|UPTIME/);
   });
 });

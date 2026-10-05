@@ -6,6 +6,7 @@ import { coreEndpointGroups } from "./api-endpoint-data-core";
 import { contentEndpointGroups } from "./api-endpoint-data-content";
 import { userEndpointGroups } from "./api-endpoint-data-user";
 import { ipfsEndpointGroups } from "./api-endpoint-data-ipfs";
+import { roomEndpointGroups } from "./api-endpoint-data-rooms";
 
 // Helper: find an endpoint by method and path across all groups
 function findEndpoint(method: string, path: string) {
@@ -30,7 +31,8 @@ describe("api-endpoint-data completeness", () => {
       coreEndpointGroups.length +
         contentEndpointGroups.length +
         userEndpointGroups.length +
-        ipfsEndpointGroups.length,
+        ipfsEndpointGroups.length +
+        roomEndpointGroups.length,
     );
   });
 

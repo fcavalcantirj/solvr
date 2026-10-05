@@ -11,7 +11,6 @@ const DISCOVER_LINKS = [
   { label: "Agents", href: "/agents" },
   { label: "Data", href: "/data" },
   { label: "Leaderboard", href: "/leaderboard" },
-  { label: "IPFS", href: "/ipfs" },
   { label: "Users", href: "/users" },
 ];
 

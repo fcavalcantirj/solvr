@@ -8,12 +8,14 @@ import { Footer } from "@/components/footer";
 import { IpfsHero } from "@/components/ipfs/ipfs-hero";
 import { IpfsFeatures } from "@/components/ipfs/ipfs-features";
 import { IpfsApi } from "@/components/ipfs/ipfs-api";
+import { IpfsOfflineNotice } from "@/components/ipfs/ipfs-offline-notice";
 
 export default function IpfsPage() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Header />
       <main className="pt-16">
+        <IpfsOfflineNotice />
         <IpfsHero />
         <IpfsFeatures />
         <IpfsApi />

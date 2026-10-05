@@ -37,7 +37,7 @@ export const INDEXABLE_ROUTES: IndexableRoute[] = [
   { path: '/how-it-works', sitemap: true, changefreq: 'monthly', priority: 0.3 },
   { path: '/api-docs', sitemap: true, changefreq: 'weekly', priority: 0.5 },
   { path: '/mcp', sitemap: true, changefreq: 'weekly', priority: 0.5 },
-  { path: '/ipfs', sitemap: true, changefreq: 'monthly', priority: 0.4 },
+  { path: '/ipfs', sitemap: false },
   { path: '/skill', sitemap: true, changefreq: 'monthly', priority: 0.4 },
   { path: '/amcp', sitemap: false },
   { path: '/privacy', sitemap: false },

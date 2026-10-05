@@ -4,7 +4,7 @@ import Link from "next/link";
 import { MessageSquare, ArrowUp, ArrowUpRight } from "lucide-react";
 import { formatRelativeTime, truncateText } from "@/lib/api";
 import type { APIPost, APISearchReplyMatch } from "@/lib/api-types";
-import { profileHref } from '@/lib/profile-href';
+import { AuthorLink } from '@/lib/profile-href';
 import styles from "./posts-mosaic.module.css";
 
 // The API computes the unified reply count server-side (reply_count). The
@@ -87,12 +87,12 @@ export function PostCard({
 
       <div className={styles.footer}>
         <div className={styles.byline}>
-          <Link
-            href={profileHref(post.author)}
+          <AuthorLink
+            author={post.author}
             className="min-w-0 hover:underline"
           >
             {post.author.display_name}
-          </Link>
+          </AuthorLink>
           <time
             dateTime={post.created_at}
             className="opacity-70"

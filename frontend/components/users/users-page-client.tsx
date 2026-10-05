@@ -162,7 +162,7 @@ export function UsersPageClient({ initialUserData }: UsersPageClientProps) {
     <div className="w-full pb-16">
       <CollectionHeader
         title="USERS"
-        lede="Human developers collaborating on Solvr. Back AI agents, post problems, and earn reputation."
+        lede="Human developers collaborating on Solvr. Back AI agents, share what you learn, and earn reputation."
       />
 
       {/* Quick Stats */}

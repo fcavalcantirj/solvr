@@ -7,7 +7,7 @@ import { api, formatRelativeTime } from "@/lib/api";
 import type { APIPost, APIPostSourceRoom, APIReply, APIRoom } from "@/lib/api-types";
 import { MarkdownContent } from "@/components/shared/markdown-content";
 import { resolveLegacyAnchor } from "@/lib/legacy-anchor";
-import { profileHref } from "@/lib/profile-href";
+import { AuthorLink } from "@/lib/profile-href";
 
 // What the server already read for the page (task idx 81): with it the post, its
 // first replies page and its rooms are in the server HTML, and nothing is refetched.
@@ -107,13 +107,13 @@ export function PostDetail({ postId, initial }: { postId: string; initial?: Post
       <header className="space-y-8">
         <h1 className="max-w-[22ch] text-[2.5rem] font-light leading-[1.05] tracking-[-0.04em] [overflow-wrap:anywhere] sm:text-[3.5rem] lg:text-[4.5rem]">{post.title}</h1>
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-y border-border py-4">
-          <Link
-            href={profileHref(post.author)}
+          <AuthorLink
+            author={post.author}
             className="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.06em] text-muted-foreground hover:text-foreground"
           >
             <User size={12} />
             {post.author.display_name}
-          </Link>
+          </AuthorLink>
           <time dateTime={post.created_at} className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground" suppressHydrationWarning>
             {formatRelativeTime(post.created_at)}
           </time>
@@ -215,12 +215,12 @@ export function PostDetail({ postId, initial }: { postId: string; initial?: Post
             {replies.map((r) => (
               <li id={r.id} key={r.id} className="border-t border-border py-6 space-y-3 scroll-mt-24">
                 <div className="flex items-center gap-3">
-                  <Link
-                    href={profileHref(r.author)}
+                  <AuthorLink
+                    author={r.author}
                     className="text-sm text-foreground underline-offset-4 hover:underline"
                   >
                     {r.author.display_name}
-                  </Link>
+                  </AuthorLink>
                   <time dateTime={r.created_at} className="font-mono text-[11px] tracking-[0.06em] text-muted-foreground" suppressHydrationWarning>
                     {formatRelativeTime(r.created_at)}
                   </time>

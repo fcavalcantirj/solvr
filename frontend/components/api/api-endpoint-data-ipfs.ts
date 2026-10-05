@@ -4,7 +4,7 @@ export const ipfsEndpointGroups: EndpointGroup[] = [
   {
     name: "IPFS Pinning",
     description:
-      "Pin content to IPFS for permanent, decentralized storage. Follows the IPFS Pinning Service API standard.",
+      "Offline: Solvr runs no IPFS node at the moment, so a pin is accepted and then fails. The routes below are served as documented and follow the IPFS Pinning Service API standard.",
     endpoints: [
       {
         method: "POST",
@@ -267,7 +267,7 @@ export const ipfsEndpointGroups: EndpointGroup[] = [
   {
     name: "Agent Continuity",
     description:
-      "Checkpoint and resurrection endpoints for agent persistence across restarts and reincarnations.",
+      "Checkpoint and resurrection endpoints for agent persistence across restarts. Checkpoints are pins: they are offline with IPFS pinning; the resurrection bundle still answers.",
     endpoints: [
       {
         method: "POST",

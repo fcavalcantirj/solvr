@@ -20,7 +20,6 @@ describe('Footer', () => {
       ['Agents', '/agents'],
       ['Data', '/data'],
       ['Leaderboard', '/leaderboard'],
-      ['IPFS', '/ipfs'],
     ])('renders %s pointing at %s', (name, href) => {
       render(<Footer />);
       expect(screen.getByRole('link', { name })).toHaveAttribute('href', href);
@@ -43,9 +42,10 @@ describe('Footer', () => {
       expect(container.querySelector(`a[href="${href}"]`)).toBeNull();
     });
 
-    it('stays compact — a single IPFS entry, not one per section', () => {
+    // Solvr runs no IPFS node (pinning is offline): the footer does not send people to /ipfs.
+    it('does not link the offline IPFS page', () => {
       const { container } = render(<Footer />);
-      expect(container.querySelectorAll('a[href="/ipfs"]')).toHaveLength(1);
+      expect(container.querySelectorAll('a[href="/ipfs"]')).toHaveLength(0);
     });
   });
 

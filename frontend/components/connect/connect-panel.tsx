@@ -24,6 +24,12 @@ import { trackCta, type TrackLocation } from '@/lib/track-attrs';
 // What it reports (SPEC.md 25.7 and 27.7), each once and only after it took effect: the
 // panel opened, a use case was picked, the visibility was flipped, an intent settled, the
 // sentence was copied. A report names the place and the use case, never the words typed.
+//
+// /connect hands the panel `initial`, the default contract its server read with no flow
+// (SPEC.md 25.6), and the panel renders it at once, so the server HTML already holds the use
+// cases, the sentence and Copy. The browser's own read replaces it when it arrives; the panel
+// counts as opened only then, with that answer's flow id. A copy made before it copies what is
+// shown and is reported without a flow id.
 
 type ConnectPanelVariant = 'panel' | 'page';
 
@@ -48,10 +54,18 @@ function trackLocationFor(variant: ConnectPanelVariant): TrackLocation {
   return variant === 'page' ? 'page' : 'hero';
 }
 
-export function ConnectPanel({ variant = 'panel' }: { variant?: ConnectPanelVariant }) {
+export function ConnectPanel({
+  variant = 'panel',
+  initial = null,
+}: {
+  variant?: ConnectPanelVariant;
+  // The contract the page's server read (flow=none), shown until the browser's answer.
+  initial?: APIConnectStart | null;
+}) {
   // Only the full page forwards the source and preset it was linked with.
-  const { start, active, loading, error, settledIntent, setIntent, setPreset, setVisibility } = useConnectStart({
+  const { start, live, active, loading, error, settledIntent, setIntent, setPreset, setVisibility } = useConnectStart({
     readLocation: variant === 'page',
+    initial,
   });
 
   if (!start || !active) {
@@ -73,6 +87,10 @@ export function ConnectPanel({ variant = 'panel' }: { variant?: ConnectPanelVari
     <ConnectPanelContent
       start={start}
       active={active}
+      live={live}
+      // The sentence the server read has no flow code yet: until the browser's answer brings
+      // one, its links hold the code's width, so the code arriving moves nothing.
+      reserveFlowCode={variant === 'page' && initial !== null && !live}
       variant={variant}
       error={error}
       settledIntent={settledIntent}
@@ -86,6 +104,8 @@ export function ConnectPanel({ variant = 'panel' }: { variant?: ConnectPanelVari
 function ConnectPanelContent({
   start,
   active,
+  live,
+  reserveFlowCode,
   variant,
   error,
   settledIntent,
@@ -95,6 +115,9 @@ function ConnectPanelContent({
 }: {
   start: APIConnectStart;
   active: APIConnectPreset;
+  // The contract shown is the browser's own answer (not the one the server read).
+  live: boolean;
+  reserveFlowCode: boolean;
   variant: ConnectPanelVariant;
   error: string | null;
   // The typed intent the sentence now shown was read with ('' while none settled).
@@ -106,10 +129,13 @@ function ConnectPanelContent({
   const entrySurface = entrySurfaceFor(variant);
   const place = trackLocationFor(variant);
 
-  // The panel/page meaningfully opened (its contract loaded). Reported once per open —
-  // this component mounts once the contract exists and stays mounted across re-reads —
-  // not on every keystroke.
+  // The panel/page meaningfully opened: the browser's own contract loaded, with the flow id
+  // of this visit. Reported once per open — this component stays mounted across re-reads —
+  // not on every keystroke, and not for the contract the server read (it carries no flow).
+  const startedReported = useRef(false);
   useEffect(() => {
+    if (!live || startedReported.current) return;
+    startedReported.current = true;
     reportConnectionStarted({
       flowId: start.selected.flow_id,
       surface: entrySurface,
@@ -118,10 +144,11 @@ function ConnectPanelContent({
       source: funnelSourceOf(start),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [live]);
 
   // Reported ONLY after the clipboard write succeeded, for the use case and the agent the
-  // copied sentence is for.
+  // copied sentence is for. Before the browser's answer arrived the sentence shown is the
+  // server's, which has no flow, so the step carries none.
   const onCopied = () => {
     reportPromptCopied({
       flowId: start.selected.flow_id,
@@ -163,9 +190,9 @@ function ConnectPanelContent({
 
   return (
     <div data-testid="connect-panel" data-variant={variant}>
-      {/* /connect states its own <h1> in the server HTML (app/connect/page.tsx): a heading
-          rendered here exists only once the browser has read the contract. Opened inline on
-          the index, the panel titles itself with the heading the API sent. */}
+      {/* /connect states its own <h1> in the server HTML (app/connect/page.tsx), so the panel
+          renders none there and the page keeps exactly one. Opened inline on the index, the
+          panel titles itself with the heading the API sent. */}
       {variant === 'panel' ? (
         <h2 className="text-xl font-normal tracking-[-0.01em] text-foreground sm:text-2xl">{start.heading}</h2>
       ) : null}
@@ -194,6 +221,7 @@ function ConnectPanelContent({
           onCopied={onCopied}
           intentLabel={start.intent_field.label}
           intentMaxChars={start.intent_field.max_chars}
+          reserveFlowCode={reserveFlowCode}
           aside={
             <Link
               href={start.example.url}

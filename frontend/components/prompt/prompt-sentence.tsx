@@ -19,6 +19,9 @@ interface PromptSentenceProps {
   // Segment indexes whose words every use case shares; they step back so the
   // words that differ read at a glance.
   quiet?: Set<number>;
+  // /connect, until the browser's answer brings the visit's flow code: the link holds the
+  // code's width, empty, so the code arriving moves no word (PromptLink).
+  reserveFlowCode?: boolean;
 }
 
 // PromptSentence renders the API's segments by kind. It never writes a word of
@@ -32,6 +35,7 @@ export function PromptSentence({
   intentMaxChars,
   reserve,
   quiet,
+  reserveFlowCode = false,
 }: PromptSentenceProps) {
   return (
     <>
@@ -45,6 +49,7 @@ export function PromptSentence({
             intentLabel={intentLabel}
             intentMaxChars={intentMaxChars}
             quiet={quiet?.has(index) ?? false}
+            reserveFlowCode={reserveFlowCode}
           />
         );
         const alternatives = reserve?.[index];
@@ -62,6 +67,7 @@ export function PromptSentence({
                 intentLabel={intentLabel}
                 intentMaxChars={intentMaxChars}
                 quiet={false}
+                reserveFlowCode={reserveFlowCode}
                 fill
               />
             </span>
@@ -90,6 +96,7 @@ interface TokenProps {
   // In a reserved slot the intent's stroke runs the slot's full width, so the
   // slot reads as one blank filled in, not as words followed by a gap.
   fill?: boolean;
+  reserveFlowCode?: boolean;
 }
 
 function Token({
@@ -101,6 +108,7 @@ function Token({
   intentMaxChars,
   quiet,
   fill = false,
+  reserveFlowCode = false,
 }: TokenProps) {
   switch (segment.kind) {
     case "role":
@@ -164,7 +172,7 @@ function Token({
         />
       );
     case "link":
-      return <PromptLink text={segment.text} />;
+      return <PromptLink text={segment.text} reserveFlowCode={reserveFlowCode} />;
     default:
       return (
         <span data-kind="text" className={cn(quiet && "text-muted-foreground")}>
@@ -178,7 +186,13 @@ function Token({
 // after "?" only rides along for the agent, so it steps back further. A crawler that
 // renders the page is told not to follow it (nofollow): a coded link is one visit's
 // address, not a page of the site.
-function PromptLink({ text }: { text: string }) {
+//
+// reserveFlowCode: the link has no code yet but will get one (/connect, before the
+// browser's answer). It then holds the width of "?f=" and the code's 8 characters
+// (SPEC.md 25.6): 11 cells of the mono face, which gives every glyph the same advance,
+// at the size the code is set in. The placeholder holds no character, so a crawler, a
+// screen reader and a copy see only the API's text; the code takes its place.
+function PromptLink({ text, reserveFlowCode = false }: { text: string; reserveFlowCode?: boolean }) {
   const cut = text.indexOf("?");
   const base = cut === -1 ? text : text.slice(0, cut);
   const rest = cut === -1 ? "" : text.slice(cut);
@@ -192,6 +206,7 @@ function PromptLink({ text }: { text: string }) {
     >
       {base}
       {rest ? <span className="text-[0.78em] text-muted-foreground">{rest}</span> : null}
+      {reserveFlowCode && !rest ? <span aria-hidden="true" className="inline-block w-[11ch] text-[0.78em]" /> : null}
     </a>
   );
 }

@@ -74,13 +74,14 @@ function sentence(f: Filling, intent: string, visibility: 'public' | 'private', 
   return { text, segments, word_count: text.trim().split(/\s+/).length };
 }
 
-function start(selected: string, intent: string, chosen?: 'public' | 'private'): APIConnectStart {
+// flowId null is the answer to ?flow=none: nothing minted, no flow id, the plain link.
+function start(selected: string, intent: string, chosen?: 'public' | 'private', flowId: string | null = CONNECT_FLOW_ID): APIConnectStart {
   const presets: APIConnectPreset[] = FILLINGS.map((f) => ({
     value: f.value,
     label: f.label,
     selected: f.value === selected,
     next: f.next,
-    prompt: sentence(f, intent, chosen ?? f.visibility, CONNECT_FLOW_ID),
+    prompt: sentence(f, intent, chosen ?? f.visibility, flowId ?? undefined),
   }));
   const active = presets.find((p) => p.selected)!;
   const visibility = active.prompt.segments.find((s) => s.kind === 'visibility')!.value!;
@@ -88,7 +89,7 @@ function start(selected: string, intent: string, chosen?: 'public' | 'private'):
     instruction_version: '2.1',
     heading: 'Connect your agents',
     intent_field: { label: 'What should they do?', placeholder: 'what should they do?', max_chars: 200 },
-    selected: { intent, preset: selected, visibility, flow_id: CONNECT_FLOW_ID },
+    selected: { intent, preset: selected, visibility, ...(flowId ? { flow_id: flowId } : {}) },
     presets,
     prompt: active.prompt,
     next: active.next,
@@ -108,6 +109,10 @@ export const connectStartFor = start;
 
 // The default contract: Plan & execute, nothing typed, each use case its own visibility.
 export const CONNECT_START: APIConnectStart = start('plan-and-build', '');
+
+// GET /v1/connect?flow=none, the read a server makes (SPEC.md 25.6): the same default
+// contract, but nothing is minted, so it has no flow id and every sentence the plain link.
+export const CONNECT_START_NO_FLOW: APIConnectStart = start('plan-and-build', '', undefined, null);
 
 // Share context, chosen private, with an intent typed.
 export const CONNECT_START_PRIVATE_COLLABORATE: APIConnectStart = start('collaborate', 'learn our billing code', 'private');

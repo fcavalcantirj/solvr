@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { APIError } from '@/lib/api-error';
 import { useDebounce } from '@/hooks/use-debounce';
@@ -28,6 +28,13 @@ import type { APIConnectPreset, APIConnectStart } from '@/lib/api-types';
 // `settledIntent` is the typed intent the answer now shown was read with: '' until the
 // visitor typed one, typing paused and the API answered for it. An intent the API filled in
 // by itself (a source's task) is not one the visitor settled.
+//
+// /connect also hands in `initial`, the default contract its server read with no flow
+// (SPEC.md 25.6), so the first render already shows a sentence. It is shown until the
+// browser's first answer arrives and is never sent back: the reads above are exactly the
+// ones made without it. `live` says the answer shown is the browser's, the one that carries
+// this visit's flow. The server could not see the address, so a linked preset applies to the
+// browser's answer only; a use case the visitor picks shows at once, as always.
 const INTENT_DEBOUNCE_MS = 300;
 
 interface ConnectSourceParams {
@@ -51,11 +58,16 @@ function readPresetFromLocation(): string | undefined {
   return new URLSearchParams(window.location.search).get('preset') || undefined;
 }
 
-export function useConnectStart({ readLocation = false }: { readLocation?: boolean } = {}) {
+export function useConnectStart({
+  readLocation = false,
+  initial = null,
+}: { readLocation?: boolean; initial?: APIConnectStart | null } = {}) {
   const [source] = useState<ConnectSourceParams>(() => (readLocation ? readSourceFromLocation() : {}));
   const [linkedPreset] = useState<string | undefined>(() => (readLocation ? readPresetFromLocation() : undefined));
   const [intent, setIntent] = useState('');
   const [preset, setPreset] = useState<string | undefined>(linkedPreset);
+  // Whether the visitor picked a use case (the address's preset is not a pick).
+  const [picked, setPicked] = useState(false);
   const [visibility, setVisibility] = useState<string | undefined>(undefined);
   const [start, setStart] = useState<APIConnectStart | null>(null);
   const [settledIntent, setSettledIntent] = useState('');
@@ -117,10 +129,21 @@ export function useConnectStart({ readLocation = false }: { readLocation?: boole
     };
   }, [source, linkedPreset, debouncedIntent, visibility, attempt]);
 
-  // The use case showing: the visitor's pick, else the one the API selected.
-  const presets = start?.presets ?? [];
-  const active: APIConnectPreset | undefined =
-    presets.find((p) => p.value === preset) ?? presets.find((p) => p.selected) ?? presets[0];
+  // What shows: the browser's answer once one arrived, else the one the server read.
+  const live = start !== null;
+  const shown = start ?? initial;
 
-  return { start, active, loading, error, intent, settledIntent, setIntent, setPreset, setVisibility };
+  // The use case showing: the visitor's pick, else the one the API selected. Until the
+  // browser's answer arrives the linked preset waits, so the first render is the server's.
+  const choice = live || picked ? preset : undefined;
+  const presets = shown?.presets ?? [];
+  const active: APIConnectPreset | undefined =
+    presets.find((p) => p.value === choice) ?? presets.find((p) => p.selected) ?? presets[0];
+
+  const pickPreset = useCallback((value: string) => {
+    setPicked(true);
+    setPreset(value);
+  }, []);
+
+  return { start: shown, live, active, loading, error, intent, settledIntent, setIntent, setPreset: pickPreset, setVisibility };
 }

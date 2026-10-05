@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { CONNECT_EXAMPLES, CONNECT_START } from '@/components/connect/connect-fixture';
+import { CONNECT_EXAMPLES, CONNECT_FLOW_ID, CONNECT_START, CONNECT_START_NO_FLOW } from '@/components/connect/connect-fixture';
 import { Prompt } from './prompt';
 import { PromptStack } from './prompt-stack';
 import { PromptSentence } from './prompt-sentence';
@@ -74,6 +74,53 @@ describe('PromptSentence', () => {
     expect(link.querySelector('span')).toBeNull();
   });
 
+  // /connect first shows the sentence its server read, whose link has no flow code yet; the
+  // browser's answer adds "?f=" and the code. Until then (reserveFlowCode) the link holds that
+  // width, empty, so the code arriving moves no word. Nothing is in the placeholder: the text a
+  // crawler, a screen reader or a copy gets is still exactly the API's.
+  describe('reserving the width of the flow code', () => {
+    const plainLink = (container: HTMLElement) => container.querySelector<HTMLAnchorElement>('a[data-kind="link"]')!;
+
+    it('holds an empty, hidden placeholder right after the link text, inside the link', () => {
+      const { container } = render(<p><PromptSentence segments={plan.prompt.segments} reserveFlowCode /></p>);
+      const link = plainLink(container);
+      const held = link.querySelectorAll('span');
+      expect(held).toHaveLength(1);
+      const placeholder = held[0];
+      expect(placeholder).toHaveAttribute('aria-hidden', 'true');
+      expect(placeholder.childNodes).toHaveLength(0);
+      expect(link.lastChild).toBe(placeholder);
+      expect(link.textContent).toBe('https://solvr.dev/skill.md');
+      expect(container.textContent).toBe(plan.prompt.text);
+    });
+
+    // One mono cell per character the code part will have, in the size the code is set in.
+    it('is as wide as "?f=" and a code, in the face and size of the code it stands for', () => {
+      const { container } = render(<p><PromptSentence segments={plan.prompt.segments} reserveFlowCode /></p>);
+      const placeholder = plainLink(container).querySelector('span')!;
+      expect([...placeholder.classList].sort()).toEqual(['inline-block', 'text-[0.78em]', 'w-[11ch]']);
+      expect(`?f=${CONNECT_FLOW_ID}`).toHaveLength(11);
+
+      const coded = render(<p><PromptSentence segments={CONNECT_START.prompt.segments} /></p>);
+      const rest = plainLink(coded.container).querySelector('span')!;
+      const fontClasses = (el: Element) => [...el.classList].filter((c) => c.startsWith('text-[') || c.startsWith('font-'));
+      expect(fontClasses(placeholder)).toEqual(fontClasses(rest));
+    });
+
+    it('holds nothing without the prop', () => {
+      const { container } = render(<p><PromptSentence segments={plan.prompt.segments} /></p>);
+      expect(plainLink(container).children).toHaveLength(0);
+    });
+
+    it('holds nothing once the link carries its code: the code takes the place', () => {
+      const { container } = render(<p><PromptSentence segments={CONNECT_START.prompt.segments} reserveFlowCode /></p>);
+      const spans = plainLink(container).querySelectorAll('span');
+      expect(spans).toHaveLength(1);
+      expect(spans[0]).toHaveTextContent(`?f=${CONNECT_FLOW_ID}`);
+      expect(spans[0]).not.toHaveAttribute('aria-hidden');
+    });
+  });
+
   // The link is for the agent that receives the sentence. A crawler that renders the page
   // is told not to walk it: a coded link (?f=) is one visit's, not a page of the site.
   it.each([
@@ -123,6 +170,18 @@ describe('Prompt variants', () => {
     const held = container.querySelectorAll('p.prompt-sentence[aria-hidden="true"]');
     expect(held).toHaveLength(2);
     held.forEach((p) => expect(p.querySelector('[role="textbox"]')).toBeNull());
+  });
+
+  // The held sentences fill the same place as the one shown (a wide screen keeps all three),
+  // so each of them holds the code's width too: none grows when the codes arrive.
+  it('connect: reserves the flow code in the sentence shown and in every one held', () => {
+    const [active, ...others] = CONNECT_START_NO_FLOW.presets;
+    const { container, rerender } = render(<Prompt variant="connect" preset={active} others={others} reserveFlowCode />);
+    const placeholders = () => container.querySelectorAll('p.prompt-sentence a[data-kind="link"] > span[aria-hidden="true"]');
+    expect(placeholders()).toHaveLength(3);
+
+    rerender(<Prompt variant="connect" preset={active} others={others} />);
+    expect(placeholders()).toHaveLength(0);
   });
 });
 

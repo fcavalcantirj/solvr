@@ -27,6 +27,9 @@ interface PromptProps {
   footer?: ReactNode;
   // connect, guide: what sits under the copy action in the side column.
   aside?: ReactNode;
+  // connect, until the browser's answer brings the flow code: every sentence's link, the
+  // held ones included, keeps the code's width empty, so nothing moves when it arrives.
+  reserveFlowCode?: boolean;
 }
 
 const SENTENCE: Record<Variant, string> = {
@@ -51,6 +54,7 @@ export function Prompt({
   intentMaxChars,
   footer,
   aside,
+  reserveFlowCode = false,
 }: PromptProps) {
   const editable = variant === "connect";
 
@@ -74,6 +78,7 @@ export function Prompt({
         onVisibilityToggle={onVisibilityToggle}
         intentLabel={intentLabel}
         intentMaxChars={intentMaxChars}
+        reserveFlowCode={reserveFlowCode}
       />
     </p>
   );

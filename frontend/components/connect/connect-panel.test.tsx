@@ -162,9 +162,8 @@ describe('ConnectPanel states', () => {
     expect(screen.queryByTestId('prompt-sentence')).not.toBeInTheDocument();
   });
 
-  // /connect states its own <h1> in the server HTML (the panel reads its sentence in the
-  // browser, so a heading of the panel's would exist only after that read). On the page the
-  // panel therefore renders no heading; opened inline on the index it titles itself.
+  // /connect states its own <h1> in the server HTML, so on the page the panel renders no
+  // heading and the page keeps exactly one; opened inline on the index it titles itself.
   it('leaves the heading to the page on /connect, and titles itself as a section on the index', async () => {
     const page = await renderPanel('page');
     expect(screen.queryByRole('heading', { level: 1 })).toBeNull();

@@ -5,6 +5,7 @@ vi.mock('@/lib/api', () => ({ api: { getConnectStart: vi.fn() } }));
 
 import { api } from '@/lib/api';
 import { APIError } from '@/lib/api-error';
+import { CONNECT_START, CONNECT_START_NO_FLOW, connectStartFor } from '@/components/connect/connect-fixture';
 import { useConnectStart } from './use-connect-start';
 
 // The /connect page carries what it was linked with to the API: the source
@@ -170,5 +171,68 @@ describe('useConnectStart keeps one flow for the visit', () => {
     act(() => result.current.setVisibility('public'));
     await waitFor(() => expect(api.getConnectStart).toHaveBeenCalledTimes(3));
     expect(vi.mocked(api.getConnectStart).mock.calls[2][0]).toEqual({ visibility: 'public', flow: 'k7m2p9xq' });
+  });
+});
+
+// /connect starts from the default contract its server read (`initial`, GET /v1/connect with
+// flow=none, SPEC.md 25.6). It is shown until the browser's own read arrives and is never
+// sent anywhere: the browser's reads are exactly the ones it made without it. `live` says the
+// answer shown is the browser's, the one that carries the visit's flow.
+describe('useConnectStart with the answer the server read', () => {
+  const held = () => {
+    let release: (value: { data: typeof CONNECT_START }) => void = () => {};
+    vi.mocked(api.getConnectStart).mockReturnValueOnce(new Promise((resolve) => { release = resolve as typeof release; }) as never);
+    return (data: typeof CONNECT_START) => act(async () => release({ data }));
+  };
+
+  it('shows it until the browser answers, then the browser\'s answer, which alone is live', async () => {
+    const browserAnswers = held();
+    const { result } = renderHook(() => useConnectStart({ readLocation: true, initial: CONNECT_START_NO_FLOW }));
+
+    expect(result.current.start).toBe(CONNECT_START_NO_FLOW);
+    expect(result.current.live).toBe(false);
+    expect(result.current.active?.value).toBe('plan-and-build');
+    await waitFor(() => expect(api.getConnectStart).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(api.getConnectStart).mock.calls[0][0]).toEqual({});
+
+    await browserAnswers(CONNECT_START);
+    expect(result.current.start).toBe(CONNECT_START);
+    expect(result.current.live).toBe(true);
+  });
+
+  it('is live from the browser\'s first answer when there is none', async () => {
+    vi.mocked(api.getConnectStart).mockResolvedValue({ data: CONNECT_START });
+    const { result } = renderHook(() => useConnectStart());
+    expect(result.current.start).toBeNull();
+    expect(result.current.live).toBe(false);
+    await waitFor(() => expect(result.current.live).toBe(true));
+    expect(result.current.start).toBe(CONNECT_START);
+  });
+
+  // The server read the default contract and could not see the address, so the address's
+  // ?preset= applies to the browser's answer: until then the first render is the server's.
+  it('applies a linked ?preset= to the browser\'s answer only', async () => {
+    setSearch('?preset=collaborate');
+    const browserAnswers = held();
+    const { result } = renderHook(() => useConnectStart({ readLocation: true, initial: CONNECT_START_NO_FLOW }));
+
+    expect(result.current.active?.value).toBe('plan-and-build');
+    await waitFor(() => expect(api.getConnectStart).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(api.getConnectStart).mock.calls[0][0]).toEqual({ preset: 'collaborate' });
+
+    await browserAnswers(connectStartFor('collaborate', ''));
+    expect(result.current.active?.value).toBe('collaborate');
+  });
+
+  it('shows a use case the visitor picks before the browser answers at once', async () => {
+    setSearch('?preset=collaborate');
+    held();
+    const { result } = renderHook(() => useConnectStart({ readLocation: true, initial: CONNECT_START_NO_FLOW }));
+
+    act(() => result.current.setPreset('collaborate'));
+    expect(result.current.active?.value).toBe('collaborate');
+    act(() => result.current.setPreset('build-and-review'));
+    expect(result.current.active?.value).toBe('build-and-review');
+    expect(result.current.active?.prompt.text).toBe(CONNECT_START_NO_FLOW.presets[2].prompt.text);
   });
 });

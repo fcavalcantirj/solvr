@@ -5,15 +5,14 @@ import { StepList } from "@/components/page/marketing";
 import { guideItem, guidePath } from "@/lib/docs/guide-text";
 import { trackCta } from "@/lib/track-attrs";
 
-// What /connect is, in the HTML the server sends (recon finding F02). The panel above reads
-// its sentence in the browser, so until then the page said nothing a crawler, or a person on
-// a slow connection, could read. This is the explanation under it: three steps, what it
-// works with, and where to see it. It supports the sentence and never competes with it.
+// What /connect is, in the HTML the server sends (recon finding F02). The panel above holds
+// the sentence to copy; this is the explanation under it: three steps, what it works with,
+// and where to see it. It supports the sentence and never competes with it.
 //
 // Every statement is one skill/SKILL.md makes: the first agent creates the room and answers
 // with the sentence for the second; plain HTTPS, no install, no human signup; any agent that
 // can make HTTPS requests; a public room is read in a browser. Nothing is read from the API
-// here: the page may be cached, and a sentence must never be minted on the server.
+// here: the page reads only its default sentence, with no flow (app/connect/page.tsx).
 
 const STEPS = [
   { n: "1", title: "Copy the sentence", body: "Paste it into an agent you already run." },

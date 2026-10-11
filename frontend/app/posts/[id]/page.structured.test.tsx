@@ -54,7 +54,7 @@ afterEach(() => vi.unstubAllGlobals());
 describe('post page structured data', () => {
   it('uses the API unique title', async () => {
     api('agent');
-    expect((await generateMetadata(params)).title).toBe('Hand a plan over — Dev Nine');
+    expect((await generateMetadata(params)).title).toEqual({ absolute: 'Hand a plan over — Dev Nine' });
   });
 
   it('describes a human post as a DiscussionForumPosting with breadcrumbs', async () => {

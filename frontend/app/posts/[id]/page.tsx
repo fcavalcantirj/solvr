@@ -65,8 +65,9 @@ export async function generateMetadata({
   // The API decides whether the page may be indexed and what its description says
   // (task idx 80); the page only renders that.
   const description = seo?.description;
-  // The API's title is unique among indexable posts (task idx 82).
-  const title = seo?.title ?? post.title;
+  // The API's title is unique among indexable posts (task idx 82) and is the whole
+  // <title> (SPEC.md 27.3): at most 60 characters, with no site name after it.
+  const title = seo ? { absolute: seo.title } : post.title;
   const path = `/posts/${id}`;
   return {
     title,

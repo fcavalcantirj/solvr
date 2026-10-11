@@ -1319,6 +1319,8 @@ export interface APIBlogPost {
   downvotes: number;
   vote_score: number;
   read_time_minutes: number;
+  // The page's search title (SPEC.md 27.3), composed by the API at read time.
+  meta_title?: string;
   meta_description?: string;
   published_at?: string;
   created_at: string;

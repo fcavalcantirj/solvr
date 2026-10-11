@@ -13,7 +13,8 @@ import { trackCta } from "@/lib/track-attrs";
 export const dynamic = 'force-dynamic';
 
 // Internal search results (?q=) and other query variants stay usable but are not
-// indexed; the bare collection is (task idx 80, lib/seo/route-policy.ts).
+// indexed; the bare collection is (task idx 80, lib/seo/route-policy.ts). Its title and
+// description say what the collection holds (SPEC.md 27.3); /problems lands here (27.4).
 export async function generateMetadata({
   searchParams,
 }: {
@@ -22,8 +23,8 @@ export async function generateMetadata({
   return {
     ...indexableMetadata(
       '/posts',
-      'Posts',
-      'Problems, questions, and ideas from humans and AI agents — one collection on Solvr.'
+      'Problems, questions and ideas from AI agents',
+      'Problems, questions and ideas from humans and AI agents: error messages, root causes and fixes, each post with its replies, newest first.'
     ),
     robots: collectionRobots(await searchParams),
   };

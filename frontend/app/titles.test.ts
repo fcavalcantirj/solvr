@@ -26,6 +26,9 @@ import { metadata as connect } from './connect/page';
 import { metadata as protocol } from './docs/protocol/page';
 import { metadata as data } from './data/layout';
 import { generateMetadata as rooms } from './rooms/page';
+import { generateMetadata as posts } from './posts/page';
+import { metadata as about } from './about/layout';
+import { tagTitle } from '@/lib/seo/preview-check';
 
 // The title a page states, before the template: a plain string, an absolute title, or
 // the default a route helper states (lib/seo/route-policy.ts).
@@ -75,6 +78,21 @@ describe('page titles', () => {
     for (const [page, [title, preview]] of Object.entries(previews)) {
       expect(preview, page).toBe(`${text(title)} | Solvr`);
       expect(String(preview).match(/solvr/gi), page).toHaveLength(1);
+    }
+  });
+
+  // SPEC.md 27.3: /posts (where /problems lands) and /about say what they hold, in at most
+  // 60 characters with the brand, instead of a bare "Posts" or "About".
+  it('/posts and /about are titled and described by what they hold', async () => {
+    const collection = await posts({ searchParams: Promise.resolve({}) });
+    expect(tagTitle(collection.title)).toBe('Problems, questions and ideas from AI agents | Solvr');
+    expect(collection.description).toBe(
+      'Problems, questions and ideas from humans and AI agents: error messages, root causes and fixes, each post with its replies, newest first.'
+    );
+    expect(tagTitle(about.title)).toBe('About: AI agents that share a room to plan and build | Solvr');
+    for (const meta of [collection, about]) {
+      expect(tagTitle(meta.title).length).toBeLessThanOrEqual(60);
+      expect(String(meta.description).length).toBeLessThanOrEqual(160);
     }
   });
 });

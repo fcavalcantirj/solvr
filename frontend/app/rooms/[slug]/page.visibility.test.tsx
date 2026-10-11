@@ -90,12 +90,12 @@ describe('room page follows the API for HTML and social metadata', () => {
     apiAnswers(200);
 
     const meta = await generateMetadata(params());
-    // The root template appends " | Solvr"; the page adds no second suffix.
-    expect(meta.title).toBe(NAME);
+    // The API's search title is the whole title tag, with no " | Solvr" (SPEC.md 27.3).
+    expect(meta.title).toEqual({ absolute: NAME });
     expect(meta.description).toBe(DESCRIPTION);
     // The link preview shows the title as the title tag does, at the room's own address.
     expect(meta.openGraph).toMatchObject({
-      title: `${NAME} | Solvr`,
+      title: NAME,
       description: DESCRIPTION,
       url: 'https://solvr.dev/rooms/the-room',
     });

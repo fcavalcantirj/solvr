@@ -22,6 +22,11 @@ jobs:
     name: Backend (Go)
     runs-on: ubuntu-latest
 
+    # only-new-issues reads the PR diff through the GitHub API.
+    permissions:
+      contents: read
+      pull-requests: read
+
     defaults:
       run:
         working-directory: backend
@@ -29,11 +34,14 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # The push lint step diffs against the parent commit (HEAD~1).
+          fetch-depth: 2
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
 
       - name: Download dependencies
@@ -46,11 +54,23 @@ jobs:
         run: |
           go tool cover -func=coverage.out | grep total | awk '{print $3}'
 
-      - name: Run linter
-        uses: golangci/golangci-lint-action@v4
+      # The backend carries a pre-existing lint baseline (see "Go lint baseline"
+      # in CLAUDE.md), so CI blocks NEW issues only.
+      - name: Run linter (new issues in this PR)
+        if: github.event_name == 'pull_request'
+        uses: golangci/golangci-lint-action@v8
         with:
-          version: v1.54
+          version: v2.14.0
           working-directory: backend
+          only-new-issues: true
+
+      - name: Run linter (new issues since the parent commit)
+        if: github.event_name == 'push'
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.14.0
+          working-directory: backend
+          args: --new-from-rev=HEAD~1
 
       - name: Build
         run: go build -v ./cmd/api

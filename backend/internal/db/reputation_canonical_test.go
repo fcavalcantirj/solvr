@@ -17,8 +17,8 @@ import (
 // it like the served leaderboard. The legacy formulas (the inline agent SQL and
 // reputation.BuildReputationSQL) were deleted with the legacy tables (idx 68).
 func TestLegacyReputation_ServedByTheCanonicalRepositories(t *testing.T) {
-	assert.Contains(t, productionSourcesContaining(t, "NewCanonicalReputationAgentRepository("), "internal/api/router.go")
-	assert.Contains(t, productionSourcesContaining(t, "NewCanonicalReputationUserRepository("), "internal/api/router.go")
+	assert.Contains(t, productionSourcesContaining(t, "NewCanonicalReputationAgentRepository("), "internal/api/router_v1.go")
+	assert.Contains(t, productionSourcesContaining(t, "NewCanonicalReputationUserRepository("), "internal/api/router_v1.go")
 	assert.Empty(t, productionSourcesContaining(t, "reputation.BuildReputationSQL("),
 		"the legacy formula was deleted with the legacy tables (idx 68)")
 

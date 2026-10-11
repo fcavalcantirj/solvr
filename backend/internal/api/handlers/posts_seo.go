@@ -17,9 +17,10 @@ import (
 type PostSEO struct {
 	// Indexable is true exactly for the posts the sitemap lists (models.Post.Indexable).
 	Indexable bool `json:"indexable"`
-	// Title is unique among indexable posts (seo.PostTitle).
+	// Title is the post's problem statement in at most seo.TitleLength characters, unique
+	// among indexable posts (seo.PostTitle).
 	Title string `json:"title"`
-	// Description is the visible body's excerpt (seo.PostDescription).
+	// Description is the visible body's problem and answer, or its excerpt (seo.PostDescription).
 	Description string `json:"description"`
 }
 
@@ -67,7 +68,8 @@ func (h *PostsHandler) GetSEO(w http.ResponseWriter, r *http.Request) {
 	}})
 }
 
-// postTitleTwins counts a post's indexable title twins (db.PostRepository.TitleTwins).
+// postTitleTwins counts the indexable posts that share a post's search title
+// (db.PostRepository.TitleTwins).
 // A repository without it (a test double) keeps every title as written.
 type postTitleTwins interface {
 	TitleTwins(ctx context.Context, postID string) (twins, sameAuthor int, err error)

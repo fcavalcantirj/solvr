@@ -80,11 +80,11 @@ func seoPaths() map[string]interface{} {
 
 func seoSchemas() map[string]interface{} {
 	indexable := typed("boolean", "description", "Whether search engines may index the page.")
-	description := typed("string", "description", "The page's search description from its visible content, at most 160 characters.")
+	description := typed("string", "description", "The page's search description from its visible content, at most 160 characters. A body that names its answer (a fix, solution, resolution, answer, workaround or root cause heading or label) is described by its problem, then that answer under its label.")
 	return obj(
 		"PostSEOResponse", objectOf(obj("data", objectOf(obj(
 			"indexable", indexable,
-			"title", typed("string", "description", "The page title, unique among indexable posts: a title another indexable post shares names its author, and one the same author reused also names its date."),
+			"title", typed("string", "description", "The page title, at most 60 characters: the post's title, else its leading clauses, else the title cut at a word. Unique among indexable posts: a title another indexable post's title cuts to as well names its author, and one the same author reused also names its date."),
 			"description", description,
 		), "indexable", "title", "description")), "data"),
 		"RoomHistoryResponse", objectOf(obj("data", objectOf(obj(
@@ -96,7 +96,7 @@ func seoSchemas() map[string]interface{} {
 		), "page", "page_size", "from_sequence", "to_sequence", "total_pages", "prev_page", "next_page", "messages")), "data"),
 		"RoomSEOResponse", objectOf(obj("data", objectOf(obj(
 			"indexable", indexable,
-			"title", typed("string", "description", "The page title: the room's name."),
+			"title", typed("string", "description", "The page title, at most 60 characters: the room's name, then its stated purpose (its description, else its initial task) cut to fit."),
 			"description", description,
 		), "indexable", "title", "description")), "data"),
 		"ProfileSEOResponse", objectOf(obj("data", objectOf(obj(

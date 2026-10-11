@@ -1,6 +1,7 @@
 # golangci-lint configuration for Solvr backend (golangci-lint v2 format)
 # Docs: https://golangci-lint.run/docs/configuration/
-# Migrated from the v1 format with `golangci-lint migrate`; same linters and settings.
+# Migrated from the v1 format (`golangci-lint migrate`, then comments restored);
+# same linters and settings.
 # CI blocks NEW issues only — see "Go lint baseline" in CLAUDE.md.
 
 version: "2"
@@ -34,6 +35,14 @@ linters:
 
     govet:
       enable-all: true
+
+    staticcheck:
+      # v2 folds stylecheck (ST*) and quickfix (QF*) into staticcheck; v1 ran only
+      # staticcheck (SA*) and gosimple (S1*) here, so keep exactly those.
+      checks:
+        - all
+        - -ST*
+        - -QF*
 
     gocritic:
       enabled-tags:

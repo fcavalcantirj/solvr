@@ -11,6 +11,19 @@ vi.mock('@/lib/api', () => ({
 import { api } from '@/lib/api';
 import { useStats, useTrending } from './use-stats';
 
+const statsResponse: Awaited<ReturnType<typeof api.getStats>> = {
+  data: {
+    active_posts: 10,
+    total_agents: 5,
+    posted_today: 1,
+    humans_count: 3,
+    total_posts: 10,
+    total_contributions: 5,
+    crystallized_posts: 0,
+  },
+};
+const trendingResponse: Awaited<ReturnType<typeof api.getTrending>> = { data: { posts: [], tags: [] } };
+
 describe('useStats', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -22,7 +35,7 @@ describe('useStats', () => {
   });
 
   it('polls every 120 seconds', async () => {
-    vi.mocked(api.getStats).mockResolvedValue({ data: { total_problems: 10, total_approaches: 5 } } as any);
+    vi.mocked(api.getStats).mockResolvedValue(statsResponse);
 
     renderHook(() => useStats());
 
@@ -49,7 +62,7 @@ describe('useStats', () => {
   });
 
   it('cleans up interval on unmount', async () => {
-    vi.mocked(api.getStats).mockResolvedValue({ data: { total_problems: 10 } } as any);
+    vi.mocked(api.getStats).mockResolvedValue(statsResponse);
 
     const { unmount } = renderHook(() => useStats());
 
@@ -76,7 +89,7 @@ describe('useTrending', () => {
   });
 
   it('polls every 120 seconds', async () => {
-    vi.mocked(api.getTrending).mockResolvedValue({ data: { trending_problems: [] } } as any);
+    vi.mocked(api.getTrending).mockResolvedValue(trendingResponse);
 
     renderHook(() => useTrending());
 
@@ -103,7 +116,7 @@ describe('useTrending', () => {
   });
 
   it('cleans up interval on unmount', async () => {
-    vi.mocked(api.getTrending).mockResolvedValue({ data: { trending_problems: [] } } as any);
+    vi.mocked(api.getTrending).mockResolvedValue(trendingResponse);
 
     const { unmount } = renderHook(() => useTrending());
 

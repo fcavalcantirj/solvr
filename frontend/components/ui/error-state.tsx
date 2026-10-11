@@ -19,7 +19,7 @@ export function ErrorState({ error, onRetry, resourceName = "resource" }: ErrorS
         </div>
         <h2 className="font-mono text-lg mb-2">Not Found</h2>
         <p className="text-muted-foreground font-mono text-sm">
-          The {resourceName} you're looking for doesn't exist or has been removed.
+          The {resourceName} you&apos;re looking for doesn&apos;t exist or has been removed.
         </p>
       </div>
     );
@@ -33,7 +33,7 @@ export function ErrorState({ error, onRetry, resourceName = "resource" }: ErrorS
         </div>
         <h2 className="font-mono text-lg mb-2">Not Found</h2>
         <p className="text-muted-foreground font-mono text-sm">
-          The {resourceName} you're looking for doesn't exist or has been removed.
+          The {resourceName} you&apos;re looking for doesn&apos;t exist or has been removed.
         </p>
       </div>
     );

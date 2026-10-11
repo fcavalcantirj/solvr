@@ -30,7 +30,7 @@ describe('MCP setup on /mcp and /api-docs', () => {
   });
 
   it('the API serves MCP over HTTP at /v1/mcp', () => {
-    const router = readFileSync(resolve(__dirname, '../../../backend/internal/api/router.go'), 'utf8');
+    const router = readFileSync(resolve(__dirname, '../../../backend/internal/api/router_v1.go'), 'utf8');
     expect(router).toMatch(/r\.Route\("\/v1", func[\s\S]*r\.Post\("\/mcp", mcpHandler\.Handle\)/);
   });
 

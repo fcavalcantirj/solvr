@@ -15,7 +15,7 @@ import (
 // community totals) are served by CanonicalStatsRepository. The legacy StatsRepository methods
 // that read answers, approaches and responses were deleted with the legacy tables (idx 68).
 func TestLegacyStats_ServedByTheCanonicalRepository(t *testing.T) {
-	assert.ElementsMatch(t, []string{"internal/api/router.go", "internal/api/router_homepage.go"},
+	assert.ElementsMatch(t, []string{"internal/api/router_v1.go", "internal/api/router_homepage.go"},
 		productionSourcesContaining(t, "db.NewCanonicalStatsRepository("),
 		"the stats routes and the overview serve the canonical statistics")
 	assert.ElementsMatch(t, []string{"internal/db/stats.go", "internal/db/stats_canonical.go"},

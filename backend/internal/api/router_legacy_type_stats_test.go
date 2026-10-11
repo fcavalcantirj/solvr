@@ -21,12 +21,12 @@ import (
 // legacy types were retired (idx 68) the aggregate has one entry, "post".
 
 type overviewKnowledgeType struct {
-	Type              string         `json:"type"`
-	Label             string         `json:"label"`
-	Total             int            `json:"total"`
-	ByStatus          map[string]int `json:"by_status"`
-	WithReplies       int            `json:"with_replies"`
-	Replies           int            `json:"replies"`
+	Type        string         `json:"type"`
+	Label       string         `json:"label"`
+	Total       int            `json:"total"`
+	ByStatus    map[string]int `json:"by_status"`
+	WithReplies int            `json:"with_replies"`
+	Replies     int            `json:"replies"`
 }
 
 type overviewKnowledgeResp struct {

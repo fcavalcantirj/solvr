@@ -587,7 +587,7 @@ func TestConnectEndpoint_MultipleAgentsCanJoinViaAddAgentPrompt(t *testing.T) {
 	// 3. POST /r/{slug}/join to establish presence
 	// 4. POST messages to the room
 	const numExecutors = 3
-	executors := make(map[string]string) // agentID -> agentKey
+	executors := make(map[string]string)      // agentID -> agentKey
 	executorTokens := make(map[string]string) // agentID -> perAgentToken
 
 	for i := 1; i <= numExecutors; i++ {
@@ -781,7 +781,7 @@ func TestConnectEndpoint_PrivateRoomRequiresOwnerAdmissionForEachAgent(t *testin
 	// Agent2 still has full access.
 	status, _ = doJSON(t, http.MethodGet, ts.URL+"/v1/rooms/"+slug, agent2Key, "")
 	require.Equal(t, http.StatusOK, status, "other agents remain unaffected")
-	
+
 	// Agent2 can still post via its per-agent token.
 	status, msgOut := doJSON(t, http.MethodPost, ts.URL+"/r/"+slug+"/message", agent2Token, `{"agent_name":"agent2","content":"still here"}`)
 	require.Equal(t, http.StatusCreated, status, "unaffected agent can still post")

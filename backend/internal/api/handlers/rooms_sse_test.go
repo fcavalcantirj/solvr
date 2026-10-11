@@ -80,7 +80,13 @@ func TestPublicStream_StreamHeadersAndNoAuth(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/rooms/"+room.Slug+"/stream", nil)
+	// The stream runs until the client goes away, so the request carries a cancellable
+	// context: the test hangs up, then waits for the handler to return before it reads
+	// the recorder. Reading the headers while the handler goroutine may still write them
+	// is a data race (go test -race).
+	reqCtx, hangUp := context.WithCancel(context.Background())
+	defer hangUp()
+	req := httptest.NewRequest(http.MethodGet, "/v1/rooms/"+room.Slug+"/stream", nil).WithContext(reqCtx)
 	req = withSlug(req, room.Slug)
 	// No Authorization header — public stream requires no auth
 	w := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
@@ -91,12 +97,17 @@ func TestPublicStream_StreamHeadersAndNoAuth(t *testing.T) {
 		handler.PublicStream(w, req)
 	}()
 
+	time.Sleep(50 * time.Millisecond) // let the stream open and send its headers
+	hangUp()
 	select {
 	case <-done:
-	case <-time.After(500 * time.Millisecond):
-		// Stream runs until context is cancelled — this is expected
+	case <-time.After(2 * time.Second):
+		t.Fatal("stream must end once the client hangs up")
 	}
 
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 without auth, got %d", w.Code)
+	}
 	ct := w.Header().Get("Content-Type")
 	if ct != "text/event-stream" {
 		t.Errorf("expected Content-Type=text/event-stream, got %q", ct)

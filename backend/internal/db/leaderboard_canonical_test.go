@@ -83,7 +83,7 @@ func productionSourcesContaining(t *testing.T, needle string) []string {
 func TestLegacyLeaderboards_ServedByTheCanonicalRepository(t *testing.T) {
 	assert.Empty(t, productionSourcesContaining(t, "NewLeaderboardRepository("),
 		"the legacy leaderboard repository was deleted with the legacy tables (idx 68)")
-	assert.Contains(t, productionSourcesContaining(t, "NewCanonicalLeaderboardRepository("), "internal/api/router.go")
+	assert.Contains(t, productionSourcesContaining(t, "NewCanonicalLeaderboardRepository("), "internal/api/router_v1.go")
 
 	d := LegacyDependencyDispositions["feature:leaderboards"]
 	assert.Equal(t, LegacyActionRefactor, d.Action)

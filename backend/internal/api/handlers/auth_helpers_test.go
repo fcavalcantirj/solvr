@@ -12,12 +12,12 @@ import (
 
 func TestGetAuthInfo(t *testing.T) {
 	tests := []struct {
-		name           string
-		setupCtx       func(ctx context.Context) context.Context
-		expectNil      bool
-		expectType     models.AuthorType
-		expectID       string
-		expectRole     string
+		name       string
+		setupCtx   func(ctx context.Context) context.Context
+		expectNil  bool
+		expectType models.AuthorType
+		expectID   string
+		expectRole string
 	}{
 		{
 			name: "agent context returns agent type",

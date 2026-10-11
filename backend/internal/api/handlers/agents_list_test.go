@@ -22,7 +22,7 @@ func TestListAgents_Success(t *testing.T) {
 		DisplayName: "Agent One",
 		Bio:         "First test agent",
 		Status:      "active",
-		Reputation:       100,
+		Reputation:  100,
 		CreatedAt:   time.Now().Add(-1 * time.Hour),
 		UpdatedAt:   time.Now(),
 	}
@@ -31,7 +31,7 @@ func TestListAgents_Success(t *testing.T) {
 		DisplayName: "Agent Two",
 		Bio:         "Second test agent",
 		Status:      "active",
-		Reputation:       50,
+		Reputation:  50,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
@@ -259,31 +259,31 @@ func TestListAgents_IncludesStats(t *testing.T) {
 
 	// Set up test agents with different statuses and badges
 	repo.agents["agent1"] = &models.Agent{
-		ID:                   "agent1",
-		DisplayName:          "Agent One",
-		Status:               "active",
-		HasHumanBackedBadge:  true,
-		Reputation:           100,
-		CreatedAt:            time.Now(),
-		UpdatedAt:            time.Now(),
+		ID:                  "agent1",
+		DisplayName:         "Agent One",
+		Status:              "active",
+		HasHumanBackedBadge: true,
+		Reputation:          100,
+		CreatedAt:           time.Now(),
+		UpdatedAt:           time.Now(),
 	}
 	repo.agents["agent2"] = &models.Agent{
-		ID:                   "agent2",
-		DisplayName:          "Agent Two",
-		Status:               "active",
-		HasHumanBackedBadge:  false,
-		Reputation:           50,
-		CreatedAt:            time.Now(),
-		UpdatedAt:            time.Now(),
+		ID:                  "agent2",
+		DisplayName:         "Agent Two",
+		Status:              "active",
+		HasHumanBackedBadge: false,
+		Reputation:          50,
+		CreatedAt:           time.Now(),
+		UpdatedAt:           time.Now(),
 	}
 	repo.agents["agent3"] = &models.Agent{
-		ID:                   "agent3",
-		DisplayName:          "Agent Three",
-		Status:               "pending",
-		HasHumanBackedBadge:  false,
-		Reputation:           25,
-		CreatedAt:            time.Now(),
-		UpdatedAt:            time.Now(),
+		ID:                  "agent3",
+		DisplayName:         "Agent Three",
+		Status:              "pending",
+		HasHumanBackedBadge: false,
+		Reputation:          25,
+		CreatedAt:           time.Now(),
+		UpdatedAt:           time.Now(),
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/agents", nil)

@@ -16,15 +16,15 @@ import (
 
 // MockClaimTokenRepository implements ClaimTokenRepositoryInterface for testing.
 type MockClaimTokenRepository struct {
-	tokens                    map[string]*models.ClaimToken
-	createCalled              bool
-	createErr                 error
-	findByTokenErr            error
-	findActiveByAgentErr      error
-	markUsedErr               error
+	tokens                     map[string]*models.ClaimToken
+	createCalled               bool
+	createErr                  error
+	findByTokenErr             error
+	findActiveByAgentErr       error
+	markUsedErr                error
 	deleteExpiredByAgentCalled bool
-	deleteExpiredByAgentErr   error
-	deleteUnusedCalled        bool
+	deleteExpiredByAgentErr    error
+	deleteUnusedCalled         bool
 }
 
 func NewMockClaimTokenRepository() *MockClaimTokenRepository {

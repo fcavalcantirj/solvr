@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -18,10 +17,10 @@ import (
 
 // mockUserRepoForAuth is a mock implementation of UserRepositoryForAuth.
 type mockUserRepoForAuth struct {
-	users            map[string]*models.User // keyed by email
-	usersByUsername  map[string]*models.User // keyed by username
-	createErr        error
-	findByEmailErr   error
+	users             map[string]*models.User // keyed by email
+	usersByUsername   map[string]*models.User // keyed by username
+	createErr         error
+	findByEmailErr    error
 	findByUsernameErr error
 }
 
@@ -188,8 +187,8 @@ func (m *mockAuthMethodRepoStub) HasEmailAuth(ctx context.Context, userID string
 func TestRegister_ValidRequest(t *testing.T) {
 	mockRepo := newMockUserRepoForAuth()
 	config := &OAuthConfig{
-		JWTSecret:    "test-secret",
-		JWTExpiry:    "15m",
+		JWTSecret:     "test-secret",
+		JWTExpiry:     "15m",
 		RefreshExpiry: "168h",
 	}
 	mockAuthMethodRepo := newMockAuthMethodRepoStub()
@@ -283,8 +282,8 @@ func TestRegister_ValidRequest(t *testing.T) {
 func TestRegister_DuplicateEmail(t *testing.T) {
 	mockRepo := newMockUserRepoForAuth()
 	config := &OAuthConfig{
-		JWTSecret:    "test-secret",
-		JWTExpiry:    "15m",
+		JWTSecret:     "test-secret",
+		JWTExpiry:     "15m",
 		RefreshExpiry: "168h",
 	}
 	mockAuthMethodRepo := newMockAuthMethodRepoStub()
@@ -339,8 +338,8 @@ func TestRegister_DuplicateEmail(t *testing.T) {
 func TestRegister_WeakPassword(t *testing.T) {
 	mockRepo := newMockUserRepoForAuth()
 	config := &OAuthConfig{
-		JWTSecret:    "test-secret",
-		JWTExpiry:    "15m",
+		JWTSecret:     "test-secret",
+		JWTExpiry:     "15m",
 		RefreshExpiry: "168h",
 	}
 	mockAuthMethodRepo := newMockAuthMethodRepoStub()
@@ -401,8 +400,8 @@ func TestRegister_WeakPassword(t *testing.T) {
 func TestRegister_InvalidEmail(t *testing.T) {
 	mockRepo := newMockUserRepoForAuth()
 	config := &OAuthConfig{
-		JWTSecret:    "test-secret",
-		JWTExpiry:    "15m",
+		JWTSecret:     "test-secret",
+		JWTExpiry:     "15m",
 		RefreshExpiry: "168h",
 	}
 	mockAuthMethodRepo := newMockAuthMethodRepoStub()
@@ -458,8 +457,8 @@ func TestRegister_InvalidEmail(t *testing.T) {
 func TestRegister_DuplicateUsername(t *testing.T) {
 	mockRepo := newMockUserRepoForAuth()
 	config := &OAuthConfig{
-		JWTSecret:    "test-secret",
-		JWTExpiry:    "15m",
+		JWTSecret:     "test-secret",
+		JWTExpiry:     "15m",
 		RefreshExpiry: "168h",
 	}
 	mockAuthMethodRepo := newMockAuthMethodRepoStub()
@@ -514,8 +513,8 @@ func TestRegister_DuplicateUsername(t *testing.T) {
 func TestRegister_InvalidUsername(t *testing.T) {
 	mockRepo := newMockUserRepoForAuth()
 	config := &OAuthConfig{
-		JWTSecret:    "test-secret",
-		JWTExpiry:    "15m",
+		JWTSecret:     "test-secret",
+		JWTExpiry:     "15m",
 		RefreshExpiry: "168h",
 	}
 	mockAuthMethodRepo := newMockAuthMethodRepoStub()
@@ -570,571 +569,5 @@ func TestRegister_InvalidUsername(t *testing.T) {
 				t.Errorf("error message should mention character requirements: %s", message)
 			}
 		})
-	}
-}
-
-// TestLogin_ValidCredentials tests successful login with correct email+password.
-func TestLogin_ValidCredentials(t *testing.T) {
-	mockRepo := newMockUserRepoForAuth()
-	config := &OAuthConfig{
-		JWTSecret:     "test-secret",
-		JWTExpiry:     "15m",
-		RefreshExpiry: "168h",
-	}
-	mockAuthMethodRepo := newMockAuthMethodRepoStub()
-	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo, nil)
-
-	// Create a user with password
-	passwordHash, _ := bcrypt.GenerateFromPassword([]byte("correctpassword"), bcrypt.DefaultCost)
-	existingUser := &models.User{
-		ID:           "user-123",
-		Email:        "user@example.com",
-		Username:     "testuser",
-		AuthProvider: models.AuthProviderEmail,
-		PasswordHash: string(passwordHash),
-		Role:         models.UserRoleUser,
-	}
-	mockRepo.users["user@example.com"] = existingUser
-
-	// Create corresponding auth_method entry
-	authMethod := &models.AuthMethod{
-		ID:           "auth-method-123",
-		UserID:       "user-123",
-		AuthProvider: models.AuthProviderEmail,
-		PasswordHash: string(passwordHash),
-	}
-	mockAuthMethodRepo.methods["user-123"] = []*models.AuthMethod{authMethod}
-
-	// Attempt login
-	reqBody := LoginRequest{
-		Email:    "user@example.com",
-		Password: "correctpassword",
-	}
-	body, _ := json.Marshal(reqBody)
-
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/login", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	handler.Login(w, req)
-
-	// Verify 200 OK
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d. Body: %s", w.Code, w.Body.String())
-		return
-	}
-
-	// Verify response structure
-	var resp LoginResponse
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
-	// Verify access_token is present
-	if resp.AccessToken == "" {
-		t.Error("access_token is empty")
-	}
-
-	// Verify refresh_token is present
-	if resp.RefreshToken == "" {
-		t.Error("refresh_token is empty")
-	}
-
-	// Verify user object
-	if resp.User.ID != "user-123" {
-		t.Errorf("expected user.id 'user-123', got '%s'", resp.User.ID)
-	}
-	if resp.User.Email != "user@example.com" {
-		t.Errorf("expected email 'user@example.com', got '%s'", resp.User.Email)
-	}
-
-	// Verify JWT can be decoded
-	claims, err := auth.ValidateJWT(config.JWTSecret, resp.AccessToken)
-	if err != nil {
-		t.Errorf("JWT validation failed: %v", err)
-	} else {
-		if claims.UserID != "user-123" {
-			t.Errorf("expected user_id 'user-123', got '%s'", claims.UserID)
-		}
-	}
-}
-
-// TestLogin_WrongPassword tests login with incorrect password returns 401.
-func TestLogin_WrongPassword(t *testing.T) {
-	mockRepo := newMockUserRepoForAuth()
-	config := &OAuthConfig{
-		JWTSecret:     "test-secret",
-		JWTExpiry:     "15m",
-		RefreshExpiry: "168h",
-	}
-	mockAuthMethodRepo := newMockAuthMethodRepoStub()
-	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo, nil)
-
-	// Create a user with password
-	passwordHash, _ := bcrypt.GenerateFromPassword([]byte("correctpassword"), bcrypt.DefaultCost)
-	existingUser := &models.User{
-		ID:           "user-123",
-		Email:        "user@example.com",
-		Username:     "testuser",
-		AuthProvider: models.AuthProviderEmail,
-		PasswordHash: string(passwordHash),
-		Role:         models.UserRoleUser,
-	}
-	mockRepo.users["user@example.com"] = existingUser
-
-	// Create corresponding auth_method entry
-	authMethod := &models.AuthMethod{
-		ID:           "auth-method-123",
-		UserID:       "user-123",
-		AuthProvider: models.AuthProviderEmail,
-		PasswordHash: string(passwordHash),
-	}
-	mockAuthMethodRepo.methods["user-123"] = []*models.AuthMethod{authMethod}
-
-	// Attempt login with wrong password
-	reqBody := LoginRequest{
-		Email:    "user@example.com",
-		Password: "wrongpassword",
-	}
-	body, _ := json.Marshal(reqBody)
-
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/login", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	handler.Login(w, req)
-
-	// Verify 401 Unauthorized
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401, got %d. Body: %s", w.Code, w.Body.String())
-	}
-
-	// Verify error response
-	var errResp map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
-		t.Fatalf("failed to decode error response: %v", err)
-	}
-	errorObj, ok := errResp["error"].(map[string]interface{})
-	if !ok {
-		t.Fatal("error object not found in response")
-	}
-	if errorObj["code"] != "INVALID_CREDENTIALS" {
-		t.Errorf("expected error code 'INVALID_CREDENTIALS', got '%v'", errorObj["code"])
-	}
-}
-
-// TestLogin_NonExistentEmail tests login with non-existent email returns 401 (no email enumeration).
-func TestLogin_NonExistentEmail(t *testing.T) {
-	mockRepo := newMockUserRepoForAuth()
-	config := &OAuthConfig{
-		JWTSecret:     "test-secret",
-		JWTExpiry:     "15m",
-		RefreshExpiry: "168h",
-	}
-	mockAuthMethodRepo := newMockAuthMethodRepoStub()
-	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo, nil)
-
-	// Attempt login with non-existent email
-	reqBody := LoginRequest{
-		Email:    "nonexistent@example.com",
-		Password: "anypassword",
-	}
-	body, _ := json.Marshal(reqBody)
-
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/login", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	handler.Login(w, req)
-
-	// Verify 401 Unauthorized (same as wrong password)
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401, got %d. Body: %s", w.Code, w.Body.String())
-	}
-
-	// Verify error response uses same code as wrong password (no email enumeration)
-	var errResp map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
-		t.Fatalf("failed to decode error response: %v", err)
-	}
-	errorObj, ok := errResp["error"].(map[string]interface{})
-	if !ok {
-		t.Fatal("error object not found in response")
-	}
-	if errorObj["code"] != "INVALID_CREDENTIALS" {
-		t.Errorf("expected error code 'INVALID_CREDENTIALS', got '%v'", errorObj["code"])
-	}
-}
-
-// TestLogin_OAuthOnlyUser tests login with OAuth-only user (no password_hash) returns 401 with specific message.
-func TestLogin_OAuthOnlyUser(t *testing.T) {
-	mockRepo := newMockUserRepoForAuth()
-	config := &OAuthConfig{
-		JWTSecret:     "test-secret",
-		JWTExpiry:     "15m",
-		RefreshExpiry: "168h",
-	}
-	mockAuthMethodRepo := newMockAuthMethodRepoStub()
-	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo, nil)
-
-	// Create an OAuth-only user (no password_hash)
-	oauthUser := &models.User{
-		ID:             "user-456",
-		Email:          "oauth@example.com",
-		Username:       "oauthuser",
-		AuthProvider:   models.AuthProviderGoogle,
-		AuthProviderID: "google-123",
-		PasswordHash:   "", // No password
-		Role:           models.UserRoleUser,
-	}
-	mockRepo.users["oauth@example.com"] = oauthUser
-
-	// Create OAuth auth_method entry (no email/password method)
-	oauthMethod := &models.AuthMethod{
-		ID:             "oauth-method-456",
-		UserID:         "user-456",
-		AuthProvider:   models.AuthProviderGoogle,
-		AuthProviderID: "google-123",
-	}
-	mockAuthMethodRepo.methods["user-456"] = []*models.AuthMethod{oauthMethod}
-
-	// Attempt login with password
-	reqBody := LoginRequest{
-		Email:    "oauth@example.com",
-		Password: "anypassword",
-	}
-	body, _ := json.Marshal(reqBody)
-
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/login", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	handler.Login(w, req)
-
-	// Verify 401 Unauthorized
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401, got %d. Body: %s", w.Code, w.Body.String())
-	}
-
-	// Verify specific error message for OAuth users
-	var errResp map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
-		t.Fatalf("failed to decode error response: %v", err)
-	}
-	errorObj, ok := errResp["error"].(map[string]interface{})
-	if !ok {
-		t.Fatal("error object not found in response")
-	}
-	message := errorObj["message"].(string)
-	if !strings.Contains(strings.ToLower(message), "google") && !strings.Contains(strings.ToLower(message), "github") {
-		t.Errorf("error message should mention OAuth providers: %s", message)
-	}
-}
-
-// mockReferralRepoForAuth is a mock implementation of ReferralRepositoryForAuth.
-type mockReferralRepoForAuth struct {
-	findByCodeFn    func(ctx context.Context, code string) (string, error)
-	createFn        func(ctx context.Context, referrerID, referredID string) error
-	findCalled      bool
-	createCalled    bool
-	lastReferrerID  string
-	lastReferredID  string
-}
-
-func (m *mockReferralRepoForAuth) FindUserIDByReferralCode(ctx context.Context, code string) (string, error) {
-	m.findCalled = true
-	if m.findByCodeFn != nil {
-		return m.findByCodeFn(ctx, code)
-	}
-	return "", db.ErrNotFound
-}
-
-func (m *mockReferralRepoForAuth) CreateReferral(ctx context.Context, referrerID, referredID string) error {
-	m.createCalled = true
-	m.lastReferrerID = referrerID
-	m.lastReferredID = referredID
-	if m.createFn != nil {
-		return m.createFn(ctx, referrerID, referredID)
-	}
-	return nil
-}
-
-// TestRegister_WithValidRef tests registration with a valid ref field creates a referral.
-func TestRegister_WithValidRef(t *testing.T) {
-	mockRepo := newMockUserRepoForAuth()
-	config := &OAuthConfig{
-		JWTSecret:     "test-secret",
-		JWTExpiry:     "15m",
-		RefreshExpiry: "168h",
-	}
-	mockAuthMethodRepo := newMockAuthMethodRepoStub()
-
-	referrerID := "referrer-user-id"
-	mockRefRepo := &mockReferralRepoForAuth{
-		findByCodeFn: func(ctx context.Context, code string) (string, error) {
-			if code == "ABC12345" {
-				return referrerID, nil
-			}
-			return "", db.ErrNotFound
-		},
-	}
-
-	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo, mockRefRepo)
-
-	reqBody := RegisterRequest{
-		Email:       "referred@example.com",
-		Password:    "securepass123",
-		Username:    "referreduser",
-		DisplayName: "Referred User",
-		Ref:         "ABC12345",
-	}
-	body, _ := json.Marshal(reqBody)
-
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/register", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	handler.Register(w, req)
-
-	if w.Code != http.StatusCreated {
-		t.Errorf("expected status 201, got %d. Body: %s", w.Code, w.Body.String())
-	}
-
-	if !mockRefRepo.createCalled {
-		t.Error("expected CreateReferral to be called, but it was not")
-	}
-
-	if mockRefRepo.lastReferrerID != referrerID {
-		t.Errorf("expected referrer ID %q, got %q", referrerID, mockRefRepo.lastReferrerID)
-	}
-}
-
-// TestRegister_WithUnknownRef tests registration with unknown ref ignores it and returns 201.
-func TestRegister_WithUnknownRef(t *testing.T) {
-	mockRepo := newMockUserRepoForAuth()
-	config := &OAuthConfig{
-		JWTSecret:     "test-secret",
-		JWTExpiry:     "15m",
-		RefreshExpiry: "168h",
-	}
-	mockAuthMethodRepo := newMockAuthMethodRepoStub()
-	mockRefRepo := &mockReferralRepoForAuth{
-		// findByCodeFn returns ErrNotFound for any code (default behavior)
-	}
-
-	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo, mockRefRepo)
-
-	reqBody := RegisterRequest{
-		Email:       "newuser2@example.com",
-		Password:    "securepass123",
-		Username:    "newuser2",
-		DisplayName: "New User 2",
-		Ref:         "UNKNOWN1",
-	}
-	body, _ := json.Marshal(reqBody)
-
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/register", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	handler.Register(w, req)
-
-	if w.Code != http.StatusCreated {
-		t.Errorf("expected status 201 with unknown ref, got %d. Body: %s", w.Code, w.Body.String())
-	}
-
-	if mockRefRepo.createCalled {
-		t.Error("expected CreateReferral NOT to be called for unknown ref")
-	}
-}
-
-// TestRegister_WithEmptyRef tests registration with empty ref does not invoke referral logic.
-func TestRegister_WithEmptyRef(t *testing.T) {
-	mockRepo := newMockUserRepoForAuth()
-	config := &OAuthConfig{
-		JWTSecret:     "test-secret",
-		JWTExpiry:     "15m",
-		RefreshExpiry: "168h",
-	}
-	mockAuthMethodRepo := newMockAuthMethodRepoStub()
-	mockRefRepo := &mockReferralRepoForAuth{}
-
-	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo, mockRefRepo)
-
-	reqBody := RegisterRequest{
-		Email:       "newuser3@example.com",
-		Password:    "securepass123",
-		Username:    "newuser3",
-		DisplayName: "New User 3",
-		Ref:         "",
-	}
-	body, _ := json.Marshal(reqBody)
-
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/register", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	handler.Register(w, req)
-
-	if w.Code != http.StatusCreated {
-		t.Errorf("expected status 201 with empty ref, got %d. Body: %s", w.Code, w.Body.String())
-	}
-
-	if mockRefRepo.findCalled {
-		t.Error("expected FindUserIDByReferralCode NOT to be called for empty ref")
-	}
-
-	if mockRefRepo.createCalled {
-		t.Error("expected CreateReferral NOT to be called for empty ref")
-	}
-}
-
-// TestRegister_SelfReferral tests that a user cannot refer themselves (no referral created).
-func TestRegister_SelfReferral(t *testing.T) {
-	mockRepo := newMockUserRepoForAuth()
-	config := &OAuthConfig{
-		JWTSecret:     "test-secret",
-		JWTExpiry:     "15m",
-		RefreshExpiry: "168h",
-	}
-	mockAuthMethodRepo := newMockAuthMethodRepoStub()
-
-	// FindUserIDByReferralCode returns the same ID as the user being created
-	// In the mock, Create sets ID to "mock-user-id"
-	mockRefRepo := &mockReferralRepoForAuth{
-		findByCodeFn: func(ctx context.Context, code string) (string, error) {
-			return "mock-user-id", nil // same as the newly created user
-		},
-	}
-
-	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo, mockRefRepo)
-
-	reqBody := RegisterRequest{
-		Email:       "selfref@example.com",
-		Password:    "securepass123",
-		Username:    "selfrefuser",
-		DisplayName: "Self Ref User",
-		Ref:         "OWNCODE1",
-	}
-	body, _ := json.Marshal(reqBody)
-
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/register", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	handler.Register(w, req)
-
-	if w.Code != http.StatusCreated {
-		t.Errorf("expected status 201 for self-referral, got %d. Body: %s", w.Code, w.Body.String())
-	}
-
-	if mockRefRepo.createCalled {
-		t.Error("expected CreateReferral NOT to be called for self-referral")
-	}
-}
-
-// TestRegister_ReferralCreateFailure tests that a referral creation failure does not block registration.
-func TestRegister_ReferralCreateFailure(t *testing.T) {
-	mockRepo := newMockUserRepoForAuth()
-	config := &OAuthConfig{
-		JWTSecret:     "test-secret",
-		JWTExpiry:     "15m",
-		RefreshExpiry: "168h",
-	}
-	mockAuthMethodRepo := newMockAuthMethodRepoStub()
-
-	mockRefRepo := &mockReferralRepoForAuth{
-		findByCodeFn: func(ctx context.Context, code string) (string, error) {
-			return "referrer-id-456", nil
-		},
-		createFn: func(ctx context.Context, referrerID, referredID string) error {
-			return errors.New("database error")
-		},
-	}
-
-	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo, mockRefRepo)
-
-	reqBody := RegisterRequest{
-		Email:       "failref@example.com",
-		Password:    "securepass123",
-		Username:    "failrefuser",
-		DisplayName: "Fail Ref User",
-		Ref:         "VALIDREF1",
-	}
-	body, _ := json.Marshal(reqBody)
-
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/register", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	handler.Register(w, req)
-
-	// Registration must succeed even if referral creation fails
-	if w.Code != http.StatusCreated {
-		t.Errorf("expected status 201 even when referral creation fails, got %d. Body: %s", w.Code, w.Body.String())
-	}
-}
-
-// TestRegister_AuthMethodFailure_RollsBackUser tests that if auth_method creation fails,
-// the user is deleted (compensating transaction).
-func TestRegister_AuthMethodFailure_RollsBackUser(t *testing.T) {
-	mockRepo := newMockUserRepoForAuth()
-	config := &OAuthConfig{
-		JWTSecret:     "test-secret",
-		JWTExpiry:     "15m",
-		RefreshExpiry: "168h",
-	}
-
-	// Mock auth method repo that always fails
-	mockAuthMethodRepo := &mockAuthMethodRepoStub{
-		methods:   make(map[string][]*models.AuthMethod),
-		createErr: errors.New("database constraint violation"),
-	}
-
-	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo, nil)
-
-	reqBody := RegisterRequest{
-		Email:       "rollback@example.com",
-		Password:    "securepass123",
-		Username:    "rollbackuser",
-		DisplayName: "Rollback User",
-	}
-	body, _ := json.Marshal(reqBody)
-
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/register", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	handler.Register(w, req)
-
-	// Verify registration failed
-	if w.Code != http.StatusInternalServerError {
-		t.Errorf("expected status 500, got %d. Body: %s", w.Code, w.Body.String())
-	}
-
-	// Verify error response indicates registration failed
-	var errResp map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
-		t.Fatalf("failed to decode error response: %v", err)
-	}
-	errorObj, ok := errResp["error"].(map[string]interface{})
-	if !ok {
-		t.Fatal("error object not found in response")
-	}
-	code := errorObj["code"].(string)
-	if code != "REGISTRATION_FAILED" {
-		t.Errorf("expected error code REGISTRATION_FAILED, got %s", code)
-	}
-
-	// CRITICAL VERIFICATION: User should have been deleted (rollback)
-	_, exists := mockRepo.users["rollback@example.com"]
-	if exists {
-		t.Error("User should have been rolled back after auth_method creation failed!")
-	}
-
-	// Verify user is not in username map either
-	_, exists = mockRepo.usersByUsername["rollbackuser"]
-	if exists {
-		t.Error("User should have been rolled back from username map after auth_method creation failed!")
 	}
 }

@@ -94,8 +94,8 @@ func TestCreatePost_ModerationStateNotSettableByAuthor(t *testing.T) {
 	handler := NewPostsHandler(repo)
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/posts", bytes.NewReader(canonicalBody(map[string]interface{}{
-		"visibility":       "public",
-		"moderation_state": "approved",
+		"visibility":        "public",
+		"moderation_state":  "approved",
 		"publication_state": "published",
 	})))
 	req.Header.Set("Content-Type", "application/json")

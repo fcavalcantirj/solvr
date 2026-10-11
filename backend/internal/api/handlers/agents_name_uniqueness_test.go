@@ -15,9 +15,9 @@ import (
 // DuplicateNameErrorResponse represents the 409 response with suggestions.
 type DuplicateNameErrorResponse struct {
 	Error struct {
-		Code         string   `json:"code"`
-		Message      string   `json:"message"`
-		Suggestions  []string `json:"suggestions,omitempty"`
+		Code        string   `json:"code"`
+		Message     string   `json:"message"`
+		Suggestions []string `json:"suggestions,omitempty"`
 	} `json:"error"`
 }
 

@@ -19,7 +19,7 @@ type MockPinRepo struct {
 	err   error
 }
 
-func (m *MockPinRepo) Create(ctx context.Context, pin *models.Pin) error   { return nil }
+func (m *MockPinRepo) Create(ctx context.Context, pin *models.Pin) error { return nil }
 func (m *MockPinRepo) GetByID(ctx context.Context, id string) (*models.Pin, error) {
 	return nil, nil
 }

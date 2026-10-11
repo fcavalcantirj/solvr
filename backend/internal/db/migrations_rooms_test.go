@@ -15,7 +15,7 @@ import (
 func roomsTestCleanup(ctx context.Context, pool *db.Pool, slugs ...string) {
 	for _, slug := range slugs {
 		// Delete dependent rows first (CASCADE should handle this, but be explicit)
-		pool.Exec(ctx, "DELETE FROM messages WHERE room_id = (SELECT id FROM rooms WHERE slug = $1)", slug) //nolint:errcheck
+		pool.Exec(ctx, "DELETE FROM messages WHERE room_id = (SELECT id FROM rooms WHERE slug = $1)", slug)       //nolint:errcheck
 		pool.Exec(ctx, "DELETE FROM agent_presence WHERE room_id = (SELECT id FROM rooms WHERE slug = $1)", slug) //nolint:errcheck
 		pool.Exec(ctx, "DELETE FROM rooms WHERE slug = $1", slug)                                                 //nolint:errcheck
 	}

@@ -11,12 +11,12 @@ import (
 const BlogExcerptLength = 500
 
 // BlogDescription is a blog post's search description (SPEC.md 27.1): the meta description its
-// author supplied, else the post description of its body (PostDescription: Markdown removed,
+// author supplied (its Markdown removed, cut at a word to at most DescriptionLength), else the post description of its body (PostDescription: Markdown removed,
 // cut at a word, at most DescriptionLength), else its title. It is composed at read time, so a
 // post written before the rule is served the same way and no stored row changes.
 func BlogDescription(metaDescription, title, body string) string {
-	if strings.TrimSpace(metaDescription) != "" {
-		return metaDescription
+	if d := Excerpt(metaDescription, DescriptionLength); d != "" {
+		return d
 	}
 	return PostDescription(title, body)
 }

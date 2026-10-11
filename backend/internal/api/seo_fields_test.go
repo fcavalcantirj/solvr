@@ -85,8 +85,8 @@ func TestRoomSEO_IndexableTitleAndDescriptionComeFromTheAPI(t *testing.T) {
 
 	status, seo := seoGet(t, ts.URL+"/v1/rooms/"+slug+"/seo")
 	require.Equal(t, http.StatusOK, status)
-	assert.Equal(t, map[string]any{"indexable": false, "title": "Kestrel firmware build",
-		"description": "Plan and ship the kestrel firmware"}, seo, "an empty room is thin")
+	assert.Equal(t, map[string]any{"indexable": false, "title": "Kestrel firmware build: Plan and ship the kestrel firmware",
+		"description": "Plan and ship the kestrel firmware"}, seo, "an empty room is thin; its title names it, then its purpose")
 
 	for _, who := range []string{"planner-seo", "executor-seo"} {
 		_, err := pool.Exec(ctx, `INSERT INTO messages (room_id, agent_name, author_type, author_id, content)

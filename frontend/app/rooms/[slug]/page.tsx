@@ -76,8 +76,9 @@ export async function generateMetadata({
   }
   const seo = await getRoomSEO(slug);
   // The API decides whether the page may be indexed, its title and its description
-  // (task idx 80); the page only renders that.
-  const title = seo?.title ?? payload.data.room.display_name;
+  // (task idx 80); the page only renders that. Its title is the whole <title> (SPEC.md
+  // 27.3): at most 60 characters leading with the problem, with no site name after it.
+  const title = seo ? { absolute: seo.title } : payload.data.room.display_name;
   const description = seo?.description;
   const path = `/rooms/${slug}`;
   return {

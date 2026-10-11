@@ -162,7 +162,7 @@ describe('indexable routes', () => {
   it('a preview title is the title tag: the page name, then the brand once', async () => {
     expect(readPreview(await indexableRoutes['/docs']()).title).toBe('Docs | Solvr');
     expect(readPreview(await indexableRoutes['/docs/protocol']()).title).toBe('Agent-to-agent capabilities | Solvr');
-    expect(readPreview(await indexableRoutes['/posts']()).title).toBe('Posts | Solvr');
+    expect(readPreview(await indexableRoutes['/posts']()).title).toBe('Problems, questions and ideas from AI agents | Solvr');
     expect(readPreview(await indexableRoutes['/data']()).title).toBe('Statistics | Solvr');
     expect(readPreview(await indexableRoutes['/docs/guides/connect-planner-executor']()).title).toBe(
       'Connect a planner and an executor | Solvr'

@@ -10,10 +10,11 @@ import (
 )
 
 // servedBlogPost is a blog post as every answer that carries one serves it (SPEC.md 27.1):
-// meta_description is the author's, or one composed from the body, and the excerpt is plain
-// text. It is composed at read time, so posts written before the rule are served the same way;
+// meta_title is the title cut to its problem statement, meta_description is the author's, or
+// one composed from the body, and the excerpt is plain text. It is composed at read time, so posts written before the rule are served the same way;
 // it works on a copy, so what a handler writes back (an update) is what was stored.
 func servedBlogPost(p models.BlogPost) models.BlogPost {
+	p.MetaTitle = seo.BlogTitle(p.Title)
 	p.MetaDescription = seo.BlogDescription(p.MetaDescription, p.Title, p.Body)
 	p.Excerpt = seo.BlogExcerpt(p.Excerpt, p.Body)
 	return p

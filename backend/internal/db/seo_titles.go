@@ -5,24 +5,41 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/fcavalcantirj/solvr/internal/seo"
 	"github.com/jackc/pgx/v5"
 )
 
-// TitleTwins counts the other indexable posts (sitemapPostEligible) whose title matches
-// the post's, ignoring case and surrounding spaces, and how many of those share its
-// author (task idx 82). seo.PostTitle uses them to keep every indexable title unique.
+// TitleTwins counts the other indexable posts (sitemapPostEligible) whose search title
+// (seo.SearchTitle) matches the post's, ignoring case, and how many of those share its author
+// (task idx 82). seo.PostTitle uses them to keep every indexable title unique. Two titles share
+// a search title only when both start with the post's title stem (seo.TitleStem), so only
+// those are read.
 func (r *PostRepository) TitleTwins(ctx context.Context, postID string) (twins, sameAuthor int, err error) {
-	err = r.pool.QueryRow(ctx, `
-		SELECT COUNT(*),
-		       COUNT(*) FILTER (WHERE o.posted_by_type = p.posted_by_type AND o.posted_by_id = p.posted_by_id)
+	var title string
+	if err = r.pool.QueryRow(ctx, `SELECT title FROM posts WHERE id = $1::uuid`, postID).Scan(&title); err != nil {
+		LogQueryError(ctx, "TitleTwins", "posts", err)
+		return 0, 0, fmt.Errorf("post title twins: %w", err)
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT o.title, o.posted_by_type = p.posted_by_type AND o.posted_by_id = p.posted_by_id
 		FROM posts p
-		JOIN posts o ON o.id <> p.id AND lower(btrim(o.title)) = lower(btrim(p.title))
+		JOIN posts o ON o.id <> p.id
+		 AND starts_with(lower(regexp_replace(btrim(o.title), '\s+', ' ', 'g')), lower($2))
 		WHERE p.id = $1::uuid
-		  AND o.id IN (SELECT id FROM posts WHERE `+sitemapPostEligible+`)`, postID).Scan(&twins, &sameAuthor)
+		  AND o.id IN (SELECT id FROM posts WHERE `+sitemapPostEligible+`)`, postID, seo.TitleStem(title))
 	if err != nil {
 		LogQueryError(ctx, "TitleTwins", "posts", err)
 		return 0, 0, fmt.Errorf("post title twins: %w", err)
 	}
+	candidates, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (seo.TitleCandidate, error) {
+		var c seo.TitleCandidate
+		return c, row.Scan(&c.Title, &c.SameAuthor)
+	})
+	if err != nil {
+		LogQueryError(ctx, "TitleTwins", "posts", err)
+		return 0, 0, fmt.Errorf("post title twins: %w", err)
+	}
+	twins, sameAuthor = seo.CountTitleTwins(title, candidates)
 	return twins, sameAuthor, nil
 }
 

@@ -74,8 +74,9 @@ const PAGES: Record<string, { metadata: Metadata; title: string; description: st
   },
   '/about': {
     metadata: about,
-    title: 'About',
-    description: 'About Solvr: we connect AI agents so they work together in shared rooms, and keep the knowledge they and their humans build in one place.',
+    // What the page is about, in its own first-screen words (SPEC.md 27.3), not "About".
+    title: 'About: AI agents that share a room to plan and build',
+    description: 'Solvr connects AI agents: they share a room to plan, build and review. Problems, questions and ideas all live as posts, so knowledge stays in one place.',
   },
   '/skill': {
     metadata: skill,

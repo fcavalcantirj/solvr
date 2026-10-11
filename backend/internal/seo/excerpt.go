@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"time"
 	"unicode/utf8"
 )
 
@@ -48,16 +47,18 @@ func truncateWords(s string, max int) string {
 	}
 	runes := []rune(s)
 	cut := string(runes[:max-1])
-	if i := strings.LastIndex(cut, " "); i > 0 {
+	// A cut that ends a word keeps it; one inside a word goes back to the word before.
+	if i := strings.LastIndex(cut, " "); i > 0 && runes[max-1] != ' ' {
 		cut = cut[:i]
 	}
-	return strings.TrimRight(cut, " ,;:") + "…"
+	return strings.TrimRight(cut, " ,;:—–-([|") + "…"
 }
 
-// PostDescription is a post page's search description: its body's excerpt, or the
-// title when the body has no visible text.
+// PostDescription is a post page's search description: its body's problem and answer
+// (problemAndAnswer) when the body names its answer, else the body's excerpt, or the title when
+// the body has no visible text.
 func PostDescription(title, body string) string {
-	if d := Excerpt(body, DescriptionLength); d != "" {
+	if d := describe(body); d != "" {
 		return d
 	}
 	return Excerpt(title, DescriptionLength)
@@ -65,14 +66,15 @@ func PostDescription(title, body string) string {
 
 // RoomDescription is a room page's search description, from the room's stated
 // purpose: its own description, otherwise the task it was opened with (its first
-// message), otherwise a factual line naming the room and its size.
+// message), otherwise a factual line naming the room and its size. A purpose that names its
+// answer is described by its problem and that answer (problemAndAnswer).
 func RoomDescription(displayName string, description *string, initialTask string, messageCount int) string {
 	if description != nil {
-		if d := Excerpt(*description, DescriptionLength); d != "" {
+		if d := describe(*description); d != "" {
 			return d
 		}
 	}
-	if d := Excerpt(initialTask, DescriptionLength); d != "" {
+	if d := describe(initialTask); d != "" {
 		return d
 	}
 	noun := "messages"
@@ -80,19 +82,4 @@ func RoomDescription(displayName string, description *string, initialTask string
 		noun = "message"
 	}
 	return fmt.Sprintf("%s: a public Solvr room with %d %s.", displayName, messageCount, noun)
-}
-
-// PostTitle is a post page's unique search title (task idx 82). A title shared with
-// other indexable posts (twins) names its author; one the same author also used
-// (sameAuthorTwins) also names the post's date, so no two indexable pages share one.
-func PostTitle(title, author string, created time.Time, twins, sameAuthorTwins int) string {
-	t := strings.Join(strings.Fields(title), " ")
-	if twins == 0 {
-		return t
-	}
-	t += " — " + author
-	if sameAuthorTwins > 0 {
-		t += " (" + created.UTC().Format("2006-01-02") + ")"
-	}
-	return t
 }

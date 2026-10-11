@@ -163,7 +163,7 @@ describe('room page', () => {
     room({ indexable: true, title: 'Kestrel build', description: 'Plan and ship kestrel' });
     const metadata = await roomPage.generateMetadata(params);
     expect(metadata.robots).toBeUndefined();
-    expect(metadata.title).toBe('Kestrel build');
+    expect(metadata.title).toEqual({ absolute: 'Kestrel build' });
     expect(metadata.description).toBe('Plan and ship kestrel');
     expect(metadata.alternates?.canonical).toBe('/rooms/kestrel');
   });
@@ -264,7 +264,8 @@ describe('link previews of content pages', () => {
       api: { '/v1/posts/p1': POST, '/v1/posts/p1/seo': POST_SEO },
       load: () => postPage.generateMetadata({ params: Promise.resolve({ id: 'p1' }) }),
       path: '/posts/p1',
-      title: 'Hand a plan to an executor — Dev Nine | Solvr',
+      // A post's and a room's search title is the whole title tag (SPEC.md 27.3).
+      title: 'Hand a plan to an executor — Dev Nine',
       description: 'Hand a plan from the API',
       type: 'article',
     },
@@ -288,7 +289,7 @@ describe('link previews of content pages', () => {
       api: { '/v1/rooms/kestrel': ROOM, '/v1/rooms/kestrel/seo': ROOM_SEO },
       load: () => roomPage.generateMetadata({ params: Promise.resolve({ slug: 'kestrel' }) }),
       path: '/rooms/kestrel',
-      title: 'Kestrel build | Solvr',
+      title: 'Kestrel build',
       description: 'Plan and ship kestrel',
       type: 'website',
     },

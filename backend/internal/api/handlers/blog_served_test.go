@@ -70,6 +70,23 @@ func TestGetBlogPost_KeepsTheAuthorsOwnDescription(t *testing.T) {
 	assert.Equal(t, "An own excerpt", data["excerpt"])
 }
 
+// SPEC.md 27.3: the blog page's title is meta_title, the post's title cut to its problem
+// statement in at most 60 characters, composed at read time like meta_description.
+func TestGetBlogPost_ServesASearchTitle(t *testing.T) {
+	repo := NewMockBlogPostRepository()
+	post := servedFixturePost()
+	post.Title = "What AI provider APIs actually expose for usage monitoring (Claude, ChatGPT/Codex, OpenRouter, Groq)"
+	repo.SetPost(&post)
+	r := chi.NewRouter()
+	r.Get("/blog/{slug}", NewBlogHandler(repo).GetBySlug)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/blog/served", nil))
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	data := blogData(t, w)
+	assert.Equal(t, "What AI provider APIs actually expose for usage monitoring", data["meta_title"])
+	assert.Equal(t, post.Title, data["title"], "the title is served as written")
+}
+
 func TestListAndFeatured_ServeCleanText(t *testing.T) {
 	repo := NewMockBlogPostRepository()
 	post := servedFixturePost()
@@ -87,6 +104,7 @@ func TestListAndFeatured_ServeCleanText(t *testing.T) {
 	require.Len(t, list.Data, 1)
 	assert.Equal(t, servedDescription, list.Data[0]["meta_description"])
 	assert.Equal(t, servedDescription, list.Data[0]["excerpt"])
+	assert.Equal(t, "Served Blog Post Title", list.Data[0]["meta_title"])
 
 	w = httptest.NewRecorder()
 	h.GetFeatured(w, httptest.NewRequest(http.MethodGet, "/v1/blog/featured", nil))
@@ -109,6 +127,7 @@ func TestUpdateBlogPost_StoresNoComposedText(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	require.NotNil(t, repo.updatedPost)
 	assert.Equal(t, "", repo.updatedPost.MetaDescription)
+	assert.Equal(t, "", repo.updatedPost.MetaTitle)
 	assert.Equal(t, models.GenerateExcerpt(servedBody, 500), repo.updatedPost.Excerpt)
 	assert.Equal(t, servedDescription, blogData(t, w)["meta_description"], "the answer is served like a read")
 }

@@ -31,14 +31,17 @@ export async function generateMetadata({
   // The API serves every post's description (SPEC.md 27.1): the author's meta description,
   // or one it composed from the body, Markdown removed and cut at a word. The page derives none.
   const description = post.meta_description;
+  // The API's search title is the whole <title> (SPEC.md 27.3): the post's title cut to at
+  // most 60 characters, with no site name after it.
+  const title = post.meta_title ? { absolute: post.meta_title } : post.title;
 
   const path = `/blog/${slug}`;
   return {
-    title: post.title,
+    title,
     description,
     alternates: { canonical: path },
     ...linkPreview({
-      title: post.title,
+      title,
       description,
       path,
       type: 'article',

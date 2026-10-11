@@ -51,7 +51,7 @@ describe('post page caching', () => {
       expect(init).toMatchObject({ cache: 'no-store' });
       expect(init?.next?.revalidate).toBeUndefined();
     }
-    expect(metadata.title).toBe('Listed title');
+    expect(metadata.title).toEqual({ absolute: 'Listed title' });
   });
 
   it('publishes no title or description once the API refuses the post', async () => {

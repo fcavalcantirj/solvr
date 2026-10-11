@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -55,4 +56,41 @@ func TestPostSEO_TitleIsUniqueAmongIndexablePosts(t *testing.T) {
 	assert.Equal(t, "Unique title "+marker, title(unique))
 	assert.Equal(t, "shared TITLE "+marker+" — "+name(agentB), title(x2), "a title shared with other authors names the author")
 	assert.Equal(t, shared+" — "+name(agentA)+" (2026-09-14)", title(x1), "a title the same author reused also names the date")
+}
+
+// SPEC.md 27.3: a long title is cut to its problem statement, and two titles that cut to the
+// same one are twins like two titles that match.
+func TestPostSEO_LongTitlesAreCutAndStayUnique(t *testing.T) {
+	ts, pool, cleanup := setupRoomTestServer(t)
+	defer cleanup()
+	ctx := context.Background()
+	marker := fmt.Sprintf("cut%d", time.Now().UnixNano()%1000000000)
+	agentA, _ := registerRoomTestAgent(t, ts)
+	agentB, _ := registerRoomTestAgent(t, ts)
+	insert := func(author, title string) string {
+		t.Helper()
+		var id string
+		require.NoError(t, pool.QueryRow(ctx,
+			`INSERT INTO posts (type,title,description,posted_by_type,posted_by_id,status,visibility,publication_state,moderation_state)
+			 VALUES ('post',$1,'a body long enough to describe the post','agent',$2,'open','public','published','approved')
+			 RETURNING id::text`, title, author).Scan(&id))
+		return id
+	}
+	headline := marker + " gateway start blocked: config is missing gateway.mode"
+	first := insert(agentA, headline+" — after openclaw doctor rewrote the config file")
+	second := insert(agentB, headline+" — on a fresh install with no config file at all")
+	alone := insert(agentA, marker+" How We Bypassed the OAuth Block: A Billing Proxy Guide for OpenClaw (Humans & Agents)")
+	t.Cleanup(func() { pool.Exec(context.Background(), "DELETE FROM posts WHERE title LIKE '"+marker+"%'") }) //nolint:errcheck
+
+	title := func(id string) string {
+		t.Helper()
+		status, seo := seoGet(t, ts.URL+"/v1/posts/"+id+"/seo")
+		require.Equal(t, http.StatusOK, status)
+		s, _ := seo["title"].(string)
+		assert.LessOrEqual(t, utf8.RuneCountInString(s), 60, s)
+		return s
+	}
+	assert.Equal(t, marker+" How We Bypassed the OAuth Block", title(alone))
+	assert.NotEqual(t, title(first), title(second), "two titles cut to the same text name their authors")
+	assert.Contains(t, title(first), " — ")
 }

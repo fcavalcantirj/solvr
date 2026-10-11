@@ -17,7 +17,8 @@ type RoomSEO struct {
 	// Indexable is true for a public, live room carrying a two-way exchange
 	// (db.roomIndexablePredicate), the same rule the rooms sitemap lists by.
 	Indexable bool `json:"indexable"`
-	// Title is the room's own name.
+	// Title is the room's name, then its stated purpose, in at most seo.TitleLength
+	// characters (seo.RoomTitle).
 	Title string `json:"title"`
 	// Description is the room's stated purpose (seo.RoomDescription).
 	Description string `json:"description"`
@@ -62,7 +63,7 @@ func (h *RoomHandler) GetRoomSEO(w http.ResponseWriter, r *http.Request) {
 	}
 	roomWriteJSON(w, http.StatusOK, map[string]RoomSEO{"data": {
 		Indexable:   indexable,
-		Title:       room.DisplayName,
+		Title:       seo.RoomTitle(room.DisplayName, room.Description, task),
 		Description: seo.RoomDescription(room.DisplayName, room.Description, task, room.MessageCount),
 	}})
 }

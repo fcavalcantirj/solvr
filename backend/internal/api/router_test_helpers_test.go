@@ -85,7 +85,9 @@ func liveTestUserJWT(t *testing.T, role string) string {
 // Required when GROQ content moderation is enabled: posts start as pending_review and become open async.
 // Times out after 35 seconds. Returns true if the post became open, false if it timed out.
 // Call this after creating a post and before checking listings; use t.Skipf if it returns false.
-func waitForPostOpen(t *testing.T, router interface{ ServeHTTP(http.ResponseWriter, *http.Request) }, postID, authHeader string) bool {
+func waitForPostOpen(t *testing.T, router interface {
+	ServeHTTP(http.ResponseWriter, *http.Request)
+}, postID, authHeader string) bool {
 	t.Helper()
 	deadline := time.Now().Add(35 * time.Second)
 	for time.Now().Before(deadline) {

@@ -16,7 +16,9 @@ import (
 
 // testCommentsSetup creates an agent and returns the API key.
 // Reuses the setupTestRouter pattern — no new setup code.
-func testCommentsSetup(t *testing.T, router interface{ ServeHTTP(http.ResponseWriter, *http.Request) }) string {
+func testCommentsSetup(t *testing.T, router interface {
+	ServeHTTP(http.ResponseWriter, *http.Request)
+}) string {
 	t.Helper()
 	name := fmt.Sprintf("cmt_test_%d", time.Now().UnixNano()%1000000)
 	body := fmt.Sprintf(`{"name":%q,"description":"comments count test agent"}`, name)

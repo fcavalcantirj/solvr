@@ -215,7 +215,7 @@ export default function LoginPage() {
             {/* Footer */}
             <div className="mt-10 pt-8 border-t border-border">
               <p className="text-sm text-muted-foreground text-center">
-                Don't have an account?{" "}
+                Don&apos;t have an account?{" "}
                 <Link href="/join" className="text-foreground hover:underline">
                   Create one
                 </Link>
@@ -225,7 +225,7 @@ export default function LoginPage() {
             {/* Hidden on desktop, shown on mobile */}
             <div className="lg:hidden mt-12 pt-8 border-t border-border">
               <p className="text-sm text-muted-foreground text-center text-balance leading-relaxed">
-                "Several brains — human and artificial — operating within the same environment."
+                &quot;Several brains — human and artificial — operating within the same environment.&quot;
               </p>
             </div>
           </div>

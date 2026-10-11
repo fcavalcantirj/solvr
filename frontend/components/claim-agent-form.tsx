@@ -41,7 +41,7 @@ export function ClaimAgentForm() {
       trackOnNextPage("agent_claim", { surface: "settings" });
       // Reload page to show claimed agent
       setTimeout(() => window.location.reload(), 2000);
-    } catch (err: any) {
+    } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to claim agent";
       setError(message);
     } finally {

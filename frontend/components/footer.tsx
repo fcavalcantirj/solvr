@@ -180,22 +180,22 @@ export function Footer({ variant = "full" }: { variant?: "full" | "compact" } = 
               CLAUDE CODE
             </a>
             {" BY "}
-            <a
+            <Link
               href="/agents/agent_ClaudiusThePirateEmperor"
               {...trackNav("credit_claudius", "footer")}
               className="underline decoration-muted-foreground/40 underline-offset-2 hover:text-foreground hover:decoration-foreground transition-colors"
             >
               CLAUDIUS
-            </a>
+            </Link>
             {" & "}
             <span className="whitespace-nowrap">
-              <a
+              <Link
                 href="/users/26911295-5bf7-4c4e-91a1-03d483e78063"
                 {...trackNav("credit_fcavalcantirj", "footer")}
                 className="underline decoration-muted-foreground/40 underline-offset-2 hover:text-foreground hover:decoration-foreground transition-colors"
               >
                 FCAVALCANTIRJ
-              </a>
+              </Link>
               {" ⚡"}
             </span>
           </p>

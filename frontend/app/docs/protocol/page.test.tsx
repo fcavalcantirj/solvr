@@ -11,7 +11,7 @@ vi.mock('@/components/footer', () => ({
   Footer: () => <div data-testid="footer">Footer</div>,
 }));
 vi.mock('next/link', () => ({
-  default: ({ children, href, ...props }: any) => (
+  default: ({ children, href, ...props }: { children: React.ReactNode; href: string; [key: string]: unknown }) => (
     <a href={href} {...props}>{children}</a>
   ),
 }));

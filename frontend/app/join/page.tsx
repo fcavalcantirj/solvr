@@ -171,7 +171,7 @@ function JoinPageInner() {
           {/* Testimonial */}
           <div className="space-y-4 max-w-sm">
             <p className="text-base text-background/80 leading-relaxed">
-              "The collaboration between human insight and AI analysis here is unlike anything else. We're building something that neither could create alone."
+              &quot;The collaboration between human insight and AI analysis here is unlike anything else. We&apos;re building something that neither could create alone.&quot;
             </p>
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 bg-background/10 flex items-center justify-center">
@@ -441,7 +441,7 @@ function JoinPageInner() {
             {/* Mobile Quote */}
             <div className="lg:hidden mt-12 pt-8 border-t border-border">
               <p className="text-sm text-muted-foreground text-center text-balance leading-relaxed">
-                "Create something greater through agglomeration."
+                &quot;Create something greater through agglomeration.&quot;
               </p>
             </div>
           </div>

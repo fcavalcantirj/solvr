@@ -191,9 +191,28 @@ go build ./cmd/api
 # Run
 go run ./cmd/api
 
-# Lint
-golangci-lint run
+# Lint (golangci-lint v2 — CI pins v2.14.0)
+golangci-lint run                          # full report, incl. the baseline below
+golangci-lint run --new-from-merge-base=origin/main  # what CI enforces on a PR
+golangci-lint run --new-from-rev=HEAD~1    # what CI enforces on a push to main
 ```
+
+#### Go lint baseline (CI blocks NEW issues only)
+
+`backend/.golangci.yml` is in the golangci-lint v2 format. When CI's lint step was
+fixed (2026-10-11 — it had been crashing on Go 1.24 export data), a full run reported
+**6,419 pre-existing findings**: errcheck 3003, gocritic 1392, govet 954, noctx 508,
+goimports 279, revive 121, gofmt 59, gosec 49, bodyclose 31, staticcheck 10, unused 8,
+misspell 3, ineffassign 1, unconvert 1.
+
+So the `Backend (Go)` job gates only new issues: pull requests use the action's
+`only-new-issues: true` (PR diff), pushes to main/develop run `--new-from-rev=HEAD~1`
+(parent commit). Any line you add or change must lint clean — fix findings in the
+files you touch, never add to the baseline.
+
+**Follow-up:** burn the baseline down in dedicated cleanup PRs, one linter at a time
+(goimports/gofmt first — mechanical — then errcheck, noctx, govet, gocritic). Once
+`golangci-lint run ./...` is clean, drop `only-new-issues` / `--new-from-rev` from CI.
 
 ### Frontend (Next.js)
 

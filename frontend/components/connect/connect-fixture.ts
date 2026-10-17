@@ -59,7 +59,7 @@ function sentence(f: Filling, intent: string, visibility: 'public' | 'private', 
     { kind: 'text', text: ', and ' },
     { kind: 'handoff', text: 'answer me with a prompt for the ' },
     { kind: 'role', text: f.b, side: 'b' },
-    { kind: 'text', text: ' to install the Solvr skill and join your room, ' },
+    { kind: 'text', text: ' to learn Solvr from the same link and join your room, ' },
     { kind: 'text', text: f.job },
     { kind: 'text', text: '.' },
   ];
@@ -86,7 +86,7 @@ function start(selected: string, intent: string, chosen?: 'public' | 'private', 
   const active = presets.find((p) => p.selected)!;
   const visibility = active.prompt.segments.find((s) => s.kind === 'visibility')!.value!;
   return {
-    instruction_version: '2.1',
+    instruction_version: '2.2',
     heading: 'Connect your agents',
     intent_field: { label: 'What should they do?', placeholder: 'what should they do?', max_chars: 200 },
     selected: { intent, preset: selected, visibility, ...(flowId ? { flow_id: flowId } : {}) },

@@ -933,6 +933,9 @@ GET /search
                    the caller's own "answered?" cutoff. Unlike min_similarity it does NOT
                    filter results; it only decides confident_match. Absent = server default
                    (SEARCH_CONFIDENCE_THRESHOLD). See §22.7.
+    entry      (optional) typed|link|api (default: api). How the term was entered: typed by a
+                   person, or the term a page opened with (link). Stored with the search; a
+                   search entered by link is not counted as a search (§27.6). Another value: 400.
 
   Example: GET /search?q=async+postgres+race+condition&status=open
   Example: GET /search?q=how+to+fix+X&min_similarity=0.85   (decidable "answered?" gate)
@@ -2901,6 +2904,10 @@ vocabulary includes "monthly active participants", "participant goal" and "stage
 Response envelope: `{"data": {...}}`. Errors: `{"error": {"code", "message"}}` (401 `MISSING_API_KEY`, 403
 `INVALID_API_KEY`, 503 `ADMIN_NOT_CONFIGURED`, 400 for a malformed parameter).
 
+Every growth report counts funnel steps and searches through `counted_funnel_events` and `counted_search_queries`
+(27.6, 2026-10-17): the rows classed `crawler` or `automation`, and the searches a link brought, are left out of
+every figure here. `GET /admin/traffic/summary` (27.6) shows what was left out, and why.
+
 ### GET /admin/growth/participants?end=<RFC3339>
 
 Monthly active participants over the rolling 30 days before `end` (default: now), plus the 30 days before those
@@ -3114,6 +3121,11 @@ Response: { "data": {
   connected stream. The load harness (`backend/cmd/loadtest`) measures it on a laptop.
 - **Queue lag**: the age of the oldest pending webhook delivery whose next attempt is due; above 5
   minutes it is `alarm`, and the 5-minute OpsAlarmJob logs a WARN. Paging is UAT.
+- **Search p95** (`external_model`) reads `counted_search_queries.duration_ms` (27.6): the searches
+  classed crawler or automation, and those a link brought, are not in it.
+- **The request log** also stores, since 2026-10-17, each answer's `error_code` and the client's
+  `ua_class` (27.6), and `GET /admin/traffic/summary` reads them. The TrafficClassifyJob runs every 15
+  minutes (27.6).
 
 ### Status page (`GET /v1/status`)
 
@@ -5736,7 +5748,7 @@ back. Nothing is added to the sentence.
 
   `request_mode` is at most 20 characters and `user_agent` at most 200 (characters, not bytes;
   else 400); both are read for this decision and never stored. The step stores `flow_id`,
-  `entry_surface` and the actor, nothing else. (The API's request log keeps the body of every
+  `entry_surface`, the actor and its traffic class and reason (27.6), nothing else. (The API's request log keeps the body of every
   non-GET request it answers with a 4xx, redacted for secrets only. A refused report is one,
   so its `user_agent` is in that log line; an accepted report leaves no trace of it.)
 - The skill ("Start a room") tells the agent: when the skill link your prompt gave you carries
@@ -5753,6 +5765,15 @@ back. Nothing is added to the sentence.
 - Known gap: the home page's three use-case cards and the workflow guides show the example
   sentences of `GET /v1/connect/examples`, which carry no code, so a room that came from one of
   them stays unattributed.
+
+**Who a step came from (27.6, 2026-10-17).** Every client-reported step stores `traffic_class` and
+`traffic_reason`. A browser step is classified from its own request (`User-Agent`, `Sec-CH-UA`,
+`Sec-Fetch-Mode`); a `skill_fetched` step from the request for the skill as the web server reports it
+(`request_mode`, `user_agent`), never from the report request itself. The headers are read and not
+stored. Server steps (`room_created`, `participant_joined`, `first_two_way_exchange`) are confirmed
+actions and keep `unclassified`. The behavioural rules (27.6) may later flag a post-sourced start and
+its agent fetch as `automation`. Every report in this part reads `counted_funnel_events`, which leaves
+out the steps classed `crawler` or `automation`.
 
 **Operator report (activation).** `GET /admin/activation-analytics?window=24h|7d|30d` (default
 30d; `X-Admin-API-Key`, uncached, in `OperatorReports`) reports rooms created and activated,
@@ -6792,11 +6813,128 @@ Publishing pages does not certify crawling, indexing, traffic or activation.
 **`scripts/seo/weekly-baseline.sh`** saves the dated baseline JSON. The operator runs it with
 `ADMIN_API_KEY` from their own environment.
 
+### Traffic classes (2026-10-17)
+
+Who a counted row came from: a person, an agent, a crawler or automation. Rows are **flagged, never
+deleted**, and one counting rule, in one place, leaves the flagged ones out of every figure.
+
+**Columns** (migration 000146). `funnel_events` and `search_queries` gain `traffic_class`
+(`unclassified`, `human`, `agent`, `crawler`, `automation`; default `unclassified`) and
+`traffic_reason`. `search_queries` gains `entry` (`typed`, `link`, `api`, or NULL before it was
+recorded). `api_request_events` gains `error_code` and `ua_class`. `page_view_events` is new.
+
+**At ingest** (`backend/internal/traffic`, pure Go). `Classify` applies these rules in order; the first
+that matches decides, and its reason is stored:
+
+| # | Signal | Class | Reason |
+|---|---|---|---|
+| 1 | a declared bot token in the user agent (the ONE list, `traffic.BotTokens`, also the skill fetch's) | crawler | `declared_bot` |
+| 2 | HeadlessChrome, Lighthouse, PTST, PhantomJS, Puppeteer, Playwright or Selenium in the user agent or `Sec-CH-UA` | automation | `headless_marker` |
+| 3 | Safari `Version/26` or later with an `iPhone OS` below 18 (iOS 26 itself reports a frozen `18_6`) | automation | `impossible_ua` |
+| 4 | an agent's credential | agent | `agent_credential` |
+| 4 | an assistant fetching for its person: Claude-User, ChatGPT-User, Perplexity-User, claude-code | agent | `assistant_ua` |
+| 5 | a page view or a browser step without `Sec-Fetch-Mode` | automation | `no_browser_headers` |
+| 6 | a browser user agent with fetch headers | human | `browser` |
+| 7 | anything else, on a skill fetch or the API | agent | `http_client` |
+
+- A browser funnel step is judged by its own request, a skill fetch by the request for the skill (as the
+  web server reports it), a search by its request, a page view by what the web server reports.
+- A stored row kept no fetch headers: for it rule 5 is skipped and a browser user agent alone is `human`.
+- Server funnel steps are confirmed actions and keep `unclassified`.
+
+**Behavioural rules** (`backend/internal/db/traffic_rules.go`). A connection start can't be judged at
+ingest: its skill fetch arrives 30-59 s later and a copy may come later still. These judge rows by how
+they behaved together:
+
+- **B1 `fetched_without_copy`**: a flow with a post-sourced browser `connection_started`, a
+  `skill_fetched` with `entry_surface` `agent_fetch` and no `starter_prompt_copied`. The start (when
+  `human` or `unclassified`) and the fetch (when `agent` or `unclassified`) become `automation`.
+- **B2 `connect_burst`**: five or more uncopied post-sourced starts in one UTC clock hour, whatever their
+  class. Each of them that is `human` or `unclassified` becomes `automation`.
+- **B3 `repeated_query`**: one `ip_address` sending one `query_normalized` twenty or more times in one UTC
+  clock hour. Each of those searches that is `human`, `agent` or `unclassified` becomes `automation`.
+
+A run covers a window whose start is rounded down to its clock hour, in one transaction. B1 and B2 are
+undone first for every row of the window they flagged, then applied again, so a copy that arrived after a
+flag gives the flow back: the start to `human`, the fetch to `agent`, with no reason. B3 never undoes: a
+clock hour's count of a query only grows. A run also classifies the window's `unclassified` searches from
+their stored user agent. A second run over the same rows changes nothing.
+
+- **The job** (`jobs.TrafficClassifyJob`): every 15 minutes over the trailing 2 hours, on every API
+  instance, one run at a time (advisory lock `solvr:traffic_classify`). A post-sourced start that an agent
+  fetched and nobody copied is flagged within one period, with no operator call.
+- **`POST /admin/traffic/reclassify`** (operator-only, in `OperatorReports`) runs the same code over a
+  window: body `{"from": RFC 3339, "to": RFC 3339, "dry_run": bool}`, `from` < `to` ≤ now, at most 366
+  days, else 400 `VALIDATION_ERROR`; while a run holds the lock, 409 `CLASSIFICATION_RUNNING`. It answers
+  `{"data": {"from", "to", "dry_run", "rules": {"stored_user_agents", "reset", "fetched_without_copy",
+  "connect_burst", "repeated_query"}, "funnel_events": {"before", "after"}, "search_queries": {"before",
+  "after"}}}`, each of `before`/`after` a list of `{traffic_class, traffic_reason, count}` over the window.
+  `rules` counts the rows each step set, so a row undone and flagged again counts in both. A dry run is
+  the same transaction rolled back: it answers what a run would set and writes nothing. The operator runs
+  the dry run first.
+
+**One counting rule.** Two views, created by 000146, are the only place a report reads funnel steps and
+searches:
+
+```sql
+counted_funnel_events  = funnel_events  WHERE traffic_class NOT IN ('crawler', 'automation')
+counted_search_queries = search_queries WHERE traffic_class NOT IN ('crawler', 'automation')
+                                         AND entry IS DISTINCT FROM 'link'
+```
+
+Every reader moved to them, the public figures included: the homepage's search totals, chart and terms,
+`GET /v1/stats/search` and `GET /v1/data/*`, the growth reports (16.5), the activation, cohort, share and
+return reports, the search latency of `GET /admin/ops/slo` and this baseline. A search a link brought (the
+term a page opened with, such as a tag link a crawler walks) is stored and counted as no search, without
+being called a bot. `counted_views_test.go` fails when code outside its list of raw readers (ingest and
+the write path, retention, the rules, the traffic summary and the baseline's `traffic` section) reads
+`funnel_events` or `search_queries`.
+
+**Page views, consent-free.** `POST /v1/analytics/pageview` (public, no credential), sent by the site's web
+server (`frontend/middleware.ts`) beside every page GET it serves, curl and crawlers included: not for
+Next's own files, a file with a dot in its name, an `/api` route, a non-GET, or the app's own link
+prefetch (`Next-Router-Prefetch`). Body: `path` (the pathname, never the query string: it can carry a
+secret; at most 512 bytes, starting with `/`), `user_agent` and `sec_ch_ua` (at most 200 characters
+each), `request_mode` and `fetch_dest` (at most 20 each), `accept_language`, `rsc` and `prefetch`
+(`Sec-Purpose` or `Purpose` names a prefetch). The API drops a prefetch, reduces the path to its
+`content_group` (27.7; the Go port `traffic.ContentGroupForPath` is held equal to `contentGroupForPath`
+by `contract/content-groups.json`), classifies the view and stores one `page_view_events` row:
+`content_group`, `traffic_class`, `traffic_reason`, `occurred_at`. No path, address, user agent or cookie.
+It answers `202 {"data": {"recorded": true|false}}`, never an error the web server must handle; a
+malformed report is 400 `VALIDATION_ERROR`. The report is never awaited and is abandoned after 3 s.
+
+**The request log.** `api_request_events.error_code` is the code of the error envelope a 4xx or 5xx
+answered with, read from the first 4 KB of the body; when there is none in the stored form
+(`^[A-Z][A-Z0-9_]{0,63}$`) it is the code the error envelope gives that status. `ua_class` is
+`browser`, `web_server` (the site's own `solvr-web/` user agent: its server renders send
+`solvr-web/1.0 (ssr)` through `lib/server-fetch.ts`), `http_client`, `crawler`, `headless` or `none`.
+`/v1/analytics/*` is measurement plumbing and is not recorded as usage.
+
+**`GET /admin/traffic/summary?window=24h|7d|30d`** (operator-only, default `7d`, in `OperatorReports`):
+`{"data": {"window", "from", "to", "pageviews": [{content_group, traffic_class, count}], "funnel":
+[{event, traffic_class, traffic_reason, count}], "searches": [{traffic_class, entry, count}], "requests":
+[{ua_class, count}], "errors": [{error_code, status_class, count}]}}` (the 20 most frequent codes). It
+reads the raw tables: it is the account of what the views leave out.
+
+**The baseline** (`GET /admin/seo/baseline`) counts its `funnel` and `search` through the views, and adds
+`traffic.excluded` (`[{table, event, traffic_class, traffic_reason, entry, count}]`: the rows it left
+out) and `pageviews` (`[{content_group, traffic_class, count}]`).
+
+**Stated limits.**
+- The crawler that walked the tag links from 2026-10-05 sent real browser headers from residential
+  addresses: its page views count as `human`. Its searches are left out from 2026-10-17 by `entry`; the
+  ones stored before have no `entry` and stay counted. Blocking it at Cloudflare is the owner's call.
+- B1 and B2 are heuristics: a person who selects a post-sourced prompt by hand, without the Copy button,
+  is flagged. The stored reasons let every report say what it left out.
+- `POST /v1/analytics/pageview` is unauthenticated, like the funnel ingest: anyone can send a view. A
+  shared secret between the two services is an owner decision (F6, open).
+
 ## 27.7 Analytics events and consent
 
 Google Analytics is the one measurement that needs the visitor's consent. It runs in the
-browser, and only after Accept. The first-party funnel (25.7), the view counts and the request
-log are recorded by Solvr's own API, set no cookie and do not depend on this choice. Cloudflare
+browser, and only after Accept. The first-party funnel (25.7), the view counts, the page views
+(27.6) and the request log are recorded by Solvr's own API, set no cookie and do not depend on
+this choice. Cloudflare
 Web Analytics is added by Cloudflare at the edge of the production site, sets no cookie and is
 outside the application. This section supersedes 19.3.
 

@@ -57,7 +57,7 @@ func TestRoomDescription_TheInitialTaskStatesItsFix(t *testing.T) {
 		"FIX:\n1. Save a backup first.\n2. Replace claude-cli/ with anthropic/."
 	assert.Equal(t,
 		"THE PROBLEM: models auth login rewrites model refs to claude-cli refs. Gateway dead. Fix: Save a backup first. Replace claude-cli/ with anthropic/.",
-		RoomDescription("room", nil, task, 3))
+		RoomDescription("room", "room", nil, task, 3))
 }
 
 func TestBlogDescription_CleansAndCapsTheAuthorsOwnMetaDescription(t *testing.T) {

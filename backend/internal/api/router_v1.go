@@ -139,6 +139,8 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	// Wire search analytics repository
 	searchAnalyticsRepo := db.NewSearchAnalyticsRepository(pool)
 	searchHandler.SetAnalyticsRepo(searchAnalyticsRepo)
+	// A search that did not answer 2xx is stored with its input (SPEC.md 22.8).
+	searchHandler.SetFailureRecorder(db.NewSearchFailureRepository(pool))
 
 	// Create user-related handlers (API-CRITICAL per PRD-v2)
 	notificationsHandler := handlers.NewNotificationsHandler(notificationsRepo)

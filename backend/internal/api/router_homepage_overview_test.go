@@ -269,6 +269,9 @@ func hpoSeedRoom(t *testing.T, pool *db.Pool, slug, name, purpose string, privat
 		OwnerID:     uuid.Nil,
 	})
 	require.NoError(t, err)
+	if !private {
+		listTestRoom(t, pool, slug)
+	}
 
 	authors := []string{"hpo_planner", "hpo_executor"}
 	for i, content := range messages {

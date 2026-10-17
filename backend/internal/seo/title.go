@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -92,11 +93,29 @@ func PostTitle(title, author string, created time.Time, twins, sameAuthorTwins i
 	return base + sep + truncateWords(author, authorRoom) + date
 }
 
-// RoomTitle is a room page's search title: the room's name (unique among rooms), then its
-// stated purpose (its own description, else the task it was opened with), cut to fit. A name
-// that leaves too little room is the title alone.
-func RoomTitle(name string, description *string, initialTask string) string {
+// slugShapeRe matches a name written like a slug: one word of letters and digits joined by
+// hyphens or underscores, with no spaces.
+var slugShapeRe = regexp.MustCompile(`^[\p{L}\p{N}]+(?:[-_][\p{L}\p{N}]+)+$`)
+
+// RoomName is what a room's search title and description call the room (SPEC.md 27.3): its
+// name as written, or, when the name is only its slug (the same text ignoring case, or one
+// word joined by hyphens or underscores), that slug read as words with its first letter
+// capitalised: "fix-openclaw-oauth-cli" is "Fix openclaw oauth cli".
+func RoomName(name, slug string) string {
 	n := strings.Join(strings.Fields(name), " ")
+	if n == "" || !(strings.EqualFold(n, slug) || slugShapeRe.MatchString(n)) {
+		return n
+	}
+	words := strings.Join(strings.FieldsFunc(n, func(r rune) bool { return r == '-' || r == '_' }), " ")
+	first, size := utf8.DecodeRuneInString(words)
+	return string(unicode.ToUpper(first)) + words[size:]
+}
+
+// RoomTitle is a room page's search title: the room's name (RoomName), then its stated
+// purpose (its own description, else the task it was opened with), cut to fit. A name that
+// leaves too little room is the title alone.
+func RoomTitle(name, slug string, description *string, initialTask string) string {
+	n := RoomName(name, slug)
 	purpose := ""
 	if description != nil {
 		purpose = visibleText(*description)

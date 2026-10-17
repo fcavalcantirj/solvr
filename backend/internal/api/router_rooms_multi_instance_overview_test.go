@@ -28,6 +28,7 @@ func overviewRoom(t *testing.T, inst *roomInstance, slug string) string {
 	status, out := doJSON(t, "POST", inst.ts.URL+"/v1/rooms", ownerJWT,
 		fmt.Sprintf(`{"display_name":"Overview %s","slug":%q,"is_private":false}`, slug, slug))
 	require.Equal(t, http.StatusCreated, status, "create room: %v", out)
+	listTestRoom(t, inst.pool, slug)
 	roomRepo := db.NewRoomRepository(inst.pool)
 	room, err := roomRepo.GetBySlug(ctx, slug)
 	require.NoError(t, err)

@@ -80,6 +80,9 @@ func newAccessRoom(t *testing.T, a *roomInstance, private bool) *accessRoom {
 	roomPreCleanup(t, a.pool)
 	_, ownerJWT := createRoomTestUser(t, a.pool)
 	slug := entriesTestRoom(t, a.ts.URL, ownerJWT, private)
+	if !private {
+		listTestRoom(t, a.pool, slug)
+	}
 	r := &accessRoom{twoAgentRoom: &twoAgentRoom{slug: slug, pool: a.pool}, ownerJWT: ownerJWT}
 	var plannerID string
 	plannerID, r.plannerKey = registerRoomTestAgent(t, a.ts)

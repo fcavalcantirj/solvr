@@ -73,6 +73,9 @@ func newNAgentRoom(t *testing.T, inst *roomInstance, pool *db.Pool, n int, priva
 	t.Helper()
 	_, ownerJWT := createRoomTestUser(t, pool)
 	room := &nAgentRoom{slug: entriesTestRoom(t, inst.ts.URL, ownerJWT, private), ownerJWT: ownerJWT, private: private, pool: pool}
+	if !private {
+		listTestRoom(t, pool, room.slug)
+	}
 	require.NoError(t, pool.QueryRow(context.Background(), `SELECT id::text FROM rooms WHERE slug=$1`, room.slug).Scan(&room.roomID))
 	for i := 0; i < n; i++ {
 		room.agents = append(room.agents, room.admit(t, inst, nAgentName(i, n), nAgentClients[i%len(nAgentClients)]))

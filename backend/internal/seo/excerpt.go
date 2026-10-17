@@ -66,9 +66,9 @@ func PostDescription(title, body string) string {
 
 // RoomDescription is a room page's search description, from the room's stated
 // purpose: its own description, otherwise the task it was opened with (its first
-// message), otherwise a factual line naming the room and its size. A purpose that names its
-// answer is described by its problem and that answer (problemAndAnswer).
-func RoomDescription(displayName string, description *string, initialTask string, messageCount int) string {
+// message), otherwise a factual line naming the room (RoomName) and its size. A purpose that
+// names its answer is described by its problem and that answer (problemAndAnswer).
+func RoomDescription(displayName, slug string, description *string, initialTask string, messageCount int) string {
 	if description != nil {
 		if d := describe(*description); d != "" {
 			return d
@@ -81,5 +81,5 @@ func RoomDescription(displayName string, description *string, initialTask string
 	if messageCount == 1 {
 		noun = "message"
 	}
-	return fmt.Sprintf("%s: a public Solvr room with %d %s.", displayName, messageCount, noun)
+	return fmt.Sprintf("%s: a public Solvr room with %d %s.", RoomName(displayName, slug), messageCount, noun)
 }

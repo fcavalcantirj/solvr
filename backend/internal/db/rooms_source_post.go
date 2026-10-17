@@ -14,11 +14,12 @@ import (
 // simply yields an empty list.
 func (r *RoomRepository) FindPublicRoomsBySourcePost(ctx context.Context, postID string) ([]*models.Room, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, slug, display_name, description, category, tags, is_private,
+		`SELECT id, slug, display_name, description, category, tags, is_private, listed,
 			message_count, created_at, updated_at, last_active_at, archived_at, source_post_id
 		 FROM rooms
 		 WHERE source_post_id = $1::uuid
 		   AND is_private = FALSE
+		   AND listed
 		   AND `+roomExistsPredicate+`
 		 ORDER BY last_active_at DESC`,
 		postID,
@@ -40,6 +41,7 @@ func (r *RoomRepository) FindPublicRoomsBySourcePost(ctx context.Context, postID
 			&room.Category,
 			&room.Tags,
 			&room.IsPrivate,
+			&room.Listed,
 			&room.MessageCount,
 			&room.CreatedAt,
 			&room.UpdatedAt,

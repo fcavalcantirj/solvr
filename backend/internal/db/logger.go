@@ -4,14 +4,9 @@ package db
 import (
 	"context"
 	"log/slog"
+
+	"github.com/fcavalcantirj/solvr/internal/requestid"
 )
-
-// contextKey is the type for context keys in this package.
-type contextKey string
-
-// requestIDKey is the context key for request ID.
-// This should match the key used by the request logging middleware.
-const requestIDKey contextKey = "request_id"
 
 // LogQueryError logs a database query error with structured context.
 // Per FIX-013: Add DB query error logging with table, operation, and error details.
@@ -24,7 +19,7 @@ func LogQueryError(ctx context.Context, op, table string, err error) {
 	}
 
 	// Include request ID if present in context
-	if reqID := ctx.Value(requestIDKey); reqID != nil {
+	if reqID := requestid.From(ctx); reqID != "" {
 		attrs = append(attrs, "request_id", reqID)
 	}
 
@@ -39,7 +34,7 @@ func LogConnectionError(ctx context.Context, err error) {
 	}
 
 	// Include request ID if present in context
-	if reqID := ctx.Value(requestIDKey); reqID != nil {
+	if reqID := requestid.From(ctx); reqID != "" {
 		attrs = append(attrs, "request_id", reqID)
 	}
 
@@ -55,7 +50,7 @@ func LogTransactionError(ctx context.Context, op string, err error) {
 	}
 
 	// Include request ID if present in context
-	if reqID := ctx.Value(requestIDKey); reqID != nil {
+	if reqID := requestid.From(ctx); reqID != "" {
 		attrs = append(attrs, "request_id", reqID)
 	}
 
@@ -73,7 +68,7 @@ func LogDuplicateKeyError(ctx context.Context, op, table, constraint string) {
 	}
 
 	// Include request ID if present in context
-	if reqID := ctx.Value(requestIDKey); reqID != nil {
+	if reqID := requestid.From(ctx); reqID != "" {
 		attrs = append(attrs, "request_id", reqID)
 	}
 
@@ -90,7 +85,7 @@ func LogNotFound(ctx context.Context, op, table, id string) {
 	}
 
 	// Include request ID if present in context
-	if reqID := ctx.Value(requestIDKey); reqID != nil {
+	if reqID := requestid.From(ctx); reqID != "" {
 		attrs = append(attrs, "request_id", reqID)
 	}
 
@@ -108,7 +103,7 @@ func LogSearchCompleted(ctx context.Context, query string, durationMs int64, res
 		"method", method,
 	}
 
-	if reqID := ctx.Value(requestIDKey); reqID != nil {
+	if reqID := requestid.From(ctx); reqID != "" {
 		attrs = append(attrs, "request_id", reqID)
 	}
 
@@ -122,7 +117,7 @@ func LogSearchEmbeddingGenerated(ctx context.Context, durationMs int64) {
 		"duration_ms", durationMs,
 	}
 
-	if reqID := ctx.Value(requestIDKey); reqID != nil {
+	if reqID := requestid.From(ctx); reqID != "" {
 		attrs = append(attrs, "request_id", reqID)
 	}
 
@@ -136,7 +131,7 @@ func LogSearchEmbeddingFailed(ctx context.Context, errMsg string) {
 		"error", errMsg,
 	}
 
-	if reqID := ctx.Value(requestIDKey); reqID != nil {
+	if reqID := requestid.From(ctx); reqID != "" {
 		attrs = append(attrs, "request_id", reqID)
 	}
 

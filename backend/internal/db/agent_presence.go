@@ -222,7 +222,7 @@ func (r *AgentPresenceRepository) DeleteExpired(ctx context.Context) ([]models.E
 	return expired, nil
 }
 
-// ListAllPublic returns all live agent presence records in non-private rooms.
+// ListAllPublic returns all live agent presence records in public, listed rooms.
 // Used by the discovery endpoint.
 func (r *AgentPresenceRepository) ListAllPublic(ctx context.Context) ([]models.AgentPresenceRecord, error) {
 	query := `
@@ -230,6 +230,7 @@ func (r *AgentPresenceRepository) ListAllPublic(ctx context.Context) ([]models.A
 		FROM agent_presence ap
 		JOIN rooms r ON r.id = ap.room_id
 		WHERE r.is_private = FALSE
+		AND r.listed
 		AND ap.last_seen > NOW() - (ap.ttl_seconds || ' seconds')::interval
 		ORDER BY ap.last_seen DESC
 	`

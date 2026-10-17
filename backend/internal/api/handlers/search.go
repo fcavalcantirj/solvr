@@ -4,6 +4,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -13,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
@@ -37,11 +37,22 @@ type SearchAnalyticsInserter interface {
 // (e.g. in tests). Conservative (high) to bias toward ASK. See BART-155.
 const DefaultSearchConfidenceThreshold = 0.85
 
+// SearchFailureRecorder stores a search that did not answer 2xx (SPEC.md 22.8).
+type SearchFailureRecorder interface {
+	RecordFailure(ctx context.Context, f *models.SearchFailure) error
+}
+
 // SearchHandler handles search-related HTTP requests.
 type SearchHandler struct {
 	repo                SearchRepositoryInterface
 	analyticsRepo       SearchAnalyticsInserter
+	failures            SearchFailureRecorder
 	confidenceThreshold float64
+}
+
+// SetFailureRecorder injects the store of failed searches (search_failures).
+func (h *SearchHandler) SetFailureRecorder(r SearchFailureRecorder) {
+	h.failures = r
 }
 
 // NewSearchHandler creates a new SearchHandler.
@@ -115,10 +126,24 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Postgres refuses text that is not UTF-8 or holds a NUL: that is the client's error, not a
+	// 500 (SPEC.md 22.7).
+	if param := invalidSearchTextParam(r.URL.Query()); param != "" {
+		writeSearchError(w, http.StatusBadRequest, "VALIDATION_ERROR", param+" must be UTF-8 text without NUL characters")
+		h.recordFailure(r, start, query, http.StatusBadRequest, "VALIDATION_ERROR", "")
+		return
+	}
+
 	// Parse filters. Every post is type "post", so a type filter selects nothing more, and a
 	// retired legacy type or status is refused (idx 68).
 	if _, err := checkLegacyPostFilters(r.URL.Query().Get("type"), r.URL.Query().Get("status")); err != nil {
 		writeFilterError(w, err)
+		code := "VALIDATION_ERROR"
+		var legacy *legacyFieldError
+		if errors.As(err, &legacy) {
+			code = ErrCodeLegacyFieldRetired
+		}
+		h.recordFailure(r, start, query, http.StatusBadRequest, code, "")
 		return
 	}
 	opts := models.SearchOptions{
@@ -150,6 +175,7 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 		parsed, err := time.Parse("2006-01-02", fromDate)
 		if err != nil {
 			writeSearchError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid from_date format, use YYYY-MM-DD")
+			h.recordFailure(r, start, query, http.StatusBadRequest, "VALIDATION_ERROR", "")
 			return
 		}
 		opts.FromDate = parsed
@@ -159,6 +185,7 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 		parsed, err := time.Parse("2006-01-02", toDate)
 		if err != nil {
 			writeSearchError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid to_date format, use YYYY-MM-DD")
+			h.recordFailure(r, start, query, http.StatusBadRequest, "VALIDATION_ERROR", "")
 			return
 		}
 		opts.ToDate = parsed
@@ -209,7 +236,7 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 	// Execute search
 	results, total, method, topSimilarity, err := h.repo.Search(r.Context(), query, opts)
 	if err != nil {
-		writeSearchError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "search failed")
+		h.answerSearchFailure(w, r, start, query, err)
 		return
 	}
 
@@ -259,15 +286,7 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 	// Async search analytics insert (fire-and-forget, no latency impact)
 	if h.analyticsRepo != nil {
 		// Extract searcher identity from auth context
-		searcherType := "anonymous"
-		var searcherID *string
-		if claims := auth.ClaimsFromContext(r.Context()); claims != nil {
-			searcherType = "human"
-			searcherID = &claims.UserID
-		} else if agent := auth.AgentFromContext(r.Context()); agent != nil {
-			searcherType = "agent"
-			searcherID = &agent.ID
-		}
+		searcherType, searcherID := searcherOf(r)
 
 		// Truncate query to 500 chars (matches DB CHECK constraint)
 		q := query

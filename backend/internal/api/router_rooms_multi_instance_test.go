@@ -129,6 +129,9 @@ func newAgentPairRoom(t *testing.T, a *roomInstance, private bool) *twoAgentRoom
 	roomPreCleanup(t, pool)
 	_, ownerJWT := createRoomTestUser(t, pool)
 	slug := entriesTestRoom(t, a.ts.URL, ownerJWT, private)
+	if !private {
+		listTestRoom(t, pool, slug)
+	}
 	r := &twoAgentRoom{slug: slug, pool: pool}
 	var memberID string
 	memberID, r.plannerKey = registerRoomTestAgent(t, a.ts)

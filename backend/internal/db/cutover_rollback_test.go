@@ -102,7 +102,7 @@ func TestCutoverRollback_DownPathKeepsOrArchivesEveryPostCutoverWrite(t *testing
 		WHERE relnamespace = 'public'::regnamespace AND relname = 'answers'`), "archived before the rollback")
 
 	applied := migrateDownTo84(ctx, t, pool)
-	require.Equal(t, 59, applied, "down migrations 000143..000085")
+	require.Equal(t, 61, applied, "down migrations 000145..000085")
 
 	var replies *string
 	require.NoError(t, pool.QueryRow(ctx, `SELECT to_regclass('replies')::text`).Scan(&replies))

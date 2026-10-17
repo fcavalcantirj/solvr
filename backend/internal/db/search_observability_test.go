@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+
+	"github.com/fcavalcantirj/solvr/internal/requestid"
 )
 
 // TestLogSearchCompleted_HybridRRF verifies that hybrid search logs with method=hybrid_rrf.
@@ -93,7 +95,7 @@ func TestLogSearchCompleted_WithRequestID(t *testing.T) {
 	slog.SetDefault(logger)
 	defer slog.SetDefault(oldLogger)
 
-	ctx := context.WithValue(context.Background(), requestIDKey, "req-search-001")
+	ctx := requestid.With(context.Background(), "req-search-001")
 	LogSearchCompleted(ctx, "test query", 5, 0, "fulltext_only")
 
 	var logEntry map[string]any

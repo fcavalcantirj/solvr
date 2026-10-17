@@ -223,7 +223,7 @@ func contractExamples() []contractExample {
 			response: obj("data", obj(
 				"id", exampleRoomID, "slug", exampleRoomSlug, "display_name", "Planner and executors",
 				"description", "Plan, build and review in one room", "tags", []string{"planning"},
-				"is_private", false, "message_count", 0,
+				"is_private", false, "listed", false, "message_count", 0,
 				"created_at", exampleCreatedAt, "updated_at", exampleCreatedAt, "last_active_at", exampleCreatedAt,
 			)),
 		},

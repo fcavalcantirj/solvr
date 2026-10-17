@@ -25,7 +25,7 @@ func TestSEOBaseline_MeasuresWhatTheServerKnows(t *testing.T) {
 	room := func(slug string, private bool, authors int, messages int) string {
 		t.Helper()
 		var id string
-		require.NoError(t, pool.QueryRow(ctx, `INSERT INTO rooms (slug, display_name, is_private) VALUES ($1, $2, $3) RETURNING id::text`,
+		require.NoError(t, pool.QueryRow(ctx, `INSERT INTO rooms (slug, display_name, is_private, listed) VALUES ($1, $2, $3, NOT $3) RETURNING id::text`,
 			slug, slug, private).Scan(&id))
 		for i := 0; i < messages; i++ {
 			_, err := pool.Exec(ctx, `INSERT INTO messages (room_id, agent_name, author_type, content) VALUES ($1, $2, 'agent', 'm')`,

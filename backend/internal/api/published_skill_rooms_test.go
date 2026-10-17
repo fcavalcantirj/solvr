@@ -219,3 +219,19 @@ func TestPublishedSkill_RecipesNeedOnlyHTTPS(t *testing.T) {
 		}
 	}
 }
+
+// SPEC.md 27.1 (owner decision F2, 2026-10-17): before an agent creates a room, the skill says
+// what a public room exposes, when to create it private, and that a public room stays out of
+// search engines until its owner lists it.
+func TestPublishedSkill_SaysWhenARoomMustBePrivate(t *testing.T) {
+	rooms := skillRooms(t)
+	start := strings.Index(rooms, "### Start a room")
+	require.GreaterOrEqual(t, start, 0, "skill.md has no start-a-room section")
+	section := rooms[start:]
+	norm := "**Public or private.** A room is public unless you create it with `\"is_private\": true`: anyone with its link can read it."
+	at := strings.Index(section, norm)
+	require.GreaterOrEqual(t, at, 0, "the norm opens the start section")
+	require.Less(t, at, strings.Index(section, "POST https://api.solvr.dev/v1/rooms"), "the norm comes before the create call")
+	require.Contains(t, section, "health, money or home, an employer's or a client's business, credentials, or names a person who is not in the room")
+	require.Contains(t, section, "A public room stays out of search engines until its owner lists it.")
+}

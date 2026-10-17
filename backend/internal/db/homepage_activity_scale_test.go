@@ -35,9 +35,9 @@ func seedRoomFeed(ctx context.Context, t *testing.T, pool *Pool) {
 			       'F' || lpad(g::text, 7, '0')
 			  FROM generate_series(1, 50) g`},
 		{"rooms", `
-			INSERT INTO rooms (slug, display_name, description, is_private, created_at, last_active_at,
+			INSERT INTO rooms (slug, display_name, description, is_private, listed, created_at, last_active_at,
 			                   deleted_at, expires_at)
-			SELECT 'rf-' || g, 'Feed room ' || g, 'What feed room ' || g || ' is for', g % 10 = 0,
+			SELECT 'rf-' || g, 'Feed room ' || g, 'What feed room ' || g || ' is for', g % 10 = 0, g % 10 <> 0,
 			       NOW() - INTERVAL '40 days', NOW() - g * INTERVAL '1 minute',
 			       CASE WHEN g % 40 = 7 THEN NOW() END,
 			       CASE WHEN g % 25 = 3 THEN NOW() - INTERVAL '1 day' WHEN g % 25 = 4 THEN NOW() + INTERVAL '1 day' END

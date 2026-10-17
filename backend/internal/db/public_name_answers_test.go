@@ -42,7 +42,7 @@ func TestPublicAnswers_NameAPersonByUsernameWhenTheStoredNameIsAnEmail(t *testin
 		VALUES ($1, 'A blog post by the same person', 'A blog body long enough to be a post.', 'human', $2, 'published', NOW())`, slug, user.ID)
 	require.NoError(t, err)
 	var roomID uuid.UUID
-	require.NoError(t, pool.QueryRow(ctx, `INSERT INTO rooms (slug, display_name) VALUES ($1, 'Owned room') RETURNING id`,
+	require.NoError(t, pool.QueryRow(ctx, `INSERT INTO rooms (slug, display_name, listed) VALUES ($1, 'Owned room', true) RETURNING id`,
 		fmt.Sprintf("pubname-room-%d", n)).Scan(&roomID))
 	_, err = pool.Exec(ctx, `INSERT INTO room_members (room_id, user_id, role, added_by) VALUES ($1, $2::uuid, 'owner', 'system')`, roomID, user.ID)
 	require.NoError(t, err)

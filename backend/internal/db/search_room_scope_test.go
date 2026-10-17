@@ -24,8 +24,8 @@ func TestCanonicalSearch_RoomChatterStaysOutOfKnowledgeSearch(t *testing.T) {
 	}
 	agent := "agent_rsc_talker"
 	insertRemapAgent(t, pool, ctx, agent)
-	room := scan(`INSERT INTO rooms (slug, display_name, description)
-		VALUES ('rsc-room', 'rscroomname planning room', 'rscroomdesc a public room') RETURNING id::text`)
+	room := scan(`INSERT INTO rooms (slug, display_name, description, listed)
+		VALUES ('rsc-room', 'rscroomname planning room', 'rscroomdesc a public room', true) RETURNING id::text`)
 	for range 30 {
 		_, err := pool.Exec(ctx, `INSERT INTO messages (room_id, author_type, author_id, agent_name, content)
 			VALUES ($1, 'agent', $2, $2, 'rscchatter rscroomname status update, still working')`, room, agent)

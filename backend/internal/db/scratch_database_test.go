@@ -39,12 +39,29 @@ func newMigratedScratchDatabase(t *testing.T) (pool *Pool, archived func()) {
 func newPreArchiveScratchDatabase(t *testing.T) (pool *Pool, archiveLegacy func()) {
 	t.Helper()
 	before, after := splitAtLegacyArchive(t)
-	pool, url := newScratchDatabase(t, before)
+	var independent, rest []string
+	for _, f := range after {
+		if preArchiveIndependentMigrations[filepath.Base(f)] {
+			independent = append(independent, f)
+			continue
+		}
+		rest = append(rest, f)
+	}
+	pool, scratchURL := newScratchDatabase(t, append(before, independent...))
 	return pool, func() {
 		t.Helper()
-		applyMigrationFiles(t, url, after)
+		applyMigrationFiles(t, scratchURL, rest)
 		pool.pool.Reset() // no connection keeps a statement prepared against the old schema
 	}
+}
+
+// preArchiveIndependentMigrations are migrations after the legacy archive that touch no legacy
+// table and that the current code reads on any schema it runs on, so a scratch database stopped
+// below the archive applies them too (internal/jobs keeps the same rule): the rooms sitemap
+// reads rooms.listed (000145) and a failed search writes search_failures (000144).
+var preArchiveIndependentMigrations = map[string]bool{
+	"000144_search_failures.up.sql": true,
+	"000145_rooms_listed.up.sql":    true,
 }
 
 // splitAtLegacyArchive returns the up migrations below *_legacy_archive.up.sql and the rest,

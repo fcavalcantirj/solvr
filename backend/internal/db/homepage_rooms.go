@@ -22,9 +22,9 @@ import (
 //     included (countedRoomPredicate). A room's existence and its volume are
 //     platform facts; a count says how many and how busy, never which.
 //   - anything that NAMES, LISTS or QUOTES a room — the recently completed
-//     rooms here, the activity stream in homepage_activity.go — is public-only
-//     (publicRoomPredicate): a private room's name, slug, description,
-//     participants and entries never leave the API through this page.
+//     rooms here, the activity stream in homepage_activity.go — is public and
+//     listed only (listedRoomPredicate): a private or unlisted room's name, slug,
+//     description, participants and entries never leave the API through this page.
 //
 // On top of either floor, the live figures also exclude rooms whose
 // `expires_at` has passed — an expired room is archived, not live — while the
@@ -180,9 +180,16 @@ type RoomPulse struct {
 // or quotes a room, and for the public-only figures reported beside the counts.
 const publicRoomPredicate = `r.deleted_at IS NULL AND r.is_private = FALSE`
 
-// liveRoomPredicate additionally excludes archived (expired) rooms. The public
-// activity stream (homepage_activity.go) reads through it.
+// liveRoomPredicate additionally excludes archived (expired) rooms.
 const liveRoomPredicate = publicRoomPredicate + ` AND (r.expires_at IS NULL OR r.expires_at > NOW())`
+
+// listedRoomPredicate is the floor for a read that names, lists or quotes a room: public and
+// listed by its owner (SPEC.md 27.1). An unlisted public room is read by its link only.
+const listedRoomPredicate = publicRoomPredicate + ` AND r.listed`
+
+// listedLiveRoomPredicate is listedRoomPredicate without archived (expired) rooms. The public
+// activity stream (homepage_activity.go) reads through it.
+const listedLiveRoomPredicate = liveRoomPredicate + ` AND r.listed`
 
 // countedRoomPredicate is the floor for every COUNT: every room that has not
 // been deleted, private ones included. Never use it in a read that returns a
@@ -458,7 +465,7 @@ func (r *HomepageRepository) GetRecentCompletedRooms(ctx context.Context, window
 	query := `
 		SELECT r.id, r.slug, r.display_name, r.description, r.message_count, r.last_active_at
 		  FROM rooms r
-		 WHERE ` + publicRoomPredicate + `
+		 WHERE ` + listedRoomPredicate + `
 		   AND (r.expires_at IS NULL OR r.expires_at > NOW())
 		   AND r.last_active_at > NOW() - $1::interval
 		   AND EXISTS (

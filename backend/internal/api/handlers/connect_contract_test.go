@@ -105,7 +105,7 @@ func TestConnect_EveryUseCaseFillsTheSameSentence(t *testing.T) {
 		want := "Learn Solvr from https://solvr.dev/skill.md?f=" + start.Selected.FlowID + ". Create a " + uc.visibility +
 			" Solvr room to ship the signup page, join it as the " + uc.roleA +
 			", and answer me with a prompt for the " + uc.roleB +
-			" to install the Solvr skill and join your room, " + uc.job + "."
+			" to learn Solvr from the same link and join your room, " + uc.job + "."
 		require.True(t, strings.HasPrefix(text, want), "%s: got %q (body %s)", uc.preset, text, body)
 		require.Equal(t, uc.preset, start.Selected.Preset)
 		require.Equal(t, uc.visibility, start.Selected.Visibility, "%s's own visibility when none is chosen", uc.preset)
@@ -503,7 +503,7 @@ func TestConnect_ServesTheChromeAroundTheSentence(t *testing.T) {
 	h := newTestConnectHandler(t, nil, "example-room")
 	start, body := getConnect(t, h, "")
 	require.Equal(t, ConnectInstructionVersion, start.InstructionVersion)
-	require.Equal(t, "2.1", ConnectInstructionVersion, "the sentence's skill link carries the flow code, and ?flow= keeps it")
+	require.Equal(t, "2.2", ConnectInstructionVersion, "the second agent learns Solvr from the same link; it installs nothing")
 	require.Equal(t, "Connect your agents", start.Heading)
 	require.Equal(t, "What should they do?", start.IntentField.Label)
 	require.Equal(t, ConnectIntentMaxChars, start.IntentField.MaxChars)

@@ -209,6 +209,9 @@ export interface SearchParams {
   tags?: string;
   page?: number;
   per_page?: number;
+  // How the term was entered (SPEC.md 27.6): typed by the visitor, or the term a link opened
+  // the page with. The API stores it; without it the search is the API's.
+  entry?: 'typed' | 'link';
 }
 
 export interface APIAddBookmarkResponse {

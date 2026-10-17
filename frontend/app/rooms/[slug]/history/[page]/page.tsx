@@ -11,6 +11,7 @@ import { NOINDEX } from "@/lib/seo/route-policy";
 import { fetchSEO } from "@/lib/seo/fetch-seo";
 import { linkPreview } from "@/lib/seo/link-preview";
 import type { APIRoomDetailResponse, APIRoomHistoryPage, APIRoomMessage, APIRoomSEO } from "@/lib/api-types";
+import { serverFetch } from "@/lib/server-fetch";
 
 // One segment of a public room's transcript (task idx 81, SPEC.md Part 27): a fixed
 // sequence range the API decides, server-rendered with ordinary links, so a crawler
@@ -27,7 +28,7 @@ const PAGE_NUMBER = /^[1-9][0-9]{0,8}$/;
 type Params = Promise<{ slug: string; page: string }>;
 
 async function apiGet<T>(path: string): Promise<{ status: number; data: T | null }> {
-  const res = await fetch(`${API_BASE_URL}${path}`, { cache: "no-store" });
+  const res = await serverFetch(`${API_BASE_URL}${path}`, { cache: "no-store" });
   if (!res.ok) return { status: res.status, data: null };
   return { status: res.status, data: (await res.json()) as T };
 }

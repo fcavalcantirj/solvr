@@ -10,6 +10,7 @@ import { NOINDEX } from "@/lib/seo/route-policy";
 import { fetchSEO } from "@/lib/seo/fetch-seo";
 import { linkPreview } from "@/lib/seo/link-preview";
 import type { APIPostSEO } from "@/lib/api-types";
+import { serverFetch } from "@/lib/server-fetch";
 
 // A post that is deleted or made family-only is refused by the API at once; the
 // page asks the API on every request so its metadata never republishes it.
@@ -30,7 +31,7 @@ const getPostSEO = cache((id: string) => fetchSEO<APIPostSEO>(`/v1/posts/${id}/s
 // HTML carries the discussion (task idx 81). A failure leaves them to the client.
 const getFirstReplies = cache(async (id: string): Promise<{ replies: APIReply[]; pages: number } | null> => {
   try {
-    const res = await fetch(`${API_BASE_URL}/v1/posts/${id}/replies?page=1`, { cache: "no-store" });
+    const res = await serverFetch(`${API_BASE_URL}/v1/posts/${id}/replies?page=1`, { cache: "no-store" });
     if (!res.ok) return null;
     const json = await res.json();
     return { replies: json.data ?? [], pages: Math.max(1, json.meta?.total_pages ?? 1) };
@@ -42,7 +43,7 @@ const getFirstReplies = cache(async (id: string): Promise<{ replies: APIReply[];
 // The rooms started from the post, and the public room it was saved from (task idx 82).
 const getRooms = cache(async (id: string): Promise<{ rooms: APIRoom[]; sourceRoom: APIPostSourceRoom | null } | null> => {
   try {
-    const res = await fetch(`${API_BASE_URL}/v1/posts/${id}/rooms`, { cache: "no-store" });
+    const res = await serverFetch(`${API_BASE_URL}/v1/posts/${id}/rooms`, { cache: "no-store" });
     if (!res.ok) return null;
     const json = await res.json();
     return { rooms: json.data ?? [], sourceRoom: json.source_room ?? null };

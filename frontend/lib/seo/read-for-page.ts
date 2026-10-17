@@ -1,3 +1,5 @@
+import { serverFetch } from '@/lib/server-fetch';
+
 // readForPage is a page's server read of its own resource (task idx 83, SPEC.md
 // Part 27.4). A refusal the API answers on purpose (404, 401, 403...) comes back as
 // { status, data: null } for the page to turn into a real 404 or a gate. An API
@@ -15,7 +17,7 @@ export class UpstreamError extends Error {
 export async function readForPage<T>(path: string): Promise<{ status: number; data: T | null }> {
   let res: Response;
   try {
-    res = await fetch(`${API_BASE_URL}${path}`, { cache: 'no-store' });
+    res = await serverFetch(`${API_BASE_URL}${path}`, { cache: 'no-store' });
   } catch {
     throw new UpstreamError(`${path}: API unreachable`);
   }

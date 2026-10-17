@@ -1,4 +1,5 @@
 import type { APIOverviewResponse } from '@/lib/api-types';
+import { serverFetch } from '@/lib/server-fetch';
 
 // The index reads GET /v1/overview on the server, so its first HTML already
 // carries the hero numbers and the sections below them: no blank band while the
@@ -21,7 +22,7 @@ const OVERVIEW_REVALIDATE_SECONDS = 60;
 
 export async function getInitialOverview(): Promise<APIOverviewResponse | null> {
   try {
-    const response = await fetch(`${API_BASE_URL}/v1/overview`, {
+    const response = await serverFetch(`${API_BASE_URL}/v1/overview`, {
       next: { revalidate: OVERVIEW_REVALIDATE_SECONDS },
       signal: AbortSignal.timeout(OVERVIEW_TIMEOUT_MS),
     });

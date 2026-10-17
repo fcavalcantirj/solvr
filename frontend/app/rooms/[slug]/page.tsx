@@ -13,6 +13,7 @@ import { NOINDEX } from "@/lib/seo/route-policy";
 import { fetchSEO } from "@/lib/seo/fetch-seo";
 import { linkPreview } from "@/lib/seo/link-preview";
 import type { APIRoomSEO } from "@/lib/api-types";
+import { serverFetch } from "@/lib/server-fetch";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "https://api.solvr.dev";
@@ -47,7 +48,7 @@ const getRoomSEO = cache((slug: string) =>
 // links out; it never takes the live room down.
 const getOutcomes = cache(async (slug: string): Promise<{ id: string; title: string }[]> => {
   try {
-    const res = await fetch(`${API_BASE_URL}/v1/rooms/${encodeURIComponent(slug)}/posts`, {
+    const res = await serverFetch(`${API_BASE_URL}/v1/rooms/${encodeURIComponent(slug)}/posts`, {
       cache: "no-store",
     });
     if (!res.ok) return [];

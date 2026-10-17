@@ -9,6 +9,7 @@ import { NOINDEX } from "@/lib/seo/route-policy";
 import { fetchSEO } from "@/lib/seo/fetch-seo";
 import { linkPreview } from "@/lib/seo/link-preview";
 import type { APIPostSEO, APIReply, APIRepliesResponse } from "@/lib/api-types";
+import { serverFetch } from "@/lib/server-fetch";
 
 // A later page of a long post discussion (task idx 81, SPEC.md Part 27): the API's
 // numbered reply page, server-rendered with ordinary links, so a crawler without
@@ -29,7 +30,7 @@ interface PostSummary {
 }
 
 async function apiGet<T>(path: string): Promise<{ status: number; data: T | null }> {
-  const res = await fetch(`${API_BASE_URL}${path}`, { cache: "no-store" });
+  const res = await serverFetch(`${API_BASE_URL}${path}`, { cache: "no-store" });
   if (!res.ok) return { status: res.status, data: null };
   return { status: res.status, data: (await res.json()) as T };
 }

@@ -69,3 +69,9 @@ vendor/
 .vscode/
 yarn-debug.log*
 yarn-error.log*
+# Growth audit of 2026-10-06: holds usernames, personal room names and user stats (public repo)
+docs/handovers/2026-10-06-agency-growth-audit/
+# 360 report of 2026-10-12: holds user stats and personal room names (public repo)
+docs/handovers/2026-10-12-solvr-360/
+# Fix-first handover of 2026-10-12: names personal rooms and user stats (public repo)
+docs/handovers/2026-10-12-solvr-fixes/

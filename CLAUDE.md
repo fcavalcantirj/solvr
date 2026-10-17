@@ -436,6 +436,47 @@ bash ~/.claude/skills/solvr/scripts/solvr-admin.sh email history
 
 ---
 
+## Analytics, Search Console and Cloudflare (owner settings outside the code)
+
+Measured 2026-10-05. These live in Google's and Cloudflare's consoles, not in the repo. A code change that touches
+them must keep them in step.
+
+- **Google Analytics 4:** property `G-HS74SKKSQY` (`properties/523300499`). The tag loads only after the visitor
+  accepts the consent bar (`components/consent-bar.tsx`, `components/site-analytics.tsx`, SPEC.md 27.7), and never on
+  `/claim`, `/auth/callback` or `/email/unsubscribe`. Set in the property's admin:
+  - Key events: `sign_up`, `prompt_copy`, `room_create`, `agent_claim`, plus Google's defaults `purchase`,
+    `close_convert_lead`, `qualify_lead`, `file_download` (only `file_download` fires). `form_start` (the login form)
+    was unmarked on 2026-10-05.
+  - Custom dimensions, event scope, each with the parameter of the same name: `direction`, `item`, `list`, `location`,
+    `method`, `preset`, `role`, `sort`, `surface`, `visibility`. Custom metrics: `page`, `results`. `status` is not
+    registered (no event sends it yet); `search_term` is Google's own dimension.
+  - Data retention: 14 months, event and user data.
+  - A new event or parameter in the code needs its registration here too, and its line in SPEC.md 27.7: an
+    unregistered parameter is collected but cannot be reported.
+- **Search Console:** domain property `sc-domain:solvr.dev`. The sitemap `https://solvr.dev/sitemap.xml` was
+  resubmitted 2026-10-05 17:23 UTC; Google's previous download was 2026-04-06. Agents read it through Composio (the
+  owner's key, outside the repo), read-only tools only. Composio's URL-inspection tool returns Google's 404 page: use
+  the search-analytics query instead. Indexing was requested on 2026-10-05 for `/connect`, `/docs/guides/claude-code`
+  and `/docs/guides/codex`, which had 0 impressions from July to 2026-10-04.
+- **Cloudflare:**
+  - Single Redirect "www to apex": filter `(http.host eq "www.solvr.dev")`, target
+    `concat("https://solvr.dev", http.request.uri.path)`, 301, query string preserved. The earlier `wildcard_replace`
+    target looped on `http://www`.
+  - SSL/TLS, Edge Certificates (2026-10-05): Always Use HTTPS on (`http://` answers one 301 to `https://`, query
+    kept); HSTS on, `max-age=15552000` (6 months), includeSubDomains off, preload off, No-Sniff on. The header is
+    zone-wide, so `api.solvr.dev` sends it too.
+  - Email Address Obfuscation is off (it broke hydration).
+- **Validating production:** curl with a browser user agent. A JavaScript browser on production fires GA, funnel and
+  view writes, and every `GET /v1/search` logs a row.
+
+### Open, with dates
+- 2026-10-06: Search Console has downloaded the sitemap after 2026-04-06 and lists the six sub-sitemaps; the four key
+  events receive data. Neither had happened on 2026-10-05: the events fire only after consent.
+- This week: the three pages whose indexing was requested show impressions in Search Console.
+- 2026-10-09, 2026-10-30, 2026-11-27: legacy redirect reviews (SPEC.md 27.4).
+
+---
+
 ## Roadmap
 
 ### Password recovery (not built)

@@ -49,8 +49,9 @@ func seedSearchSample(t *testing.T, pool *Pool) searchSampleSeed {
 	answer(draft, "ksbeta the draft answer", false)
 	answer(s.answered, "ksbeta a withdrawn answer", true)
 
-	// Recorded searches, most frequent first. 'ksquote is rejected by the search before and
-	// after the conversion; kszeta matches nothing; ksgamma is outside a sample of four.
+	// Recorded searches, most frequent first. 'ksquote, a word that starts with a quote, is a
+	// normal search since SPEC.md 22.7 (it was a tsquery syntax error before 2026-10-17);
+	// kszeta matches nothing; ksgamma is outside a sample of four.
 	for q, n := range map[string]int{"ksbeta": 5, "ksalpha": 4, "'ksquote": 3, "kszeta": 2, "ksgamma": 1} {
 		_, err := pool.Exec(ctx, `INSERT INTO search_queries (query, query_normalized, results_count, search_method, duration_ms)
 			SELECT $1, $1, 0, 'fulltext_only', 1 FROM generate_series(1, $2)`, q, n)
@@ -69,7 +70,7 @@ func TestKnowledgeCutover_SearchSampleFindsBeforeAndAfterTheMostFrequentQueries(
 	got := rep.SearchSample
 	require.NotNil(t, got)
 	require.Equal(t, []string{"ksbeta", "ksalpha", "'ksquote", "kszeta"}, got.Queries, "most frequent first, ties by text")
-	require.Equal(t, []string{"'ksquote"}, got.Errored, "a query the search rejects is left out, before and after")
+	require.Empty(t, got.Errored, "no sampled query is rejected: any text is a valid query (SPEC.md 22.7)")
 	require.Empty(t, got.ErroredAfter)
 	require.Equal(t, 1, got.PostsBefore, "ksalpha finds the solved problem by its own text")
 	require.Equal(t, 3, got.PostsAfter, "ksbeta now finds the solved problem and the answered question through their replies")

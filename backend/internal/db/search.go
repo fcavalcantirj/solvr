@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/jackc/pgx/v5"
@@ -357,44 +358,27 @@ func searchPostSelect(tsArg, score, similarity, from, counts string) string {
 		LEFT JOIN agents a ON p.posted_by_type = 'agent' AND p.posted_by_id = a.id` + counts
 }
 
-// buildTsQuery converts a search query to PostgreSQL's websearch-compatible tsquery format.
+// buildTsQuery turns any text into to_tsquery input that matches a document holding any of its
+// words, each as a prefix: "'word1':* | 'word2':*" (SPEC.md 22.7).
+//
+// Every word is a quoted lexeme. Inside quotes only the quote and the backslash mean anything
+// to the tsquery parser, so they are escaped and every other character is plain text: a word
+// can hold "<", start with a quote or be all operators and still parse. The parser then drops
+// what normalizes to nothing (punctuation, a tag-like "<module>", stop words). A NUL byte and
+// invalid UTF-8 are dropped first, because Postgres refuses them as text, and a word with no
+// letter or digit is skipped, because it can match nothing.
 func buildTsQuery(query string) string {
-	// Clean up the query
-	query = strings.TrimSpace(query)
-	if query == "" {
-		return ""
-	}
-
-	// Split into words and join with | (OR)
-	words := strings.Fields(query)
-	var escaped []string
-	for _, word := range words {
-		// Remove special characters that might break tsquery
-		word = strings.ReplaceAll(word, "'", "''")
-		word = strings.ReplaceAll(word, "\\", "")
-		word = strings.ReplaceAll(word, ":", "")
-		word = strings.ReplaceAll(word, "(", "")
-		word = strings.ReplaceAll(word, ")", "")
-		word = strings.ReplaceAll(word, "&", "")
-		word = strings.ReplaceAll(word, "|", "")
-		word = strings.ReplaceAll(word, "!", "")
-		if word != "" {
-			escaped = append(escaped, word)
+	query = strings.ToValidUTF8(strings.ReplaceAll(query, "\x00", ""), "")
+	var terms []string
+	for _, word := range strings.Fields(query) {
+		if !strings.ContainsFunc(word, func(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) }) {
+			continue
 		}
+		lexeme := strings.ReplaceAll(word, `\`, `\\`)
+		lexeme = strings.ReplaceAll(lexeme, "'", "''")
+		terms = append(terms, "'"+lexeme+"':*")
 	}
-
-	// Join with :* for prefix matching and | for OR
-	// This gives "word1:* | word2:*" which matches any of the words
-	// Using OR instead of AND makes search more forgiving and finds more results
-	if len(escaped) == 0 {
-		return ""
-	}
-
-	for i := range escaped {
-		escaped[i] = escaped[i] + ":*"
-	}
-
-	return strings.Join(escaped, " | ")
+	return strings.Join(terms, " | ")
 }
 
 // buildSearchFilters builds the WHERE clause filters based on search options.

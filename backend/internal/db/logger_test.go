@@ -7,6 +7,8 @@ import (
 	"errors"
 	"log/slog"
 	"testing"
+
+	"github.com/fcavalcantirj/solvr/internal/requestid"
 )
 
 // TestLogQueryError verifies that LogQueryError produces structured JSON logs.
@@ -66,7 +68,7 @@ func TestLogQueryErrorWithContext(t *testing.T) {
 	testErr := errors.New("timeout")
 
 	// Create context with request ID (commonly added by middleware)
-	ctx := context.WithValue(context.Background(), requestIDKey, "req-12345")
+	ctx := requestid.With(context.Background(), "req-12345")
 
 	LogQueryError(ctx, "Create", "agents", testErr)
 

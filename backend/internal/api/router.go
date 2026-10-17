@@ -12,7 +12,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
-	"github.com/google/uuid"
 
 	"github.com/fcavalcantirj/solvr/internal/api/handlers"
 	apimiddleware "github.com/fcavalcantirj/solvr/internal/api/middleware"
@@ -20,6 +19,7 @@ import (
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/hub"
 	"github.com/fcavalcantirj/solvr/internal/jobs"
+	"github.com/fcavalcantirj/solvr/internal/requestid"
 	"github.com/fcavalcantirj/solvr/internal/services"
 )
 
@@ -228,14 +228,16 @@ func NewRouter(pool *db.Pool, hubMgr *hub.HubManager, registry *hub.PresenceRegi
 }
 
 // requestIDMiddleware adds a unique request ID to each request
+// requestIDMiddleware resolves the request's one id (SPEC.md 17.3): a safe client X-Request-ID,
+// or a new one. It answers it in the response header, and puts it in the request's header and
+// context, so the Logging and APIUsage middlewares, the db layer's log lines and the error
+// envelope all name the same id.
 func requestIDMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestID := r.Header.Get("X-Request-ID")
-		if requestID == "" {
-			requestID = uuid.New().String()
-		}
+		requestID := requestid.Resolve(r.Header.Get("X-Request-ID"))
+		r.Header.Set("X-Request-ID", requestID)
 		w.Header().Set("X-Request-ID", requestID)
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(w, r.WithContext(requestid.With(r.Context(), requestID)))
 	})
 }
 

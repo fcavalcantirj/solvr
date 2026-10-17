@@ -22,6 +22,18 @@ func fromOf(t *testing.T, sender any) string {
 	return s.FromAddress()
 }
 
+type replyToer interface{ ReplyTo() string }
+
+// replyToOf is the Reply-To a sender sends, "" for none.
+func replyToOf(t *testing.T, sender any) string {
+	t.Helper()
+	s, ok := sender.(replyToer)
+	if !ok {
+		t.Fatalf("%T does not say its Reply-To", sender)
+	}
+	return s.ReplyTo()
+}
+
 func envOf(vars map[string]string) func(string) string {
 	return func(k string) string { return vars[k] }
 }
@@ -79,6 +91,35 @@ func TestEmailSendersFromEnv(t *testing.T) {
 		}
 		if missing != "" {
 			t.Errorf("missing = %q, want none", missing)
+		}
+	})
+
+	t.Run("BROADCAST_REPLY_TO: replies to a broadcast go there, a notice carries none", func(t *testing.T) {
+		broadcast, notice, _ := emailSendersFromEnv(envOf(map[string]string{"RESEND_API_KEY": "re_test",
+			"FROM_EMAIL_TRANSACTIONAL": "hello@solvr.dev", "BROADCAST_REPLY_TO": "hello@solvr.dev"}))
+		if broadcast == nil || notice == nil {
+			t.Fatalf("senders %v %v, want both", broadcast, notice)
+		}
+		if got := fromOf(t, broadcast); got != "noreply@solvr.dev" {
+			t.Errorf("broadcast from %q, want noreply@solvr.dev", got)
+		}
+		if got := replyToOf(t, broadcast); got != "hello@solvr.dev" {
+			t.Errorf("broadcast Reply-To %q, want hello@solvr.dev", got)
+		}
+		if got := replyToOf(t, notice); got != "" {
+			t.Errorf("notice Reply-To %q, want none", got)
+		}
+	})
+
+	t.Run("unset, or not one bare address: no Reply-To, and broadcasts still send", func(t *testing.T) {
+		for _, value := range []string{"", " ", "Solvr <hello@solvr.dev>", "hello", "a@b.c, d@e.f", " hello@solvr.dev"} {
+			broadcast, _, _ := emailSendersFromEnv(envOf(map[string]string{"RESEND_API_KEY": "re_test", "BROADCAST_REPLY_TO": value}))
+			if broadcast == nil {
+				t.Fatalf("%q: no broadcast sender", value)
+			}
+			if got := replyToOf(t, broadcast); got != "" {
+				t.Errorf("%q: broadcast Reply-To %q, want none", value, got)
+			}
 		}
 	})
 }

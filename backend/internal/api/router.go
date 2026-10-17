@@ -129,13 +129,18 @@ func NewRouter(pool *db.Pool, hubMgr *hub.HubManager, registry *hub.PresenceRegi
 	}
 	r.With(operatorOnly).Post("/admin/jobs/translation/run", adminHandler.RunTranslationJob)
 
-	// The two Resend senders (SPEC.md 16.6): broadcasts from FROM_EMAIL, notices only from
-	// FROM_EMAIL_TRANSACTIONAL. A missing transactional address leaves no notice sender, so
-	// notices are refused (fail closed) and this is logged at start.
+	// The two Resend senders (SPEC.md 16.6): broadcasts from FROM_EMAIL (replies to
+	// BROADCAST_REPLY_TO), notices only from FROM_EMAIL_TRANSACTIONAL. A missing transactional
+	// address leaves no notice sender, so notices are refused (fail closed) and this is logged at start.
 	broadcastSender, noticeSender, emailGap := emailSendersFromEnv(os.Getenv)
 	if broadcastSender != nil {
 		adminHandler.SetEmailSender(broadcastSender)
-		slog.Info("Resend email client configured", "transactional_sender", noticeSender != nil)
+		replyToSet := false
+		if s, ok := broadcastSender.(interface{ ReplyTo() string }); ok {
+			replyToSet = s.ReplyTo() != ""
+		}
+		slog.Info("Resend email client configured", "transactional_sender", noticeSender != nil,
+			"broadcast_reply_to", replyToSet)
 	}
 	if noticeSender != nil {
 		adminHandler.SetNoticeSender(noticeSender)

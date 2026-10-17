@@ -14,6 +14,7 @@ import (
 type ResendClient struct {
 	client    *resend.Client
 	fromEmail string
+	replyTo   string
 }
 
 // NewResendClient creates a new ResendClient.
@@ -29,6 +30,16 @@ func NewResendClient(apiKey, fromEmail string) *ResendClient {
 // FromAddress is the address this client sends from.
 func (c *ResendClient) FromAddress() string {
 	return c.fromEmail
+}
+
+// SetReplyTo sets the Reply-To of every email this client sends; empty sends none (SPEC.md 16.6).
+func (c *ResendClient) SetReplyTo(addr string) {
+	c.replyTo = addr
+}
+
+// ReplyTo is the Reply-To this client sends, or "" for none.
+func (c *ResendClient) ReplyTo() string {
+	return c.replyTo
 }
 
 // SetBaseURL overrides the Resend API base URL (for testing with httptest).
@@ -48,7 +59,8 @@ func (c *ResendClient) SetBaseURL(rawURL string) {
 // Send sends a single email via the Resend API and returns Resend's id for it, which its
 // webhook events name (SPEC.md 16.6).
 // Parameters: to (recipient), subject, htmlBody, textBody (can be empty).
-// The from address is set at construction time as "Solvr <fromEmail>".
+// The from address is set at construction time as "Solvr <fromEmail>", and the Reply-To, if any,
+// by SetReplyTo.
 // Optional variadic headers map allows passing custom headers (e.g., List-Unsubscribe).
 func (c *ResendClient) Send(ctx context.Context, to, subject, htmlBody, textBody string, headers ...map[string]string) (string, error) {
 	params := &resend.SendEmailRequest{
@@ -57,6 +69,7 @@ func (c *ResendClient) Send(ctx context.Context, to, subject, htmlBody, textBody
 		Subject: subject,
 		Html:    htmlBody,
 		Text:    textBody,
+		ReplyTo: c.replyTo,
 	}
 	if len(headers) > 0 && headers[0] != nil {
 		params.Headers = headers[0]

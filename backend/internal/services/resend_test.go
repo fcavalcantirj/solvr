@@ -216,3 +216,52 @@ func TestResendClient_Send_WithHeaders(t *testing.T) {
 		t.Errorf("expected List-Unsubscribe == '<mailto:unsubscribe@solvr.dev>', got %q", unsubscribe)
 	}
 }
+
+// SPEC.md 16.6: a client given a Reply-To sends it as Resend's reply_to; without one the field is absent.
+func TestResendClient_Send_ReplyTo(t *testing.T) {
+	for _, tc := range []struct {
+		name, replyTo string
+	}{
+		{"set", "hello@solvr.dev"},
+		{"unset", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var captured map[string]any
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				body, err := io.ReadAll(r.Body)
+				if err != nil {
+					t.Errorf("read body: %v", err)
+				}
+				if err := json.Unmarshal(body, &captured); err != nil {
+					t.Errorf("unmarshal body: %v", err)
+				}
+				w.Header().Set("Content-Type", "application/json")
+				if _, err := w.Write([]byte(`{"id": "test-id"}`)); err != nil {
+					t.Errorf("write: %v", err)
+				}
+			}))
+			defer server.Close()
+
+			client := NewResendClient("test-api-key", "noreply@solvr.dev")
+			client.SetBaseURL(server.URL)
+			client.SetReplyTo(tc.replyTo)
+			if got := client.ReplyTo(); got != tc.replyTo {
+				t.Errorf("ReplyTo() = %q, want %q", got, tc.replyTo)
+			}
+			if _, err := client.Send(context.Background(), "user@example.com", "Subject", "<p>x</p>", ""); err != nil {
+				t.Fatalf("Send: %v", err)
+			}
+
+			got, present := captured["reply_to"]
+			if tc.replyTo == "" {
+				if present {
+					t.Errorf("reply_to = %v, want it absent", got)
+				}
+				return
+			}
+			if got != tc.replyTo {
+				t.Errorf("reply_to = %v, want %q", got, tc.replyTo)
+			}
+		})
+	}
+}

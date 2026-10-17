@@ -1755,6 +1755,7 @@ SMTP_PASS=
 FROM_EMAIL=
 RESEND_API_KEY=
 FROM_EMAIL_TRANSACTIONAL=   # the notice sender (16.6); unset refuses every notice
+BROADCAST_REPLY_TO=         # the Reply-To of broadcasts (16.6); unset sends none
 RESEND_WEBHOOK_SECRET=      # whsec_... of the Resend webhook (16.6); unset refuses every event
 
 # LLM (for future AI features)
@@ -3032,9 +3033,10 @@ about it (migration 000147, `backend/internal/db/email_delivery.go`).
 - A **broadcast** (`POST /admin/email/broadcast`, to every mailable user or one with `to`) goes from `FROM_EMAIL`
   (`noreply@solvr.dev` when unset), inside the branded template whose footer links the unsubscribe page, with
   `List-Unsubscribe: <https://api.solvr.dev/v1/email/unsubscribe?email=…&token=…>` and
-  `List-Unsubscribe-Post: List-Unsubscribe=One-Click` (RFC 8058). The `<mailto:unsubscribe@solvr.dev>` entry is sent
-  only once the owner confirms that mailbox exists (open question F4 of the 2026-10-12 fix plan). The dry run's
-  `preview.footer_url` is the first recipient's footer link.
+  `List-Unsubscribe-Post: List-Unsubscribe=One-Click` (RFC 8058). There is no `mailto:` entry: `unsubscribe@solvr.dev`
+  has no mailbox (owner, 2026-10-17). Replies go to `BROADCAST_REPLY_TO` when it is one bare address; any other value
+  is ignored, so a bad setting never stops broadcasts. The dry run's `preview.footer_url` is the first recipient's
+  footer link.
 - A **notice** (`POST /admin/email/notice {to, subject, body_html, body_text, dry_run}`, operator-only) is one
   transactional email to one live user (`to` is one bare address): from `FROM_EMAIL_TRANSACTIONAL`, with the body
   as given, no footer and no `List-Unsubscribe` headers. A user who unsubscribed from broadcasts still receives
@@ -3081,7 +3083,7 @@ or `failed`). A failed send is logged with the recipient's user id, never the ad
   - any other event is stored and changes nothing.
 - A suppressed address is left out of every broadcast (`ListActiveEmails`) and refused for a notice.
 
-**Owner settings.** `RESEND_WEBHOOK_SECRET` and `FROM_EMAIL_TRANSACTIONAL` are set in EasyPanel; the webhook is
+**Owner settings.** `RESEND_WEBHOOK_SECRET`, `FROM_EMAIL_TRANSACTIONAL` and `BROADCAST_REPLY_TO` are set in EasyPanel; the webhook is
 created in Resend → Webhooks for the seven events above, with `https://api.solvr.dev/v1/webhooks/resend` as its URL.
 
 ---

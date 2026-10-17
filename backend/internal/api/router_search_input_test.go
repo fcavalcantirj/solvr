@@ -19,12 +19,12 @@ func TestSearchRouter_AnswersPastedErrorsAndStoresFailuresUnderTheirRequestID(t 
 
 	resp, err := http.Get(ts.URL + "/v1/search?q=Cannot%20find%20module%20%27express%27&page=1&per_page=20") //nolint:noctx // test client
 	require.NoError(t, err)
-	resp.Body.Close()
+	require.NoError(t, resp.Body.Close())
 	assert.Equal(t, http.StatusOK, resp.StatusCode, "a quoted word is plain search text")
 
 	resp, err = http.Get(ts.URL + "/v1/search?q=c1-router-probe%FF&page=1&per_page=20") //nolint:noctx // test client
 	require.NoError(t, err)
-	resp.Body.Close()
+	require.NoError(t, resp.Body.Close())
 	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	id := resp.Header.Get("X-Request-ID")
 	require.NotEmpty(t, id)

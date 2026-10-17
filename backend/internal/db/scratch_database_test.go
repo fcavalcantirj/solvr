@@ -47,10 +47,10 @@ func newPreArchiveScratchDatabase(t *testing.T) (pool *Pool, archiveLegacy func(
 		}
 		rest = append(rest, f)
 	}
-	pool, url := newScratchDatabase(t, append(before, independent...))
+	pool, scratchURL := newScratchDatabase(t, append(before, independent...))
 	return pool, func() {
 		t.Helper()
-		applyMigrationFiles(t, url, rest)
+		applyMigrationFiles(t, scratchURL, rest)
 		pool.pool.Reset() // no connection keeps a statement prepared against the old schema
 	}
 }

@@ -26,7 +26,7 @@ func NewSearchFailureRepository(pool *Pool) *SearchFailureRepository {
 // RecordFailure stores one failed search. Its query is stored as text Postgres accepts: invalid
 // UTF-8 becomes U+FFFD, NUL bytes are removed and it is cut to 500 characters. An empty request
 // id or SQLSTATE is stored as NULL.
-func (r *SearchFailureRepository) RecordFailure(ctx context.Context, f models.SearchFailure) error {
+func (r *SearchFailureRepository) RecordFailure(ctx context.Context, f *models.SearchFailure) error {
 	q := strings.ToValidUTF8(strings.ReplaceAll(f.Query, "\x00", ""), "�")
 	if utf8.RuneCountInString(q) > searchFailureQueryMax {
 		q = string([]rune(q)[:searchFailureQueryMax])

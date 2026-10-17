@@ -64,7 +64,7 @@ func createRoomWithSourcePost(t *testing.T, ts *httptest.Server, apiKey, sourceP
 	if !private {
 		// A new room starts unlisted (SPEC.md 27.1); its owner lists it, so the post shows it.
 		listed := doRoomRequestAtCurrentVersion(t, http.MethodPatch, ts.URL+"/v1/rooms/"+slugOut, `{"listed":true}`, apiKey)
-		listed.Body.Close()
+		require.NoError(t, listed.Body.Close())
 		require.Equal(t, http.StatusOK, listed.StatusCode, "the owner lists the room")
 	}
 	return slugOut, id

@@ -4,8 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
 // SPEC.md 22.7: the search answers every input class, on the keyword path and on the hybrid

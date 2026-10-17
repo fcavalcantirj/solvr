@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -21,11 +22,11 @@ import (
 
 // usageEvents keeps what APIUsage records, for the request-id wiring test.
 type usageEvents struct {
-	mu     sync.Mutex
 	events []db.APIRequestEvent
+	mu     sync.Mutex
 }
 
-func (u *usageEvents) Record(e db.APIRequestEvent) {
+func (u *usageEvents) Record(e db.APIRequestEvent) { //nolint:gocritic // APIUsageRecorder takes the event by value
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	u.events = append(u.events, e)
@@ -65,7 +66,7 @@ func TestRequestID_OneIDReachesTheContextTheLogsAndTheUsageRow(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			buf.Reset()
 			rec.events = nil
-			req := httptest.NewRequest(http.MethodGet, "/v1/search?q=x", nil)
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/search?q=x", http.NoBody)
 			if c.client != "" {
 				req.Header.Set("X-Request-ID", c.client)
 			}

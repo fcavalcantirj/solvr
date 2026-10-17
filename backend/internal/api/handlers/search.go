@@ -39,7 +39,7 @@ const DefaultSearchConfidenceThreshold = 0.85
 
 // SearchFailureRecorder stores a search that did not answer 2xx (SPEC.md 22.8).
 type SearchFailureRecorder interface {
-	RecordFailure(ctx context.Context, f models.SearchFailure) error
+	RecordFailure(ctx context.Context, f *models.SearchFailure) error
 }
 
 // SearchHandler handles search-related HTTP requests.

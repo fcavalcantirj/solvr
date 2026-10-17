@@ -85,7 +85,7 @@ func (h *SearchHandler) recordFailure(r *http.Request, start time.Time, query st
 		return
 	}
 	searcherType, _ := searcherOf(r)
-	f := models.SearchFailure{
+	f := &models.SearchFailure{
 		RequestID:    requestid.From(r.Context()),
 		Query:        query,
 		Status:       status,
@@ -95,9 +95,12 @@ func (h *SearchHandler) recordFailure(r *http.Request, start time.Time, query st
 		DurationMs:   int(time.Since(start).Milliseconds()),
 		OccurredAt:   start,
 	}
+	// The write outlives the response, so it keeps the request's values (its id) but not its
+	// cancellation.
+	detached := context.WithoutCancel(r.Context())
 	go func() {
 		defer func() { recover() }() //nolint:errcheck // a statistic must never take the server down
-		ctx, cancel := context.WithTimeout(context.Background(), searchFailureRecordTimeout)
+		ctx, cancel := context.WithTimeout(detached, searchFailureRecordTimeout)
 		defer cancel()
 		if err := h.failures.RecordFailure(ctx, f); err != nil {
 			slog.Warn("search failure record failed", "request_id", f.RequestID, "error", err)

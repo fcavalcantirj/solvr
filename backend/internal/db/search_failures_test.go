@@ -28,11 +28,11 @@ func TestSearchFailureRepository_StoresTheInputAsValidTextWithItsOutcome(t *test
 	marker := "c1-probe-" + at.Format("150405.000")
 	long := marker + " bad\xffbyte nul\x00here " + strings.Repeat("é", 600)
 
-	require.NoError(t, repo.RecordFailure(ctx, models.SearchFailure{
+	require.NoError(t, repo.RecordFailure(ctx, &models.SearchFailure{
 		RequestID: "req-fail-1", Query: long, Status: 500, ErrorCode: "INTERNAL_ERROR",
 		SQLState: "42601", SearcherType: "anonymous", DurationMs: 312, OccurredAt: at,
 	}))
-	require.NoError(t, repo.RecordFailure(ctx, models.SearchFailure{
+	require.NoError(t, repo.RecordFailure(ctx, &models.SearchFailure{
 		Query: marker + " gone", Status: 499, ErrorCode: "CLIENT_CLOSED_REQUEST", SearcherType: "agent", OccurredAt: at,
 	}))
 	t.Cleanup(func() { pool.Exec(context.Background(), `DELETE FROM search_failures WHERE query LIKE $1`, marker+"%") }) //nolint:errcheck

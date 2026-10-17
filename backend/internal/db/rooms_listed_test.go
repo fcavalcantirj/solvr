@@ -80,7 +80,7 @@ func TestListedRule_EveryPublicListingSkipsUnlistedRoomsAndFeaturingLists(t *tes
 	insertRemapAgent(t, pool, ctx, probe)
 	t.Cleanup(func() { pool.Exec(context.Background(), `DELETE FROM agents WHERE id = $1`, probe) }) //nolint:errcheck
 	for _, room := range []uuid.UUID{unlisted, listedID} {
-		_, err := pool.Exec(ctx, `INSERT INTO room_members (room_id, agent_id, role, added_by)
+		_, err = pool.Exec(ctx, `INSERT INTO room_members (room_id, agent_id, role, added_by)
 			VALUES ($1, $2, 'member', $2)`, room, probe)
 		require.NoError(t, err)
 		_, err = pool.Exec(ctx, `INSERT INTO agent_presence (room_id, agent_id, agent_name, card_json, ttl_seconds)

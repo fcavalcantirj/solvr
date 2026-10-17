@@ -35,6 +35,9 @@ func With(ctx context.Context, id string) context.Context {
 
 // From returns the request id ctx carries, or "" when it carries none.
 func From(ctx context.Context) string {
-	id, _ := ctx.Value(ctxKey{}).(string)
+	id, ok := ctx.Value(ctxKey{}).(string)
+	if !ok {
+		return ""
+	}
 	return id
 }

@@ -21,16 +21,16 @@ import (
 
 // failureLog keeps the failures the handler records, for the tests below.
 type failureLog struct {
-	mu   sync.Mutex
-	rows []models.SearchFailure
 	got  chan struct{}
+	rows []models.SearchFailure
+	mu   sync.Mutex
 }
 
 func newFailureLog() *failureLog { return &failureLog{got: make(chan struct{}, 16)} }
 
-func (f *failureLog) RecordFailure(_ context.Context, sf models.SearchFailure) error {
+func (f *failureLog) RecordFailure(_ context.Context, sf *models.SearchFailure) error {
 	f.mu.Lock()
-	f.rows = append(f.rows, sf)
+	f.rows = append(f.rows, *sf)
 	f.mu.Unlock()
 	f.got <- struct{}{}
 	return nil
@@ -75,7 +75,7 @@ func TestSearch_RejectsTextThatIsNotUTF8OrHoldsNUL(t *testing.T) {
 		repo := NewMockSearchRepository()
 		h := NewSearchHandler(repo)
 		w := httptest.NewRecorder()
-		h.Search(w, httptest.NewRequest(http.MethodGet, target, nil))
+		h.Search(w, httptest.NewRequestWithContext(context.Background(), http.MethodGet, target, http.NoBody))
 		assert.Equal(t, http.StatusBadRequest, w.Code, target)
 		assert.Equal(t, "VALIDATION_ERROR", searchFailureCode(t, w), target)
 		assert.Contains(t, w.Body.String(), "must be UTF-8 text without NUL characters", target)
@@ -93,7 +93,7 @@ func TestSearch_AClientThatLeftIs499NotA500(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	w := httptest.NewRecorder()
-	h.Search(w, httptest.NewRequest(http.MethodGet, "/v1/search?q=scraping", nil).WithContext(ctx))
+	h.Search(w, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/search?q=scraping", http.NoBody).WithContext(ctx))
 	assert.Equal(t, 499, w.Code)
 	assert.Equal(t, "CLIENT_CLOSED_REQUEST", searchFailureCode(t, w))
 }
@@ -109,7 +109,7 @@ func TestSearch_AServerFailureIsLoggedWithItsRequestID(t *testing.T) {
 	repo := NewMockSearchRepository()
 	repo.SetError(&pgconn.PgError{Code: "42601", Message: "syntax error in tsquery"})
 	h := NewSearchHandler(repo)
-	req := httptest.NewRequest(http.MethodGet, "/v1/search?q=x", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/search?q=x", http.NoBody)
 	req = req.WithContext(requestid.With(req.Context(), "req-search-1"))
 	w := httptest.NewRecorder()
 	h.Search(w, req)
@@ -135,7 +135,7 @@ func TestSearch_EveryFailureIsRecorded(t *testing.T) {
 		}
 		h := NewSearchHandler(repo)
 		h.SetFailureRecorder(failures)
-		req := httptest.NewRequest(http.MethodGet, target, nil)
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, target, http.NoBody)
 		ctx := requestid.With(req.Context(), "req-"+target)
 		if cancelled {
 			c, cancel := context.WithCancel(ctx)

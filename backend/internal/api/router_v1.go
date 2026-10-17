@@ -440,10 +440,17 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			r.Get("/posts/{id}/views", viewsHandler.GetViewCount)
 		})
 
-		// Email unsubscribe — public endpoint, HMAC-signed token validates identity
+		// Email delivery (SPEC.md 16.6), public: the HMAC-signed token of an email's link proves
+		// the address, and the Resend webhook proves itself by its Svix signature.
+		//   POST /v1/email/unsubscribe  RFC 8058 one-click unsubscribe
+		//   GET  /v1/email/unsubscribe  303 to the solvr.dev page; never writes
+		//   POST /v1/webhooks/resend    delivery events; 503 while RESEND_WEBHOOK_SECRET is unset
 		if pool != nil {
 			unsubHandler := handlers.NewUnsubscribeHandler(db.NewUserRepository(pool), jwtSecret)
-			r.Get("/email/unsubscribe", unsubHandler.Unsubscribe)
+			r.Post("/email/unsubscribe", unsubHandler.Unsubscribe)
+			r.Get("/email/unsubscribe", unsubHandler.ShowPage)
+			resendWebhook := handlers.NewResendWebhookHandler(db.NewEmailDeliveryRepository(pool), os.Getenv("RESEND_WEBHOOK_SECRET"))
+			r.Post("/webhooks/resend", resendWebhook.Receive)
 		}
 
 		// Stats endpoints (for frontend dashboard)

@@ -59,9 +59,19 @@ func TestResendClient_Send_Success(t *testing.T) {
 	client.SetBaseURL(server.URL)
 
 	ctx := context.Background()
-	err := client.Send(ctx, "user@example.com", "Test Subject", "<p>Hello</p>", "Hello")
+	id, err := client.Send(ctx, "user@example.com", "Test Subject", "<p>Hello</p>", "Hello")
 	if err != nil {
 		t.Errorf("expected no error, got: %v", err)
+	}
+	// SPEC.md 16.6: the provider's id of each message is kept, so its webhook events find it.
+	if id != "test-email-id" {
+		t.Errorf("Send returned id %q, want Resend's id test-email-id", id)
+	}
+}
+
+func TestResendClient_FromAddress(t *testing.T) {
+	if got := NewResendClient("test-api-key", "notices@solvr.dev").FromAddress(); got != "notices@solvr.dev" {
+		t.Errorf("FromAddress() = %q, want notices@solvr.dev", got)
 	}
 }
 
@@ -77,7 +87,7 @@ func TestResendClient_Send_APIError(t *testing.T) {
 	client.SetBaseURL(server.URL)
 
 	ctx := context.Background()
-	err := client.Send(ctx, "invalid", "Test", "<p>x</p>", "")
+	_, err := client.Send(ctx, "invalid", "Test", "<p>x</p>", "")
 	if err == nil {
 		t.Error("expected error, got nil")
 	}
@@ -110,7 +120,7 @@ func TestResendClient_Send_EmptyTextBody(t *testing.T) {
 	client.SetBaseURL(server.URL)
 
 	ctx := context.Background()
-	err := client.Send(ctx, "user@example.com", "Subject", "<p>HTML only</p>", "")
+	_, err := client.Send(ctx, "user@example.com", "Subject", "<p>HTML only</p>", "")
 	if err != nil {
 		t.Errorf("expected no error, got: %v", err)
 	}
@@ -150,7 +160,7 @@ func TestResendClient_Send_CustomFromEmail(t *testing.T) {
 	client.SetBaseURL(server.URL)
 
 	ctx := context.Background()
-	err := client.Send(ctx, "user@example.com", "Subject", "<p>Test</p>", "")
+	_, err := client.Send(ctx, "user@example.com", "Subject", "<p>Test</p>", "")
 	if err != nil {
 		t.Errorf("expected no error, got: %v", err)
 	}
@@ -181,7 +191,7 @@ func TestResendClient_Send_WithHeaders(t *testing.T) {
 	customHeaders := map[string]string{
 		"List-Unsubscribe": "<mailto:unsubscribe@solvr.dev>",
 	}
-	err := client.Send(ctx, "user@example.com", "Newsletter", "<p>Hello</p>", "Hello", customHeaders)
+	_, err := client.Send(ctx, "user@example.com", "Newsletter", "<p>Hello</p>", "Hello", customHeaders)
 	if err != nil {
 		t.Errorf("expected no error, got: %v", err)
 	}

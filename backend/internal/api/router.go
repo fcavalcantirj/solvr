@@ -129,23 +129,31 @@ func NewRouter(pool *db.Pool, hubMgr *hub.HubManager, registry *hub.PresenceRegi
 	}
 	r.With(operatorOnly).Post("/admin/jobs/translation/run", adminHandler.RunTranslationJob)
 
-	// Wire Resend email client and broadcast endpoint if API key is available
-	if resendKey := os.Getenv("RESEND_API_KEY"); resendKey != "" {
-		fromEmail := os.Getenv("FROM_EMAIL")
-		if fromEmail == "" {
-			fromEmail = "noreply@solvr.dev"
-		}
-		resendClient := services.NewResendClient(resendKey, fromEmail)
-		adminHandler.SetEmailSender(resendClient)
-		slog.Info("Resend email client configured", "from", fromEmail)
+	// The two Resend senders (SPEC.md 16.6): broadcasts from FROM_EMAIL, notices only from
+	// FROM_EMAIL_TRANSACTIONAL. A missing transactional address leaves no notice sender, so
+	// notices are refused (fail closed) and this is logged at start.
+	broadcastSender, noticeSender, emailGap := emailSendersFromEnv(os.Getenv)
+	if broadcastSender != nil {
+		adminHandler.SetEmailSender(broadcastSender)
+		slog.Info("Resend email client configured", "transactional_sender", noticeSender != nil)
+	}
+	if noticeSender != nil {
+		adminHandler.SetNoticeSender(noticeSender)
+	}
+	if emailGap != "" && broadcastSender != nil {
+		slog.Error("transactional email is refused until it is configured", "missing", emailGap)
 	}
 
 	// Wire email broadcast repos (needed even without Resend key for 503 response)
 	if pool != nil {
 		adminHandler.SetEmailBroadcastRepo(db.NewEmailBroadcastRepository(pool))
 		adminHandler.SetUserEmailRepo(db.NewUserRepository(pool))
+		delivery := db.NewEmailDeliveryRepository(pool)
+		adminHandler.SetEmailMessageRecorder(delivery)
+		adminHandler.SetNoticeRecipientRepo(delivery)
 	}
 	r.With(operatorOnly).Post("/admin/email/broadcast", adminHandler.BroadcastEmail)
+	r.With(operatorOnly).Post("/admin/email/notice", adminHandler.SendNotice)
 	mountAbuseAdminRoutes(r, pool, operatorOnly, ipfsAPIURL)
 	mountGrowthReportRoutes(r, pool, operatorOnly)
 	mountSEOReportRoutes(r, pool, operatorOnly)

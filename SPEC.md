@@ -1753,6 +1753,9 @@ SMTP_PORT=587
 SMTP_USER=
 SMTP_PASS=
 FROM_EMAIL=
+RESEND_API_KEY=
+FROM_EMAIL_TRANSACTIONAL=   # the notice sender (16.6); unset refuses every notice
+RESEND_WEBHOOK_SECRET=      # whsec_... of the Resend webhook (16.6); unset refuses every event
 
 # LLM (for future AI features)
 LLM_PROVIDER=openai|anthropic
@@ -3019,6 +3022,67 @@ The planner-to-executor acquisition loop (spec.json idx 87; `backend/internal/gr
   `new_human_activations` (humans first seen in an activated room attributed to a public room or post) and
   `human_share_visits`; `data.initial_cohort`:
   owner-led, `not_yet_measurable`.
+
+## 16.6 Email Delivery
+
+Solvr sends two kinds of email through Resend, and keeps a record of each message and of what Resend reported
+about it (migration 000147, `backend/internal/db/email_delivery.go`).
+
+**Two senders.** `RESEND_API_KEY` enables sending at all.
+- A **broadcast** (`POST /admin/email/broadcast`, to every mailable user or one with `to`) goes from `FROM_EMAIL`
+  (`noreply@solvr.dev` when unset), inside the branded template whose footer links the unsubscribe page, with
+  `List-Unsubscribe: <https://api.solvr.dev/v1/email/unsubscribe?email=…&token=…>` and
+  `List-Unsubscribe-Post: List-Unsubscribe=One-Click` (RFC 8058). The `<mailto:unsubscribe@solvr.dev>` entry is sent
+  only once the owner confirms that mailbox exists (open question F4 of the 2026-10-12 fix plan). The dry run's
+  `preview.footer_url` is the first recipient's footer link.
+- A **notice** (`POST /admin/email/notice {to, subject, body_html, body_text, dry_run}`, operator-only) is one
+  transactional email to one live user (`to` is one bare address): from `FROM_EMAIL_TRANSACTIONAL`, with the body
+  as given, no footer and no `List-Unsubscribe` headers. A user who unsubscribed from broadcasts still receives
+  it; an address Solvr no longer mails is refused (409 `RECIPIENT_SUPPRESSED`); an unknown one is 404. Without
+  `FROM_EMAIL_TRANSACTIONAL` (or with a value that is not one bare address) there is no notice sender: every notice
+  answers 503 `TRANSACTIONAL_SENDER_NOT_CONFIGURED` and the error is logged. A notice never falls back to the
+  broadcast sender or its footer. `dry_run` resolves the recipient and sends nothing.
+
+**Unsubscribe links.** Every link carries the address, URL-encoded, and `token` =
+HMAC-SHA256(address, `JWT_SECRET`), so every link already sent keeps working.
+- `POST /v1/email/unsubscribe?email=&token=` is the one-click unsubscribe: any form body (mail clients send
+  `List-Unsubscribe=One-Click`), no credential, idempotent; 200 `{"status":"unsubscribed"}`, 403 `INVALID_TOKEN`,
+  400 `VALIDATION_ERROR` when either is missing. It sets `users.email_unsubscribed_at`, which removes the address from broadcasts. A link sent
+  before addresses were encoded reads a `+` of the address as a space; that form is accepted only when its token
+  matches.
+- `GET /v1/email/unsubscribe?email=&token=` never writes: it answers 303 to
+  `https://solvr.dev/email/unsubscribe?email=…&masked=…&token=…`, so a link scanner or a prefetch unsubscribes no one.
+- The page `/email/unsubscribe` makes no call on load. It shows the masked address the API put in the link
+  (`a***@example.com`) and one Unsubscribe button, which POSTs the one-click body. The footer of a broadcast links
+  this page.
+
+**Records.** Every send writes an `email_messages` row: `kind` (`broadcast` | `transactional`), the broadcast's id,
+the user, Resend's message id (`provider_message_id`, NULL when the send failed), the subject and `status` (`sent`
+or `failed`). A failed send is logged with the recipient's user id, never the address.
+
+**Resend webhook: `POST /v1/webhooks/resend`.** Resend signs each request the Svix way: the signed content is
+`<svix-id>.<svix-timestamp>.<raw body>`, HMAC-SHA256 keyed with the base64 part of `RESEND_WEBHOOK_SECRET` (after
+`whsec_`), and the `svix-signature` header lists space-separated `v1,<base64>` entries, any of which may match
+(compared in constant time). A timestamp more than 5 minutes from the server's clock is refused.
+- Answers: 200 `{"received":true,"duplicate":false}` once stored (`duplicate` true for a svix-id already stored,
+  which changes nothing); 401 `INVALID_SIGNATURE` or `TIMESTAMP_OUT_OF_RANGE`; 400 for a verified body that is not
+  an event; 413 above 64 KB; 500 when it cannot be stored, so Resend retries. While `RESEND_WEBHOOK_SECRET` is
+  unset or not a signing secret it answers 503 `WEBHOOK_NOT_CONFIGURED` to everything (fail closed) and the
+  error is logged at start.
+- Every event is stored once in `email_events` (svix-id, Resend's `data.email_id`, the event type, `bounce.type`,
+  the event's `created_at`). In the same transaction:
+  - `email.sent`, `email.delivered`, `email.delivery_delayed`, `email.bounced`, `email.complained`, `email.failed`
+    and `email.suppressed` set the message's `status` to the event's name, unless a later event already set it
+    (`last_event_at`);
+  - `email.bounced` with `data.bounce.type` `Permanent`, the hard bounce of Resend's bounce types
+    (`Permanent`, `Transient`, `Undetermined`), sets `users.email_suppressed_at` with reason `hard_bounce` on the
+    addresses of `data.to`;
+  - `email.complained` sets it with reason `complaint`, and `email_unsubscribed_at` too;
+  - any other event is stored and changes nothing.
+- A suppressed address is left out of every broadcast (`ListActiveEmails`) and refused for a notice.
+
+**Owner settings.** `RESEND_WEBHOOK_SECRET` and `FROM_EMAIL_TRANSACTIONAL` are set in EasyPanel; the webhook is
+created in Resend → Webhooks for the seven events above, with `https://api.solvr.dev/v1/webhooks/resend` as its URL.
 
 ---
 
@@ -6029,6 +6093,7 @@ no sunset period.
 | `service-status` | keep | — |
 | `seo` | keep | — |
 | `product-analytics` | keep | — |
+| `email-delivery` | keep | — |
 | `administration` | keep | — |
 
 ## 26.3 Adapter Mapping
@@ -6127,8 +6192,9 @@ Every route whose family is not `keep`, with its canonical destination:
 - `connect-and-integrations`: `GET /v1/connect`, `GET /v1/connect/examples`, `POST /v1/mcp`, `GET /v1/openapi.json`, `GET /v1/openapi.yaml`, `GET /.well-known/ai-agent.json`
 - `service-status`: `GET /health`, `GET /health/live`, `GET /health/ready`, `GET /v1/health/ipfs`, `GET /v1/status`, `GET /robots.txt`
 - `seo`: `GET /v1/sitemap/urls`, `GET /v1/sitemap/counts`, `GET /v1/posts/{id}/seo`, `GET /v1/rooms/{slug}/seo`, `GET /v1/agents/{id}/seo`, `GET /v1/users/{id}/seo`
-- `product-analytics`: `GET /v1/analytics/funnel/contract`, `POST /v1/analytics/funnel`, `GET /v1/email/unsubscribe`
-- `administration`: `POST /admin/query`, `DELETE /admin/users/{id}`, `DELETE /admin/agents/{id}`, `GET /admin/users/deleted`, `GET /admin/agents/deleted`, `POST /admin/jobs/translation/run`, `POST /admin/email/broadcast`, `GET /admin/email/history`, `GET /admin/search-analytics/trending`, `GET /admin/search-analytics/summary`, `GET /admin/activation-analytics`, `GET /admin/cohort-comparison`, `POST /admin/incidents`, `PATCH /admin/incidents/{id}`, `POST /admin/incidents/{id}/updates`, `PUT /admin/rooms/{slug}/featured`, `DELETE /admin/rooms/{slug}/featured`, `GET /admin/rooms/featured`
+- `product-analytics`: `GET /v1/analytics/funnel/contract`, `POST /v1/analytics/funnel`, `POST /v1/analytics/pageview`
+- `email-delivery`: `GET /v1/email/unsubscribe`, `POST /v1/email/unsubscribe`, `POST /v1/webhooks/resend` (16.6)
+- `administration`: `POST /admin/query`, `DELETE /admin/users/{id}`, `DELETE /admin/agents/{id}`, `GET /admin/users/deleted`, `GET /admin/agents/deleted`, `POST /admin/jobs/translation/run`, `POST /admin/email/broadcast`, `POST /admin/email/notice`, `GET /admin/email/history`, `GET /admin/search-analytics/trending`, `GET /admin/search-analytics/summary`, `GET /admin/activation-analytics`, `GET /admin/cohort-comparison`, `POST /admin/incidents`, `PATCH /admin/incidents/{id}`, `POST /admin/incidents/{id}/updates`, `PUT /admin/rooms/{slug}/featured`, `DELETE /admin/rooms/{slug}/featured`, `GET /admin/rooms/featured`
 
 ## 26.5 Runtime Adapters
 

@@ -206,6 +206,8 @@ var writeProbeValidationOnly = map[string]string{
 	"POST /admin/ipfs/gc":              "repo/gc goes straight to IPFS, which the probe points at a closed port",
 	"POST /admin/jobs/translation/run": "the job runner is wired only when GROQ_API_KEY is set; the probe unsets it (the scheduled-jobs probe runs TranslationJob)",
 	"POST /admin/email/broadcast":      "the email sender is wired only when RESEND_API_KEY is set; the probe unsets it so nothing is ever sent",
+	"POST /admin/email/notice":         "the transactional sender is wired only when RESEND_API_KEY and FROM_EMAIL_TRANSACTIONAL are set; the probe unsets them so nothing is ever sent",
+	"POST /v1/webhooks/resend":         "the webhook takes events only when RESEND_WEBHOOK_SECRET is set; the probe unsets it, so every call answers 503",
 }
 
 type writeProbeVerdict struct {
@@ -283,6 +285,8 @@ func TestLegacyDroppedDatabase_WriteRoutesExposeOnlyLegacyRouteFamilies(t *testi
 	t.Setenv("ADMIN_API_KEY", routeProbeAdminKey)
 	t.Setenv("GROQ_API_KEY", "")                   // no external moderation or translation calls
 	t.Setenv("RESEND_API_KEY", "")                 // never send email
+	t.Setenv("FROM_EMAIL_TRANSACTIONAL", "")       // no notice sender either
+	t.Setenv("RESEND_WEBHOOK_SECRET", "")          // the Resend webhook refuses every call
 	t.Setenv("IPFS_API_URL", "http://127.0.0.1:9") // refuse IPFS at once on both databases
 
 	presentURL := newPreArchiveScratchURL(t, "solvr_legacy_present_")

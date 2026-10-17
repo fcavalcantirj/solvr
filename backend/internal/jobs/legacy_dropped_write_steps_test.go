@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"mime/multipart"
+	"net/url"
+
+	"github.com/fcavalcantirj/solvr/internal/api/handlers"
 )
 
 // The write probe's call sequence. Steps run in order and each builds its calls from what
@@ -244,6 +247,12 @@ var writeProbeSteps = []func(s *writeProbeState) []writeProbeCall{
 				j(map[string]any{"flow_id": "route-probe-flow", "event": "starter_prompt_copied"})),
 			call("POST /v1/analytics/pageview", "anonymous", "/v1/analytics/pageview",
 				j(map[string]any{"path": "/rooms/route-probe", "user_agent": "route-probe", "request_mode": "navigate"})),
+			// RFC 8058's one-click unsubscribe, with the probe user's own signed link.
+			{route: "POST /v1/email/unsubscribe", caller: "anonymous",
+				path: "/v1/email/unsubscribe?email=" + url.QueryEscape(s.userEmail) +
+					"&token=" + handlers.GenerateUnsubscribeToken(s.userEmail, routeProbeJWTSecret()),
+				body: "List-Unsubscribe=One-Click", contentType: "application/x-www-form-urlencoded"},
+			call("POST /v1/webhooks/resend", "anonymous", "/v1/webhooks/resend", j(map[string]any{"type": "email.delivered"})),
 		}
 		for _, typ := range probePostTypes {
 			calls = append(calls, call("POST /v1/mcp", "agent", "/v1/mcp", rpc("tools/call", map[string]any{
@@ -371,6 +380,8 @@ var writeProbeSteps = []func(s *writeProbeState) []writeProbeCall{
 			call("POST /admin/jobs/translation/run", "admin", "/admin/jobs/translation/run", `{}`),
 			call("POST /admin/email/broadcast", "admin", "/admin/email/broadcast",
 				j(map[string]any{"subject": "route probe", "body_html": "<p>route probe</p>", "dry_run": true})),
+			call("POST /admin/email/notice", "admin", "/admin/email/notice",
+				j(map[string]any{"to": s.userEmail, "subject": "route probe", "body_html": "<p>route probe</p>", "dry_run": true})),
 			call("POST /admin/incidents", "admin", "/admin/incidents", j(map[string]any{
 				"id": "route-probe-incident", "title": "Route probe incident", "severity": "minor", "affected_services": []string{"api"}})),
 			call("PATCH /admin/incidents/{id}", "admin", incident, j(map[string]any{"status": "monitoring"})),

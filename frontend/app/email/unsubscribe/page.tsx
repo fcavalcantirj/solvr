@@ -1,26 +1,31 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState, Suspense } from "react";
+import { useState, Suspense } from "react";
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
 
+// The page an email's footer links (SPEC.md 16.6). The API puts the address, its token and the
+// address masked for display in the link. Opening the page changes nothing: one button POSTs the
+// RFC 8058 one-click body to the same URL a mail client uses.
 function UnsubscribeContent() {
   const searchParams = useSearchParams();
-  const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
-  const [message, setMessage] = useState("");
+  const email = searchParams.get("email");
+  const token = searchParams.get("token");
+  const masked = searchParams.get("masked");
+  const [status, setStatus] = useState<"ready" | "working" | "success" | "error">(
+    email && token ? "ready" : "error",
+  );
+  const [message, setMessage] = useState(email && token ? "" : "Invalid unsubscribe link. Missing email or token.");
 
-  useEffect(() => {
-    const email = searchParams.get("email");
-    const token = searchParams.get("token");
-
-    if (!email || !token) {
-      setStatus("error");
-      setMessage("Invalid unsubscribe link. Missing email or token.");
-      return;
-    }
-
+  const unsubscribe = () => {
+    if (!email || !token) return;
+    setStatus("working");
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.solvr.dev";
-    fetch(`${apiUrl}/v1/email/unsubscribe?email=${encodeURIComponent(email)}&token=${encodeURIComponent(token)}`)
+    fetch(`${apiUrl}/v1/email/unsubscribe?email=${encodeURIComponent(email)}&token=${encodeURIComponent(token)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: "List-Unsubscribe=One-Click",
+    })
       .then(async (res) => {
         const data = await res.json();
         if (res.ok) {
@@ -35,17 +40,28 @@ function UnsubscribeContent() {
         setStatus("error");
         setMessage("Network error. Please try again later.");
       });
-  }, [searchParams]);
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="max-w-md w-full mx-4 text-center">
         <h1 className="font-mono text-lg tracking-tight font-medium mb-2">SOLVR_</h1>
 
-        {status === "loading" && (
-          <div className="mt-8">
-            <Loader2 className="w-8 h-8 animate-spin mx-auto text-muted-foreground" />
-            <p className="font-mono text-sm text-muted-foreground mt-4">Processing...</p>
+        {(status === "ready" || status === "working") && (
+          <div className="mt-8 border border-border p-8">
+            <h2 className="mb-2 text-2xl font-light tracking-[-0.02em]">Unsubscribe</h2>
+            <p className="text-sm text-muted-foreground">
+              Stop Solvr&apos;s broadcast emails{masked ? ` to ${masked}` : ""}?
+            </p>
+            <button
+              type="button"
+              onClick={unsubscribe}
+              disabled={status === "working"}
+              className="mt-6 w-full font-mono text-[11px] uppercase tracking-[0.18em] py-2.5 border border-border hover:border-foreground transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
+            >
+              {status === "working" && <Loader2 className="w-3 h-3 animate-spin" />}
+              Unsubscribe
+            </button>
           </div>
         )}
 

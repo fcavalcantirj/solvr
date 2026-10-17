@@ -87,6 +87,12 @@ type APIRequestEvent struct {
 	// DurationMs is how long the server took to answer, from the boundary to
 	// the end of the handler. Nil when it was not measured; stored as NULL.
 	DurationMs *int
+	// ErrorCode is the code of the error envelope a 4xx or 5xx answer carried
+	// (SPEC.md 27.6). Empty for a success; stored as NULL.
+	ErrorCode string
+	// UAClass is the kind of client that asked (traffic.UAClasses). Empty when
+	// it was not recorded; stored as NULL.
+	UAClass string
 }
 
 // APIUsageRepository writes recorded requests.
@@ -109,14 +115,14 @@ func (r *APIUsageRepository) RecordRequests(ctx context.Context, events []APIReq
 		return nil
 	}
 
-	const columns = 10
+	const columns = 12
 	values := make([]string, 0, len(events))
 	args := make([]any, 0, len(events)*columns)
 
 	for i, event := range events {
 		base := i * columns
-		values = append(values, fmt.Sprintf("($%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d)",
-			base+1, base+2, base+3, base+4, base+5, base+6, base+7, base+8, base+9, base+10))
+		values = append(values, fmt.Sprintf("($%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d)",
+			base+1, base+2, base+3, base+4, base+5, base+6, base+7, base+8, base+9, base+10, base+11, base+12))
 
 		occurredAt := event.OccurredAt
 		if occurredAt.IsZero() {
@@ -133,13 +139,16 @@ func (r *APIUsageRepository) RecordRequests(ctx context.Context, events []APIReq
 			event.StatusClass,
 			occurredAt,
 			event.DurationMs,
+			nilIfEmpty(event.ErrorCode),
+			nilIfEmpty(event.UAClass),
 		)
 	}
 
 	_, err := r.pool.Exec(ctx, `
 		INSERT INTO api_request_events (
 			request_id, route_template, method, operation,
-			operation_family, operation_kind, actor_type, status_class, occurred_at, duration_ms
+			operation_family, operation_kind, actor_type, status_class, occurred_at, duration_ms,
+			error_code, ua_class
 		) VALUES `+strings.Join(values, ", ")+`
 		ON CONFLICT (request_id) WHERE request_id IS NOT NULL DO NOTHING
 	`, args...)

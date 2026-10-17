@@ -491,6 +491,7 @@ var RouteFamilies = []RouteFamily{
 		Routes: []string{
 			"GET /v1/analytics/funnel/contract",
 			"POST /v1/analytics/funnel",
+			"POST /v1/analytics/pageview",
 			"GET /v1/email/unsubscribe",
 		},
 	},
@@ -524,6 +525,8 @@ var RouteFamilies = []RouteFamily{
 			"GET /admin/return-usage",
 			"GET /admin/ops/slo",
 			"GET /admin/seo/baseline",
+			"GET /admin/traffic/summary",
+			"POST /admin/traffic/reclassify",
 			"PUT /admin/rooms/{slug}/featured",
 			"DELETE /admin/rooms/{slug}/featured",
 			"GET /admin/rooms/featured",

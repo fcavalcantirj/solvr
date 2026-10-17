@@ -210,6 +210,19 @@ func main() {
 		log.Println("Counter reconcile job started (runs every hour)")
 	}
 
+	// Start the traffic classify job if database is available: the behavioural traffic rules
+	// (SPEC.md 27.6) judge the last two hours of funnel steps and searches, so a connection
+	// start an agent fetched and nobody copied is flagged without an operator call, one
+	// instance at a time.
+	var trafficClassifyCancel context.CancelFunc
+	if pool != nil {
+		trafficClassifyJob := jobs.NewTrafficClassifyJob(db.NewTrafficRules(pool))
+		var trafficClassifyCtx context.Context
+		trafficClassifyCtx, trafficClassifyCancel = context.WithCancel(context.Background())
+		go trafficClassifyJob.RunScheduled(trafficClassifyCtx, jobs.DefaultTrafficClassifyInterval)
+		log.Println("Traffic classify job started (runs every 15 minutes)")
+	}
+
 	// Start health check monitoring job if database is available
 	var healthCheckCancel context.CancelFunc
 	if pool != nil {
@@ -293,6 +306,9 @@ func main() {
 	}
 	if counterReconcileCancel != nil {
 		counterReconcileCancel()
+	}
+	if trafficClassifyCancel != nil {
+		trafficClassifyCancel()
 	}
 	if webhookDeliveryCancel != nil {
 		webhookDeliveryCancel()

@@ -45,7 +45,7 @@ const monitoredUserAgentsCTE = `
 	monitored AS (
 		SELECT ua FROM (
 			SELECT DISTINCT COALESCE(user_agent, '') AS ua
-			  FROM search_queries
+			  FROM counted_search_queries
 			 WHERE searched_at >= $1 AND searched_at < $2
 		) d
 		 WHERE ua ILIKE ANY($3::text[])
@@ -61,7 +61,7 @@ const qualifyingActivityCTE = monitoredUserAgentsCTE + `,
 		   AND viewed_at >= $1 AND viewed_at < $2
 		UNION ALL
 		SELECT searcher_type::text, searcher_id::text, searched_at, 'search'
-		  FROM search_queries
+		  FROM counted_search_queries
 		 WHERE searcher_type IN ('human', 'agent') AND searcher_id IS NOT NULL
 		   AND searched_at >= $1 AND searched_at < $2
 		   AND COALESCE(user_agent, '') NOT IN (SELECT ua FROM monitored)
@@ -96,7 +96,7 @@ const qualifyingActivityCTE = monitoredUserAgentsCTE + `,
 		   AND created_at >= $1 AND created_at < $2
 		UNION ALL
 		SELECT 'agent', a.id::text, f.occurred_at, 'room'
-		  FROM funnel_events f
+		  FROM counted_funnel_events f
 		  JOIN agents a ON f.actor_ref = ` + actorRefSQL + `
 		 WHERE f.event_name = 'room_created' AND f.actor_type = 'agent' AND f.actor_ref IS NOT NULL
 		   AND f.occurred_at >= $1 AND f.occurred_at < $2
@@ -225,23 +225,23 @@ func (r *ParticipantActivityRepository) measureAnonymousAndTraffic(ctx context.C
 		WITH `+monitoredUserAgentsCTE+`,
 		anon_flows AS (
 			SELECT flow_id, MIN(occurred_at) AS first_at
-			  FROM funnel_events
+			  FROM counted_funnel_events
 			 WHERE source_channel = 'browser' AND actor_type = 'anonymous' AND flow_id IS NOT NULL
 			   AND occurred_at >= $1 AND occurred_at < $2
 			 GROUP BY flow_id
 		)
 		SELECT
-			(SELECT COUNT(*) FROM search_queries
+			(SELECT COUNT(*) FROM counted_search_queries
 			  WHERE searcher_type = 'anonymous' AND searched_at >= $1 AND searched_at < $2
 			    AND COALESCE(user_agent, '') NOT IN (SELECT ua FROM monitored)),
 			(SELECT COUNT(*) FROM post_views
 			  WHERE viewer_type = 'anonymous' AND viewed_at >= $1 AND viewed_at < $2),
-			(SELECT COUNT(*) FROM funnel_events
+			(SELECT COUNT(*) FROM counted_funnel_events
 			  WHERE source_channel = 'browser' AND actor_type = 'anonymous'
 			    AND occurred_at >= $1 AND occurred_at < $2),
 			(SELECT COUNT(*) FROM anon_flows),
 			(SELECT COUNT(*) FROM anon_flows af
-			  WHERE EXISTS (SELECT 1 FROM funnel_events s
+			  WHERE EXISTS (SELECT 1 FROM counted_funnel_events s
 			                 WHERE s.flow_id = af.flow_id AND s.source_channel = 'server'
 			                   AND s.actor_type IN ('agent', 'human') AND s.actor_ref IS NOT NULL
 			                   AND s.occurred_at >= af.first_at AND s.occurred_at < $2)),
@@ -253,18 +253,18 @@ func (r *ParticipantActivityRepository) measureAnonymousAndTraffic(ctx context.C
 				SELECT operation_kind, COUNT(*) AS n FROM api_request_events
 				 WHERE occurred_at >= $1 AND occurred_at < $2 GROUP BY operation_kind) q),
 			(SELECT COALESCE(json_object_agg(searcher_type, n), '{}'::json) FROM (
-				SELECT searcher_type, COUNT(*) AS n FROM search_queries
+				SELECT searcher_type, COUNT(*) AS n FROM counted_search_queries
 				 WHERE searched_at >= $1 AND searched_at < $2
 				   AND COALESCE(user_agent, '') NOT IN (SELECT ua FROM monitored)
 				 GROUP BY searcher_type) q),
-			(SELECT COUNT(*) FROM search_queries
+			(SELECT COUNT(*) FROM counted_search_queries
 			  WHERE searched_at >= $1 AND searched_at < $2
 			    AND COALESCE(user_agent, '') IN (SELECT ua FROM monitored)),
 			(SELECT COUNT(*) FROM post_views WHERE viewed_at >= $1 AND viewed_at < $2),
 			(SELECT COUNT(DISTINCT room_id) FROM room_entries
 			  WHERE kind = 'message' AND author_type IN ('human', 'agent') AND deleted_at IS NULL
 			    AND created_at >= $1 AND created_at < $2),
-			(SELECT COUNT(*) FROM funnel_events
+			(SELECT COUNT(*) FROM counted_funnel_events
 			  WHERE event_name = 'first_two_way_exchange' AND occurred_at >= $1 AND occurred_at < $2),
 			(SELECT COUNT(*) FROM users
 			  WHERE deleted_at IS NULL AND created_at >= $1 AND created_at < $2),

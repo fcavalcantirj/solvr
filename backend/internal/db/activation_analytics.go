@@ -187,20 +187,20 @@ func (r *ActivationAnalyticsRepository) measureCounts(ctx context.Context, from,
 	err := r.pool.QueryRow(ctx, `
 		WITH created AS (
 			SELECT DISTINCT ON (room_id) room_id, flow_id
-			  FROM funnel_events
+			  FROM counted_funnel_events
 			 WHERE event_name = 'room_created' AND room_id IS NOT NULL
 			   AND occurred_at >= $1 AND occurred_at < $2
 		),
 		started AS (
 			SELECT DISTINCT flow_id
-			  FROM funnel_events
+			  FROM counted_funnel_events
 			 WHERE event_name = 'connection_started' AND source_channel = 'browser'
 			   AND flow_id IS NOT NULL
 			   AND occurred_at >= $1 AND occurred_at < $2
 		),
 		reached AS (
 			SELECT DISTINCT f.event_name, f.flow_id
-			  FROM funnel_events f
+			  FROM counted_funnel_events f
 			 WHERE f.flow_id IN (SELECT flow_id FROM started)
 			   AND f.occurred_at >= $1 AND f.occurred_at < $2
 			   AND (f.event_name = 'starter_prompt_copied'
@@ -209,7 +209,7 @@ func (r *ActivationAnalyticsRepository) measureCounts(ctx context.Context, from,
 		SELECT
 			(SELECT COUNT(*) FROM created),
 			(SELECT COUNT(DISTINCT f.room_id)
-			   FROM funnel_events f
+			   FROM counted_funnel_events f
 			  WHERE f.event_name = 'first_two_way_exchange'
 			    AND f.room_id IN (SELECT room_id FROM created)),
 			(SELECT COUNT(*) FROM started),
@@ -273,8 +273,8 @@ func (r *ActivationAnalyticsRepository) durationStats(ctx context.Context, from,
 			COUNT(*)
 		  FROM (
 			SELECT EXTRACT(EPOCH FROM (m.occurred_at - c.occurred_at)) * 1000 AS d
-			  FROM funnel_events c
-			  JOIN funnel_events m
+			  FROM counted_funnel_events c
+			  JOIN counted_funnel_events m
 			    ON m.room_id = c.room_id
 			   AND m.event_name = $3
 			   AND ($4 = 0 OR m.ordinal = $4)
@@ -302,8 +302,8 @@ func (r *ActivationAnalyticsRepository) measureParticipants(ctx context.Context,
 			COUNT(*) FILTER (WHERE max_ord >= 3)
 		  FROM (
 			SELECT f.room_id, MAX(f.ordinal) AS max_ord
-			  FROM funnel_events f
-			  JOIN funnel_events c
+			  FROM counted_funnel_events f
+			  JOIN counted_funnel_events c
 			    ON c.room_id = f.room_id
 			   AND c.event_name = 'room_created'
 			   AND c.occurred_at >= $1 AND c.occurred_at < $2

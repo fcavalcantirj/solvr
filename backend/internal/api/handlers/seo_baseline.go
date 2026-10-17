@@ -76,6 +76,8 @@ func (h *SEOBaselineHandler) GetBaseline(w http.ResponseWriter, r *http.Request)
 		"funnel":     b.Funnel,
 		"landings":   b.Landings,
 		"search":     b.Search,
+		"traffic":    b.Traffic,
+		"pageviews":  b.PageViews,
 		"milestones": milestones,
 	}})
 }

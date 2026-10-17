@@ -94,6 +94,8 @@ type FunnelEvent struct {
 	InstructionVersion string    `json:"instruction_version,omitempty"`
 	SourceKind         string    `json:"source_kind,omitempty"`
 	SourceID           string    `json:"source_id,omitempty"`
+	TrafficClass       string    `json:"traffic_class"` // who the step came from (SPEC.md 27.6)
+	TrafficReason      string    `json:"traffic_reason,omitempty"`
 	OccurredAt         time.Time `json:"occurred_at"`
 }
 

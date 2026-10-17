@@ -51,7 +51,7 @@ type SearchSampleMiss struct {
 const searchSamplePageSize = 50
 
 // sampledQueriesSQL lists the most frequent recorded queries, ties by text.
-const sampledQueriesSQL = `SELECT query_normalized FROM search_queries WHERE btrim(query_normalized) <> ''
+const sampledQueriesSQL = `SELECT query_normalized FROM counted_search_queries WHERE btrim(query_normalized) <> ''
 	GROUP BY query_normalized ORDER BY count(*) DESC, query_normalized LIMIT $1`
 
 // legacyContributionSearchSQL is the legacy contribution search: live answers by content,

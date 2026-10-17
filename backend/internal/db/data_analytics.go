@@ -84,7 +84,7 @@ func (r *DataAnalyticsRepository) GetTrendingPublic(
 			COUNT(*) AS search_count,
 			AVG(results_count)::float AS avg_results,
 			AVG(duration_ms)::float AS avg_duration
-		FROM search_queries
+		FROM counted_search_queries
 		WHERE searched_at >= NOW() - INTERVAL '%s'%s
 		GROUP BY query_normalized
 		ORDER BY search_count DESC
@@ -137,7 +137,7 @@ func (r *DataAnalyticsRepository) GetBreakdown(
 			CASE WHEN COUNT(*) = 0 THEN 0
 			ELSE (COUNT(*) FILTER (WHERE results_count = 0))::float / COUNT(*)::float
 			END AS zero_result_rate
-		FROM search_queries
+		FROM counted_search_queries
 		WHERE searched_at >= NOW() - INTERVAL '%s'%s
 	`, interval, botClause)
 
@@ -149,7 +149,7 @@ func (r *DataAnalyticsRepository) GetBreakdown(
 	// Query 2: by searcher_type
 	typeQuery := fmt.Sprintf(`
 		SELECT searcher_type, COUNT(*)
-		FROM search_queries
+		FROM counted_search_queries
 		WHERE searched_at >= NOW() - INTERVAL '%s'%s
 		GROUP BY searcher_type
 	`, interval, botClause)
@@ -196,7 +196,7 @@ func (r *DataAnalyticsRepository) GetCategories(
 
 	query := fmt.Sprintf(`
 		SELECT COALESCE(type_filter, 'unfiltered') AS category, COUNT(*) AS search_count
-		FROM search_queries
+		FROM counted_search_queries
 		WHERE searched_at >= NOW() - INTERVAL '%s'%s
 		GROUP BY type_filter
 		ORDER BY search_count DESC

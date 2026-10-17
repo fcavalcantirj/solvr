@@ -69,11 +69,11 @@ func (r *ShareAttributionRepository) measureActivationsAndReturns(ctx context.Co
 func (r *ShareAttributionRepository) newAgents(ctx context.Context, activated []attributedRoom, roomIDs []string) ([]activatedIdentity, error) {
 	rows, err := r.pool.Query(ctx, `
 		WITH joins AS (
-			SELECT DISTINCT room_id, actor_ref FROM funnel_events
+			SELECT DISTINCT room_id, actor_ref FROM counted_funnel_events
 			 WHERE event_name = 'participant_joined' AND actor_type = 'agent'
 			   AND actor_ref IS NOT NULL AND room_id = ANY($1::uuid[])
 		), firsts AS (
-			SELECT DISTINCT ON (actor_ref) actor_ref, room_id FROM funnel_events
+			SELECT DISTINCT ON (actor_ref) actor_ref, room_id FROM counted_funnel_events
 			 WHERE event_name = 'participant_joined'
 			   AND actor_ref IN (SELECT actor_ref FROM joins)
 			 ORDER BY actor_ref, occurred_at, id
@@ -104,12 +104,12 @@ func (r *ShareAttributionRepository) newHumans(ctx context.Context, activated []
 	rows, err := r.pool.Query(ctx, `
 		WITH cand AS (
 			SELECT DISTINCT actor_ref, COALESCE(flow_id, '') AS flow, COALESCE(room_id::text, '') AS room
-			  FROM funnel_events
+			  FROM counted_funnel_events
 			 WHERE actor_type = 'human' AND actor_ref IS NOT NULL
 			   AND (flow_id = ANY($1::text[]) OR room_id = ANY($2::uuid[]))
 		), firsts AS (
 			SELECT DISTINCT ON (actor_ref) actor_ref, COALESCE(flow_id, '') AS flow, COALESCE(room_id::text, '') AS room
-			  FROM funnel_events
+			  FROM counted_funnel_events
 			 WHERE actor_ref IN (SELECT actor_ref FROM cand)
 			 ORDER BY actor_ref, occurred_at, id
 		)
@@ -168,7 +168,7 @@ func (r *ShareAttributionRepository) laterActivity(ctx context.Context, ids []ac
 	}
 	rows, err := r.pool.Query(ctx, `
 		SELECT actor_ref, event_name, COALESCE(room_id::text, ''), COALESCE(flow_id, ''), occurred_at
-		  FROM funnel_events
+		  FROM counted_funnel_events
 		 WHERE actor_ref = ANY($1::text[]) AND occurred_at > $2 AND occurred_at <= $3`, refs, earliest, now)
 	if err != nil {
 		LogQueryError(ctx, "ShareAttribution.returns", "funnel_events", err)

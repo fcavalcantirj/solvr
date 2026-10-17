@@ -1,0 +1,15 @@
+DROP VIEW IF EXISTS counted_search_queries;
+DROP VIEW IF EXISTS counted_funnel_events;
+DROP TABLE IF EXISTS page_view_events;
+ALTER TABLE api_request_events DROP CONSTRAINT IF EXISTS api_request_events_ua_class_check;
+ALTER TABLE api_request_events DROP CONSTRAINT IF EXISTS api_request_events_error_code_check;
+ALTER TABLE api_request_events DROP COLUMN IF EXISTS ua_class;
+ALTER TABLE api_request_events DROP COLUMN IF EXISTS error_code;
+ALTER TABLE search_queries DROP CONSTRAINT IF EXISTS search_queries_entry_check;
+ALTER TABLE search_queries DROP CONSTRAINT IF EXISTS search_queries_traffic_class_check;
+ALTER TABLE search_queries DROP COLUMN IF EXISTS entry;
+ALTER TABLE search_queries DROP COLUMN IF EXISTS traffic_reason;
+ALTER TABLE search_queries DROP COLUMN IF EXISTS traffic_class;
+ALTER TABLE funnel_events DROP CONSTRAINT IF EXISTS funnel_events_traffic_class_check;
+ALTER TABLE funnel_events DROP COLUMN IF EXISTS traffic_reason;
+ALTER TABLE funnel_events DROP COLUMN IF EXISTS traffic_class;

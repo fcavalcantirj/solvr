@@ -72,7 +72,7 @@ func (r *OpsSLORepository) ObserveSLO(ctx context.Context, start, end, now time.
 	}
 	if obs.Search, err = r.p95(ctx, "search", `
 		SELECT percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms), COUNT(*)
-		  FROM search_queries
+		  FROM counted_search_queries
 		 WHERE searched_at >= $1 AND searched_at <= $2`, start, end); err != nil {
 		return obs, err
 	}

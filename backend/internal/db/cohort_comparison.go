@@ -202,23 +202,23 @@ func (r *CohortComparisonRepository) measureCounts(ctx context.Context, from, to
 	err := r.pool.QueryRow(ctx, `
 		WITH created AS (
 			SELECT DISTINCT ON (room_id) room_id, actor_ref
-			  FROM funnel_events
+			  FROM counted_funnel_events
 			 WHERE event_name = 'room_created' AND room_id IS NOT NULL
 			   AND occurred_at >= $1 AND occurred_at < $2
 			 ORDER BY room_id, occurred_at
 		),
 		activated AS (
-			SELECT DISTINCT room_id FROM funnel_events
+			SELECT DISTINCT room_id FROM counted_funnel_events
 			 WHERE event_name = 'first_two_way_exchange' AND room_id IS NOT NULL
 		),
 		attempted AS (
-			SELECT DISTINCT room_id FROM funnel_events
+			SELECT DISTINCT room_id FROM counted_funnel_events
 			 WHERE event_name = 'participant_joined' AND room_id IS NOT NULL
 			   AND ordinal IS NOT NULL AND ordinal >= 2
 		),
 		firstseen AS (
 			SELECT actor_ref, MIN(occurred_at) AS first_at
-			  FROM funnel_events WHERE actor_ref IS NOT NULL GROUP BY actor_ref
+			  FROM counted_funnel_events WHERE actor_ref IS NOT NULL GROUP BY actor_ref
 		)
 		SELECT
 			(SELECT COUNT(*) FROM created),
@@ -263,8 +263,8 @@ func (r *CohortComparisonRepository) firstExchangeDuration(ctx context.Context, 
 			COUNT(*)
 		  FROM (
 			SELECT EXTRACT(EPOCH FROM (m.occurred_at - c.occurred_at)) * 1000 AS d
-			  FROM funnel_events c
-			  JOIN funnel_events m
+			  FROM counted_funnel_events c
+			  JOIN counted_funnel_events m
 			    ON m.room_id = c.room_id AND m.event_name = 'first_two_way_exchange'
 			 WHERE c.event_name = 'room_created' AND c.room_id IS NOT NULL
 			   AND c.occurred_at >= $1 AND c.occurred_at < $2
@@ -283,10 +283,10 @@ func (r *CohortComparisonRepository) firstExchangeDuration(ctx context.Context, 
 func (r *CohortComparisonRepository) measureReturnsAndPosts(ctx context.Context, from, to time.Time, w *CohortWindow) error {
 	err := r.pool.QueryRow(ctx, `
 		SELECT COUNT(DISTINCT c.room_id)
-		  FROM funnel_events c
-		  JOIN funnel_events ex
+		  FROM counted_funnel_events c
+		  JOIN counted_funnel_events ex
 		    ON ex.room_id = c.room_id AND ex.event_name = 'first_two_way_exchange'
-		  JOIN funnel_events later
+		  JOIN counted_funnel_events later
 		    ON later.room_id = c.room_id
 		   AND later.event_name IN ('participant_joined', 'room_viewed')
 		   AND later.occurred_at > ex.occurred_at
@@ -303,7 +303,7 @@ func (r *CohortComparisonRepository) measureReturnsAndPosts(ctx context.Context,
 		  FROM posts p
 		 WHERE p.source_room_id IS NOT NULL AND p.deleted_at IS NULL
 		   AND p.source_room_id IN (
-			SELECT room_id FROM funnel_events
+			SELECT room_id FROM counted_funnel_events
 			 WHERE event_name = 'room_created' AND room_id IS NOT NULL
 			   AND occurred_at >= $1 AND occurred_at < $2)
 	`, from, to).Scan(&w.RoomToPostPublications)

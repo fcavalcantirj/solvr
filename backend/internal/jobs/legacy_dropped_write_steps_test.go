@@ -242,6 +242,8 @@ var writeProbeSteps = []func(s *writeProbeState) []writeProbeCall{
 				j(map[string]any{"flow_id": "route-probe-flow", "event": "room_viewed"})),
 			call("POST /v1/analytics/funnel", "human", "/v1/analytics/funnel",
 				j(map[string]any{"flow_id": "route-probe-flow", "event": "starter_prompt_copied"})),
+			call("POST /v1/analytics/pageview", "anonymous", "/v1/analytics/pageview",
+				j(map[string]any{"path": "/rooms/route-probe", "user_agent": "route-probe", "request_mode": "navigate"})),
 		}
 		for _, typ := range probePostTypes {
 			calls = append(calls, call("POST /v1/mcp", "agent", "/v1/mcp", rpc("tools/call", map[string]any{
@@ -383,6 +385,8 @@ var writeProbeSteps = []func(s *writeProbeState) []writeProbeCall{
 			// The homepage's featured rooms: the probe's room is featured, then taken out again.
 			call("PUT /admin/rooms/{slug}/featured", "admin", "/admin/rooms/"+or(s.roomSlug)+"/featured", `{}`),
 			call("DELETE /admin/rooms/{slug}/featured", "admin", "/admin/rooms/"+or(s.roomSlug)+"/featured", ""),
+			call("POST /admin/traffic/reclassify", "admin", "/admin/traffic/reclassify",
+				j(map[string]any{"from": "2026-10-01T00:00:00Z", "to": "2026-10-02T00:00:00Z", "dry_run": true})),
 		}
 	},
 	func(s *writeProbeState) []writeProbeCall {

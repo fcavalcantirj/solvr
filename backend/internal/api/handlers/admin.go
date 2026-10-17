@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"regexp"
@@ -27,9 +28,15 @@ type TranslationJobRunner interface {
 	RunOnce(ctx context.Context) (translated, failed int)
 }
 
-// EmailSender sends a single email. Implemented by services.ResendClient.
+// EmailSender sends a single email and returns the provider's id for it. Implemented by
+// services.ResendClient.
 type EmailSender interface {
-	Send(ctx context.Context, to, subject, htmlBody, textBody string, headers ...map[string]string) error
+	Send(ctx context.Context, to, subject, htmlBody, textBody string, headers ...map[string]string) (string, error)
+}
+
+// EmailMessageRecorder stores one row per message sent or tried (email_messages, SPEC.md 16.6).
+type EmailMessageRecorder interface {
+	RecordMessage(ctx context.Context, m *models.EmailMessage) error
 }
 
 // EmailBroadcastRepo persists broadcast log entries.
@@ -49,9 +56,13 @@ type UserEmailRepo interface {
 type AdminHandler struct {
 	pool                 *db.Pool
 	translationJobRunner TranslationJobRunner
-	emailSender          EmailSender
+	emailSender          EmailSender // broadcasts: FROM_EMAIL, the footer, List-Unsubscribe
+	noticeSender         EmailSender // notices: FROM_EMAIL_TRANSACTIONAL only; nil refuses them
 	emailBroadcastRepo   EmailBroadcastRepo
 	userEmailRepo        UserEmailRepo
+	messageRecorder      EmailMessageRecorder
+	noticeRecipients     NoticeRecipientRepo
+	log                  *slog.Logger // nil logs to slog.Default()
 }
 
 // NewAdminHandler creates a new AdminHandler.
@@ -67,6 +78,58 @@ func (h *AdminHandler) SetTranslationJobRunner(runner TranslationJobRunner) {
 // SetEmailSender injects the email sender dependency.
 func (h *AdminHandler) SetEmailSender(sender EmailSender) {
 	h.emailSender = sender
+}
+
+// SetNoticeSender injects the transactional sender of POST /admin/email/notice. Without one,
+// notices are refused: they never fall back to the broadcast sender.
+func (h *AdminHandler) SetNoticeSender(sender EmailSender) {
+	h.noticeSender = sender
+}
+
+// SetEmailMessageRecorder injects the store of email_messages rows.
+func (h *AdminHandler) SetEmailMessageRecorder(recorder EmailMessageRecorder) {
+	h.messageRecorder = recorder
+}
+
+// SetNoticeRecipientRepo injects the lookup of a notice's one recipient.
+func (h *AdminHandler) SetNoticeRecipientRepo(repo NoticeRecipientRepo) {
+	h.noticeRecipients = repo
+}
+
+func (h *AdminHandler) logger() *slog.Logger {
+	if h.log != nil {
+		return h.log
+	}
+	return slog.Default()
+}
+
+// recordMessage stores a message row when a recorder is wired; a failure to store is logged and
+// never fails the send it describes.
+func (h *AdminHandler) recordMessage(ctx context.Context, m *models.EmailMessage) {
+	if h.messageRecorder == nil {
+		return
+	}
+	if err := h.messageRecorder.RecordMessage(ctx, m); err != nil {
+		h.logger().Error("email message not recorded", "kind", m.Kind, "user_id", m.UserID, "error", err)
+	}
+}
+
+// redactAddress is a send error's text without the recipient's address, which a provider's
+// message may quote: logs name a recipient by user id only.
+func redactAddress(err error, email string) string {
+	if email == "" {
+		return err.Error()
+	}
+	return strings.ReplaceAll(err.Error(), email, "<recipient>")
+}
+
+// unsubscribeHMACKey is the key of the unsubscribe tokens: the JWT secret, as the unsubscribe
+// routes use it.
+func unsubscribeHMACKey() string {
+	if key := os.Getenv("JWT_SECRET"); key != "" {
+		return key
+	}
+	return "test-jwt-secret-32-chars-long!!"
 }
 
 // SetEmailBroadcastRepo injects the email broadcast repository dependency.
@@ -165,6 +228,7 @@ func (h *AdminHandler) BroadcastEmail(w http.ResponseWriter, r *http.Request) {
 			}
 			preview["body_html"] = substituteTemplateVars(req.BodyHTML, first.DisplayName, first.ReferralCode, referralLink)
 			preview["body_text"] = substituteTemplateVars(req.BodyText, first.DisplayName, first.ReferralCode, referralLink)
+			preview["footer_url"] = unsubscribePageURL(first.Email, GenerateUnsubscribeToken(first.Email, unsubscribeHMACKey()))
 		}
 		writeAdminJSON(w, http.StatusOK, map[string]interface{}{
 			"would_send": len(recipients),
@@ -220,10 +284,7 @@ func (h *AdminHandler) BroadcastEmail(w http.ResponseWriter, r *http.Request) {
 	failedCount := 0
 
 	// HMAC key for unsubscribe tokens (same secret used for JWT)
-	hmacKey := os.Getenv("JWT_SECRET")
-	if hmacKey == "" {
-		hmacKey = "test-jwt-secret-32-chars-long!!"
-	}
+	hmacKey := unsubscribeHMACKey()
 
 	// Send emails synchronously and sequentially with per-recipient template substitution
 	// 150ms delay between sends to respect Resend's 10 req/s rate limit
@@ -238,23 +299,32 @@ func (h *AdminHandler) BroadcastEmail(w http.ResponseWriter, r *http.Request) {
 		personalHTML := substituteTemplateVars(req.BodyHTML, recipient.DisplayName, recipient.ReferralCode, referralLink)
 		personalText := substituteTemplateVars(req.BodyText, recipient.DisplayName, recipient.ReferralCode, referralLink)
 
-		// Per-recipient List-Unsubscribe with HMAC token (Gmail 2024 one-click compliance)
+		// Per-recipient unsubscribe links on one HMAC token (SPEC.md 16.6): the footer links the
+		// solvr.dev page; List-Unsubscribe is the one-click API URL (RFC 8058, Gmail and Yahoo's
+		// bulk-sender rule). Its mailto: entry waits for the owner to confirm the mailbox (F4).
 		unsubToken := GenerateUnsubscribeToken(recipient.Email, hmacKey)
-		unsubURL := "https://api.solvr.dev/v1/email/unsubscribe?email=" + recipient.Email + "&token=" + unsubToken
 
 		// Wrap in branded email template
-		personalHTML = emailutil.WrapInBrandedTemplate(personalHTML, unsubURL, "You are receiving this broadcast from Solvr")
+		personalHTML = emailutil.WrapInBrandedTemplate(personalHTML, unsubscribePageURL(recipient.Email, unsubToken),
+			"You are receiving this broadcast from Solvr")
 		unsubHeaders := map[string]string{
-			"List-Unsubscribe":      "<" + unsubURL + ">, <mailto:unsubscribe@solvr.dev>",
+			"List-Unsubscribe":      "<" + oneClickUnsubscribeURL(recipient.Email, unsubToken) + ">",
 			"List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
 		}
 
-		err := h.emailSender.Send(ctx, recipient.Email, req.Subject, personalHTML, personalText, unsubHeaders)
+		msg := &models.EmailMessage{Kind: models.EmailKindBroadcast, BroadcastID: logEntry.ID, UserID: recipient.ID,
+			Subject: req.Subject, Status: models.EmailStatusSent}
+		providerID, err := h.emailSender.Send(ctx, recipient.Email, req.Subject, personalHTML, personalText, unsubHeaders)
 		if err != nil {
 			failedCount++
-			// Log error but continue with next recipient
+			msg.Status = models.EmailStatusFailed
+			h.logger().Error("email send failed", "kind", msg.Kind, "broadcast_id", logEntry.ID, "user_id", recipient.ID,
+				"error", redactAddress(err, recipient.Email))
+			h.recordMessage(ctx, msg)
 			continue
 		}
+		msg.ProviderMessageID = providerID
+		h.recordMessage(ctx, msg)
 		sentCount++
 	}
 

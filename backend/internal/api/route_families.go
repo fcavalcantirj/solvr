@@ -492,7 +492,15 @@ var RouteFamilies = []RouteFamily{
 			"GET /v1/analytics/funnel/contract",
 			"POST /v1/analytics/funnel",
 			"POST /v1/analytics/pageview",
+		},
+	},
+	{
+		Name:        "email-delivery",
+		Disposition: DispositionKeep,
+		Routes: []string{
 			"GET /v1/email/unsubscribe",
+			"POST /v1/email/unsubscribe",
+			"POST /v1/webhooks/resend",
 		},
 	},
 	{
@@ -506,6 +514,7 @@ var RouteFamilies = []RouteFamily{
 			"GET /admin/agents/deleted",
 			"POST /admin/jobs/translation/run",
 			"POST /admin/email/broadcast",
+			"POST /admin/email/notice",
 			"GET /admin/email/history",
 			"GET /admin/search-analytics/trending",
 			"GET /admin/search-analytics/summary",

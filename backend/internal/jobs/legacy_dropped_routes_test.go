@@ -47,9 +47,9 @@ var legacyRepositoryFamilies = map[string]bool{
 const routeProbeAdminKey = "route-probe-admin-key"
 
 type routeProbeFixture struct {
-	userID, jwt, agentID, agentKey, roomSlug string
-	posts                                    map[string]string // post type -> id
-	replies                                  []string
+	userID, userEmail, jwt, agentID, agentKey, roomSlug string
+	posts                                               map[string]string // post type -> id
+	replies                                             []string
 }
 
 type routeProbeRequest struct {
@@ -95,7 +95,7 @@ func seedRouteProbeData(ctx context.Context, t *testing.T, pool *db.Pool) routeP
 		AuthProvider: models.AuthProviderGitHub, AuthProviderID: "probe_" + suffix, Role: "user",
 	})
 	must("user", err)
-	fx.userID = user.ID
+	fx.userID, fx.userEmail = user.ID, user.Email
 	fx.jwt, err = auth.GenerateJWT(routeProbeJWTSecret(), user.ID, user.Email, "user", time.Hour)
 	must("jwt", err)
 

@@ -28,16 +28,16 @@ type mockSendCall struct {
 	Headers map[string]string
 }
 
-func (m *mockEmailSender) Send(ctx context.Context, to, subject, htmlBody, textBody string, headers ...map[string]string) error {
+func (m *mockEmailSender) Send(ctx context.Context, to, subject, htmlBody, textBody string, headers ...map[string]string) (string, error) {
 	call := mockSendCall{To: to, Subject: subject, HTML: htmlBody, Text: textBody}
 	if len(headers) > 0 {
 		call.Headers = headers[0]
 	}
 	m.calls = append(m.calls, call)
 	if m.failOnIdx >= 0 && len(m.calls)-1 == m.failOnIdx {
-		return fmt.Errorf("send failed for %s", to)
+		return "", fmt.Errorf("send failed for %s", to)
 	}
-	return nil
+	return fmt.Sprintf("re-msg-%d", len(m.calls)), nil
 }
 
 // mockEmailBroadcastRepo tracks CreateLog and UpdateStatusAndCounts calls.

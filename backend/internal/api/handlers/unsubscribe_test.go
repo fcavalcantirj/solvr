@@ -6,115 +6,243 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 )
 
-// mockUnsubscribeRepo tracks UnsubscribeByEmail calls.
+// The signed links of Solvr's emails (SPEC.md 16.6). POST is RFC 8058's one-click unsubscribe:
+// it accepts any form body, needs no credential, is idempotent and answers 200, and a bad token
+// answers 403. GET never writes: it answers 303 to the solvr.dev page, which asks before it
+// POSTs. The token is HMAC-SHA256(email, JWT_SECRET), so every link already sent keeps working.
+
+// mockUnsubscribeRepo records UnsubscribeByEmail calls.
 type mockUnsubscribeRepo struct {
-	calledWith string
-	err        error
+	err   error
+	calls []string
 }
 
 func (m *mockUnsubscribeRepo) UnsubscribeByEmail(ctx context.Context, email string) error {
-	m.calledWith = email
+	m.calls = append(m.calls, email)
 	return m.err
 }
 
-func TestUnsubscribe_Success(t *testing.T) {
-	repo := &mockUnsubscribeRepo{}
-	handler := NewUnsubscribeHandler(repo, "test-secret-key")
+const unsubTestKey = "test-secret-key"
 
-	email := "alice@example.com"
-	token := GenerateUnsubscribeToken(email, "test-secret-key")
+func unsubscribeQuery(email, token string) string {
+	return "?email=" + url.QueryEscape(email) + "&token=" + url.QueryEscape(token)
+}
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/email/unsubscribe?email="+email+"&token="+token, nil)
+func oneClickPost(h *UnsubscribeHandler, query string) *httptest.ResponseRecorder {
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/email/unsubscribe"+query,
+		strings.NewReader("List-Unsubscribe=One-Click"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
+	h.Unsubscribe(rr, req)
+	return rr
+}
 
-	handler.Unsubscribe(rr, req)
+func pageGet(h *UnsubscribeHandler, query string) *httptest.ResponseRecorder {
+	rr := httptest.NewRecorder()
+	h.ShowPage(rr, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/email/unsubscribe"+query, http.NoBody))
+	return rr
+}
+
+func TestUnsubscribe_OneClickPostUnsubscribes(t *testing.T) {
+	repo := &mockUnsubscribeRepo{}
+	h := NewUnsubscribeHandler(repo, unsubTestKey)
+	email := "alice@example.com"
+
+	rr := oneClickPost(h, unsubscribeQuery(email, GenerateUnsubscribeToken(email, unsubTestKey)))
 
 	if rr.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+		t.Fatalf("status = %d, want 200: %s", rr.Code, rr.Body.String())
 	}
-
 	var resp map[string]string
-	json.NewDecoder(rr.Body).Decode(&resp)
-	if resp["status"] != "unsubscribed" {
-		t.Errorf("expected status=unsubscribed, got %s", resp["status"])
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
 	}
-	if repo.calledWith != email {
-		t.Errorf("expected repo called with %s, got %s", email, repo.calledWith)
+	if resp["status"] != "unsubscribed" {
+		t.Errorf("status = %q, want unsubscribed", resp["status"])
+	}
+	if len(repo.calls) != 1 || repo.calls[0] != email {
+		t.Errorf("repo calls = %v, want [%s]", repo.calls, email)
 	}
 }
 
-func TestUnsubscribe_InvalidToken(t *testing.T) {
+func TestUnsubscribe_OneClickPostIsIdempotent(t *testing.T) {
 	repo := &mockUnsubscribeRepo{}
-	handler := NewUnsubscribeHandler(repo, "test-secret-key")
+	h := NewUnsubscribeHandler(repo, unsubTestKey)
+	email := "alice@example.com"
+	q := unsubscribeQuery(email, GenerateUnsubscribeToken(email, unsubTestKey))
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/email/unsubscribe?email=alice@example.com&token=bad-token", nil)
+	for i := 0; i < 2; i++ {
+		if rr := oneClickPost(h, q); rr.Code != http.StatusOK {
+			t.Fatalf("call %d: status = %d, want 200", i+1, rr.Code)
+		}
+	}
+}
+
+func TestUnsubscribe_OneClickPostAcceptsAnyFormBody(t *testing.T) {
+	repo := &mockUnsubscribeRepo{}
+	h := NewUnsubscribeHandler(repo, unsubTestKey)
+	email := "alice@example.com"
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost,
+		"/v1/email/unsubscribe"+unsubscribeQuery(email, GenerateUnsubscribeToken(email, unsubTestKey)), http.NoBody)
 	rr := httptest.NewRecorder()
+	h.Unsubscribe(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("an empty body: status = %d, want 200", rr.Code)
+	}
+}
 
-	handler.Unsubscribe(rr, req)
+func TestUnsubscribe_OneClickPostRefusesABadToken(t *testing.T) {
+	repo := &mockUnsubscribeRepo{}
+	h := NewUnsubscribeHandler(repo, unsubTestKey)
+
+	rr := oneClickPost(h, unsubscribeQuery("alice@example.com", "bad-token"))
 
 	if rr.Code != http.StatusForbidden {
-		t.Errorf("expected 403, got %d", rr.Code)
+		t.Errorf("status = %d, want 403", rr.Code)
 	}
-	if repo.calledWith != "" {
-		t.Error("repo should NOT be called with invalid token")
+	if len(repo.calls) != 0 {
+		t.Error("a bad token must not unsubscribe anyone")
+	}
+}
+
+func TestUnsubscribe_OneClickPostRefusesATokenOfAnotherKey(t *testing.T) {
+	repo := &mockUnsubscribeRepo{}
+	h := NewUnsubscribeHandler(repo, "production-key")
+	email := "alice@example.com"
+
+	rr := oneClickPost(h, unsubscribeQuery(email, GenerateUnsubscribeToken(email, "different-key")))
+
+	if rr.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403", rr.Code)
+	}
+}
+
+func TestUnsubscribe_AnEncodedPlusSurvives(t *testing.T) {
+	repo := &mockUnsubscribeRepo{}
+	h := NewUnsubscribeHandler(repo, unsubTestKey)
+	email := "alice+tag@example.com"
+
+	rr := oneClickPost(h, unsubscribeQuery(email, GenerateUnsubscribeToken(email, unsubTestKey)))
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rr.Code, rr.Body.String())
+	}
+	if len(repo.calls) != 1 || repo.calls[0] != email {
+		t.Errorf("repo calls = %v, want [%s]", repo.calls, email)
+	}
+}
+
+// Links sent before this release put the address in the query unencoded, so a '+' in it reads
+// as a space. The token is the HMAC of the real address, so the handler accepts the '+' form
+// only when its token matches: an old link of a plus address still works, and nothing else
+// gets through.
+func TestUnsubscribe_AnOldLinkOfAPlusAddressStillWorks(t *testing.T) {
+	repo := &mockUnsubscribeRepo{}
+	h := NewUnsubscribeHandler(repo, unsubTestKey)
+	email := "alice+tag@example.com"
+	oldLink := "?email=" + email + "&token=" + GenerateUnsubscribeToken(email, unsubTestKey)
+
+	rr := oneClickPost(h, oldLink)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rr.Code, rr.Body.String())
+	}
+	if len(repo.calls) != 1 || repo.calls[0] != email {
+		t.Errorf("repo calls = %v, want [%s]", repo.calls, email)
+	}
+
+	other := &mockUnsubscribeRepo{}
+	h = NewUnsubscribeHandler(other, unsubTestKey)
+	if rr := oneClickPost(h, "?email=alice%20tag@example.com&token=bad"); rr.Code != http.StatusForbidden {
+		t.Errorf("a space with a bad token: status = %d, want 403", rr.Code)
 	}
 }
 
 func TestUnsubscribe_MissingParams(t *testing.T) {
-	repo := &mockUnsubscribeRepo{}
-	handler := NewUnsubscribeHandler(repo, "test-secret-key")
-
-	// Missing both
-	req := httptest.NewRequest(http.MethodGet, "/v1/email/unsubscribe", nil)
-	rr := httptest.NewRecorder()
-	handler.Unsubscribe(rr, req)
-	if rr.Code != http.StatusBadRequest {
-		t.Errorf("expected 400 for missing params, got %d", rr.Code)
-	}
-
-	// Missing token
-	req = httptest.NewRequest(http.MethodGet, "/v1/email/unsubscribe?email=a@b.com", nil)
-	rr = httptest.NewRecorder()
-	handler.Unsubscribe(rr, req)
-	if rr.Code != http.StatusBadRequest {
-		t.Errorf("expected 400 for missing token, got %d", rr.Code)
+	h := NewUnsubscribeHandler(&mockUnsubscribeRepo{}, unsubTestKey)
+	for _, q := range []string{"", "?email=a@b.com", "?token=t"} {
+		if rr := oneClickPost(h, q); rr.Code != http.StatusBadRequest {
+			t.Errorf("POST %q: status = %d, want 400", q, rr.Code)
+		}
+		if rr := pageGet(h, q); rr.Code != http.StatusBadRequest {
+			t.Errorf("GET %q: status = %d, want 400", q, rr.Code)
+		}
 	}
 }
 
 func TestUnsubscribe_RepoError(t *testing.T) {
-	repo := &mockUnsubscribeRepo{err: fmt.Errorf("db error")}
-	handler := NewUnsubscribeHandler(repo, "test-secret-key")
-
+	h := NewUnsubscribeHandler(&mockUnsubscribeRepo{err: fmt.Errorf("db error")}, unsubTestKey)
 	email := "alice@example.com"
-	token := GenerateUnsubscribeToken(email, "test-secret-key")
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/email/unsubscribe?email="+email+"&token="+token, nil)
-	rr := httptest.NewRecorder()
-
-	handler.Unsubscribe(rr, req)
+	rr := oneClickPost(h, unsubscribeQuery(email, GenerateUnsubscribeToken(email, unsubTestKey)))
 
 	if rr.Code != http.StatusInternalServerError {
-		t.Errorf("expected 500 on repo error, got %d", rr.Code)
+		t.Errorf("status = %d, want 500", rr.Code)
 	}
 }
 
-func TestUnsubscribe_DifferentKeyRejectsToken(t *testing.T) {
+// GET answers 303 to the page with the address and token encoded and the address masked for
+// display, and writes nothing: a link scanner or a prefetch never unsubscribes anyone.
+func TestUnsubscribe_GetRedirectsToThePageAndWritesNothing(t *testing.T) {
 	repo := &mockUnsubscribeRepo{}
-	handler := NewUnsubscribeHandler(repo, "production-key")
+	h := NewUnsubscribeHandler(repo, unsubTestKey)
+	email := "alice+tag@example.com"
+	token := GenerateUnsubscribeToken(email, unsubTestKey)
 
-	email := "alice@example.com"
-	token := GenerateUnsubscribeToken(email, "different-key") // signed with wrong key
+	for _, tok := range []string{token, "bad"} {
+		rr := pageGet(h, unsubscribeQuery(email, tok))
+		if rr.Code != http.StatusSeeOther {
+			t.Fatalf("token %q: status = %d, want 303", tok, rr.Code)
+		}
+		loc := rr.Header().Get("Location")
+		if !strings.HasPrefix(loc, "https://solvr.dev/email/unsubscribe?email=alice%2Btag%40example.com&") {
+			t.Errorf("Location = %q, want the solvr.dev page with the address encoded first", loc)
+		}
+		u, err := url.Parse(loc)
+		if err != nil {
+			t.Fatalf("Location %q: %v", loc, err)
+		}
+		if got := u.Query().Get("token"); got != tok {
+			t.Errorf("token = %q, want %q", got, tok)
+		}
+		if got := u.Query().Get("masked"); got != "a***@example.com" {
+			t.Errorf("masked = %q, want a***@example.com", got)
+		}
+	}
+	if len(repo.calls) != 0 {
+		t.Errorf("GET wrote: repo calls = %v", repo.calls)
+	}
+}
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/email/unsubscribe?email="+email+"&token="+token, nil)
-	rr := httptest.NewRecorder()
+func TestUnsubscribeURLs_EncodeTheAddress(t *testing.T) {
+	email := "alice+tag@example.com"
+	token := GenerateUnsubscribeToken(email, unsubTestKey)
 
-	handler.Unsubscribe(rr, req)
+	page := unsubscribePageURL(email, token)
+	if !strings.HasPrefix(page, "https://solvr.dev/email/unsubscribe?email=alice%2Btag%40example.com&") {
+		t.Errorf("page URL = %q", page)
+	}
+	oneClick := oneClickUnsubscribeURL(email, token)
+	if want := "https://api.solvr.dev/v1/email/unsubscribe?email=alice%2Btag%40example.com&token=" + token; oneClick != want {
+		t.Errorf("one-click URL = %q, want %q", oneClick, want)
+	}
+}
 
-	if rr.Code != http.StatusForbidden {
-		t.Errorf("expected 403 for token signed with different key, got %d", rr.Code)
+func TestMaskEmail(t *testing.T) {
+	for in, want := range map[string]string{
+		"alice@example.com": "a***@example.com",
+		"a@b.c":             "a***@b.c",
+		"no-at-sign":        "***",
+		"@example.com":      "***@example.com",
+	} {
+		if got := maskEmail(in); got != want {
+			t.Errorf("maskEmail(%q) = %q, want %q", in, got, want)
+		}
 	}
 }
 

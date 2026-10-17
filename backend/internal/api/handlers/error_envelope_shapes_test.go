@@ -45,7 +45,7 @@ func TestUnsubscribe_ErrorsUseEnvelope(t *testing.T) {
 		status int
 		code   string
 	}{
-		{"missing params", &mockUnsubscribeRepo{}, "", http.StatusBadRequest, "MISSING_PARAMS"},
+		{"missing params", &mockUnsubscribeRepo{}, "", http.StatusBadRequest, "VALIDATION_ERROR"},
 		{"invalid token", &mockUnsubscribeRepo{}, "?email=" + email + "&token=bad", http.StatusForbidden, "INVALID_TOKEN"},
 		{"repo error", &mockUnsubscribeRepo{err: fmt.Errorf("db down")}, "?email=" + email + "&token=" + valid, http.StatusInternalServerError, "INTERNAL_ERROR"},
 	}

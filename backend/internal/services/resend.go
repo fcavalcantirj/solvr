@@ -26,6 +26,11 @@ func NewResendClient(apiKey, fromEmail string) *ResendClient {
 	}
 }
 
+// FromAddress is the address this client sends from.
+func (c *ResendClient) FromAddress() string {
+	return c.fromEmail
+}
+
 // SetBaseURL overrides the Resend API base URL (for testing with httptest).
 // The resend-go SDK uses a *url.URL for BaseURL, so we parse the string.
 // A trailing slash is appended if missing to ensure correct URL resolution.
@@ -40,11 +45,12 @@ func (c *ResendClient) SetBaseURL(rawURL string) {
 	c.client.BaseURL = u
 }
 
-// Send sends a single email via the Resend API.
+// Send sends a single email via the Resend API and returns Resend's id for it, which its
+// webhook events name (SPEC.md 16.6).
 // Parameters: to (recipient), subject, htmlBody, textBody (can be empty).
 // The from address is set at construction time as "Solvr <fromEmail>".
 // Optional variadic headers map allows passing custom headers (e.g., List-Unsubscribe).
-func (c *ResendClient) Send(ctx context.Context, to, subject, htmlBody, textBody string, headers ...map[string]string) error {
+func (c *ResendClient) Send(ctx context.Context, to, subject, htmlBody, textBody string, headers ...map[string]string) (string, error) {
 	params := &resend.SendEmailRequest{
 		From:    fmt.Sprintf("Solvr <%s>", c.fromEmail),
 		To:      []string{to},
@@ -56,10 +62,12 @@ func (c *ResendClient) Send(ctx context.Context, to, subject, htmlBody, textBody
 		params.Headers = headers[0]
 	}
 
-	_, err := c.client.Emails.SendWithContext(ctx, params)
+	sent, err := c.client.Emails.SendWithContext(ctx, params)
 	if err != nil {
-		return fmt.Errorf("resend send failed: %w", err)
+		return "", fmt.Errorf("resend send failed: %w", err)
 	}
-
-	return nil
+	if sent == nil {
+		return "", nil
+	}
+	return sent.Id, nil
 }

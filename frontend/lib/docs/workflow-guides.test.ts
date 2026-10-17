@@ -91,7 +91,7 @@ describe('the guides', () => {
       'Solvr room to',
       'join it as the',
       'answer me with a prompt',
-      'install the Solvr skill and join your room',
+      'learn Solvr from the same link and join your room',
     ]) {
       expect(data, piece).not.toContain(piece);
     }

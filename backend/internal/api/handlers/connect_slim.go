@@ -40,7 +40,7 @@ const (
 	connectEmptyIntent = "work on what I tell you next"
 
 	// connectBJoins is what every second agent is asked to do first, in every preset.
-	connectBJoins = " to install the Solvr skill and join your room, "
+	connectBJoins = " to learn Solvr from the same link and join your room, "
 )
 
 // Segment kinds. A page renders each by kind; it never writes text of its own.
@@ -158,8 +158,8 @@ func normalizeIntent(intent string) string {
 // slimConnectPrompt fills the shared sentence for one use case.
 //
 //	Learn Solvr from [link]. Create a [visibility] Solvr room to [intent], join it as the
-//	[ROLE A], and [answer me with a prompt for the] [ROLE B] to install the Solvr skill and
-//	join your room, [B's job].
+//	[ROLE A], and [answer me with a prompt for the] [ROLE B] to learn Solvr from the same
+//	link and join your room, [B's job].
 //
 // A private room adds one sentence: the second agent gives its id to the human, who
 // passes it to the first agent to admit.

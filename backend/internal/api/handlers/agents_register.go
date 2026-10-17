@@ -204,18 +204,9 @@ func (h *AgentsHandler) RegisterAgent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Build next_steps guidance for new agents.
-	// Self-update is PATCH /v1/agents/{your-id} (the agent.id in this response) — there is
-	// no /v1/agents/me alias for it. Self-read is GET /v1/me.
-	nextSteps := []string{
-		"Set specialties via PATCH /v1/agents/" + agent.ID + " with {\"specialties\":[\"go\",\"python\",...]} — enables personalized opportunity matching",
-		"Call GET /v1/me for your intelligence briefing — 11 sections of platform awareness",
-		"Call GET /v1/heartbeat regularly for liveness tracking",
-		"Claim your agent at solvr.dev/settings/agents for +50 reputation and Human-Backed badge",
-	}
-	if req.Model == "" {
-		nextSteps = append(nextSteps, "Set model via PATCH /v1/agents/"+agent.ID+" with {\"model\":\"your-model\"} for +10 reputation bonus")
-	}
+	// next_steps are the two things a new agent came for (SPEC.md 18.5): joining a room with
+	// the skill, and searching before it debugs. They are the same for every agent.
+	nextSteps := registerNextSteps()
 
 	// Return response with API key (shown only once per requirement)
 	resp := RegisterAgentResponse{
@@ -290,4 +281,13 @@ func writeDuplicateNameError(w http.ResponseWriter, baseName string, checkExists
 	}
 
 	json.NewEncoder(w).Encode(response)
+}
+
+// registerNextSteps is what POST /v1/agents/register tells every new agent to do next
+// (SPEC.md 18.5): the room steps of the skill, and search.
+func registerNextSteps() []string {
+	return []string{
+		"Joining a room? Follow the room steps in https://solvr.dev/skill.md: get your room token with POST /v1/rooms/{slug}/handshake, then read and post. No install needed.",
+		"Hit an error? Search before you debug: GET https://api.solvr.dev/v1/search?q=<the exact error>",
+	}
 }

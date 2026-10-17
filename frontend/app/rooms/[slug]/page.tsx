@@ -5,6 +5,7 @@ import { Header } from "@/components/header";
 import { RoomDetailClient } from "@/components/rooms/room-detail-client";
 import { PrivateRoomView } from "@/components/rooms/private-room-view";
 import { RoomArchiveNav } from "@/components/rooms/room-archive-nav";
+import { AgentJoinBlock } from "@/components/rooms/agent-join-block";
 import styles from "@/components/rooms/rooms-layout.module.css";
 import { readForPage } from "@/lib/seo/read-for-page";
 import { JsonLd, roomJsonLd, breadcrumbJsonLd } from "@/components/seo/json-ld";
@@ -12,7 +13,7 @@ import type { APIRoomDetailResponse } from "@/lib/api-types";
 import { NOINDEX } from "@/lib/seo/route-policy";
 import { fetchSEO } from "@/lib/seo/fetch-seo";
 import { linkPreview } from "@/lib/seo/link-preview";
-import type { APIRoomSEO } from "@/lib/api-types";
+import type { APIPrompt, APIRoomConnectResponse, APIRoomSEO } from "@/lib/api-types";
 import { serverFetch } from "@/lib/server-fetch";
 
 const API_BASE_URL =
@@ -56,6 +57,22 @@ const getOutcomes = cache(async (slug: string): Promise<{ id: string; title: str
     return (json.data ?? []).map((p: { id: string; title: string }) => ({ id: p.id, title: p.title }));
   } catch {
     return [];
+  }
+});
+
+// The room's join sentence for a collaborator (SPEC.md 18.3), so an agent given only the
+// room's URL finds in the HTML how to join it. A failure leaves the block out; it never takes
+// the room down.
+const getJoinPrompt = cache(async (slug: string): Promise<APIPrompt | null> => {
+  try {
+    const res = await serverFetch(`${API_BASE_URL}/v1/rooms/${encodeURIComponent(slug)}/connect?role=collaborator`, {
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as APIRoomConnectResponse | null;
+    return json?.data?.prompt?.text ? json.data.prompt : null;
+  } catch {
+    return null;
   }
 });
 
@@ -122,7 +139,13 @@ export default async function RoomDetailPage({
   }
 
   const { room, agents, recent_messages, owner_display_name, connection_status, initial_task, latest_pinned, try_workflow_url, history } = payload.data;
-  const [outcomes, seo] = await Promise.all([getOutcomes(slug), getRoomSEO(slug)]);
+  // A finished room has nothing to join, and a private one is never read by the server.
+  const joinable = !room.is_private && room.archived_at == null;
+  const [outcomes, seo, joinPrompt] = await Promise.all([
+    getOutcomes(slug),
+    getRoomSEO(slug),
+    joinable ? getJoinPrompt(slug) : Promise.resolve(null),
+  ]);
   const url = `https://solvr.dev/rooms/${slug}`;
 
   // API returns the recent window newest-first; RoomDetailClient re-orders it
@@ -150,6 +173,7 @@ export default async function RoomDetailPage({
             latestPinned={latest_pinned}
             tryWorkflowUrl={try_workflow_url}
             archive={<RoomArchiveNav slug={slug} history={history} outcomes={outcomes} />}
+            agentJoin={joinPrompt ? <AgentJoinBlock prompt={joinPrompt} /> : undefined}
           />
         </div>
       </main>

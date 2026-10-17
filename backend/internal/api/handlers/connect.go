@@ -36,7 +36,9 @@ const (
 	// 2.1 (the flow code, SPEC.md 25.6): the flow id is a short code, the skill link of a
 	// sentence that creates a room carries it (?f=<code>), and ?flow= keeps one visit one
 	// flow.
-	ConnectInstructionVersion = "2.1"
+	// 2.2 (W6): the second agent is asked to learn Solvr from the same link, never to
+	// install the skill.
+	ConnectInstructionVersion = "2.2"
 
 	// ConnectPresetPlanAndBuild is the default use case: a planner directs, an executor
 	// builds.

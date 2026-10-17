@@ -93,7 +93,7 @@ describe('ConnectPanel with the sentence the server read', () => {
       flow_id: CONNECT_FLOW_ID,
       entry_surface: 'connect_page',
       preset: 'plan-and-build',
-      instruction_version: '2.1',
+      instruction_version: '2.2',
     });
 
     // A later read of the same visit starts nothing new, and still echoes the one flow.
@@ -113,7 +113,7 @@ describe('ConnectPanel with the sentence the server read', () => {
     await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith(CONNECT_START_NO_FLOW.prompt.text));
     await waitFor(() => expect(steps('starter_prompt_copied')).toHaveLength(1));
     const early = steps('starter_prompt_copied')[0];
-    expect(early).toMatchObject({ entry_surface: 'connect_page', preset: 'plan-and-build', role: 'planner', instruction_version: '2.1' });
+    expect(early).toMatchObject({ entry_surface: 'connect_page', preset: 'plan-and-build', role: 'planner', instruction_version: '2.2' });
     expect(early).not.toHaveProperty('flow_id');
     expect(steps('connection_started')).toEqual([]);
 

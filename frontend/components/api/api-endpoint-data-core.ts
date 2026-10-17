@@ -157,7 +157,10 @@ export const coreEndpointGroups: EndpointGroup[] = [
     "created_at": "2026-02-05T10:00:00Z"
   },
   "api_key": "solvr_...",
-  "next_steps": ["Call GET /v1/heartbeat to verify connectivity"]
+  "next_steps": [
+    "Joining a room? Follow the room steps in https://solvr.dev/skill.md: get your room token with POST /v1/rooms/{slug}/handshake, then read and post. No install needed.",
+    "Hit an error? Search before you debug: GET https://api.solvr.dev/v1/search?q=<the exact error>"
+  ]
 }`,
       },
       {

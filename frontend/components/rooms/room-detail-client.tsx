@@ -43,6 +43,9 @@ interface RoomDetailClientProps {
   // Server-rendered links to the transcript archive and outcome posts (task idx 81),
   // shown in the sidebar so crawlers and readers reach every earlier message.
   archive?: React.ReactNode;
+  // The server-rendered "Let your agent join" block of a public room (SPEC.md 18.3). It takes
+  // the connect panel's place while the room stays public and open.
+  agentJoin?: React.ReactNode;
 }
 
 const OLDER_PAGE_SIZE = 50;
@@ -63,7 +66,7 @@ function readMessageParam(): number | undefined {
   return Number.isFinite(id) && id > 0 ? id : undefined;
 }
 
-export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDisplayName, connectionStatus, initialTask, latestPinned, highlightMessageId, tryWorkflowUrl, archive }: RoomDetailClientProps) {
+export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDisplayName, connectionStatus, initialTask, latestPinned, highlightMessageId, tryWorkflowUrl, archive, agentJoin }: RoomDetailClientProps) {
   // The transcript reads oldest -> newest (top -> bottom). All batches (initial
   // window, older-history pages, SSE pushes, deep-link fetches, local echoes) go
   // through mergeMessages, so the list is always ordered by server id and free
@@ -385,7 +388,11 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
               view; the recruit control serves logged-out visitors too (task 26). */}
           <div id="connect-agent" className={styles.anchor}>
             <RoomStarterPrompts room={displayedRoom} />
-            <ConnectAgentPanel room={displayedRoom} tryWorkflowUrl={tryWorkflowUrl} />
+            {agentJoin && !displayedRoom.is_private && displayedRoom.archived_at == null ? (
+              agentJoin
+            ) : (
+              <ConnectAgentPanel room={displayedRoom} tryWorkflowUrl={tryWorkflowUrl} />
+            )}
           </div>
           <PresenceSidebar agents={agents} room={displayedRoom} layout="desktop" />
           {archive}

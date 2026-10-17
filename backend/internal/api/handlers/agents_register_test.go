@@ -388,99 +388,41 @@ func TestRegisterAgent_NoModelNoReputationBonus(t *testing.T) {
 // Tests for next_steps guidance in registration response (prd-v5 requirement)
 // ============================================================================
 
-// TestRegisterAgent_IncludesNextSteps tests that registration response includes next_steps guidance.
-// Per prd-v5: Help new agents thrive by providing actionable next steps.
-func TestRegisterAgent_IncludesNextSteps(t *testing.T) {
-	repo := NewMockAgentRepositoryWithNameLookup()
-	handler := NewAgentsHandler(repo, "test-jwt-secret")
-
-	reqBody := RegisterAgentRequest{
-		Name:        "nextsteps_agent",
-		Description: "Agent testing next steps",
-	}
-	body, _ := json.Marshal(reqBody)
-
-	req := httptest.NewRequest(http.MethodPost, "/v1/agents/register", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-
-	rr := httptest.NewRecorder()
-	handler.RegisterAgent(rr, req)
-
-	if rr.Code != http.StatusCreated {
-		t.Fatalf("expected status 201, got %d: %s", rr.Code, rr.Body.String())
-	}
-
-	var resp RegisterAgentResponse
-	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
-	// Verify next_steps is present and has at least 4 items
-	if len(resp.NextSteps) < 4 {
-		t.Errorf("expected next_steps to have >= 4 items, got %d: %v", len(resp.NextSteps), resp.NextSteps)
-	}
-
-	// Verify core guidance items are present
-	found := map[string]bool{
-		"specialties": false,
-		"briefing":    false,
-		"heartbeat":   false,
-		"claim":       false,
-	}
-	for _, step := range resp.NextSteps {
-		if strings.Contains(step, "specialties") {
-			found["specialties"] = true
+// TestRegisterAgent_NextStepsPointToTheRoomAndToSearch: a new agent is told the two things it
+// came for (SPEC.md 18.5): how to join a room with the skill, and to search before it debugs.
+// Nothing about claims, reputation, heartbeats, briefings or specialties.
+func TestRegisterAgent_NextStepsPointToTheRoomAndToSearch(t *testing.T) {
+	for _, model := range []string{"", "claude-opus-4"} {
+		repo := NewMockAgentRepositoryWithNameLookup()
+		handler := NewAgentsHandler(repo, "test-jwt-secret")
+		body, err := json.Marshal(RegisterAgentRequest{Name: "nextsteps_agent", Description: "Agent testing next steps", Model: model})
+		if err != nil {
+			t.Fatal(err)
 		}
-		if strings.Contains(step, "/v1/me") {
-			found["briefing"] = true
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/agents/register", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rr := httptest.NewRecorder()
+		handler.RegisterAgent(rr, req)
+		if rr.Code != http.StatusCreated {
+			t.Fatalf("model %q: expected status 201, got %d: %s", model, rr.Code, rr.Body.String())
 		}
-		if strings.Contains(step, "heartbeat") {
-			found["heartbeat"] = true
+		var resp RegisterAgentResponse
+		if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
 		}
-		if strings.Contains(step, "claim") || strings.Contains(step, "solvr.dev/settings") {
-			found["claim"] = true
+		want := []string{
+			"Joining a room? Follow the room steps in https://solvr.dev/skill.md: get your room token with POST /v1/rooms/{slug}/handshake, then read and post. No install needed.",
+			"Hit an error? Search before you debug: GET https://api.solvr.dev/v1/search?q=<the exact error>",
 		}
-	}
-
-	for key, v := range found {
-		if !v {
-			t.Errorf("expected next_steps to include guidance about '%s'", key)
+		if strings.Join(resp.NextSteps, "\n") != strings.Join(want, "\n") {
+			t.Errorf("model %q: next_steps = %q, want %q", model, resp.NextSteps, want)
 		}
-	}
-}
-
-// TestRegisterAgent_NextSteps_OmitsModelTip tests that model tip is omitted when model is provided.
-// Per prd-v5: Conditionally omit model tip if model was provided in registration request.
-func TestRegisterAgent_NextSteps_OmitsModelTip(t *testing.T) {
-	repo := NewMockAgentRepositoryWithNameLookup()
-	handler := NewAgentsHandler(repo, "test-jwt-secret")
-
-	reqBody := RegisterAgentRequest{
-		Name:        "model_set_agent",
-		Description: "Agent with model",
-		Model:       "claude-opus-4",
-	}
-	body, _ := json.Marshal(reqBody)
-
-	req := httptest.NewRequest(http.MethodPost, "/v1/agents/register", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-
-	rr := httptest.NewRecorder()
-	handler.RegisterAgent(rr, req)
-
-	if rr.Code != http.StatusCreated {
-		t.Fatalf("expected status 201, got %d: %s", rr.Code, rr.Body.String())
-	}
-
-	var resp RegisterAgentResponse
-	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
-	// Verify model tip is NOT present when model was provided
-	for _, step := range resp.NextSteps {
-		if strings.Contains(step, "Set model") || strings.Contains(step, `"model"`) {
-			t.Errorf("expected model tip to be absent when model is set, but found: %s", step)
+		for _, step := range resp.NextSteps {
+			for _, gone := range []string{"Claim", "claim", "reputation", "heartbeat", "specialties", "briefing", "Set model"} {
+				if strings.Contains(step, gone) {
+					t.Errorf("model %q: a next step still mentions %q: %s", model, gone, step)
+				}
+			}
 		}
 	}
 }
@@ -527,46 +469,5 @@ func TestRegisterAgent_WithKERIPublicKey(t *testing.T) {
 	// Verify AMCP identity is flagged
 	if !resp.Agent.HasAMCPIdentity {
 		t.Error("expected has_amcp_identity to be true")
-	}
-}
-
-// TestRegisterAgent_NextSteps_IncludesModelTip tests that model tip is included when model is NOT provided.
-// Per prd-v5: If model NOT provided, add tip about setting model for +10 reputation bonus.
-func TestRegisterAgent_NextSteps_IncludesModelTip(t *testing.T) {
-	repo := NewMockAgentRepositoryWithNameLookup()
-	handler := NewAgentsHandler(repo, "test-jwt-secret")
-
-	reqBody := RegisterAgentRequest{
-		Name:        "no_model_steps",
-		Description: "Agent without model",
-		// Model deliberately not set
-	}
-	body, _ := json.Marshal(reqBody)
-
-	req := httptest.NewRequest(http.MethodPost, "/v1/agents/register", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-
-	rr := httptest.NewRecorder()
-	handler.RegisterAgent(rr, req)
-
-	if rr.Code != http.StatusCreated {
-		t.Fatalf("expected status 201, got %d: %s", rr.Code, rr.Body.String())
-	}
-
-	var resp RegisterAgentResponse
-	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
-	// Verify model tip IS present when model was not provided
-	modelTipFound := false
-	for _, step := range resp.NextSteps {
-		if strings.Contains(step, "model") && strings.Contains(step, "reputation") {
-			modelTipFound = true
-			break
-		}
-	}
-	if !modelTipFound {
-		t.Errorf("expected model tip in next_steps when model is not set, got: %v", resp.NextSteps)
 	}
 }

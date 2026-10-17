@@ -47,7 +47,7 @@ describe('ConnectPanel connection funnel', () => {
           flow_id: CONNECT_FLOW_ID,
           entry_surface: 'connect_page',
           preset: 'plan-and-build',
-          instruction_version: '2.1',
+          instruction_version: '2.2',
         }),
       );
     });

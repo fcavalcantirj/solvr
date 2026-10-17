@@ -28,14 +28,14 @@ const stageRoomsCTE = `
 		SELECT DISTINCT ON (f.room_id) f.room_id, f.occurred_at AS created_at, f.flow_id,
 		       CASE WHEN a.human_id IS NOT NULL THEN 'h:' || a.human_id::text
 		            WHEN a.id IS NOT NULL THEN 'a:' || a.id END AS owner
-		  FROM funnel_events f
+		  FROM counted_funnel_events f
 		  LEFT JOIN agents a ON f.actor_ref = ` + actorRefSQL + `
 		 WHERE f.event_name = 'room_created' AND f.room_id IS NOT NULL AND f.occurred_at < $1
 		 ORDER BY f.room_id, f.occurred_at
 	),
 	activated AS (
 		SELECT room_id, MIN(occurred_at) AS activated_at
-		  FROM funnel_events
+		  FROM counted_funnel_events
 		 WHERE event_name = 'first_two_way_exchange' AND room_id IS NOT NULL AND occurred_at < $1
 		 GROUP BY room_id
 	)`
@@ -116,7 +116,7 @@ func (r *GrowthStageRepository) measureWorkflows(ctx context.Context, end time.T
 			 WHERE ac.activated_at >= $2
 		)
 		SELECT preset, COUNT(*) AS rooms FROM (
-			SELECT COALESCE((SELECT p.preset FROM funnel_events p
+			SELECT COALESCE((SELECT p.preset FROM counted_funnel_events p
 			                  WHERE w.flow_id IS NOT NULL AND p.flow_id = w.flow_id AND p.preset IS NOT NULL
 			                  ORDER BY p.occurred_at LIMIT 1), 'unknown') AS preset
 			  FROM weekly w

@@ -130,8 +130,8 @@ func (r *ReturnUsageRepository) Measure(ctx context.Context, from, to, now time.
 // agentCollaborationsSQL: every (agent, activated room, activation instant) up to `to`.
 const agentCollaborationsSQL = `
 	SELECT DISTINCT j.actor_ref, x.room_id::text, x.occurred_at
-	  FROM funnel_events x
-	  JOIN funnel_events j ON j.room_id = x.room_id AND j.event_name = 'participant_joined'
+	  FROM counted_funnel_events x
+	  JOIN counted_funnel_events j ON j.room_id = x.room_id AND j.event_name = 'participant_joined'
 	   AND j.actor_type = 'agent' AND j.actor_ref IS NOT NULL
 	 WHERE x.event_name = 'first_two_way_exchange' AND x.occurred_at < $1`
 
@@ -139,9 +139,9 @@ const agentCollaborationsSQL = `
 // `to`, a human taking part through the room's own rows or the flow that created it.
 const humanCollaborationsSQL = `
 	SELECT DISTINCT h.actor_ref, x.room_id::text, x.occurred_at
-	  FROM funnel_events x
-	  LEFT JOIN funnel_events c ON c.room_id = x.room_id AND c.event_name = 'room_created'
-	  JOIN funnel_events h ON h.actor_type = 'human' AND h.actor_ref IS NOT NULL
+	  FROM counted_funnel_events x
+	  LEFT JOIN counted_funnel_events c ON c.room_id = x.room_id AND c.event_name = 'room_created'
+	  JOIN counted_funnel_events h ON h.actor_type = 'human' AND h.actor_ref IS NOT NULL
 	   AND (h.room_id = x.room_id OR (c.flow_id IS NOT NULL AND h.flow_id = c.flow_id))
 	 WHERE x.event_name = 'first_two_way_exchange' AND x.occurred_at < $1`
 
@@ -232,8 +232,8 @@ func (r *ReturnUsageRepository) outcomes(ctx context.Context, from, to, now time
 			       (rm.archived_at IS NOT NULL OR EXISTS (
 			           SELECT 1 FROM room_entries d WHERE d.room_id = c.room_id AND d.kind = 'event'
 			              AND lower(d.event_type) IN ('done', 'task.done'))) AS completed
-			  FROM funnel_events c
-			  LEFT JOIN funnel_events x ON x.room_id = c.room_id AND x.event_name = 'first_two_way_exchange' AND x.occurred_at <= $3
+			  FROM counted_funnel_events c
+			  LEFT JOIN counted_funnel_events x ON x.room_id = c.room_id AND x.event_name = 'first_two_way_exchange' AND x.occurred_at <= $3
 			  LEFT JOIN rooms rm ON rm.id = c.room_id
 			 WHERE c.event_name = 'room_created' AND c.occurred_at >= $1 AND c.occurred_at < $2
 		)
@@ -243,7 +243,7 @@ func (r *ReturnUsageRepository) outcomes(ctx context.Context, from, to, now time
 		       COUNT(*) FILTER (WHERE activated_at IS NOT NULL AND completed AND NOT returned)::int,
 		       COUNT(*) FILTER (WHERE activated_at IS NOT NULL AND completed AND returned)::int
 		  FROM (SELECT created.*, (created.actor_ref IS NOT NULL AND EXISTS (
-		            SELECT 1 FROM funnel_events o
+		            SELECT 1 FROM counted_funnel_events o
 		             WHERE o.actor_ref = created.actor_ref AND o.room_id IS DISTINCT FROM created.room_id
 		               AND o.event_name IN ('room_created', 'participant_joined')
 		               AND o.occurred_at > created.activated_at AND o.occurred_at <= $3)) AS returned
@@ -319,7 +319,7 @@ func (r *ReturnUsageRepository) languageDemand(ctx context.Context, from, to tim
 				WHEN query ~* '[ãõç]' OR query ~* '\m(não|nao|como|para|erro|está|você|voce|porque)\M' THEN 'portuguese_marked'
 				WHEN query ~ '[^\x01-\x7fÀ-ɏ]' THEN 'other_non_latin'
 				ELSE 'latin_other' END AS bucket
-			  FROM search_queries WHERE searched_at >= $1 AND searched_at < $2
+			  FROM counted_search_queries WHERE searched_at >= $1 AND searched_at < $2
 		) q GROUP BY bucket`, from, to)
 	if err != nil {
 		LogQueryError(ctx, "ReturnUsage.language", "search_queries", err)

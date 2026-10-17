@@ -86,21 +86,25 @@ type BrowserFunnelEvent struct {
 	EntrySurface       string
 	InstructionVersion string
 	Source             FunnelSource
+	// Traffic is who the step came from, classified by the ingest handler (SPEC.md 27.6).
+	Traffic TrafficLabel
 }
 
 // RecordBrowserEvent stores one browser-reported funnel step. The caller has
 // already validated that EventName is a browser event and classified the actor.
 func (r *FunnelEventRepository) RecordBrowserEvent(ctx context.Context, ev BrowserFunnelEvent) error {
 	srcKind, srcID := ev.Source.columns()
+	class, reason := ev.Traffic.columns()
 	_, err := r.pool.Exec(ctx, `
 		INSERT INTO funnel_events (
 			flow_id, event_name, source_channel, actor_type, actor_ref,
-			preset, role, entry_surface, instruction_version, source_kind, source_id
-		) VALUES ($1, $2, 'browser', $3, $4, $5, $6, $7, $8, $9, $10)
+			preset, role, entry_surface, instruction_version, source_kind, source_id,
+			traffic_class, traffic_reason
+		) VALUES ($1, $2, 'browser', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 	`,
 		nullFunnel(ev.FlowID), ev.EventName, ev.ActorType, nullFunnel(ev.ActorRef),
 		nullFunnel(ev.Preset), nullFunnel(ev.Role), nullFunnel(ev.EntrySurface),
-		nullFunnel(ev.InstructionVersion), srcKind, srcID,
+		nullFunnel(ev.InstructionVersion), srcKind, srcID, class, reason,
 	)
 	if err != nil {
 		LogQueryError(ctx, "RecordBrowserEvent", "funnel_events", err)
@@ -111,19 +115,21 @@ func (r *FunnelEventRepository) RecordBrowserEvent(ctx context.Context, ev Brows
 
 // RecordSkillFetched stores the web server's skill_fetched step: the skill link of a
 // copied sentence (skill.md?f=<flow code>) was fetched. The caller has validated the flow
-// code and decided the entry surface (models.FunnelSurfaceAgentFetch,
-// models.FunnelSurfaceBotFetch or models.FunnelSurfaceBrowserVisit); nothing else a client
-// sent reaches the row, the request's user agent least of all. Every fetch is a row: the
-// reports count distinct flows, not fetches.
-func (r *FunnelEventRepository) RecordSkillFetched(ctx context.Context, flowID, actorType, actorRef, entrySurface string) error {
+// code, decided the entry surface (models.FunnelSurfaceAgentFetch,
+// models.FunnelSurfaceBotFetch or models.FunnelSurfaceBrowserVisit) and classified the fetch
+// (label, SPEC.md 27.6); nothing else a client sent reaches the row, the request's user agent
+// least of all. Every fetch is a row: the reports count distinct flows, not fetches.
+func (r *FunnelEventRepository) RecordSkillFetched(ctx context.Context, flowID, actorType, actorRef, entrySurface string, label TrafficLabel) error {
 	if !models.ValidFunnelActorType(actorType) {
 		actorType = models.FunnelActorAnonymous
 	}
+	class, reason := label.columns()
 	_, err := r.pool.Exec(ctx, `
 		INSERT INTO funnel_events (
-			flow_id, event_name, source_channel, actor_type, actor_ref, entry_surface
-		) VALUES ($1, 'skill_fetched', 'web_server', $2, $3, $4)
-	`, nullFunnel(flowID), actorType, nullFunnel(actorRef), nullFunnel(entrySurface))
+			flow_id, event_name, source_channel, actor_type, actor_ref, entry_surface,
+			traffic_class, traffic_reason
+		) VALUES ($1, 'skill_fetched', 'web_server', $2, $3, $4, $5, $6)
+	`, nullFunnel(flowID), actorType, nullFunnel(actorRef), nullFunnel(entrySurface), class, reason)
 	if err != nil {
 		LogQueryError(ctx, "RecordSkillFetched", "funnel_events", err)
 		return fmt.Errorf("record funnel skill_fetched: %w", err)
@@ -286,7 +292,7 @@ func (r *FunnelEventRepository) list(ctx context.Context, where string, arg any)
 		       COALESCE(actor_ref, ''), COALESCE(room_id::text, ''), COALESCE(preset, ''),
 		       COALESCE(role, ''), COALESCE(ordinal, 0), COALESCE(entry_surface, ''),
 		       COALESCE(instruction_version, ''), COALESCE(source_kind, ''),
-		       COALESCE(source_id::text, ''), occurred_at
+		       COALESCE(source_id::text, ''), traffic_class, COALESCE(traffic_reason, ''), occurred_at
 		  FROM funnel_events `+where+` ORDER BY id ASC`, arg)
 	if err != nil {
 		LogQueryError(ctx, "ListFunnelEvents", "funnel_events", err)
@@ -299,7 +305,8 @@ func (r *FunnelEventRepository) list(ctx context.Context, where string, arg any)
 		var e models.FunnelEvent
 		if err := rows.Scan(&e.ID, &e.FlowID, &e.EventName, &e.SourceChannel, &e.ActorType,
 			&e.ActorRef, &e.RoomID, &e.Preset, &e.Role, &e.Ordinal, &e.EntrySurface,
-			&e.InstructionVersion, &e.SourceKind, &e.SourceID, &e.OccurredAt); err != nil {
+			&e.InstructionVersion, &e.SourceKind, &e.SourceID, &e.TrafficClass, &e.TrafficReason,
+			&e.OccurredAt); err != nil {
 			return nil, fmt.Errorf("scan funnel event: %w", err)
 		}
 		out = append(out, e)

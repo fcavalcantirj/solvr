@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
+	"github.com/fcavalcantirj/solvr/internal/traffic"
 )
 
 // SearchAnalyticsRepository handles persistence of search query analytics.
@@ -18,19 +19,22 @@ func NewSearchAnalyticsRepository(pool *Pool) *SearchAnalyticsRepository {
 	return &SearchAnalyticsRepository{pool: pool}
 }
 
-// Insert stores a single search query record.
+// Insert stores a single search query record, with how it was entered and who sent it
+// (SPEC.md 27.6). A record without a class is stored unclassified.
 func (r *SearchAnalyticsRepository) Insert(ctx context.Context, sq models.SearchQuery) error {
+	class, reason := TrafficLabel{Class: traffic.Class(sq.TrafficClass), Reason: traffic.Reason(sq.TrafficReason)}.columns()
 	_, err := r.pool.Exec(ctx, `
 		INSERT INTO search_queries (
 			query, query_normalized, type_filter, results_count,
 			search_method, duration_ms, searcher_type, searcher_id,
-			ip_address, user_agent, page, searched_at, public_scope
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+			ip_address, user_agent, page, searched_at, public_scope,
+			entry, traffic_class, traffic_reason
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 	`,
 		sq.Query, sq.QueryNormalized, sq.TypeFilter, sq.ResultsCount,
 		sq.SearchMethod, sq.DurationMs, sq.SearcherType, sq.SearcherID,
 		nilIfEmpty(sq.IPAddress), nilIfEmpty(sq.UserAgent), sq.Page, sq.SearchedAt,
-		sq.PublicScope,
+		sq.PublicScope, nilIfEmpty(sq.Entry), class, reason,
 	)
 	if err != nil {
 		return fmt.Errorf("insert search query: %w", err)
@@ -49,7 +53,7 @@ func (r *SearchAnalyticsRepository) GetTrending(ctx context.Context, days int, l
 			COUNT(*) AS search_count,
 			AVG(results_count)::float AS avg_results,
 			AVG(duration_ms)::float AS avg_duration
-		FROM search_queries
+		FROM counted_search_queries
 		WHERE searched_at >= NOW() - $1 * INTERVAL '1 day'
 		GROUP BY query_normalized
 		ORDER BY search_count DESC
@@ -85,7 +89,7 @@ func (r *SearchAnalyticsRepository) GetZeroResults(ctx context.Context, days int
 			COUNT(*) AS search_count,
 			0::float AS avg_results,
 			AVG(duration_ms)::float AS avg_duration
-		FROM search_queries
+		FROM counted_search_queries
 		WHERE searched_at >= NOW() - $1 * INTERVAL '1 day'
 		  AND results_count = 0
 		GROUP BY query_normalized
@@ -124,7 +128,7 @@ func (r *SearchAnalyticsRepository) GetSummary(ctx context.Context, days int) (m
 			CASE WHEN COUNT(*) = 0 THEN 0
 			ELSE (COUNT(*) FILTER (WHERE results_count = 0))::float / COUNT(*)::float
 			END AS zero_result_rate
-		FROM search_queries
+		FROM counted_search_queries
 		WHERE searched_at >= NOW() - $1 * INTERVAL '1 day'
 	`, days).Scan(&summary.TotalSearches, &summary.UniqueQueries, &summary.AvgDurationMs, &summary.ZeroResultRate)
 	if err != nil {
@@ -134,7 +138,7 @@ func (r *SearchAnalyticsRepository) GetSummary(ctx context.Context, days int) (m
 	// By searcher type
 	rows, err := r.pool.Query(ctx, `
 		SELECT searcher_type, COUNT(*)
-		FROM search_queries
+		FROM counted_search_queries
 		WHERE searched_at >= NOW() - $1 * INTERVAL '1 day'
 		GROUP BY searcher_type
 	`, days)

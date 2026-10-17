@@ -9,6 +9,7 @@ import (
 	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
+	"github.com/fcavalcantirj/solvr/internal/traffic"
 )
 
 // The connection-funnel API.
@@ -115,6 +116,7 @@ func (h *FunnelHandler) IngestBrowserEvent(w http.ResponseWriter, r *http.Reques
 		EntrySurface:       req.EntrySurface,
 		InstructionVersion: req.InstructionVersion,
 		Source:             h.resolveSource(r.Context(), req.Source),
+		Traffic:            browserStepLabel(r, actorType),
 	})
 	if err != nil {
 		// A funnel row that could not be written is a statistic that is briefly
@@ -135,6 +137,19 @@ func (h *FunnelHandler) GetContract(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"instruction_version": ConnectInstructionVersion,
 		"events":              models.FunnelEventContract(),
+	})
+}
+
+// browserStepLabel classifies a browser step from what the browser's own request said about
+// itself (SPEC.md 27.6). The headers are read here and never stored.
+func browserStepLabel(r *http.Request, actorType string) db.TrafficLabel {
+	return db.LabelFor(traffic.Signals{
+		Surface:         traffic.SurfaceBrowserEvent,
+		UserAgent:       r.UserAgent(),
+		ClientHints:     r.Header.Get("Sec-CH-UA"),
+		FetchMode:       r.Header.Get("Sec-Fetch-Mode"),
+		AgentCredential: actorType == models.FunnelActorAgent,
+		HeadersKnown:    true,
 	})
 }
 

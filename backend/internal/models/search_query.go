@@ -24,7 +24,24 @@ type SearchQuery struct {
 	// was served before this was recorded: eligibility unknown, and its text is
 	// never publishable. See db.PublicQueryText.
 	PublicScope *bool `json:"public_scope,omitempty"`
+
+	// Entry is how the term reached the search (SearchEntryTyped, SearchEntryLink or
+	// SearchEntryAPI). A term a link brought is stored and never counted as a search (SPEC.md 27.6).
+	Entry string `json:"entry,omitempty"`
+	// TrafficClass and TrafficReason say who sent the search (SPEC.md 27.6).
+	TrafficClass  string `json:"traffic_class,omitempty"`
+	TrafficReason string `json:"traffic_reason,omitempty"`
 }
+
+// How a term reached GET /v1/search (its entry parameter, SPEC.md 27.6).
+const (
+	// SearchEntryTyped is a term the visitor typed into the site's search.
+	SearchEntryTyped = "typed"
+	// SearchEntryLink is the term a page opened with: a link brought it, nobody typed it.
+	SearchEntryLink = "link"
+	// SearchEntryAPI is a call that names neither, the default.
+	SearchEntryAPI = "api"
+)
 
 // TrendingSearch represents an aggregated trending search term.
 type TrendingSearch struct {

@@ -58,10 +58,12 @@ func newPreArchiveScratchDatabase(t *testing.T) (pool *Pool, archiveLegacy func(
 // preArchiveIndependentMigrations are migrations after the legacy archive that touch no legacy
 // table and that the current code reads on any schema it runs on, so a scratch database stopped
 // below the archive applies them too (internal/jobs keeps the same rule): the rooms sitemap
-// reads rooms.listed (000145) and a failed search writes search_failures (000144).
+// reads rooms.listed (000145), a failed search writes search_failures (000144), and every funnel
+// step, search and recorded request writes its traffic class (000146).
 var preArchiveIndependentMigrations = map[string]bool{
 	"000144_search_failures.up.sql": true,
 	"000145_rooms_listed.up.sql":    true,
+	"000146_traffic_classes.up.sql": true,
 }
 
 // splitAtLegacyArchive returns the up migrations below *_legacy_archive.up.sql and the rest,

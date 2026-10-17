@@ -207,7 +207,7 @@ func newMigratedScratchURL(t *testing.T, prefix string) string {
 // the operator routes. The pre-archive database gets them too, so a probe measures the legacy
 // tables and not a column or table the head code uses regardless of the archive.
 var archiveIndependentMigrations = []string{"000139_api_request_duration.up.sql", "000141_featured_rooms.up.sql",
-	"000144_search_failures.up.sql", "000145_rooms_listed.up.sql"}
+	"000144_search_failures.up.sql", "000145_rooms_listed.up.sql", "000146_traffic_classes.up.sql"}
 
 // splitArchiveIndependent separates archiveIndependentMigrations out of the migrations
 // from the legacy archive on, keeping order, and fails if one of them is missing.
@@ -450,6 +450,11 @@ func scheduledWorkers(pool *db.Pool, tracer *dbErrorTracer) []probeWorker {
 			job := jobs.NewCounterReconcileJob(db.NewCounterReconciler(pool), jobs.DefaultCounterReconcileLimit)
 			if run, err := job.RunOnce(ctx); err != nil || run.Busy || len(run.Counters) == 0 {
 				t.Errorf("counter reconcile job = %+v, %v; want every counter reconciled", run, err)
+			}
+		}},
+		{"job:TrafficClassifyJob", func(ctx context.Context, t *testing.T) {
+			if run, err := jobs.NewTrafficClassifyJob(db.NewTrafficRules(pool)).RunOnce(ctx); err != nil || run.Busy {
+				t.Errorf("traffic classify job = %+v, %v; want a clean run", run, err)
 			}
 		}},
 	}

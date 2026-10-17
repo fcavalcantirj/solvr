@@ -68,13 +68,13 @@ func (r *AcquisitionLoopRepository) exampleRoom(ctx context.Context, slug string
 	var created, second, exchange *time.Time
 	err := r.pool.QueryRow(ctx, `
 		SELECT c.occurred_at,
-		       (SELECT MIN(j.occurred_at) FROM funnel_events j
+		       (SELECT MIN(j.occurred_at) FROM counted_funnel_events j
 		         WHERE j.room_id = ro.id AND j.event_name = 'participant_joined' AND j.ordinal = 2 AND j.occurred_at < $2),
-		       (SELECT MIN(x.occurred_at) FROM funnel_events x
+		       (SELECT MIN(x.occurred_at) FROM counted_funnel_events x
 		         WHERE x.room_id = ro.id AND x.event_name = 'first_two_way_exchange' AND x.occurred_at < $2)
 		  FROM rooms ro
 		  LEFT JOIN LATERAL (
-			SELECT f.occurred_at FROM funnel_events f
+			SELECT f.occurred_at FROM counted_funnel_events f
 			 WHERE f.room_id = ro.id AND f.event_name = 'room_created' AND f.occurred_at < $2
 			 ORDER BY f.occurred_at LIMIT 1
 		  ) c ON true
@@ -117,7 +117,7 @@ func (r *AcquisitionLoopRepository) measureFirstConnections(ctx context.Context,
 		win AS (
 			SELECT w.room_id,
 			       EXISTS (SELECT 1 FROM activated ac WHERE ac.room_id = w.room_id) AS activated,
-			       EXISTS (SELECT 1 FROM funnel_events j
+			       EXISTS (SELECT 1 FROM counted_funnel_events j
 			                WHERE j.room_id = w.room_id AND j.event_name = 'participant_joined'
 			                  AND j.ordinal >= 2 AND j.occurred_at < $1) AS second_joined
 			  FROM firsts w WHERE w.created_at >= $2
@@ -143,7 +143,7 @@ func (r *AcquisitionLoopRepository) measureAgentDepth(ctx context.Context, end t
 		parts AS (
 			SELECT DISTINCT j.room_id, a.id AS agent_id,
 			       CASE WHEN a.human_id IS NOT NULL THEN 'h:' || a.human_id::text ELSE 'a:' || a.id END AS owner
-			  FROM funnel_events j
+			  FROM counted_funnel_events j
 			  JOIN agents a ON j.actor_ref = `+actorRefSQL+`
 			 WHERE j.event_name = 'participant_joined' AND j.occurred_at < $1
 			   AND j.room_id IN (SELECT room_id FROM created WHERE created_at >= $2)

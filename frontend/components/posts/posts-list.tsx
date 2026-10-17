@@ -21,6 +21,10 @@ interface PostsListProps {
 // Renders the canonical Posts collection. All ordering, filtering and search is
 // the API's job; this component only fetches, paginates and displays.
 //
+// Each search says how its term was entered (SPEC.md 27.6): link for the term the page opened
+// with, until the visitor types, and typed after that. The API counts a link-brought term as no
+// search: the tag links a crawler walks are not searches anybody typed.
+//
 // It also says what the visitor did with the list (SPEC.md 27.7), each time only after the
 // list that was asked for arrived:
 //   search       a term of at least two characters the visitor settled on, with the number
@@ -57,8 +61,9 @@ export function PostsList({ initialPosts = [], searchQuery, sort }: PostsListPro
       const superseded = () => read !== latestRead.current;
       if (q !== openedWith.current) visitorSearched.current = true;
       try {
+        const entry = visitorSearched.current ? 'typed' : 'link';
         const res = q
-          ? await api.search({ q, page: targetPage, per_page: PER_PAGE })
+          ? await api.search({ q, page: targetPage, per_page: PER_PAGE, entry })
           : await api.getPosts({ sort, page: targetPage, per_page: PER_PAGE });
         if (superseded()) return;
         setPosts((prev) => (replace ? res.data : [...prev, ...res.data]));

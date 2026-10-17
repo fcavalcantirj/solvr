@@ -40,9 +40,9 @@ func TestFunnelEventRepository_RecordSkillFetched(t *testing.T) {
 	repo := db.NewFunnelEventRepository(pool)
 	flow := newTestFlowCode(t, ctx, pool)
 
-	require.NoError(t, repo.RecordSkillFetched(ctx, flow, models.FunnelActorAnonymous, "", models.FunnelSurfaceAgentFetch))
-	require.NoError(t, repo.RecordSkillFetched(ctx, flow, models.FunnelActorAgent, db.PseudonymizeActor("agent_skill"), models.FunnelSurfaceBrowserVisit))
-	require.NoError(t, repo.RecordSkillFetched(ctx, flow, models.FunnelActorAnonymous, "", models.FunnelSurfaceBotFetch))
+	require.NoError(t, repo.RecordSkillFetched(ctx, flow, models.FunnelActorAnonymous, "", models.FunnelSurfaceAgentFetch, db.TrafficLabel{}))
+	require.NoError(t, repo.RecordSkillFetched(ctx, flow, models.FunnelActorAgent, db.PseudonymizeActor("agent_skill"), models.FunnelSurfaceBrowserVisit, db.TrafficLabel{}))
+	require.NoError(t, repo.RecordSkillFetched(ctx, flow, models.FunnelActorAnonymous, "", models.FunnelSurfaceBotFetch, db.TrafficLabel{}))
 
 	events, err := repo.ListByFlow(ctx, flow)
 	require.NoError(t, err)
@@ -90,7 +90,7 @@ func TestFunnelEventRepository_FlowKnown(t *testing.T) {
 
 	t.Run("an agent's fetch of the skill link alone makes it known", func(t *testing.T) {
 		flow := newTestFlowCode(t, ctx, pool)
-		require.NoError(t, repo.RecordSkillFetched(ctx, flow, models.FunnelActorAnonymous, "", models.FunnelSurfaceAgentFetch))
+		require.NoError(t, repo.RecordSkillFetched(ctx, flow, models.FunnelActorAnonymous, "", models.FunnelSurfaceAgentFetch, db.TrafficLabel{}))
 		assert.True(t, known(flow))
 	})
 
@@ -100,18 +100,18 @@ func TestFunnelEventRepository_FlowKnown(t *testing.T) {
 	t.Run("a bot's fetch or a person's visit never makes it known", func(t *testing.T) {
 		for _, surface := range []string{models.FunnelSurfaceBotFetch, models.FunnelSurfaceBrowserVisit} {
 			flow := newTestFlowCode(t, ctx, pool)
-			require.NoError(t, repo.RecordSkillFetched(ctx, flow, models.FunnelActorAnonymous, "", surface))
-			require.NoError(t, repo.RecordSkillFetched(ctx, flow, models.FunnelActorAnonymous, "", surface))
+			require.NoError(t, repo.RecordSkillFetched(ctx, flow, models.FunnelActorAnonymous, "", surface, db.TrafficLabel{}))
+			require.NoError(t, repo.RecordSkillFetched(ctx, flow, models.FunnelActorAnonymous, "", surface, db.TrafficLabel{}))
 			assert.False(t, known(flow), "%s alone", surface)
 		}
 
 		both := newTestFlowCode(t, ctx, pool)
-		require.NoError(t, repo.RecordSkillFetched(ctx, both, models.FunnelActorAnonymous, "", models.FunnelSurfaceBotFetch))
-		require.NoError(t, repo.RecordSkillFetched(ctx, both, models.FunnelActorAnonymous, "", models.FunnelSurfaceBrowserVisit))
+		require.NoError(t, repo.RecordSkillFetched(ctx, both, models.FunnelActorAnonymous, "", models.FunnelSurfaceBotFetch, db.TrafficLabel{}))
+		require.NoError(t, repo.RecordSkillFetched(ctx, both, models.FunnelActorAnonymous, "", models.FunnelSurfaceBrowserVisit, db.TrafficLabel{}))
 		assert.False(t, known(both), "a bot's fetch and a person's visit together")
 
 		// The same code becomes known the moment an agent fetches the link.
-		require.NoError(t, repo.RecordSkillFetched(ctx, both, models.FunnelActorAnonymous, "", models.FunnelSurfaceAgentFetch))
+		require.NoError(t, repo.RecordSkillFetched(ctx, both, models.FunnelActorAnonymous, "", models.FunnelSurfaceAgentFetch, db.TrafficLabel{}))
 		assert.True(t, known(both))
 	})
 
@@ -120,7 +120,7 @@ func TestFunnelEventRepository_FlowKnown(t *testing.T) {
 	t.Run("a skill fetch with an unknown or missing surface does not make it known", func(t *testing.T) {
 		for _, surface := range []string{"", "some_new_surface", "AGENT_FETCH"} {
 			flow := newTestFlowCode(t, ctx, pool)
-			require.NoError(t, repo.RecordSkillFetched(ctx, flow, models.FunnelActorAnonymous, "", surface))
+			require.NoError(t, repo.RecordSkillFetched(ctx, flow, models.FunnelActorAnonymous, "", surface, db.TrafficLabel{}))
 			assert.False(t, known(flow), "surface %q", surface)
 		}
 	})
@@ -129,7 +129,7 @@ func TestFunnelEventRepository_FlowKnown(t *testing.T) {
 	// whatever its free-text surface says, and next to a bot's fetch too.
 	t.Run("a browser step beside a bot's fetch still makes it known", func(t *testing.T) {
 		flow := newTestFlowCode(t, ctx, pool)
-		require.NoError(t, repo.RecordSkillFetched(ctx, flow, models.FunnelActorAnonymous, "", models.FunnelSurfaceBotFetch))
+		require.NoError(t, repo.RecordSkillFetched(ctx, flow, models.FunnelActorAnonymous, "", models.FunnelSurfaceBotFetch, db.TrafficLabel{}))
 		assert.False(t, known(flow))
 		require.NoError(t, repo.RecordBrowserEvent(ctx, db.BrowserFunnelEvent{
 			FlowID: flow, EventName: models.FunnelStarterPromptCopied, ActorType: models.FunnelActorAnonymous,

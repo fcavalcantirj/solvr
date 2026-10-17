@@ -130,6 +130,16 @@ var OperatorReports = []OperatorReport{
 	},
 	{
 		Method:  http.MethodGet,
+		Path:    "/admin/traffic/summary",
+		Reports: "who the traffic came from: page views by kind of page and class, funnel steps and searches by class, requests by client class and the top error codes",
+	},
+	{
+		Method:  http.MethodPost,
+		Path:    "/admin/traffic/reclassify",
+		Reports: "what the behavioural traffic rules set over a named window, before and after, by class and reason",
+	},
+	{
+		Method:  http.MethodGet,
 		Path:    "/admin/ops/slo",
 		Reports: "core-API availability, p95 read, timeline-write and delivery latency against their targets, search latency and delivery queue lag",
 	},

@@ -162,6 +162,7 @@ func searchPath() map[string]interface{} {
 			queryParam("per_page", "Results per page; above 50 is clamped to 50.", typed("integer", "default", 20, "minimum", 1, "maximum", 50)),
 			queryParam("min_similarity", "Opt-in similarity floor (0 to 1): only semantic matches at or above it are listed.", unit),
 			queryParam("confidence_threshold", "Overrides, for this request, the bar meta.confident_match is measured against (0 to 1).", unit),
+			queryParam("entry", "How the term was entered: typed (a person typed it), link (the term a page opened with) or api (the default). A search entered by link is stored and not counted as a search; another value is 400.", typed("string", "enum", []string{models.SearchEntryTyped, models.SearchEntryLink, models.SearchEntryAPI}, "default", models.SearchEntryAPI)),
 		},
 		"responses", withErrors(obj("200", jsonOK("One page of results", "SearchResponse", nil)), "400"),
 	))

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
+	"github.com/fcavalcantirj/solvr/internal/traffic"
 )
 
 // SearchRepositoryInterface defines the database operations for search.
@@ -114,6 +115,7 @@ type SearchResponseMeta struct {
 //   - page: page number (default: 1)
 //   - per_page: results per page (default: 20, max: 50)
 //   - min_similarity: opt-in cosine floor 0–1 (honest empty below the bar; see BART-155)
+//   - entry: how the term was entered, typed|link|api (default: api; SPEC.md 27.6)
 //
 // Unrecognized query params are ignored but reported in meta.warnings (never a silent no-op).
 func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
@@ -146,6 +148,15 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 		h.recordFailure(r, start, query, http.StatusBadRequest, code, "")
 		return
 	}
+	// How the term was entered: a term a link brought is stored and never counted as a
+	// search (SPEC.md 27.6).
+	entry, ok := searchEntry(r.URL.Query().Get("entry"))
+	if !ok {
+		writeSearchError(w, http.StatusBadRequest, "VALIDATION_ERROR", "entry must be typed, link or api")
+		h.recordFailure(r, start, query, http.StatusBadRequest, "VALIDATION_ERROR", "")
+		return
+	}
+
 	opts := models.SearchOptions{
 		Status:     r.URL.Query().Get("status"),
 		Author:     r.URL.Query().Get("author"),
@@ -287,6 +298,14 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 	if h.analyticsRepo != nil {
 		// Extract searcher identity from auth context
 		searcherType, searcherID := searcherOf(r)
+		trafficClass, trafficReason := traffic.Classify(traffic.Signals{
+			Surface:         traffic.SurfaceAPI,
+			UserAgent:       r.UserAgent(),
+			ClientHints:     r.Header.Get("Sec-CH-UA"),
+			FetchMode:       r.Header.Get("Sec-Fetch-Mode"),
+			AgentCredential: searcherType == "agent",
+			HeadersKnown:    true,
+		})
 
 		// Truncate query to 500 chars (matches DB CHECK constraint)
 		q := query
@@ -313,6 +332,9 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 			Page:            opts.Page,
 			UserAgent:       r.Header.Get("User-Agent"),
 			SearchedAt:      start,
+			Entry:           entry,
+			TrafficClass:    string(trafficClass),
+			TrafficReason:   string(trafficReason),
 		}
 		if opts.Type != "" {
 			sq.TypeFilter = &opts.Type
@@ -341,7 +363,19 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 var validSearchParams = map[string]struct{}{
 	"q": {}, "type": {}, "tags": {}, "status": {}, "author": {}, "author_type": {},
 	"from_date": {}, "to_date": {}, "sort": {}, "page": {}, "per_page": {},
-	"content_types": {}, "min_similarity": {}, "confidence_threshold": {},
+	"content_types": {}, "min_similarity": {}, "confidence_threshold": {}, "entry": {},
+}
+
+// searchEntry reads the entry parameter: typed, link or api, and api when it is absent.
+func searchEntry(value string) (string, bool) {
+	switch value {
+	case "":
+		return models.SearchEntryAPI, true
+	case models.SearchEntryTyped, models.SearchEntryLink, models.SearchEntryAPI:
+		return value, true
+	default:
+		return "", false
+	}
 }
 
 // SearchParamNames lists the query parameters GET /search reads, sorted; the published

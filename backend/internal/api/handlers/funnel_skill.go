@@ -3,10 +3,11 @@ package handlers
 import (
 	"log/slog"
 	"net/http"
-	"strings"
 	"unicode/utf8"
 
+	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
+	"github.com/fcavalcantirj/solvr/internal/traffic"
 )
 
 // skill_fetched: the skill link of a copied sentence was fetched (SPEC.md 25.7).
@@ -41,55 +42,16 @@ const funnelUserAgentMax = 200
 // skillFetchNavigate is the Sec-Fetch-Mode a browser sends when a person opens a link.
 const skillFetchNavigate = "navigate"
 
-// skillFetchBotTokens is the ONE list of what a link preview or a crawler calls itself in
-// its User-Agent, spelled as its owner spells it. A user agent that contains any of them,
-// in any letter case, is a bot's:
-//
-//   - a link preview: somebody pasted the sentence into Slack, WhatsApp, Discord, Telegram,
-//     X, LinkedIn, Facebook, Skype or Teams, Reddit, Mastodon or an e-mail, and the app
-//     fetched the link to show what it points at;
-//   - a crawler: a search engine, an SEO tool or a model trainer that rendered /connect
-//     and followed the link.
-//
-// Neither is an agent reading the skill, so neither may be counted as one.
-//
-// An agent's tool is deliberately NOT here and must never be added: ChatGPT-User,
-// Claude-User, claude-code, curl, python-requests, node, Go-http-client, axios, undici,
-// okhttp. Each is a person's assistant or an agent's HTTP client fetching the skill, which
-// is exactly what agent_fetch counts, and so is a request that names no user agent at all.
-// funnel_skill_surface_test.go holds both lists against each other.
-var skillFetchBotTokens = []string{
-	// Link previews.
-	"Slackbot", "Slack-ImgProxy", "WhatsApp", "Discordbot", "TelegramBot", "Twitterbot", "LinkedInBot",
-	"facebookexternalhit", "Facebot", "SkypeUriPreview", "Iframely", "Embedly", "redditbot", "Mastodon",
-	// Crawlers.
-	"Googlebot", "Google-InspectionTool", "bingbot", "DuckDuckBot", "YandexBot", "Baiduspider", "Applebot",
-	"AhrefsBot", "SemrushBot", "MJ12bot", "PetalBot", "Bytespider", "GPTBot", "OAI-SearchBot", "ClaudeBot",
-	"PerplexityBot", "CCBot",
-}
-
-// skillFetchBotNeedles is skillFetchBotTokens in lower case, made once from that list: a
-// user agent is lowered and searched for each.
-var skillFetchBotNeedles = func() []string {
-	needles := make([]string, len(skillFetchBotTokens))
-	for i, token := range skillFetchBotTokens {
-		needles[i] = strings.ToLower(token)
-	}
-	return needles
-}()
+// skillFetchBotTokens is the ONE list of what a link preview or a crawler calls itself in its
+// User-Agent (traffic.BotTokens, SPEC.md 25.7 and 27.6): the skill fetch and the traffic
+// classes share it. A user agent that contains any of them, in any letter case, is a bot's.
+// An agent's tool is deliberately NOT on it; funnel_skill_surface_test.go holds both lists
+// against each other.
+var skillFetchBotTokens = traffic.BotTokens
 
 // isSkillFetchBot reports whether a User-Agent names a link preview or a crawler.
 func isSkillFetchBot(userAgent string) bool {
-	if userAgent == "" {
-		return false
-	}
-	lowered := strings.ToLower(userAgent)
-	for _, needle := range skillFetchBotNeedles {
-		if strings.Contains(lowered, needle) {
-			return true
-		}
-	}
-	return false
+	return traffic.IsDeclaredBot(userAgent)
 }
 
 // skillFetchSurface decides the entry surface of a skill fetch from how the skill was
@@ -130,7 +92,16 @@ func (h *FunnelHandler) ingestSkillFetched(w http.ResponseWriter, r *http.Reques
 
 	actorType, actorRef := funnelActor(r)
 	surface := skillFetchSurface(req.RequestMode, req.UserAgent)
-	if err := h.repo.RecordSkillFetched(r.Context(), req.FlowID, actorType, actorRef, surface); err != nil {
+	// The fetch is classified by the request for the skill, as the web server reports it,
+	// never by the web server's own report (SPEC.md 27.6).
+	label := db.LabelFor(traffic.Signals{
+		Surface:         traffic.SurfaceSkillFetch,
+		UserAgent:       req.UserAgent,
+		FetchMode:       req.RequestMode,
+		AgentCredential: actorType == models.FunnelActorAgent,
+		HeadersKnown:    true,
+	})
+	if err := h.repo.RecordSkillFetched(r.Context(), req.FlowID, actorType, actorRef, surface, label); err != nil {
 		// As for every funnel step: a row that could not be written is a statistic
 		// that is briefly short, never an error the reporter must handle.
 		slog.Warn("failed to record skill_fetched funnel event", "error", err)

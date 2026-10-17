@@ -1,4 +1,5 @@
 import type { APIConnectExamplesResponse, APIConnectPreset } from '@/lib/api-types';
+import { serverFetch } from '@/lib/server-fetch';
 
 // The guides and the home cards show the API's three example sentences
 // (GET /v1/connect/examples), read on the server so the first HTML carries them.
@@ -16,7 +17,7 @@ const EXAMPLES_REVALIDATE_SECONDS = 300;
 
 export async function getConnectExamples(): Promise<APIConnectPreset[] | null> {
   try {
-    const response = await fetch(`${API_BASE_URL}/v1/connect/examples`, {
+    const response = await serverFetch(`${API_BASE_URL}/v1/connect/examples`, {
       next: { revalidate: EXAMPLES_REVALIDATE_SECONDS },
       signal: AbortSignal.timeout(EXAMPLES_TIMEOUT_MS),
     });

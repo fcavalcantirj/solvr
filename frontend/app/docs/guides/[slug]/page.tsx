@@ -8,6 +8,7 @@ import { guidePath, workflowGuide } from "@/lib/docs/workflow-guides";
 import { linkPreview } from "@/lib/seo/link-preview";
 import { getConnectExamples } from "@/lib/connect-examples-server";
 import type { APIConnectPreset, APIConnectStart } from "@/lib/api-types";
+import { serverFetch } from "@/lib/server-fetch";
 
 // A workflow guide (task idx 84, SPEC.md 27.5). One component renders all nine from their
 // data (lib/docs/workflow-guides.ts), on the server: what the guide is for, the API's
@@ -68,7 +69,7 @@ export default async function WorkflowGuidePage({ params }: { params: Params }) 
 // for it. The sentence then carries the plain skill link, like the examples.
 async function liveSentence(preset: string): Promise<APIConnectPreset | null> {
   try {
-    const res = await fetch(`${API_BASE_URL}/v1/connect?preset=${preset}&visibility=public&flow=none`, { cache: "no-store" });
+    const res = await serverFetch(`${API_BASE_URL}/v1/connect?preset=${preset}&visibility=public&flow=none`, { cache: "no-store" });
     if (!res.ok) return null;
     const json = (await res.json()) as { data?: Partial<APIConnectStart> } | null;
     return json?.data?.presets?.find((p) => p.selected) ?? null;

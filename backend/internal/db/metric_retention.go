@@ -92,6 +92,8 @@ var RawEventSources = []RawEventSource{
 				"operator acquisition model: monthly retained/new/reactivated searchers and cohorts over all history", AllHistory},
 			{"ReturnUsageRepository.Measure",
 				"operator language demand by query script for the last 24h, 7d or 30d", longestRoomStatsWindow()},
+			{"TrafficReportRepository.Summary",
+				"operator traffic summary: searches by class and entry for the last 24h, 7d or 30d", longestRoomStatsWindow()},
 		},
 	},
 	{
@@ -103,6 +105,8 @@ var RawEventSources = []RawEventSource{
 				"the earliest recorded call, stated as when measurement began", AllHistory},
 			{"ParticipantActivityRepository.Measure",
 				"operator participant report traffic: API requests by actor type and operation kind", 2 * ParticipantWindow},
+			{"TrafficReportRepository.Summary",
+				"operator traffic summary: requests by client class and the top error codes for the last 24h, 7d or 30d", longestRoomStatsWindow()},
 		},
 	},
 	{
@@ -126,6 +130,18 @@ var RawEventSources = []RawEventSource{
 				"operator share loop; a new agent or human is new by its first step ever", AllHistory},
 			{"ReturnUsageRepository.Measure",
 				"operator return usage; gaps reach back to an identity's previous collaboration", AllHistory},
+			{"TrafficReportRepository.Summary",
+				"operator traffic summary: funnel steps by class and reason for the last 24h, 7d or 30d", longestRoomStatsWindow()},
+		},
+	},
+	{
+		// Consent-free page views (000146): one row per view, only the kind of page and its class.
+		Table: "page_view_events", TimeColumn: "occurred_at", Retention: KeptIndefinitely,
+		Readers: []MetricReader{
+			{"TrafficReportRepository.Summary",
+				"operator traffic summary: page views by kind of page and class for the last 24h, 7d or 30d", longestRoomStatsWindow()},
+			{"SEOBaselineRepository.Measure",
+				"operator SEO baseline page views by kind of page and class for the last 24h, 7d or 30d", longestRoomStatsWindow()},
 		},
 	},
 	{

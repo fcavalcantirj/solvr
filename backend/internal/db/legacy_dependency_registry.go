@@ -58,6 +58,7 @@ var LegacyDependencyDispositions = map[string]LegacyDependencyDisposition{
 	"job:SearchDocumentJob":        keep("embeds the posts and replies search_document_drift() lists; touches no legacy table"),
 	"job:WebhookDeliveryJob":       keep("sends the webhook deliveries queued with notification events (webhooks, webhook_deliveries, notifications); touches no legacy table"),
 	"job:CounterReconcileJob":      keep("repairs the posts, replies, blog posts, rooms and agents counters the *_drift() functions list, row by row; touches no legacy table"),
+	"job:TrafficClassifyJob":       keep("the behavioural traffic rules over funnel_events and search_queries (SPEC.md 27.6); touches no legacy table"),
 	"job:TranslationJob":           done(LegacyActionRefactor, "translation uses posts original_* columns; its moderation trigger now writes the verdict as a system reply (ModerationReplyWriter), not a legacy comment"),
 	"job:CrystallizationJob":       done(LegacyActionRefactor, "see feature:crystallization; main.go wires the canonical lister and crystallizer and the job skips ErrNothingToCrystallize"),
 	"consumer:RoomEntryChannel":    keep("room entry fan-out; independent of the knowledge model"),

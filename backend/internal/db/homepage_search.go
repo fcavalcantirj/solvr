@@ -193,7 +193,7 @@ func (r *HomepageRepository) searchTotals(ctx context.Context, window RoomStatsW
 		      FROM (
 		        SELECT user_agent, searcher_type, public_scope IS NULL AS unknown_scope, COUNT(*) AS n,
 		               COUNT(*) FILTER (WHERE searched_at >= NOW() - INTERVAL '24 hours') AS n_day
-		          FROM search_queries
+		          FROM counted_search_queries
 		         WHERE searched_at >= NOW() - $1::interval
 		         GROUP BY user_agent, searcher_type, public_scope IS NULL
 		      ) per_agent
@@ -215,7 +215,7 @@ func (r *HomepageRepository) searchTotals(ctx context.Context, window RoomStatsW
 func (r *HomepageRepository) searchSeries(ctx context.Context, window RoomStatsWindow, monitored []string) ([]BucketCount, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT date_trunc($1, searched_at) AS bucket, COUNT(*)
-		  FROM search_queries
+		  FROM counted_search_queries
 		 WHERE searched_at >= date_trunc($1, NOW()) - ($3::int - 1) * $4::interval
 		   AND `+notMonitoredExpr+`
 		 GROUP BY bucket
@@ -260,7 +260,7 @@ func (r *HomepageRepository) topSearchTerms(ctx context.Context, window RoomStat
 		SELECT query_normalized,
 		       COUNT(*) AS searches,
 		       COUNT(*) FILTER (WHERE results_count > 0) AS with_results
-		  FROM search_queries
+		  FROM counted_search_queries
 		 WHERE searched_at >= NOW() - $1::interval
 		   AND public_scope
 		   AND `+notMonitoredExpr+`
@@ -302,7 +302,7 @@ func (r *HomepageRepository) recentSearchTerms(ctx context.Context, window RoomS
 	rows, err := r.pool.Query(ctx, `
 		WITH candidates AS (
 		  SELECT query_normalized, COUNT(*) AS occurrences, MAX(searched_at) AS last_searched
-		    FROM search_queries
+		    FROM counted_search_queries
 		   WHERE searched_at >= NOW() - $1::interval
 		     AND public_scope
 		     AND `+notMonitoredExpr+`
@@ -315,7 +315,7 @@ func (r *HomepageRepository) recentSearchTerms(ctx context.Context, window RoomS
 		  FROM candidates c
 		 CROSS JOIN LATERAL (
 		   SELECT searcher_type, results_count
-		     FROM search_queries
+		     FROM counted_search_queries
 		    WHERE query_normalized = c.query_normalized
 		      AND searched_at = c.last_searched
 		      AND public_scope

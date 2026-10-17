@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readdirSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { CONTENT_GROUPS, contentGroupForPath, isUntrackedPath } from './analytics-paths';
 
@@ -94,6 +94,20 @@ describe('contentGroupForPath', () => {
     expect(contentGroupForPath(null)).toBe('other');
     expect(contentGroupForPath(undefined)).toBe('other');
     expect(contentGroupForPath('')).toBe('other');
+  });
+
+  // contract/content-groups.json is the one table of what kind of page a path is. The API's
+  // ContentGroupForPath (backend/internal/traffic) answers every case of it too, so the page
+  // views the API counts and the hits Google sees use one rule (SPEC.md 27.6, 27.7).
+  it('answers every case of the table it shares with the API', () => {
+    const fixture = JSON.parse(readFileSync(join(__dirname, '..', '..', 'contract', 'content-groups.json'), 'utf8')) as {
+      cases: Array<{ path: string; group: string }>;
+    };
+    expect(fixture.cases.length).toBeGreaterThan(50);
+    for (const { path, group } of fixture.cases) {
+      expect(contentGroupForPath(path), path).toBe(group);
+    }
+    expect(new Set(fixture.cases.map((c) => c.group))).toEqual(new Set(CONTENT_GROUPS));
   });
 
   it('is a closed list of thirteen', () => {

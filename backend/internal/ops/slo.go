@@ -322,7 +322,7 @@ const (
 	sourceAvailability = "service_checks: api and database, one check per service every 5 minutes (HealthCheckJob)"
 	sourceRead         = "api_request_events.duration_ms: GET requests (operation_kind poll) answered 2xx; server-side time; search, streams, heartbeats, health, admin and the homepage's own reads are not recorded"
 	sourceWrite        = "api_request_events.duration_ms: POST /v1/rooms/{slug}/entries, /v1/rooms/{slug}/messages, /r/{slug}/message and /r/{slug}/events answered 2xx; server-side time"
-	sourceSearch       = "search_queries.duration_ms: every search, including the external embedding call when one is configured"
+	sourceSearch       = "counted_search_queries.duration_ms: every counted search (SPEC.md 27.6), including the external embedding call when one is configured"
 )
 
 // BuildSLOReport computes the four targets, the separately measured external-model

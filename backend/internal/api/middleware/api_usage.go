@@ -2,12 +2,14 @@ package middleware
 
 import (
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/fcavalcantirj/solvr/internal/db"
+	"github.com/fcavalcantirj/solvr/internal/traffic"
 )
 
 // Measuring aggregate API usage at the boundary.
@@ -48,6 +50,8 @@ var apiUsageExcludedPrefixes = []string{
 	"/admin",
 	// The overview reading its own numbers.
 	"/v1/homepage",
+	// Measurement plumbing: the funnel steps and page views the site reports.
+	"/v1/analytics",
 	// Static assets and crawler files.
 	"/robots.txt",
 	"/favicon.ico",
@@ -176,16 +180,20 @@ func APIUsage(recorder APIUsageRecorder) func(http.Handler) http.Handler {
 				StatusClass:     wrapped.status / 100,
 				OccurredAt:      time.Now(),
 				DurationMs:      &durationMs,
+				ErrorCode:       apiUsageErrorCode(wrapped.status, wrapped.sniff),
+				UAClass:         traffic.UAClass(r.UserAgent(), r.Header.Get("Sec-CH-UA")),
 			})
 		})
 	}
 }
 
-// apiUsageWriter captures the response class and nothing else.
+// apiUsageWriter captures the response class and, of an error answer, the first
+// apiUsageErrorSniffBytes of its body: enough to read the envelope's code.
 type apiUsageWriter struct {
 	http.ResponseWriter
 	status      int
 	wroteHeader bool
+	sniff       []byte
 }
 
 func (w *apiUsageWriter) WriteHeader(code int) {
@@ -200,7 +208,41 @@ func (w *apiUsageWriter) Write(b []byte) (int, error) {
 	if !w.wroteHeader {
 		w.wroteHeader = true
 	}
+	if w.status >= 400 && len(w.sniff) < apiUsageErrorSniffBytes {
+		w.sniff = append(w.sniff, b[:min(len(b), apiUsageErrorSniffBytes-len(w.sniff))]...)
+	}
 	return w.ResponseWriter.Write(b)
+}
+
+// apiUsageErrorSniffBytes bounds how much of an error answer is read for its code.
+const apiUsageErrorSniffBytes = 4096
+
+// apiUsageErrorCodeForm is the stored form of an error code (000146's check).
+var apiUsageErrorCodeForm = regexp.MustCompile(`^[A-Z][A-Z0-9_]{0,63}$`)
+
+// apiUsageCodeField finds the envelope's code in a body cut before its end.
+var apiUsageCodeField = regexp.MustCompile(`"code"\s*:\s*"([^"]{1,64})"`)
+
+// apiUsageErrorCode is the code of a 4xx or 5xx answer: the error envelope's, read by the
+// Logging middleware's parser (or, from a body longer than the sniff, by its field), else the
+// code the error envelope gives that status (errorCodeForStatus). Empty for a success.
+func apiUsageErrorCode(status int, body []byte) string {
+	if status < 400 {
+		return ""
+	}
+	code, _ := extractErrorDetails(body)
+	if code == "" {
+		if m := apiUsageCodeField.FindSubmatch(body); m != nil {
+			code = string(m[1])
+		}
+	}
+	if !apiUsageErrorCodeForm.MatchString(code) {
+		code = errorCodeForStatus(status)
+	}
+	if !apiUsageErrorCodeForm.MatchString(code) {
+		return "" // never a value the column refuses: a refused row would lose its whole batch
+	}
+	return code
 }
 
 // Flush keeps streaming handlers working: they assert on http.Flusher, and a

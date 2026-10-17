@@ -182,7 +182,8 @@ describe('middleware: a fetch of the skill link is reported to the API', () => {
     for (const path of ['/skill.md/extra', '/skill', '/skill.mdx', '/heartbeat.md', '/docs/skill.md']) {
       middleware(new NextRequest(`https://solvr.dev${path}?f=k7m2p9xq`), fakeEvent().event);
     }
-    expect(spy).not.toHaveBeenCalled();
+    // A page among them is still reported as a page view (middleware.pageview.test.ts).
+    expect(spy.mock.calls.filter(([url]) => url === FUNNEL)).toEqual([]);
   });
 
   it('does not read the API\'s answer and releases it', async () => {

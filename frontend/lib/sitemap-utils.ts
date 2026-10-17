@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { serverFetch } from '@/lib/server-fetch';
 
 interface SitemapEntry {
   loc: string;
@@ -68,7 +69,7 @@ export function sitemapUnavailable(): NextResponse {
 // sitemap turns into sitemapUnavailable().
 export async function readSitemapAPI<T>(path: string, pick: (body: unknown) => T | null): Promise<T | null> {
   try {
-    const res = await fetch(`${API_URL}${path}`, { cache: 'no-store' });
+    const res = await serverFetch(`${API_URL}${path}`, { cache: 'no-store' });
     if (!res.ok) return null;
     return pick(await res.json());
   } catch {

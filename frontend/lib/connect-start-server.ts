@@ -1,4 +1,5 @@
 import type { APIConnectStart, APIConnectStartResponse } from '@/lib/api-types';
+import { serverFetch } from '@/lib/server-fetch';
 
 // /connect carries its default sentence in the HTML the server sends (SPEC.md 25.6): the use
 // cases, the sentence, the line beside it and the Copy button are painted with the page, and
@@ -22,7 +23,7 @@ const START_REVALIDATE_SECONDS = 300;
 
 export async function getDefaultConnectStart(): Promise<APIConnectStart | null> {
   try {
-    const response = await fetch(`${API_BASE_URL}/v1/connect?flow=none`, {
+    const response = await serverFetch(`${API_BASE_URL}/v1/connect?flow=none`, {
       next: { revalidate: START_REVALIDATE_SECONDS },
       signal: AbortSignal.timeout(START_TIMEOUT_MS),
     });

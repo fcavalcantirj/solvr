@@ -145,7 +145,7 @@ func (r *ShareAttributionRepository) Measure(ctx context.Context, from, to, now 
 func (r *ShareAttributionRepository) readBrowserSteps(ctx context.Context, from, to time.Time, rep *ShareAttributionReport) (map[shareOrigin]int, map[shareOrigin]int, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT event_name, actor_type, source_kind, source_id::text, COALESCE(flow_id, '')
-		  FROM funnel_events
+		  FROM counted_funnel_events
 		 WHERE occurred_at >= $1 AND occurred_at < $2 AND source_id IS NOT NULL
 		   AND event_name IN ('share_visit', 'share_link_copied', 'connection_started')`, from, to)
 	if err != nil {
@@ -212,7 +212,7 @@ func (r *ShareAttributionRepository) activatedOrigins(ctx context.Context, refer
 		return out, nil
 	}
 	rows, err := r.pool.Query(ctx, `
-		SELECT DISTINCT room_id::text FROM funnel_events
+		SELECT DISTINCT room_id::text FROM counted_funnel_events
 		 WHERE event_name = 'first_two_way_exchange' AND room_id = ANY($1::uuid[]) AND occurred_at <= $2`,
 		roomIDs, now)
 	if err != nil {
@@ -235,8 +235,8 @@ func (r *ShareAttributionRepository) activatedOrigins(ctx context.Context, refer
 func (r *ShareAttributionRepository) attributedRooms(ctx context.Context, from, to, now time.Time) ([]attributedRoom, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT c.room_id::text, COALESCE(c.flow_id, ''), x.occurred_at
-		  FROM funnel_events c
-		  LEFT JOIN funnel_events x
+		  FROM counted_funnel_events c
+		  LEFT JOIN counted_funnel_events x
 		    ON x.room_id = c.room_id AND x.event_name = 'first_two_way_exchange' AND x.occurred_at <= $3
 		 WHERE c.event_name = 'room_created' AND c.source_id IS NOT NULL
 		   AND c.occurred_at >= $1 AND c.occurred_at < $2`, from, to, now)

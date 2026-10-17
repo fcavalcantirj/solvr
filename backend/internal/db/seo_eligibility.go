@@ -20,10 +20,11 @@ var roomTwoWayExchange = fmt.Sprintf(`(SELECT COUNT(DISTINCT m.agent_name)
 	activationMinAuthors)
 
 // roomIndexablePredicate is the one rule for a room page search engines may index
-// and the rooms sitemap lists (task idx 80): public, live, and carrying a two-way
-// exchange. A thin or empty room stays usable but is neither indexed nor listed.
-// Discussion value, not word count, decides it.
-var roomIndexablePredicate = `is_private = false AND ` + roomExistsPredicate + ` AND ` + roomTwoWayExchange
+// and the rooms sitemap lists (task idx 80): public, listed by its owner (SPEC.md 27.1;
+// new rooms start unlisted), live, and carrying a two-way exchange. A thin or empty room
+// stays usable but is neither indexed nor listed. Discussion value, not word count,
+// decides it.
+var roomIndexablePredicate = `is_private = false AND listed AND ` + roomExistsPredicate + ` AND ` + roomTwoWayExchange
 
 // IsIndexable reports whether the room's page may be indexed (roomIndexablePredicate).
 func (r *RoomRepository) IsIndexable(ctx context.Context, roomID uuid.UUID) (bool, error) {

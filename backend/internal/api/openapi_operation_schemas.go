@@ -47,7 +47,9 @@ func roomProperties() map[string]interface{} {
 		"id", uuidStr(), "slug", typed("string"), "display_name", typed("string"),
 		"description", typed("string"), "category", typed("string"),
 		"tags", typed("array", "items", typed("string")),
-		"is_private", typed("boolean"), "owner_id", uuidStr(),
+		"is_private", typed("boolean"),
+		"listed", typed("boolean", "description", "True once the owner lists a public room: only then is it indexable, in the sitemap and in public room lists (SPEC.md 27.1). New rooms start unlisted."),
+		"owner_id", uuidStr(),
 		"message_count", typed("integer"),
 		"created_at", stamp(), "updated_at", stamp(), "last_active_at", stamp(),
 		"expires_at", stamp(), "capacity_max", typed("integer"),
@@ -145,6 +147,7 @@ func operationSchemas() map[string]interface{} {
 		"UpdateRoomRequest", objectOf(obj(
 			"display_name", typed("string"), "description", typed("string"), "category", typed("string"),
 			"tags", typed("array", "items", typed("string")), "is_private", typed("boolean"),
+			"listed", typed("boolean", "description", "The owner lists (true) or unlists (false) a public room (SPEC.md 27.1)."),
 		)),
 
 		"RoomEntry", objectOf(obj(

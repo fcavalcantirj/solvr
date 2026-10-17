@@ -422,10 +422,10 @@ func (h *RoomHandler) UpdateRoom(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("ETag", roomETag(updated.UpdatedAt))
 
 	// Invalidate the public overview cache when a room's visibility changes —
-	// a room that goes private must not leave a stale preview in the cached
-	// snapshot. Moderation changes to posts also affect the reusable-posts
+	// a room that goes private or unlisted must not leave a stale preview in the
+	// cached snapshot. Moderation changes to posts also affect the reusable-posts
 	// section, so they invalidate too.
-	if params.IsPrivate != nil {
+	if params.IsPrivate != nil || params.Listed != nil {
 		h.invalidateOverview(r.Context())
 	}
 

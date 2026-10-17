@@ -23,8 +23,8 @@ func TestRoomIndexable_RequiresATwoWayExchange(t *testing.T) {
 	newRoom := func(slug string, private bool) uuid.UUID {
 		t.Helper()
 		var id uuid.UUID
-		require.NoError(t, pool.QueryRow(ctx, `INSERT INTO rooms (slug, display_name, is_private)
-			VALUES ($1, $2, $3) RETURNING id`, slug, slug, private).Scan(&id))
+		require.NoError(t, pool.QueryRow(ctx, `INSERT INTO rooms (slug, display_name, is_private, listed)
+			VALUES ($1, $2, $3, NOT $3) RETURNING id`, slug, slug, private).Scan(&id))
 		return id
 	}
 	say := func(room uuid.UUID, name, authorType string, authorID *string) int64 {

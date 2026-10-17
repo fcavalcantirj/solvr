@@ -71,6 +71,9 @@ func TestOverview_ARoomChangedByAnyWriterLeavesEveryInstancesSnapshotAtCommit(t 
 		status, out := doJSON(t, http.MethodPost, a.ts.URL+"/v1/rooms", key, `{"display_name":"`+name+`","is_private":false}`)
 		require.Equal(t, http.StatusCreated, status, "create room: %v", out)
 		slug := entryData(t, out)["slug"].(string)
+		// A new room starts unlisted (SPEC.md 27.1); its owner lists it, so the overview shows it.
+		status, out = doJSONAtCurrentVersion(t, http.MethodPatch, a.ts.URL+"/v1/rooms/"+slug, key, `{"listed":true}`)
+		require.Equal(t, http.StatusOK, status, "list room: %v", out)
 		tok := handshakeRoomToken(t, a.ts, slug, key)
 		postRoomMessage(t, a.ts.URL, slug, tok, "keeper", "a message in "+name)
 		return slug

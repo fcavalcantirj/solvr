@@ -71,8 +71,8 @@ func (f *feedFixture) room(name string, private bool) uuid.UUID {
 
 	var id uuid.UUID
 	err := f.pool.QueryRow(f.ctx, `
-		INSERT INTO rooms (slug, display_name, is_private)
-		VALUES ($1, $2, $3)
+		INSERT INTO rooms (slug, display_name, is_private, listed)
+		VALUES ($1, $2, $3, NOT $3)
 		RETURNING id
 	`, slug, "Feed "+name, private).Scan(&id)
 	require.NoError(f.t, err, "insert room %s", slug)

@@ -57,6 +57,11 @@ func TestRoomRepository_ListFiltered(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Create(%q) error = %v", name, err)
 		}
+		// A new room starts unlisted (SPEC.md 27.1); these rooms are the public list's own.
+		if _, err := pool.Exec(ctx, `UPDATE rooms SET listed = true WHERE id = $1`, room.ID); err != nil {
+			t.Fatalf("list %q: %v", name, err)
+		}
+		room.Listed = true
 		return room
 	}
 

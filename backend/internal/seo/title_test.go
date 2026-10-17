@@ -82,23 +82,53 @@ func TestPostTitle_KeepsTheTwinSuffixWithinTheLength(t *testing.T) {
 
 func TestRoomTitle_NamesTheRoomThenItsStatedPurpose(t *testing.T) {
 	purpose := "Helping other agents to configure new models auth login --provider anthropic --method cli --set-default command"
-	got := RoomTitle("fix-openclaw-oauth-cli", &purpose, "")
-	assert.Equal(t, "fix-openclaw-oauth-cli: Helping other agents to configure…", got)
+	got := RoomTitle("fix-openclaw-oauth-cli", "fix-openclaw-oauth-cli", &purpose, "")
+	assert.Equal(t, "Fix openclaw oauth cli: Helping other agents to configure…", got)
 	assert.LessOrEqual(t, utf8.RuneCountInString(got), TitleLength)
 }
 
 func TestRoomTitle_UsesTheInitialTaskWhenTheRoomStatesNoPurpose(t *testing.T) {
-	assert.Equal(t, "gateway-fix: gateway start blocked", RoomTitle("gateway-fix", nil, "gateway start blocked"))
+	assert.Equal(t, "Gateway fix: gateway start blocked", RoomTitle("gateway-fix", "gateway-fix", nil, "gateway start blocked"))
 	empty := "  "
-	assert.Equal(t, "gateway-fix: Find out why the gateway dies", RoomTitle("gateway-fix", &empty, "**Find out** why the gateway dies"))
+	assert.Equal(t, "Gateway fix: Find out why the gateway dies",
+		RoomTitle("gateway-fix", "gateway-fix", &empty, "**Find out** why the gateway dies"))
 }
 
 func TestRoomTitle_IsTheNameAloneWhenNothingElseFits(t *testing.T) {
-	assert.Equal(t, "planner-room", RoomTitle("planner-room", nil, ""))
+	assert.Equal(t, "Planner room", RoomTitle("planner-room", "planner-room", nil, ""))
 	name := "a room whose name is already most of the title length ok"
 	purpose := "and a purpose that cannot fit after it"
-	assert.Equal(t, name, RoomTitle(name, &purpose, ""))
-	assert.LessOrEqual(t, utf8.RuneCountInString(RoomTitle(strings.Repeat("n", 90), nil, "")), TitleLength)
+	assert.Equal(t, name, RoomTitle(name, "a-room-whose-name", &purpose, ""))
+	assert.LessOrEqual(t, utf8.RuneCountInString(RoomTitle(strings.Repeat("n", 90), "n", nil, "")), TitleLength)
+}
+
+// SPEC.md 27.3: a room named only by its slug is called by the slug read as words, so its
+// search title and description start with words a searcher reads, not a URL fragment.
+func TestRoomName_ReadsANameThatIsOnlyItsSlugAsWords(t *testing.T) {
+	for _, c := range []struct{ name, slug, want string }{
+		{"fix-openclaw-oauth-cli", "fix-openclaw-oauth-cli", "Fix openclaw oauth cli"},
+		{"Kestrel-integration", "kestrel-integration", "Kestrel integration"},
+		{"gateway-API-retry", "gateway-api-retry", "Gateway API retry"},
+		{"probe-2026-k9", "probe-2026-k9", "Probe 2026 k9"},
+		{"plan_and_build", "plan-and-build-x", "Plan and build"},
+		{"kestrel", "kestrel", "Kestrel"},
+		{"  fix-openclaw-oauth-cli ", "fix-openclaw-oauth-cli", "Fix openclaw oauth cli"},
+	} {
+		assert.Equal(t, c.want, RoomName(c.name, c.slug), c.name)
+	}
+}
+
+func TestRoomName_KeepsAReadableNameAsWritten(t *testing.T) {
+	for _, c := range []struct{ name, slug string }{
+		{"Planner team: Go rate limiter", "planner-team-go-rate-limiter"},
+		{"Kestrel Triggers", "kestrel-triggers"},
+		{"kestrel-firmware build", "kestrel-firmware"},
+		{"KESTREL — firmware for the bench", "kestrel"},
+		{"kestrel", "kestrel-room"},
+	} {
+		assert.Equal(t, c.name, RoomName(c.name, c.slug), c.name)
+	}
+	assert.Equal(t, "", RoomName("   ", "x"))
 }
 
 func TestBlogTitle_IsTheSearchTitleOfThePostsTitle(t *testing.T) {

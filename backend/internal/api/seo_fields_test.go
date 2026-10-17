@@ -78,8 +78,8 @@ func TestRoomSEO_IndexableTitleAndDescriptionComeFromTheAPI(t *testing.T) {
 	ctx := context.Background()
 	slug := fmt.Sprintf("test-seo-room-%d", time.Now().UnixNano()%1000000000)
 	var roomID string
-	require.NoError(t, pool.QueryRow(ctx, `INSERT INTO rooms (slug, display_name, description, is_private)
-		VALUES ($1, 'Kestrel firmware build', 'Plan and ship the **kestrel** firmware', false) RETURNING id::text`,
+	require.NoError(t, pool.QueryRow(ctx, `INSERT INTO rooms (slug, display_name, description, is_private, listed)
+		VALUES ($1, 'Kestrel firmware build', 'Plan and ship the **kestrel** firmware', false, true) RETURNING id::text`,
 		slug).Scan(&roomID))
 	t.Cleanup(func() { pool.Exec(context.Background(), `DELETE FROM rooms WHERE id = $1`, roomID) }) //nolint:errcheck
 

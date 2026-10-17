@@ -16,8 +16,8 @@ import (
 //
 // Three rules are enforced HERE, by the query, so no caller can widen them:
 //
-//  1. Public, live rooms only (liveRoomPredicate: not private, not deleted, not
-//     past expires_at). A room taken private or expired disappears from the next read.
+//  1. Public, listed, live rooms only (listedLiveRoomPredicate: not private, listed by
+//     its owner, not deleted, not past expires_at). A room taken private or expired disappears from the next read.
 //  2. Deleted and system messages are not activity. A deleted message is gone
 //     from the next read; an edited one is re-read from the row, never cached.
 //  3. Typed events pass an ALLOW-LIST, not a noise blocklist. Heartbeats,
@@ -93,7 +93,7 @@ func publicRoomFeedEntries(after, limit string) string {
 		        m.content, m.metadata, '' AS event_type, '' AS issue, m.created_at
 		   FROM messages m JOIN rooms r ON r.id = m.room_id
 		  WHERE m.deleted_at IS NULL AND m.author_type <> 'system'
-		    AND ` + liveRoomPredicate + since("m") + `
+		    AND ` + listedLiveRoomPredicate + since("m") + `
 		  ORDER BY m.created_at DESC, m.id DESC
 		  LIMIT ` + limit + `)
 		UNION ALL
@@ -103,7 +103,7 @@ func publicRoomFeedEntries(after, limit string) string {
 		        '', '{}'::jsonb, e.event_type, e.issue, e.created_at
 		   FROM room_events e JOIN rooms r ON r.id = e.room_id
 		  WHERE upper(e.event_type) IN (` + publicFeedEventTypesSQL + `)
-		    AND ` + liveRoomPredicate + since("e") + `
+		    AND ` + listedLiveRoomPredicate + since("e") + `
 		  ORDER BY e.created_at DESC, e.id DESC
 		  LIMIT ` + limit + `)`
 }

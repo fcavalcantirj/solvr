@@ -37,14 +37,22 @@ func NewFeaturedRoomRepository(pool *Pool) *FeaturedRoomRepository {
 }
 
 // Feature adds a public, live room to the pool, or updates the messages it
-// quotes while keeping its place. A missing, private or deleted room is
-// ErrRoomNotFound: the homepage may never show it.
+// quotes while keeping its place. Featuring also lists the room, in the same
+// statement (SPEC.md 27.1): featuring is the operator's way to put a room in the
+// sitemap, and it shows the room more widely than the sitemap does. A missing,
+// private or deleted room is ErrRoomNotFound: the homepage may never show it.
 func (r *FeaturedRoomRepository) Feature(ctx context.Context, slug string, askSeq, outcomeSeq *int) (*FeaturedRoom, error) {
 	fr := FeaturedRoom{Slug: slug, Public: true}
 	err := r.pool.QueryRow(ctx, `
+		WITH listed AS (
+			UPDATE rooms
+			   SET listed = true,
+			       updated_at = CASE WHEN rooms.listed THEN rooms.updated_at ELSE NOW() END
+			 WHERE slug = $1 AND is_private = false AND deleted_at IS NULL
+			RETURNING id
+		)
 		INSERT INTO featured_rooms (room_id, ask_seq, outcome_seq)
-		SELECT id, $2, $3 FROM rooms
-		 WHERE slug = $1 AND is_private = false AND deleted_at IS NULL
+		SELECT id, $2, $3 FROM listed
 		ON CONFLICT (room_id) DO UPDATE
 		   SET ask_seq = EXCLUDED.ask_seq, outcome_seq = EXCLUDED.outcome_seq
 		RETURNING room_id, featured_at, ask_seq, outcome_seq
@@ -85,10 +93,10 @@ func (r *FeaturedRoomRepository) ListAll(ctx context.Context) ([]FeaturedRoom, e
 func (r *FeaturedRoomRepository) list(ctx context.Context, publicOnly bool) ([]FeaturedRoom, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT f.room_id, ro.slug, f.featured_at, f.ask_seq, f.outcome_seq,
-		       (ro.is_private = false AND ro.deleted_at IS NULL) AS public
+		       (ro.is_private = false AND ro.listed AND ro.deleted_at IS NULL) AS public
 		  FROM featured_rooms f
 		  JOIN rooms ro ON ro.id = f.room_id
-		 WHERE NOT $1 OR (ro.is_private = false AND ro.deleted_at IS NULL)
+		 WHERE NOT $1 OR (ro.is_private = false AND ro.listed AND ro.deleted_at IS NULL)
 		 ORDER BY f.featured_at ASC, ro.slug ASC
 	`, publicOnly)
 	if err != nil {

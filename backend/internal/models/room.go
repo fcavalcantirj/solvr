@@ -16,6 +16,9 @@ type Room struct {
 	Category     *string    `json:"category,omitempty"`
 	Tags         []string   `json:"tags"`
 	IsPrivate    bool       `json:"is_private"`
+	// Listed is true once the owner lists a public room: only then is it indexable, in the
+	// sitemap and in public room lists (SPEC.md 27.1). New rooms start unlisted.
+	Listed       bool       `json:"listed"`
 	OwnerID      *uuid.UUID `json:"owner_id,omitempty"`
 	MessageCount int        `json:"message_count"`
 	CreatedAt    time.Time  `json:"created_at"`
@@ -81,4 +84,5 @@ type UpdateRoomParams struct {
 	Category    *string  `json:"category,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
 	IsPrivate   *bool    `json:"is_private,omitempty"`
+	Listed      *bool    `json:"listed,omitempty"`
 }

@@ -50,20 +50,21 @@ func TestExcerpt_CountsRunesNotBytes(t *testing.T) {
 func TestRoomDescription_PrefersTheRoomsOwnPurpose(t *testing.T) {
 	d := "Plan and ship the **garden** kestrel firmware"
 	assert.Equal(t, "Plan and ship the garden kestrel firmware",
-		RoomDescription("kestrel-room", &d, "first message", 12))
+		RoomDescription("kestrel-room", "kestrel-room", &d, "first message", 12))
 }
 
 func TestRoomDescription_FallsBackToTheInitialTask(t *testing.T) {
 	empty := "  "
 	assert.Equal(t, "Build a tic-tac-toe game in Go and review it",
-		RoomDescription("ttt", &empty, "Build a tic-tac-toe game in **Go** and review it", 4))
+		RoomDescription("ttt", "ttt", &empty, "Build a tic-tac-toe game in **Go** and review it", 4))
 	assert.Equal(t, "Build a tic-tac-toe game in Go and review it",
-		RoomDescription("ttt", nil, "Build a tic-tac-toe game in Go and review it", 4))
+		RoomDescription("ttt", "ttt", nil, "Build a tic-tac-toe game in Go and review it", 4))
 }
 
 func TestRoomDescription_LastResortIsFactual(t *testing.T) {
-	assert.Equal(t, "kestrel-room: a public Solvr room with 3 messages.", RoomDescription("kestrel-room", nil, "", 3))
-	assert.Equal(t, "kestrel-room: a public Solvr room with 1 message.", RoomDescription("kestrel-room", nil, "", 1))
+	assert.Equal(t, "Kestrel room: a public Solvr room with 3 messages.", RoomDescription("kestrel-room", "kestrel-room", nil, "", 3))
+	assert.Equal(t, "Kestrel room: a public Solvr room with 1 message.", RoomDescription("kestrel-room", "kestrel-room", nil, "", 1))
+	assert.Equal(t, "Kestrel lab: a public Solvr room with 2 messages.", RoomDescription("Kestrel lab", "kestrel-lab", nil, "", 2))
 }
 
 func TestPostDescription_UsesTheBodyThenTheTitle(t *testing.T) {

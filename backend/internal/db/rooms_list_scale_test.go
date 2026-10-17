@@ -27,8 +27,8 @@ func seedRoomListing(ctx context.Context, t *testing.T, pool *Pool) {
 	for _, step := range []struct{ name, sql string }{
 		{"replica", `SET LOCAL session_replication_role = replica`},
 		{"rooms", `
-			INSERT INTO rooms (slug, display_name, description, is_private, created_at, last_active_at)
-			SELECT 'rl-' || g, 'Listed room ' || g, 'What listed room ' || g || ' is for', g % 10 = 0,
+			INSERT INTO rooms (slug, display_name, description, is_private, listed, created_at, last_active_at)
+			SELECT 'rl-' || g, 'Listed room ' || g, 'What listed room ' || g || ' is for', g % 10 = 0, g % 10 <> 0,
 			       NOW() - INTERVAL '40 days', NOW() - g * INTERVAL '1 minute'
 			  FROM generate_series(1, 2000) g`},
 		{"entries", `

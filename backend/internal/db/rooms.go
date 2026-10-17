@@ -31,7 +31,7 @@ func humanOwnerOf(roomIDExpr string) string {
 }
 
 // roomColumns is the column list read by scanRoom/scanRoomRow; owner_id is derived.
-var roomColumns = `id, slug, display_name, description, category, tags, is_private,
+var roomColumns = `id, slug, display_name, description, category, tags, is_private, listed,
 	(` + humanOwnerOf("rooms.id") + `) AS owner_id,
 	message_count, created_at, updated_at, last_active_at, expires_at, deleted_at,
 	archived_at, result_message_id`
@@ -76,7 +76,7 @@ func (r *RoomRepository) Create(ctx context.Context, params models.CreateRoomPar
 	query := `
 		INSERT INTO rooms (slug, display_name, description, category, tags, is_private, message_count, expires_at, source_post_id, source_room_id)
 		VALUES ($1, $2, $3, $4, $5, $6, 0, $7, $8, $9)
-		RETURNING id, slug, display_name, description, category, tags, is_private,
+		RETURNING id, slug, display_name, description, category, tags, is_private, listed,
 			message_count, created_at, updated_at, last_active_at, expires_at, deleted_at,
 			archived_at, result_message_id, source_post_id, source_room_id
 	`
@@ -104,6 +104,7 @@ func (r *RoomRepository) Create(ctx context.Context, params models.CreateRoomPar
 			&room.Category,
 			&room.Tags,
 			&room.IsPrivate,
+			&room.Listed,
 			&room.MessageCount,
 			&room.CreatedAt,
 			&room.UpdatedAt,
@@ -258,6 +259,8 @@ func (r *RoomRepository) ListFiltered(ctx context.Context, params RoomListParams
 	where := []string{
 		"r.deleted_at IS NULL",
 		"r.is_private = FALSE",
+		// A public room is listed only once its owner lists it (SPEC.md 27.1).
+		"r.listed",
 		"(r.expires_at IS NULL OR r.expires_at > NOW())",
 		`NOT (
 			r.message_count = 0
@@ -299,7 +302,7 @@ func (r *RoomRepository) ListFiltered(ctx context.Context, params RoomListParams
 	// and owner, so an offset page does not pay for the rooms it skips.
 	query := `
 		SELECT p.id, p.slug, p.display_name, p.description, p.category, p.tags,
-			p.is_private, ho.user_id, p.message_count, p.created_at, p.updated_at,
+			p.is_private, p.listed, ho.user_id, p.message_count, p.created_at, p.updated_at,
 			p.last_active_at, p.expires_at, p.live_agent_count,
 			` + roomParticipantCount("p.id") + ` AS unique_participant_count,
 			` + userPublicName("u") + ` AS owner_display_name,
@@ -340,6 +343,7 @@ func (r *RoomRepository) ListFiltered(ctx context.Context, params RoomListParams
 			&rws.Category,
 			&rws.Tags,
 			&rws.IsPrivate,
+			&rws.Listed,
 			&rws.OwnerID,
 			&rws.MessageCount,
 			&rws.CreatedAt,
@@ -446,6 +450,11 @@ func (r *RoomRepository) Update(ctx context.Context, roomID uuid.UUID, params mo
 	if params.IsPrivate != nil {
 		setClauses = append(setClauses, fmt.Sprintf("is_private = $%d", argIdx))
 		args = append(args, *params.IsPrivate)
+		argIdx++
+	}
+	if params.Listed != nil {
+		setClauses = append(setClauses, fmt.Sprintf("listed = $%d", argIdx))
+		args = append(args, *params.Listed)
 		argIdx++
 	}
 
@@ -564,6 +573,7 @@ func (r *RoomRepository) scanRoom(ctx context.Context, op, query string, args ..
 		&room.Category,
 		&room.Tags,
 		&room.IsPrivate,
+		&room.Listed,
 		&room.OwnerID,
 		&room.MessageCount,
 		&room.CreatedAt,
@@ -599,6 +609,7 @@ func (r *RoomRepository) scanRoomRow(rows pgx.Rows, room *models.Room) error {
 		&room.Category,
 		&room.Tags,
 		&room.IsPrivate,
+		&room.Listed,
 		&room.OwnerID,
 		&room.MessageCount,
 		&room.CreatedAt,

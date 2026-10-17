@@ -98,6 +98,10 @@ func TestRoomsOwnerRetired_DerivedOwnerFollowsMembershipTransfer(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT display_name FROM users WHERE id = $1`, heir).Scan(&heirName); err != nil {
 		t.Fatalf("heir name: %v", err)
 	}
+	// A new room starts unlisted (SPEC.md 27.1); the public list reads listed rooms only.
+	if _, err := pool.Exec(ctx, `UPDATE rooms SET listed = true WHERE id = $1`, room.ID); err != nil {
+		t.Fatalf("list the room: %v", err)
+	}
 	rooms, err := repo.ListFiltered(ctx, db.RoomListParams{Query: room.Slug, Limit: 5})
 	if err != nil {
 		t.Fatalf("ListFiltered: %v", err)

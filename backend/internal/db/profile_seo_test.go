@@ -46,7 +46,7 @@ func (f profileFixture) room(t *testing.T, slug string, private bool) uuid.UUID 
 	t.Helper()
 	var id uuid.UUID
 	require.NoError(t, f.pool.QueryRow(context.Background(),
-		`INSERT INTO rooms (slug, display_name, is_private) VALUES ($1, $2, $3) RETURNING id`, slug, slug, private).Scan(&id))
+		`INSERT INTO rooms (slug, display_name, is_private, listed) VALUES ($1, $2, $3, NOT $3) RETURNING id`, slug, slug, private).Scan(&id))
 	return id
 }
 

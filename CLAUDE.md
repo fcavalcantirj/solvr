@@ -391,7 +391,11 @@ Send emails to users via the admin broadcast system. Backend handles branded tem
   - Each message is a row in `email_messages`, which holds Resend's id and the latest status. Each event is a row in
     `email_events`, stored once.
   - A `Permanent` bounce or a complaint sets `users.email_suppressed_at`. That address is left out of every broadcast
-    and refused for a notice. This is proven in tests only: production has had no real bounce yet.
+    and refused for a notice (409 `RECIPIENT_SUPPRESSED`).
+  - The hard-bounce path was proven live on 2026-10-18 with a throwaway user at Resend's `bounced+label@resend.dev`
+    (which answers SMTP 550 without harming the domain's reputation). `email.bounced` (`Permanent`) arrived about 2 s
+    after the send, and the user was suppressed. The script is `~/dev/solvr-ops/api-tools/bounce_proof.sh`, on the
+    owner's machine.
 - **Verify a send** without an inbox: `GET https://api.resend.com/emails/{id}` shows `from`, `reply_to` and
   `last_event`. The id is `email_messages.provider_message_id`.
 - **Test sends go only to the owner's own account,** and every single-recipient broadcast follows a dry run with the
@@ -521,9 +525,9 @@ them must keep them in step.
 - 2026-10-09, 2026-10-30, 2026-11-27: legacy redirect reviews (SPEC.md 27.4).
 - 2026-10-20: the 72 h re-measures of the 2026-10-12 fix plan's R1 (search 5xx) and R2 (traffic classes).
 - 2026-10-23: Search Console shows 0 impressions for the 11 rooms made private on 2026-10-17.
-- Open, the owner's call:
-  - a live proof that a hard bounce suppresses an address: a throwaway user at `bounced@resend.dev` plus one send;
-  - the admin SEO baseline (`db/seo_baseline.go`) counts rooms with entries without skipping deleted rooms.
+- Done 2026-10-18:
+  - the hard-bounce suppression was proven live on production;
+  - the admin SEO baseline's `activation.rooms_activated` skips deleted rooms (v1.3.23).
 
 ---
 

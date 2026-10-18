@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -21,7 +22,8 @@ import (
 // (traffic.ContentGroupForPath) and the view is classified (traffic.Classify). Only the kind,
 // the class and the reason are stored: no path, address, user agent or cookie, and no consent
 // is needed (SPEC.md 27.7). A row that could not be written is a statistic briefly short,
-// never an error the web server must handle.
+// never an error the web server must handle. When the API has WEB_REPORT_SECRET, a report is
+// taken only with that secret in X-Solvr-Web-Report, which the web server alone has (F6).
 
 // pageViewPathMax bounds path, in bytes: a page path is short, and a longer one is not a page.
 const pageViewPathMax = 512
@@ -38,14 +40,19 @@ type PageViewRecorder interface {
 	Record(ctx context.Context, contentGroup string, label db.TrafficLabel) error
 }
 
+// webReportHeader carries the web server's secret on each page-view report.
+const webReportHeader = "X-Solvr-Web-Report"
+
 // PageViewHandler serves POST /v1/analytics/pageview.
 type PageViewHandler struct {
-	repo PageViewRecorder
+	repo   PageViewRecorder
+	secret []byte
 }
 
-// NewPageViewHandler wires the handler to the page view store.
-func NewPageViewHandler(repo PageViewRecorder) *PageViewHandler {
-	return &PageViewHandler{repo: repo}
+// NewPageViewHandler wires the handler to the page view store. secret is WEB_REPORT_SECRET:
+// when it is set, a report is taken only if it carries the secret; empty takes any report.
+func NewPageViewHandler(repo PageViewRecorder, secret string) *PageViewHandler {
+	return &PageViewHandler{repo: repo, secret: []byte(secret)}
 }
 
 // pageViewReport is the web server's report of one page it served.
@@ -60,8 +67,13 @@ type pageViewReport struct {
 	Prefetch       bool   `json:"prefetch"`
 }
 
-// Record handles POST /v1/analytics/pageview. Public: the web server reports with no credential.
+// Record handles POST /v1/analytics/pageview. With a secret set, a report without it is
+// refused before its body is read (401, compared in constant time).
 func (h *PageViewHandler) Record(w http.ResponseWriter, r *http.Request) {
+	if len(h.secret) > 0 && subtle.ConstantTimeCompare([]byte(r.Header.Get(webReportHeader)), h.secret) != 1 {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "page views are reported only by the site's web server")
+		return
+	}
 	var report pageViewReport
 	if err := json.NewDecoder(r.Body).Decode(&report); err != nil {
 		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid request body")

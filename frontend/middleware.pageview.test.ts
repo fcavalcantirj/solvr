@@ -155,6 +155,38 @@ describe('middleware: a page the site serves is reported to the API', () => {
   });
 });
 
+// F6 (SPEC.md 27.6): when the web server has WEB_REPORT_SECRET, its page-view report carries
+// it as X-Solvr-Web-Report, so the API can refuse views reported by anyone else. The skill
+// fetch report goes to the funnel and never carries it.
+describe("the page-view report carries the web server's secret", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('sends X-Solvr-Web-Report when WEB_REPORT_SECRET is set, on the page-view report only', () => {
+    vi.stubEnv('WEB_REPORT_SECRET', 'web-report-secret-for-tests');
+    const spy = stubFetch();
+    middleware(new NextRequest('https://solvr.dev/skill.md?f=k7m2p9xq', { headers: { 'User-Agent': 'curl/8.7.1' } }), fakeEvent().event);
+    middleware(new NextRequest('https://solvr.dev/rooms', { headers: { 'User-Agent': 'curl/8.7.1' } }), fakeEvent().event);
+
+    const views = pageViewCalls(spy);
+    expect(views).toHaveLength(1);
+    expect(new Headers(views[0][1].headers).get('x-solvr-web-report')).toBe('web-report-secret-for-tests');
+    const skill = spy.mock.calls.filter(([url]) => String(url).endsWith('/v1/analytics/funnel')) as Array<[string, RequestInit]>;
+    expect(skill).toHaveLength(1);
+    expect(new Headers(skill[0][1].headers).has('x-solvr-web-report')).toBe(false);
+  });
+
+  it('sends no such header when WEB_REPORT_SECRET is unset', () => {
+    vi.stubEnv('WEB_REPORT_SECRET', '');
+    const spy = stubFetch();
+    middleware(new NextRequest('https://solvr.dev/rooms', { headers: { 'User-Agent': 'curl/8.7.1' } }), fakeEvent().event);
+    const views = pageViewCalls(spy);
+    expect(views).toHaveLength(1);
+    expect(new Headers(views[0][1].headers).has('x-solvr-web-report')).toBe(false);
+  });
+});
+
 describe('the middleware runs on every page and on no asset', () => {
   it.each([
     '/',

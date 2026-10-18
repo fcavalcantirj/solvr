@@ -1771,6 +1771,9 @@ RATE_LIMIT_HUMAN_GENERAL=60
 # Monitoring
 SENTRY_DSN=
 LOG_LEVEL=info
+
+# Traffic (27.6): the same value on the API and on the web server
+WEB_REPORT_SECRET=          # the page-view report secret; unset on the API takes any report
 ```
 
 ## 7.4 Database Migrations
@@ -6996,7 +6999,7 @@ being called a bot. `counted_views_test.go` fails when code outside its list of 
 the write path, retention, the rules, the traffic summary and the baseline's `traffic` section) reads
 `funnel_events` or `search_queries`.
 
-**Page views, consent-free.** `POST /v1/analytics/pageview` (public, no credential), sent by the site's web
+**Page views, consent-free.** `POST /v1/analytics/pageview`, sent by the site's web
 server (`frontend/middleware.ts`) beside every page GET it serves, curl and crawlers included: not for
 Next's own files, a file with a dot in its name, an `/api` route, a non-GET, or the app's own link
 prefetch (`Next-Router-Prefetch`). Body: `path` (the pathname, never the query string: it can carry a
@@ -7032,8 +7035,11 @@ out) and `pageviews` (`[{content_group, traffic_class, count}]`).
   ones stored before have no `entry` and stay counted. Blocking it at Cloudflare is the owner's call.
 - B1 and B2 are heuristics: a person who selects a post-sourced prompt by hand, without the Copy button,
   is flagged. The stored reasons let every report say what it left out.
-- `POST /v1/analytics/pageview` is unauthenticated, like the funnel ingest: anyone can send a view. A
-  shared secret between the two services is an owner decision (F6, open).
+- Only the site's web server reports page views (F6, owner 2026-10-17). Both services hold `WEB_REPORT_SECRET`;
+  the web server sends it as `X-Solvr-Web-Report` on each page-view report (read at runtime, never on the skill
+  fetch report), and the API compares it in constant time before reading the body: missing or wrong is 401
+  `UNAUTHORIZED` and nothing is recorded. With no secret on the API, any report is taken, as before. The funnel
+  ingest stays public: browsers call it.
 
 ## 27.7 Analytics events and consent
 

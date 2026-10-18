@@ -20,18 +20,27 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev'
 // from an anonymous client (the runtime would otherwise send its own default).
 const SKILL_REPORT_USER_AGENT = 'solvr-web/1.0 (skill-fetch report)'
 const PAGE_VIEW_REPORT_USER_AGENT = 'solvr-web/1.0 (pageview report)'
+// The page-view report carries the web server's WEB_REPORT_SECRET here (F6, SPEC.md 27.6), so
+// the API can refuse views reported by anyone else. It is read on each report: the runtime
+// value counts, not one from the build.
+const WEB_REPORT_HEADER = 'X-Solvr-Web-Report'
 
 // sendReport posts one report to the API. The request starts at once, beside the response.
 // The promise it returns settles when the API answered, failed or the timeout passed, and it
 // never rejects: a statistic must not break the page it measures.
-function sendReport(endpoint: string, userAgent: string, body: Record<string, unknown>): Promise<void> {
+function sendReport(
+  endpoint: string,
+  userAgent: string,
+  body: Record<string, unknown>,
+  extraHeaders: Record<string, string> = {},
+): Promise<void> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), REPORT_TIMEOUT_MS)
   let sent: Promise<unknown>
   try {
     sent = fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'User-Agent': userAgent },
+      headers: { 'Content-Type': 'application/json', 'User-Agent': userAgent, ...extraHeaders },
       body: JSON.stringify(body),
       signal: controller.signal,
     })
@@ -68,16 +77,22 @@ function reportSkillFetched(flowId: string, requestMode: string, userAgent: stri
 function reportPageView(request: NextRequest): Promise<void> {
   const header = (name: string) => request.headers.get(name) ?? ''
   const purpose = `${header('sec-purpose')} ${header('purpose')}`.toLowerCase()
-  return sendReport('/v1/analytics/pageview', PAGE_VIEW_REPORT_USER_AGENT, {
-    path: request.nextUrl.pathname,
-    user_agent: header('user-agent').slice(0, REPORT_HEADER_MAX_LENGTH),
-    request_mode: header('sec-fetch-mode'),
-    fetch_dest: header('sec-fetch-dest'),
-    sec_ch_ua: header('sec-ch-ua').slice(0, REPORT_HEADER_MAX_LENGTH),
-    accept_language: request.headers.has('accept-language'),
-    rsc: header('rsc') === '1',
-    prefetch: purpose.includes('prefetch'),
-  })
+  const secret = process.env.WEB_REPORT_SECRET
+  return sendReport(
+    '/v1/analytics/pageview',
+    PAGE_VIEW_REPORT_USER_AGENT,
+    {
+      path: request.nextUrl.pathname,
+      user_agent: header('user-agent').slice(0, REPORT_HEADER_MAX_LENGTH),
+      request_mode: header('sec-fetch-mode'),
+      fetch_dest: header('sec-fetch-dest'),
+      sec_ch_ua: header('sec-ch-ua').slice(0, REPORT_HEADER_MAX_LENGTH),
+      accept_language: request.headers.has('accept-language'),
+      rsc: header('rsc') === '1',
+      prefetch: purpose.includes('prefetch'),
+    },
+    secret ? { [WEB_REPORT_HEADER]: secret } : {},
+  )
 }
 
 // isPageView is a GET of a page, not a file (a name with a dot) and not the app's own

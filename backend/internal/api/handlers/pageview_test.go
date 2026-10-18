@@ -24,7 +24,71 @@ func newPageViewHandler(t *testing.T) (*PageViewHandler, *db.Pool) {
 	if pool == nil {
 		t.Skip("DATABASE_URL not set, skipping integration test")
 	}
-	return NewPageViewHandler(db.NewPageViewRepository(pool)), pool
+	return NewPageViewHandler(db.NewPageViewRepository(pool), ""), pool
+}
+
+// countingPageViews is a page view store that counts what it is given.
+type countingPageViews struct{ n int }
+
+func (c *countingPageViews) Record(context.Context, string, db.TrafficLabel) error {
+	c.n++
+	return nil
+}
+
+// F6 (SPEC.md 27.6): with WEB_REPORT_SECRET set, a view is taken only from the site's web
+// server, which sends that secret as X-Solvr-Web-Report. Anything else is refused before its
+// body is read, and nothing reaches the store.
+func TestPageView_WithASecretTakesOnlyTheWebServersReports(t *testing.T) {
+	const secret = "web-report-secret-for-tests"
+	view := `{"path":"/rooms/planner-room","user_agent":"` + browserUA + `","request_mode":"navigate","fetch_dest":"document"}`
+	for _, c := range []struct {
+		name, header, body, answer string
+		status, stored             int
+	}{
+		{name: "no header", body: view, status: http.StatusUnauthorized},
+		{name: "a wrong secret", header: "not-the-secret", body: view, status: http.StatusUnauthorized},
+		{name: "a malformed report without the secret", body: `{"path":`, status: http.StatusUnauthorized},
+		{name: "the secret", header: secret, body: view, status: http.StatusAccepted, stored: 1, answer: `{"data":{"recorded":true}}`},
+		{name: "the secret on a prefetch", header: secret, body: `{"path":"/blog","prefetch":true}`, status: http.StatusAccepted, answer: `{"data":{"recorded":false}}`},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			store := &countingPageViews{}
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/analytics/pageview", strings.NewReader(c.body))
+			if c.header != "" {
+				req.Header.Set("X-Solvr-Web-Report", c.header)
+			}
+			rec := httptest.NewRecorder()
+			NewPageViewHandler(store, secret).Record(rec, req)
+
+			require.Equal(t, c.status, rec.Code, rec.Body.String())
+			assert.Equal(t, c.stored, store.n, "views given to the store")
+			if c.status != http.StatusUnauthorized {
+				require.JSONEq(t, c.answer, rec.Body.String())
+				return
+			}
+			var out struct {
+				Error struct {
+					Code string `json:"code"`
+				} `json:"error"`
+			}
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &out))
+			assert.Equal(t, "UNAUTHORIZED", out.Error.Code)
+		})
+	}
+}
+
+// Without WEB_REPORT_SECRET a view is taken from anyone, as before F6.
+func TestPageView_WithoutASecretTakesAnyReport(t *testing.T) {
+	store := &countingPageViews{}
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/analytics/pageview",
+		strings.NewReader(`{"path":"/","user_agent":"curl/8.7.1"}`))
+	req.Header.Set("X-Solvr-Web-Report", "anything")
+	rec := httptest.NewRecorder()
+	NewPageViewHandler(store, "").Record(rec, req)
+
+	require.Equal(t, http.StatusAccepted, rec.Code, rec.Body.String())
+	require.JSONEq(t, `{"data":{"recorded":true}}`, rec.Body.String())
+	assert.Equal(t, 1, store.n)
 }
 
 func reportPageView(t *testing.T, h *PageViewHandler, body string) *httptest.ResponseRecorder {

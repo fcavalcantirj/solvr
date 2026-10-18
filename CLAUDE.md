@@ -375,6 +375,28 @@ curl -X POST https://api.solvr.dev/admin/query \
 
 Send emails to users via the admin broadcast system. Backend handles branded template wrapping, HMAC unsubscribe links, `List-Unsubscribe` headers, and 150ms rate limiting between sends.
 
+**How Solvr's email works (SPEC.md 16.6, live since v1.3.20/v1.3.21, 2026-10-17):**
+- **Broadcasts** go from `FROM_EMAIL` (unset = `noreply@solvr.dev`, which has no mailbox) with Reply-To
+  `BROADCAST_REPLY_TO` (`hello@solvr.dev`, so replies reach the owner). They carry RFC 8058 one-click unsubscribe:
+  `List-Unsubscribe: <https://api.solvr.dev/v1/email/unsubscribe?email=…&token=…>` plus `List-Unsubscribe-Post`. There
+  is no `mailto:`, because `unsubscribe@` has no mailbox. The footer links the `/email/unsubscribe` page, which POSTs
+  only on a click.
+- **Notices** (`POST /admin/email/notice {to, subject, body_html, body_text, dry_run}`, operator key) send one
+  transactional email to one live user. They go from `FROM_EMAIL_TRANSACTIONAL` (`hello@solvr.dev`), with no footer
+  and no unsubscribe headers. Without that setting every notice answers 503; a notice never falls back to the
+  broadcast sender.
+- **Delivery tracking:**
+  - Resend posts the `email.*` events to `POST /v1/webhooks/resend`, Svix-signed with `RESEND_WEBHOOK_SECRET`. Without
+    the secret it answers 503; unsigned events get 401.
+  - Each message is a row in `email_messages`, which holds Resend's id and the latest status. Each event is a row in
+    `email_events`, stored once.
+  - A `Permanent` bounce or a complaint sets `users.email_suppressed_at`. That address is left out of every broadcast
+    and refused for a notice. This is proven in tests only: production has had no real bounce yet.
+- **Verify a send** without an inbox: `GET https://api.resend.com/emails/{id}` shows `from`, `reply_to` and
+  `last_event`. The id is `email_messages.provider_message_id`.
+- **Test sends go only to the owner's own account,** and every single-recipient broadcast follows a dry run with the
+  same body whose answer is `would_send: 1`. A missing `to` sends to everyone.
+
 **Skill:** `~/.claude/skills/solvr/scripts/solvr-admin.sh`
 
 **Template variables:** `{name}`, `{referral_code}`, `{referral_link}` — substituted per-recipient by the backend.
@@ -407,7 +429,9 @@ bash ~/.claude/skills/solvr/scripts/solvr-admin.sh email history
 
 **Key files:**
 - **Skill script:** `~/.claude/skills/solvr/scripts/solvr-admin.sh`
-- **Handler:** `backend/internal/api/handlers/admin.go` (`BroadcastEmail`)
+- **Handler:** `backend/internal/api/handlers/admin.go` (`BroadcastEmail`), `admin_notice.go` (`SendNotice`),
+  `resend_webhook.go` (events, suppression); senders from env: `backend/internal/api/email_senders.go`;
+  store: `backend/internal/db/email_delivery.go`
 - **Template wrapper:** `backend/internal/emailutil/template.go` (`WrapInBrandedTemplate`)
 - **Unsubscribe:** `backend/internal/api/handlers/unsubscribe.go` (HMAC-signed one-click)
 - **Broadcast log:** `backend/internal/db/email_broadcast.go` (audit trail)
@@ -466,6 +490,27 @@ them must keep them in step.
     kept); HSTS on, `max-age=15552000` (6 months), includeSubDomains off, preload off, No-Sniff on. The header is
     zone-wide, so `api.solvr.dev` sends it too.
   - Email Address Obfuscation is off (it broke hydration).
+  - Email DNS (2026-10-17):
+    - Resend's records: DKIM `resend._domainkey`, and the `send` SPF TXT plus MX
+      `feedback-smtp.us-east-1.amazonses.com`, priority 10. Resend re-checks a verified domain and fails it 72 h
+      after a required record disappears.
+    - `_dmarc` TXT `v=DMARC1; p=none`, with no `rua`, so no report mailbox is needed.
+- **Email (2026-10-17):**
+  - Mail for `@solvr.dev` is hosted at Umbler, with one mailbox: `hello@solvr.dev`.
+  - Resend's domain `solvr.dev` is verified, with open and click tracking off.
+  - Its webhook goes to `https://api.solvr.dev/v1/webhooks/resend` for 7 events: `email.sent`, `delivered`,
+    `delivery_delayed`, `bounced`, `complained`, `failed` and `suppressed`.
+  - EasyPanel env on solvr-api: `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`, `FROM_EMAIL_TRANSACTIONAL`,
+    `BROADCAST_REPLY_TO`.
+- **Page views (F6, 2026-10-18):**
+  - The web middleware reports consent-free page views to `POST /v1/analytics/pageview` with `X-Solvr-Web-Report` =
+    `WEB_REPORT_SECRET`. It holds the same value on solvr-web and solvr-api, and without it the API answers 401.
+  - To rotate it, set the new value on both services, then redeploy the web first and the API second.
+- **Owner keys for agents:** the git-ignored `.env` holds `SOLVR_RESEND_API_KEY` (Resend, full access) and
+  `SOLVR_EASYPANEL_TOKEN` (the whole panel), next to `ADMIN_API_KEY` and `SOLVR_DEPLOY_*`.
+  - Never print them.
+  - `inspectAppService` returns a service's whole env, so print only names.
+  - `updateAppEnv` replaces the whole env, so append to the text you read and compare it by content afterwards.
 - **Validating production:** curl with a browser user agent. A JavaScript browser on production fires GA, funnel and
   view writes, and every `GET /v1/search` logs a row.
 
@@ -474,6 +519,11 @@ them must keep them in step.
   events receive data. Neither had happened on 2026-10-05: the events fire only after consent.
 - This week: the three pages whose indexing was requested show impressions in Search Console.
 - 2026-10-09, 2026-10-30, 2026-11-27: legacy redirect reviews (SPEC.md 27.4).
+- 2026-10-20: the 72 h re-measures of the 2026-10-12 fix plan's R1 (search 5xx) and R2 (traffic classes).
+- 2026-10-23: Search Console shows 0 impressions for the 11 rooms made private on 2026-10-17.
+- Open, the owner's call:
+  - a live proof that a hard bounce suppresses an address: a throwaway user at `bounced@resend.dev` plus one send;
+  - the admin SEO baseline (`db/seo_baseline.go`) counts rooms with entries without skipping deleted rooms.
 
 ---
 

@@ -6895,8 +6895,8 @@ Ownership of the data:
 `7d`, `no-store`). It returns:
 - `indexable`: posts, rooms, `room_history_pages`, agents, users (profiles with public content, 27.1), blog posts.
 - the sitemap `lastmod` per type.
-- `activation`: rooms that reached `room.activated`, and `first_two_way_exchange` steps, in the
-  window.
+- `activation`: rooms that reached `room.activated` (a room deleted since is not counted), and
+  `first_two_way_exchange` steps, in the window.
 - `funnel`: each connection-funnel step by `entry_surface`, `skill_fetched` included (as
   `agent_fetch`, `bot_fetch` and `browser_visit`, 25.7).
 - `landings`: connections (`room_created`) and activations (`first_two_way_exchange`) attributed

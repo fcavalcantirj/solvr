@@ -116,7 +116,8 @@ func (r *SEOBaselineRepository) Measure(ctx context.Context, from, to time.Time,
 
 	if err := r.pool.QueryRow(ctx, `
 		SELECT
-		  (SELECT COUNT(*) FROM room_events WHERE event_type = $3 AND created_at >= $1 AND created_at < $2),
+		  (SELECT COUNT(*) FROM room_events ev JOIN rooms r ON r.id = ev.room_id
+		    WHERE ev.event_type = $3 AND ev.created_at >= $1 AND ev.created_at < $2 AND r.deleted_at IS NULL),
 		  (SELECT COUNT(*) FROM counted_funnel_events WHERE event_name = 'first_two_way_exchange' AND occurred_at >= $1 AND occurred_at < $2)`,
 		from, to, RoomActivationEventType).Scan(&b.Activation.RoomsActivated, &b.Activation.FirstTwoWayExchanges); err != nil {
 		return nil, fmt.Errorf("seo baseline activation: %w", err)

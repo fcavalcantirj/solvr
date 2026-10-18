@@ -57,6 +57,11 @@ func TestSEOBaseline_MeasuresWhatTheServerKnows(t *testing.T) {
 	activated(public, in)
 	activated(private, in)
 	activated(public, out)
+	// A room deleted after it activated no longer counts, whenever it was deleted.
+	deleted := room("seo-base-deleted", false, 2, 4)
+	activated(deleted, in)
+	_, err := pool.Exec(ctx, `UPDATE rooms SET deleted_at = NOW() WHERE id = $1`, deleted)
+	require.NoError(t, err)
 
 	funnel := func(event, surface string, kind, source any, at time.Time) {
 		t.Helper()
@@ -106,7 +111,7 @@ func TestSEOBaseline_MeasuresWhatTheServerKnows(t *testing.T) {
 	assert.Equal(t, 1, b.Indexable.Rooms, "only the public two-way room")
 	assert.Equal(t, 2, b.Indexable.RoomHistoryPages, "150 sequences make two transcript pages")
 	require.NotNil(t, b.Lastmod.Posts)
-	assert.Equal(t, 2, b.Activation.RoomsActivated, "activations in the window, counted without naming rooms")
+	assert.Equal(t, 2, b.Activation.RoomsActivated, "activations in the window, counted without naming rooms; a deleted room's is not")
 	assert.Equal(t, 1, b.Activation.FirstTwoWayExchanges)
 	assert.Equal(t, []SEOFunnelCount{
 		{Event: "connection_started", EntrySurface: "connect_page", Count: 2},

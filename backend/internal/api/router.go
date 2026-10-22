@@ -31,12 +31,17 @@ const Version = "0.2.0"
 // hubMgr and registry are optional - if nil, room routes are not mounted.
 // The embeddingService parameter is optional - if nil, post creation won't generate embeddings.
 func NewRouter(pool *db.Pool, hubMgr *hub.HubManager, registry *hub.PresenceRegistry, embeddingService ...services.EmbeddingService) *chi.Mux {
+	clientIPMiddleware, err := apimiddleware.NewClientIPMiddleware(os.Getenv("TRUSTED_PROXY_CIDRS"))
+	if err != nil {
+		// Refuse startup rather than silently trusting an invalid boundary.
+		panic(err)
+	}
 	r := chi.NewRouter()
 
 	// Middleware stack
 	r.Use(requestIDMiddleware)
 	r.Use(apimiddleware.ErrorEnvelope) // after request ID, outside Recoverer
-	r.Use(apimiddleware.RealClientIP)  // CF-Connecting-IP or the connection address; never X-Forwarded-For/X-Real-IP/True-Client-IP
+	r.Use(clientIPMiddleware)          // Normalize the verified client once, before logging and limits.
 	r.Use(middleware.Recoverer)
 
 	// CORS configuration - MUST be early in the chain so error responses include CORS headers

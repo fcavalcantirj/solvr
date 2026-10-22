@@ -31,7 +31,7 @@ type registrationAnswer struct {
 
 func registerFrom(t *testing.T, ts *httptest.Server, pool *db.Pool, ip string) registrationAnswer {
 	t.Helper()
-	return registerWithHeaders(t, ts, pool, map[string]string{"CF-Connecting-IP": ip})
+	return registerWithHeaders(t, ts, pool, map[string]string{"CF-Connecting-IP": ip, "X-Real-IP": "172.67.190.162"})
 }
 
 func registerWithHeaders(t *testing.T, ts *httptest.Server, pool *db.Pool, headers map[string]string) registrationAnswer {
@@ -67,7 +67,8 @@ func assertRegistrationRefused(t *testing.T, got registrationAnswer, limit int) 
 }
 
 func TestRegistrationLimit_TheRegistrationAfterTheDefaultLimitFromOneIPIsRefused(t *testing.T) {
-	t.Setenv(registrationLimitEnv, "") // the default in code, whatever the test process set
+	t.Setenv("TRUSTED_PROXY_CIDRS", "127.0.0.0/8") // Test HTTP server stands in for Traefik.
+	t.Setenv(registrationLimitEnv, "")             // the default in code, whatever the test process set
 	ts, pool, _ := newBillingFreeServer(t)
 
 	limit := apimiddleware.DefaultRegistrationsPerIPPerHour
@@ -82,6 +83,7 @@ func TestRegistrationLimit_TheRegistrationAfterTheDefaultLimitFromOneIPIsRefused
 }
 
 func TestRegistrationLimit_TheEnvironmentSetsTheLimit(t *testing.T) {
+	t.Setenv("TRUSTED_PROXY_CIDRS", "127.0.0.0/8")
 	t.Setenv(registrationLimitEnv, "3")
 	ts, pool, _ := newBillingFreeServer(t)
 
@@ -100,7 +102,7 @@ func TestRegistrationLimit_AnUnusableEnvironmentValueKeepsTheDefault(t *testing.
 	assert.Equal(t, 7, registrationLimitPerIPPerHour())
 }
 
-// The client IP is Cloudflare's CF-Connecting-IP or the connection's own address: the
+// Without a trusted proxy, the client IP is the connection's own address: the
 // forwarding headers any caller can set are never read, so varying them opens no new
 // registration bucket.
 func TestRegistrationLimit_SpoofedForwardingHeadersShareOneBucket(t *testing.T) {
@@ -117,6 +119,6 @@ func TestRegistrationLimit_SpoofedForwardingHeadersShareOneBucket(t *testing.T) 
 		require.Equal(t, http.StatusCreated, got.status, "registration %d of 3: %v", i+1, got.body)
 	}
 	assertRegistrationRefused(t, registerWithHeaders(t, ts, pool, map[string]string{
-		"X-Forwarded-For": "203.0.113.24", "X-Real-IP": "203.0.113.25", "True-Client-IP": "203.0.113.26",
+		"X-Forwarded-For": "203.0.113.24", "X-Real-IP": "203.0.113.25", "True-Client-IP": "203.0.113.26", "CF-Connecting-IP": "203.0.113.27",
 	}), 3)
 }

@@ -51,5 +51,6 @@ The same response has three more sections:
 - Deploy migration 000140, then take a fresh dump. Until 000140 is live, every production dump
   loses the two search-document triggers on restore (`incident-runbook.md` § 4 has the SQL that
   puts them back).
-- Check that the edge proxy overwrites or strips the client-IP headers (`True-Client-IP`,
-  `X-Real-IP`, `X-Forwarded-For`). The per-IP limits trust them (see the incident runbook).
+- Verify the explicitly configured Traefik trust boundary (`TRUSTED_PROXY_CIDRS`) for both
+  Cloudflare and direct-origin traffic; public forwarding-header spoofs must not change a
+  visitor's rate-limit bucket (see the incident runbook).

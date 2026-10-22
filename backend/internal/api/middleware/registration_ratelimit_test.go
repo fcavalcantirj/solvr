@@ -385,13 +385,18 @@ func TestRegistrationRateLimiter_BucketsByCFConnectingIP(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
 	})
+	policy, err := NewClientIPMiddleware("10.0.0.0/24")
+	if err != nil {
+		t.Fatal(err)
+	}
 	send := func(cf, xff string) int {
 		req := httptest.NewRequest(http.MethodPost, "/v1/agents/register", nil)
 		req.RemoteAddr = "10.0.0.1:12345" // the proxy in front of the API
 		req.Header.Set("CF-Connecting-IP", cf)
+		req.Header.Set("X-Real-IP", "172.67.190.162")
 		req.Header.Set("X-Forwarded-For", xff)
 		rr := httptest.NewRecorder()
-		rl.Middleware(handler).ServeHTTP(rr, req)
+		policy(rl.Middleware(handler)).ServeHTTP(rr, req)
 		return rr.Code
 	}
 
@@ -405,5 +410,35 @@ func TestRegistrationRateLimiter_BucketsByCFConnectingIP(t *testing.T) {
 	}
 	if code := send("203.0.113.2", "198.51.100.1"); code != http.StatusCreated {
 		t.Errorf("a different CF-Connecting-IP has its own bucket: got %d, want 201", code)
+	}
+}
+
+// Direct-origin visitors must have independent buckets without trusting their CF header.
+func TestRegistrationRateLimiter_TrustedProxyDirectVisitors(t *testing.T) {
+	limiter := NewRegistrationRateLimiter(NewMockIPRateLimitStore(), &RegistrationRateLimitConfig{MaxPerIP: 2, Window: time.Hour, LogPrefix: "test"})
+	policy, err := NewClientIPMiddleware("10.20.0.0/24")
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := policy(limiter.Middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusCreated) })))
+	send := func(visitor, forgedCF string) int {
+		r := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/agents/register", http.NoBody)
+		r.RemoteAddr = "10.20.0.2:1234"
+		r.Header.Set("X-Real-IP", visitor)
+		r.Header.Set("CF-Connecting-IP", forgedCF)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w.Code
+	}
+	for _, fake := range []string{"192.0.2.1", "192.0.2.2"} {
+		if got := send("203.0.113.8", fake); got != http.StatusCreated {
+			t.Fatalf("first two requests: %d", got)
+		}
+	}
+	if got := send("203.0.113.8", "192.0.2.3"); got != http.StatusTooManyRequests {
+		t.Errorf("spoof split visitor bucket: %d", got)
+	}
+	if got := send("203.0.113.9", "192.0.2.1"); got != http.StatusCreated {
+		t.Errorf("distinct visitor shared the proxy bucket: %d", got)
 	}
 }

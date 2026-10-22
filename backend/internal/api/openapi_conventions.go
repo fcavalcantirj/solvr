@@ -148,7 +148,7 @@ func conventions() map[string]interface{} {
 				"room writes and stream tickets: per client IP per minute (room entries, messages, events, stream tickets)",
 			},
 			"client_ip_header", apimiddleware.CFConnectingIPHeader,
-			"client_ip_note", "The client IP is the CF-Connecting-IP the edge sets when it holds a valid IP, otherwise the connection's address. X-Forwarded-For, X-Real-IP and True-Client-IP are never read.",
+			"client_ip_note", "The socket address is used unless the peer is in TRUSTED_PROXY_CIDRS. A trusted Traefik proxy supplies the actual upstream in X-Real-IP; CF-Connecting-IP is used only when that upstream is a verified Cloudflare address. X-Forwarded-For and True-Client-IP are ignored.",
 			"note", "A rate-limited response carries the limiter's state in both header families: RateLimit-Limit, RateLimit-Remaining and RateLimit-Reset (seconds until the window resets), and the X-RateLimit-* equivalents (X-RateLimit-Reset is a Unix time). A refused request is 429 RATE_LIMITED with Retry-After in seconds (also error.retry_after_seconds): wait that long before retrying.",
 		),
 		"conditional_requests", obj(

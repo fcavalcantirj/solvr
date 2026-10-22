@@ -108,3 +108,19 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  skill:
+    name: Agent Skill
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Transport regressions
+        run: python3 skill/scripts/test_transport.py
+      - name: Shell contracts and published distribution
+        run: |
+          for test in skill/scripts/test_*.sh; do
+            bash "$test"
+          done

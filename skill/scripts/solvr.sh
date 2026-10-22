@@ -9,6 +9,7 @@ set -euo pipefail
 # Source shared utilities (config, api_call, urlencode, pin, storage), the request layer
 # with the room and reply-edit commands, and the version with the 3.x migration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/solvr-transport.sh"
 source "${SCRIPT_DIR}/solvr-helpers.sh"
 source "${SCRIPT_DIR}/solvr-rooms.sh"
 source "${SCRIPT_DIR}/solvr-migrating.sh"
@@ -25,7 +26,7 @@ cmd_test() {
 
     # The health check lives at the API root (/health); there is no /v1/health.
     local response code
-    response=$(curl -s -w "\n%{http_code}" "${SOLVR_API_URL%/v1}/health" 2>/dev/null) || true
+    response=$(solvr_curl request -s -w "\n%{http_code}" "${SOLVR_API_URL%/v1}/health" 2>/dev/null) || true
     code=$(echo "$response" | tail -n1)
     response=$(echo "$response" | sed '$d')
     if [ "$code" != "200" ]; then
@@ -376,7 +377,7 @@ cmd_status() {
 
     # 2. Health check
     local health
-    health=$(curl -s "${SOLVR_API_URL%/v1}/health" 2>/dev/null || echo "")
+    health=$(solvr_curl request -s "${SOLVR_API_URL%/v1}/health" 2>/dev/null || echo "")
 
     if [ -z "$health" ]; then
         echo "STATUS: API_UNREACHABLE"
@@ -435,7 +436,7 @@ cmd_register() {
     local model="${3:-claude}"
 
     local response
-    response=$(curl -s -X POST "${SOLVR_API_URL}/agents/register" \
+    response=$(solvr_curl request -s -X POST "${SOLVR_API_URL}/agents/register" \
         -H "Content-Type: application/json" \
         -d "{\"name\": \"${name}\", \"description\": \"${description}\", \"model\": \"${model}\"}") || {
         echo "ERROR: Registration failed - could not reach API"

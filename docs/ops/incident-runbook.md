@@ -175,10 +175,14 @@ bash scripts/ops/migration-recovery-drill.sh <local production-shaped database> 
   through (`middleware/ratelimit.go:129-132`). This is pinned on purpose by
   `TestCreateRateLimit_GeneralLimitsUnchanged`. Raising `rate_limit_config` therefore does nothing
   against a polling flood. An owner decision is open.
-- The per-IP limits key on client-supplied headers. chi `RealIP` takes `True-Client-IP`, then
-  `X-Real-IP`, then the first `X-Forwarded-For`; the registration limiter reads
-  `X-Forwarded-For` first. They hold only if the edge proxy overwrites or strips those headers
-  (**UAT**: verify at the EasyPanel/Traefik edge).
+- Per-IP limits use the normalized client address. Set `TRUSTED_PROXY_CIDRS` to the explicitly
+  trusted Traefik ingress network before deploying the client-IP fix. Traefik must retain its
+  default forwarding-header sanitization (`forwardedHeaders.insecure=false`, no public trusted
+  peers): its `X-Real-IP` must be the real upstream. The API accepts `CF-Connecting-IP` only when
+  that upstream belongs to Cloudflare; direct-origin visitors use the verified upstream instead.
+  Verify with marked read-only requests both through Cloudflare and directly to the origin:
+  forged CF/X-Real-IP/X-Forwarded-For/True-Client-IP headers must not change the visitor bucket.
+  The API port must remain unpublished; invalid proxy ranges refuse startup.
 - `rate_limit_config` and the registration env value are read when the process starts: redeploy
   after changing them.
 
@@ -223,3 +227,37 @@ every test run.
   record its time.
 - Check the edge's client-IP header handling.
 - Rehearse the incident API (section 2) once against production.
+
+## Regional connection timeouts (2026-10-22)
+
+Both `solvr.dev` and `api.solvr.dev` returned four Cloudflare addresses. From the affected
+Claro connection, only `104.21.51.232` completed TCP/TLS. `172.67.190.162` and both advertised
+IPv6 addresses timed out before TLS; all four worked from the Hostinger origin. A fresh curl
+connection with a 10-second budget spent about 5 seconds before falling back. A fast load
+through the good address therefore did not establish recovery.
+
+The API and database were healthy. The origin served the homepage locally in about 22 ms,
+and a public room stream delivered heartbeat comments at 30 and 60 seconds. This locates the
+failure on the client-to-edge path; it does not prove which provider filters or loses traffic.
+Earliest supplied evidence: 2026-10-22 22:39 UTC; no earlier outage-start evidence is available.
+The canonical shell watcher hid curl failures since `ea980f69` (2026-10-01); the API's unconditional
+CF header trust dated to `d18c79fb` (2026-10-03). Neither commit introduced the external route fault.
+
+For temporary DNS-only recovery, first deploy and verify the proxy trust configuration above.
+Keep origin addresses and exported DNS rollback records in private operator tooling, outside
+this repository. Export the current records for the apex and API names, then route those names
+to the existing HTTPS origin, DNS-only, TTL 300, with no conflicting address records. Preserve
+unrelated DNS, firewall rules and TLS validation. Verify ordinary DNS access, assets, API reads,
+client-IP attribution and SSE heartbeats from the affected network and an independent VPS.
+Require ten fresh successful requests per host per network, p95 below one second. Existing
+DNS caches can retain the earlier edge addresses until their TTL expires.
+
+To restore the proxy, require every advertised Cloudflare address to pass three checks five
+minutes apart from both networks. Prepare provider evidence with UTC times, DNS answers,
+per-address TCP/TLS timings and traceroutes; provider escalation is separate from service recovery.
+Do not mistake server-side availability, a VPS-only check or one working edge for route recovery.
+
+`python3 scripts/ops/probe-connectivity.py --attempts 10` records DNS answers, separate
+address probes and fresh normal-DNS timings as JSON. Run it on both networks, saving output
+outside the repository; after cutover `--normal-only` verifies the public route. Never use
+these measurements as a substitute for checking the browser's page assets and room stream.

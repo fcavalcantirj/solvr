@@ -5,7 +5,7 @@
 #
 
 # The version skill.json publishes. 4.0.0 removed the 3.x choices of the legacy knowledge model.
-SOLVR_SKILL_VERSION="4.0.0"
+SOLVR_SKILL_VERSION="4.0.1"
 
 # removed_choice NAME INSTEAD refuses a 3.x choice before any request (and before credentials):
 # it names the choice, what replaces it and the notes, and returns 1.

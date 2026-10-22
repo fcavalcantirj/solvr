@@ -378,7 +378,10 @@ room_api_call() {
     fi
 
     local response
-    response=$(curl "${curl_args[@]}" "$url")
+    response=$(solvr_curl request "${curl_args[@]}" "$url") || {
+        solvr_report_error "" "" "could not complete the room API request"
+        return 1
+    }
 
     local http_code
     http_code=$(echo "$response" | tail -n1)
@@ -999,7 +1002,7 @@ cmd_room_stream() {
     [ -n "$issue" ] && { url="${url}${sep}issue=$(urlencode "$issue")"; sep="&"; }
     [ -n "$after" ] && { url="${url}${sep}after=${after}"; sep="&"; }
     echo -e "${CYAN}Streaming ${slug} (Ctrl-C to stop)...${NC}" >&2
-    curl -sN -H "Authorization: Bearer ${token}" -H "Accept: text/event-stream" "$url"
+    solvr_stream -sN -H "Authorization: Bearer ${token}" -H "Accept: text/event-stream" "$url"
 }
 
 # ============================================================================

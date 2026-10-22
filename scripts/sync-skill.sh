@@ -80,6 +80,7 @@ if command -v zip &> /dev/null; then
         references/api.md \
         references/examples.md \
         scripts/solvr.sh \
+        scripts/solvr-transport.sh \
         scripts/solvr-helpers.sh \
         scripts/solvr-rooms.sh \
         scripts/solvr-migrating.sh \

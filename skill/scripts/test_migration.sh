@@ -117,7 +117,7 @@ echo "Solvr skill migration tests (stub curl)"
 echo "========================================="
 
 # 1. The version: skill.json and its published copy agree, it is 4.0.0, and solvr.sh prints it.
-check "skill.json publishes 4.0.0" "$(is '[ "$VERSION" = 4.0.0 ]')" "skill.json version: $VERSION"
+check "skill.json publishes 4.0.1" "$(is '[ "$VERSION" = 4.0.1 ]')" "skill.json version: $VERSION"
 check "the published skill.json carries the same version" \
     "$(is '[ "$(json_version "$REPO_ROOT/frontend/public/skill.json")" = "$VERSION" ]')" \
     "frontend/public/skill.json version: $(json_version "$REPO_ROOT/frontend/public/skill.json")"

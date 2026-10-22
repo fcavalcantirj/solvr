@@ -52,8 +52,12 @@ solvr_request() {
         curl_args+=(-D "$SOLVR_HEADERS_FILE")
     fi
 
-    local response http_code body
-    response=$(curl "${curl_args[@]}" "${SOLVR_API_URL}${endpoint}") || true
+    local response http_code body curl_code=0
+    response=$(solvr_curl request "${curl_args[@]}" "${SOLVR_API_URL}${endpoint}") || curl_code=$?
+    if [ "$curl_code" -ne 0 ]; then
+        solvr_report_error "" "" "could not complete the API request (curl exit ${curl_code})"
+        return 1
+    fi
     http_code=$(echo "$response" | tail -n1)
     body=$(echo "$response" | sed '$d')
 
@@ -91,6 +95,7 @@ solvr_report_error() {
         request_id=$(echo "$body" | jq -r '.error.request_id // empty')
     fi
     [ -n "$message" ] || message="API returned status ${status}"
+    if [ -z "$status" ] && [ -z "$code" ]; then code="NETWORK_ERROR"; fi
     if [ -n "$status" ]; then
         echo -e "${RED}Error (${status}): ${code:+${code}: }${message}${NC}" >&2
     else
@@ -361,11 +366,21 @@ cmd_room_watch() {
 
     # The stream is read through a FIFO so the reader can stop curl once --max events arrived,
     # even while the server keeps the connection open.
-    local dir
+    local dir curl_pid="" curl_code=0
     dir=$(mktemp -d)
+    solvr_watch_cleanup() {
+        if [ -n "$curl_pid" ]; then
+            kill "$curl_pid" 2>/dev/null || true
+            wait "$curl_pid" 2>/dev/null || true
+        fi
+        rm -rf "$dir"
+    }
+    trap solvr_watch_cleanup EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
     mkfifo "$dir/stream"
-    curl "${curl_args[@]}" "${SOLVR_API_URL}/rooms/$(path_segment "$slug")/stream${query}" > "$dir/stream" 2>/dev/null &
-    local curl_pid=$!
+    solvr_stream "${curl_args[@]}" "${SOLVR_API_URL}/rooms/$(path_segment "$slug")/stream${query}" > "$dir/stream" 2> "$dir/error" &
+    curl_pid=$!
 
     local line id="" event="" data="" other="" count=0 status=0 done=false
     while IFS= read -r line || [ -n "$line" ]; do
@@ -389,9 +404,16 @@ cmd_room_watch() {
         [ "$done" = true ] && break
     done < "$dir/stream"
 
-    kill "$curl_pid" 2>/dev/null || true
-    wait "$curl_pid" 2>/dev/null || true
-    rm -rf "$dir"
+    if [ "$done" = true ]; then kill "$curl_pid" 2>/dev/null || true; fi
+    wait "$curl_pid" 2>/dev/null || curl_code=$?
+    curl_pid=""
+    if [ "$done" = false ] && [ "$curl_code" -ne 0 ]; then
+        if [ -s "$dir/error" ]; then cat "$dir/error" >&2;
+        else solvr_report_error "" "" "room stream transport failed"; fi
+        status=1
+    fi
+    solvr_watch_cleanup
+    trap - EXIT INT TERM
 
     if [ -n "$other" ]; then
         # Not an event stream: the API answered an error before streaming.

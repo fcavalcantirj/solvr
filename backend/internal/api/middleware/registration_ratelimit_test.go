@@ -393,8 +393,7 @@ func TestRegistrationRateLimiter_BucketsByCFConnectingIP(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/v1/agents/register", nil)
 		req.RemoteAddr = "10.0.0.1:12345" // the proxy in front of the API
 		req.Header.Set("CF-Connecting-IP", cf)
-		req.Header.Set("X-Real-IP", "172.67.190.162")
-		req.Header.Set("X-Forwarded-For", xff)
+		req.Header.Set("X-Forwarded-For", xff+", 172.67.190.162")
 		rr := httptest.NewRecorder()
 		policy(rl.Middleware(handler)).ServeHTTP(rr, req)
 		return rr.Code
@@ -424,7 +423,7 @@ func TestRegistrationRateLimiter_TrustedProxyDirectVisitors(t *testing.T) {
 	send := func(visitor, forgedCF string) int {
 		r := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/agents/register", http.NoBody)
 		r.RemoteAddr = "10.20.0.2:1234"
-		r.Header.Set("X-Real-IP", visitor)
+		r.Header.Set("X-Forwarded-For", visitor)
 		r.Header.Set("CF-Connecting-IP", forgedCF)
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, r)

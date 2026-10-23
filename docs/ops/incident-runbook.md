@@ -176,9 +176,9 @@ bash scripts/ops/migration-recovery-drill.sh <local production-shaped database> 
   `TestCreateRateLimit_GeneralLimitsUnchanged`. Raising `rate_limit_config` therefore does nothing
   against a polling flood. An owner decision is open.
 - Per-IP limits use the normalized client address. Set `TRUSTED_PROXY_CIDRS` to the explicitly
-  trusted Traefik ingress network before deploying the client-IP fix. Traefik must retain its
-  default forwarding-header sanitization (`forwardedHeaders.insecure=false`, no public trusted
-  peers): its `X-Real-IP` must be the real upstream. The API accepts `CF-Connecting-IP` only when
+  trusted Traefik ingress network before deploying the client-IP fix. Traefik must supply its
+  actual peer appended as the final `X-Forwarded-For` address. Only that final address is trusted;
+  `X-Real-IP` and earlier addresses may be supplied by callers. The API accepts `CF-Connecting-IP` only when
   that upstream belongs to Cloudflare; direct-origin visitors use the verified upstream instead.
   Verify with marked read-only requests both through Cloudflare and directly to the origin:
   forged CF/X-Real-IP/X-Forwarded-For/True-Client-IP headers must not change the visitor bucket.
@@ -261,3 +261,8 @@ Do not mistake server-side availability, a VPS-only check or one working edge fo
 address probes and fresh normal-DNS timings as JSON. Run it on both networks, saving output
 outside the repository; after cutover `--normal-only` verifies the public route. Never use
 these measurements as a substitute for checking the browser's page assets and room stream.
+
+Live rollout verification found EasyPanel sets `forwardedHeaders.insecure=true` on both
+entrypoints through container environment variables. The API therefore uses the actual peer
+Traefik appends to `X-Forwarded-For`, rather than `X-Real-IP`. This avoids changing global proxy
+settings for unrelated services. The live forged-header check must pass before DNS cutover.

@@ -14,6 +14,24 @@
 - **API:** https://api.solvr.dev
 - **Google OAuth callback:** https://api.solvr.dev/v1/auth/google/callback
 
+### Connectivity incident checkpoint — 2026-10-23 02:36 UTC
+
+Read [the session handoff](docs/handovers/2026-10-23-connectivity.md) before resuming this incident.
+API fixes are deployed (`b251f95a`), web is deployed (`47b44aa1`, web 0.4.21), and skill 4.0.1
+is published and installed locally. Latest API check: operational, 5/5 fresh requests succeeded
+in 0.16–0.70 s. Both Cloudflare IPv6 addresses recovered; IPv4 `172.67.190.162` still timed out
+in three checks. This is partial route recovery; earlier reports of three unreachable addresses
+describe the earlier state. The failing operator and exact outage onset remain unknown.
+
+**DNS was never changed:** apex/API remain proxied. Temporary DNS-only routing was prepared,
+but the browser tool required action-time confirmation because it bypasses edge protection;
+that confirmation was not received. Recheck current routing and DNS before deciding whether a
+cutover is still needed; do not save a stale browser form. No redeploy is needed just to resume.
+The active-room count of 1 was verified against SQL: the hero intentionally uses the last 24 h
+(7-day and 30-day section counts were 6 and 33). Detailed checks, remaining work, safe operator
+access and durable private evidence locations are in the handoff. Release history: `progress.txt`;
+recovery procedure: [incident runbook](docs/ops/incident-runbook.md#regional-connection-timeouts-2026-10-22).
+
 ---
 
 ## Golden Rules

@@ -26,8 +26,9 @@ func ClientIP(r *http.Request) string {
 }
 
 // NewClientIPMiddleware trusts only explicitly configured reverse proxies. Traefik
-// must retain its default forwarded-header sanitization: X-Real-IP is overwritten
-// with its actual peer, not accepted from public callers. Behind that boundary,
+// must append its actual socket peer to X-Forwarded-For, as Traefik does even
+// when its entrypoint preserves incoming forwarding headers. Only that last
+// address is verified; X-Real-IP and earlier addresses are caller-controlled.
 // CF-Connecting-IP is accepted only for a verified Cloudflare peer.
 func NewClientIPMiddleware(cidrs string) (func(http.Handler) http.Handler, error) {
 	var trusted []netip.Prefix
@@ -46,7 +47,7 @@ func NewClientIPMiddleware(cidrs string) (func(http.Handler) http.Handler, error
 			if err == nil {
 				client := peer
 				if inPrefixes(peer, trusted) {
-					if upstream, ok := singleHeaderIP(r, "X-Real-IP"); ok {
+					if upstream, ok := lastProxyPeer(r); ok {
 						client = upstream
 						if inPrefixes(upstream, cloudflarePrefixes) {
 							if visitor, ok := singleHeaderIP(r, CFConnectingIPHeader); ok {
@@ -60,6 +61,22 @@ func NewClientIPMiddleware(cidrs string) (func(http.Handler) http.Handler, error
 			next.ServeHTTP(w, r)
 		})
 	}, nil
+}
+
+func lastProxyPeer(r *http.Request) (netip.Addr, bool) {
+	values := r.Header.Values("X-Forwarded-For")
+	if len(values) != 1 {
+		return netip.Addr{}, false
+	}
+	value := values[0]
+	if comma := strings.LastIndexByte(value, ','); comma >= 0 {
+		value = value[comma+1:]
+	}
+	addr, err := netip.ParseAddr(strings.TrimSpace(value))
+	if err != nil || addr.Zone() != "" {
+		return netip.Addr{}, false
+	}
+	return addr.Unmap(), true
 }
 
 func singleHeaderIP(r *http.Request, name string) (netip.Addr, bool) {

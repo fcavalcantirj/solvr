@@ -31,7 +31,7 @@ type registrationAnswer struct {
 
 func registerFrom(t *testing.T, ts *httptest.Server, pool *db.Pool, ip string) registrationAnswer {
 	t.Helper()
-	return registerWithHeaders(t, ts, pool, map[string]string{"CF-Connecting-IP": ip, "X-Real-IP": "172.67.190.162"})
+	return registerWithHeaders(t, ts, pool, map[string]string{"CF-Connecting-IP": ip, "X-Forwarded-For": "172.67.190.162"})
 }
 
 func registerWithHeaders(t *testing.T, ts *httptest.Server, pool *db.Pool, headers map[string]string) registrationAnswer {

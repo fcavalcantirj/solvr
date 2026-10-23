@@ -35,7 +35,9 @@ func TestClientIPPolicy(t *testing.T) {
 		{"mapped IPv4 addresses", "[::ffff:10.20.0.2]:1234", "::ffff:172.67.190.162", "::ffff:198.51.100.9", "198.51.100.9"},
 		{"missing upstream ignores CF header", "10.20.0.2:1234", "", "198.51.100.9", "10.20.0.2"},
 		{"invalid upstream ignores CF header", "10.20.0.2:1234", "not-an-ip", "198.51.100.9", "10.20.0.2"},
-		{"upstream list refused", "10.20.0.2:1234", "172.67.190.162, 203.0.113.8", "198.51.100.9", "10.20.0.2"},
+		{"only appended peer is trusted", "10.20.0.2:1234", "172.67.190.162, 203.0.113.8", "198.51.100.9", "203.0.113.8"},
+		{"empty appended peer refused", "10.20.0.2:1234", "172.67.190.162, ", "198.51.100.9", "10.20.0.2"},
+		{"invalid appended peer refused", "10.20.0.2:1234", "172.67.190.162, invalid", "198.51.100.9", "10.20.0.2"},
 		{"upstream zone refused", "10.20.0.2:1234", "fe80::1%eth0", "198.51.100.9", "10.20.0.2"},
 		{"invalid CF header falls back to verified upstream", "10.20.0.2:1234", "172.67.190.162", "invalid", "172.67.190.162"},
 		{"CF list refused", "10.20.0.2:1234", "172.67.190.162", "198.51.100.9, 198.51.100.10", "172.67.190.162"},
@@ -44,9 +46,9 @@ func TestClientIPPolicy(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody)
 			r.RemoteAddr = tc.peer
-			r.Header.Set("X-Real-IP", tc.upstream)
+			r.Header.Set("X-Forwarded-For", tc.upstream)
 			r.Header.Set("CF-Connecting-IP", tc.cf)
-			r.Header.Set("X-Forwarded-For", "192.0.2.99")
+			r.Header.Set("X-Real-IP", "172.67.190.162")
 			r.Header.Set("True-Client-IP", "192.0.2.98")
 			policy(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 				if got := ClientIP(r); got != tc.want || r.RemoteAddr != tc.want {
@@ -67,15 +69,15 @@ func TestClientIPPolicy_ConfigAndDuplicateHeaders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, header := range []string{"X-Real-IP", "CF-Connecting-IP"} {
+	for _, header := range []string{"X-Forwarded-For", "CF-Connecting-IP"} {
 		r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody)
 		r.RemoteAddr = "10.20.0.2:1234"
-		r.Header.Set("X-Real-IP", "172.67.190.162")
+		r.Header.Set("X-Forwarded-For", "172.67.190.162")
 		r.Header.Set("CF-Connecting-IP", "198.51.100.9")
 		r.Header.Add(header, "192.0.2.99")
 		policy(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 			want := "172.67.190.162"
-			if header == "X-Real-IP" {
+			if header == "X-Forwarded-For" {
 				want = "10.20.0.2"
 			}
 			if ClientIP(r) != want {

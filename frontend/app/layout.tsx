@@ -13,12 +13,13 @@ import { linkPreview } from '@/lib/seo/link-preview'
 
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_ID || 'G-HS74SKKSQY'
 
-// display 'optional' for the text face: the hero's <h1> is the homepage's largest paint, and
-// Lighthouse on production (2026-11-08, mobile, two runs each) put LCP at 2.6-3.1 s with the
-// font swapping in against 2.16 s with it blocked. With 'optional' the browser paints the
-// metric-matched fallback at once and uses Inter when it is already cached, so the first
-// visit never waits for it. The mono face is not on the first paint's critical path.
-const _inter = Inter({ subsets: ["latin"], variable: '--font-inter', display: 'optional' });
+// LCP note (SEO audit 2026-11-08/09, Lighthouse mobile on production, two runs each): the hero
+// <h1> is the largest paint; LCP was 2.6-3.1 s as served and 2.16 s with the two font files
+// blocked. `display: 'optional'` was tried live and changed nothing (3.2-3.4 s after), so the
+// gain is not the swap: it is the 88 KB of preloaded woff2 competing with CSS and JS on a slow
+// link. The next thing to measure is `preload: false`, on a local build first; the default
+// display stays until a change is proven.
+const _inter = Inter({ subsets: ["latin"], variable: '--font-inter' });
 const _jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: '--font-jetbrains' });
 
 export const metadata: Metadata = {

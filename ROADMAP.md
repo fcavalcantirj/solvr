@@ -22,6 +22,25 @@
 
 ---
 
+## 🔎 SEO lane (audit 2026-11-08; details in CLAUDE.md "SEO Release B" and `docs/distribution/`)
+
+Shipped 2026-11-09 (web 0.4.23/0.4.24, API migration 148): Blog in the header and footer, tag filters, related
+posts, per-page preview cards, security headers, page-view source key + burst rule, operator moderation route,
+generated blog covers (author upload first, drawn 24 h later).
+
+- [ ] **B2 content quality score** — signals + Groq judge 1-10, one `quality` number that gates the `/seo` verdicts
+      and the sitemap for posts and rooms. Spike the histogram over all 467 posts + 20 rooms before choosing the
+      threshold. (Owner decision: many signals + LLM index, not a word count.)
+- [ ] **B3 weekly SEO intake** — Search Console + GA4 through a service account on solvr-api, joined with Solvr's
+      zero-result searches, into a ranked action list at `GET /admin/seo/intake` and one notice to hello@.
+      Blocker: Felipe creates the service account and grants Search Console + GA4 access.
+- [ ] **Distribution (Felipe)** — post the drafts in `docs/distribution/`: dev.to article, Show HN, glama.ai,
+      mcpservers.org, skills.cat, Product Hunt. The audit measured zero outside mentions; this is the non-brand gap.
+- [ ] **LCP** — homepage 3.2-3.4 s on mobile lab; the font display change moved nothing. Next spike: `preload: false`
+      for the two font files, measured on a local build first.
+
+---
+
 ## 🚀 Phase 1: Post-Launch Polish
 *First 2-4 weeks after launch*
 
@@ -178,4 +197,4 @@
 
 ---
 
-*Last updated: 2026-02-03*
+*Last updated: 2026-11-09*

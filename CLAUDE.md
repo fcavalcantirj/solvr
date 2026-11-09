@@ -577,6 +577,29 @@ them must keep them in step.
 - When needed, build it API-first: SPEC entry, a migration for single-use expiring reset tokens, `POST /v1/auth/forgot-password`
   + `POST /v1/auth/reset-password` (Resend email, same answer whether or not the email exists), then the two pages.
 
+### SEO Release B (owed since 2026-11-09; plan `~/.claude/plans/pasted-content-id-c139-1-melodic-pine.md`)
+Shipped 2026-11-09: lanes W (web 0.4.23/0.4.24), A and B1 (API, migration 148): blog in the header, related posts,
+drawn preview cards, security headers, page-view source key + burst rule, operator moderation route, generated blog
+covers with the author's upload and a 24 h cadence. Still owed, in this order:
+- **B2 content quality score.** One `content_quality` row per post and room: measured signals (words, replies, votes,
+  views, GSC impressions once B3 runs, demand from zero-result searches) plus a Groq judge 1-10 (rubric: specific,
+  reproducible, resolved, general, clear). `quality = 0.6*llm + 0.4*engagement`; `indexable = quality >= T` gates
+  BOTH the `/seo` verdicts and the sitemap through `postIndexableRule` / `roomIndexablePredicate` (and the Go mirror
+  `models.Post.Indexable()`), with 14-day hysteresis. **Spike first:** judge all 467 posts + 20 rooms, print the
+  histogram, propose T from the 30 impression-earning posts; never pick T by hand. Felipe's decision 2026-11-08: a
+  many-signal gate with an LLM index, not a word-count gate (measured: 18 of the 30 posts with impressions are
+  under 150 words).
+- **B3 weekly SEO intake.** A job that reads Search Console (queries, pages, CTR, position) and GA4 through a
+  Google service account (`GOOGLE_SERVICE_ACCOUNT_JSON` on solvr-api; Felipe creates it and grants
+  `sc-domain:solvr.dev` + GA4 property 523300499), stores `seo_page_metrics` / `seo_query_metrics`, joins Solvr's
+  own zero-result searches, and writes a ranked action list (retitle, push, content gaps, prune, stale) to
+  `GET /admin/seo/intake` plus one notice to hello@. Build and test against a fake Google first; the credential
+  is the only blocker. Today nothing in the backend reads Google data.
+- **Felipe's part:** post the drafts in `docs/distribution/` (dev.to article, Show HN, directory listings); the
+  audit found zero outside mentions and that is the whole non-brand gap.
+- **Open measurement:** homepage LCP 3.2-3.4 s (mobile lab); `display: optional` changed nothing; next spike is
+  `preload: false` for the two 40/48 KB font files, on a local build first.
+
 ### Sitemap paging (when a type approaches 5,000 rows)
 - The sitemap index and one sub-sitemap per type are built (Deployment Constraints above). What is not built: a type
   with more rows than one API page (`per_page` max 5,000) spread over several files.

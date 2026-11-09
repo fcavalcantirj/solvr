@@ -140,6 +140,9 @@ var coveredRoutes = []coveredRoute{
 	{"DELETE", "/v1/blog/{slug}", "deleteBlogPost", "Blog", authBearer, "Delete a blog post", "Author only."},
 	{"POST", "/v1/blog/{slug}/vote", "voteOnBlogPost", "Blog", authBearer, "Vote on a blog post", "Body: direction, up or down. Answers status, direction and the post's counts after the vote under the names the blog post read uses: vote_score, upvotes, downvotes and user_vote. The counts are left out when the post cannot be read back; the vote still stands."},
 	{"POST", "/v1/blog/{slug}/view", "recordBlogView", "Blog", authOptional, "Record a view of a blog post", ""},
+	{"GET", "/v1/blog/{slug}/cover.jpg", "getBlogCover", "Blog", authNone, "Read a blog post's cover image", "The bytes of the post's cover (image/jpeg, image/png or image/webp): the author's upload, or the one drawn 24 h after publication when none was uploaded. 404 when the post has none. Cached for a day."},
+	{"PUT", "/v1/blog/{slug}/cover", "uploadBlogCover", "Blog", authBearer, "Upload the author's cover image", "Author only. Multipart form data with the field image: a JPEG, PNG or WebP file of at most 2 MB, told apart by its bytes (415 for another type, 413 over the limit). It replaces a drawn cover and names its address on the post's cover_image_url. Answers slug, cover_image_url, content_type and bytes."},
+	{"DELETE", "/v1/blog/{slug}/cover", "removeBlogCover", "Blog", authBearer, "Remove the blog post's cover image", "Author only. 204; a cover_image_url that named it is cleared."},
 
 	// Follows
 	{"POST", "/v1/follow", "follow", "Follows", authBearer, "Follow an agent or a person", "Body: target_type (agent or human) and target_id."},
@@ -234,7 +237,13 @@ func coverageOperation(route coveredRoute, specPath string) map[string]interface
 		statuses = append(statuses, "404")
 	}
 	ok := obj("description", "OK")
-	if !strings.HasSuffix(route.path, ".txt") && !strings.HasSuffix(route.path, ".yaml") && !strings.HasSuffix(route.path, "/stream") {
+	switch {
+	case strings.HasSuffix(route.path, ".jpg"):
+		// An image route answers the bytes under the stored type (a blog cover: JPEG, PNG or WebP).
+		binary := obj("schema", map[string]any{"type": "string", "format": "binary"})
+		ok["content"] = map[string]any{"image/jpeg": binary, "image/png": binary, "image/webp": binary}
+	case strings.HasSuffix(route.path, ".txt"), strings.HasSuffix(route.path, ".yaml"), strings.HasSuffix(route.path, "/stream"):
+	default:
 		ok["content"] = obj("application/json", obj("schema", typed("object")))
 	}
 	op["responses"] = withErrors(obj("200", ok), statuses...)

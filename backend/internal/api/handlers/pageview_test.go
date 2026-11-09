@@ -27,12 +27,54 @@ func newPageViewHandler(t *testing.T) (*PageViewHandler, *db.Pool) {
 	return NewPageViewHandler(db.NewPageViewRepository(pool), ""), pool
 }
 
-// countingPageViews is a page view store that counts what it is given.
-type countingPageViews struct{ n int }
+// countingPageViews is a page view store that counts what it is given and keeps the last
+// source key.
+type countingPageViews struct {
+	lastKey string
+	n       int
+}
 
-func (c *countingPageViews) Record(context.Context, string, db.TrafficLabel) error {
+func (c *countingPageViews) Record(_ context.Context, _ string, _ db.TrafficLabel, sourceKey string) error {
 	c.n++
+	c.lastKey = sourceKey
 	return nil
+}
+
+// Release A of the 2026-11-08 SEO audit: a report may carry the visitor's address
+// (client_ip, from Cloudflare's header at the web server). The API turns it into the day's
+// source key (traffic.PageViewSourceKey) and stores that alone; a report without an address
+// stores no key. The key is what the burst rule groups by.
+func TestPageView_StoresADailySourceKeyNeverTheAddress(t *testing.T) {
+	store := &countingPageViews{}
+	h := NewPageViewHandler(store, "web-report-secret")
+	body := `{"path":"/blog","user_agent":"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/141.0 Safari/537.36","request_mode":"navigate","client_ip":"203.0.113.7"}`
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/analytics/pageview", strings.NewReader(body))
+	req.Header.Set(webReportHeader, "web-report-secret")
+	rec := httptest.NewRecorder()
+	h.Record(rec, req)
+	require.Equal(t, http.StatusAccepted, rec.Code, rec.Body.String())
+	require.Regexp(t, `^[0-9a-f]{16}$`, store.lastKey)
+	require.NotContains(t, store.lastKey, "203.0.113.7")
+
+	// The same source again in the same day: the same key.
+	first := store.lastKey
+	req = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/analytics/pageview", strings.NewReader(body))
+	req.Header.Set(webReportHeader, "web-report-secret")
+	h.Record(httptest.NewRecorder(), req)
+	require.Equal(t, first, store.lastKey)
+
+	// No address: no key.
+	req = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/analytics/pageview", strings.NewReader(`{"path":"/blog","user_agent":"curl/8.7.1"}`))
+	req.Header.Set(webReportHeader, "web-report-secret")
+	h.Record(httptest.NewRecorder(), req)
+	require.Equal(t, "", store.lastKey)
+
+	// An address too long to be one is a malformed report.
+	req = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/analytics/pageview", strings.NewReader(`{"path":"/blog","client_ip":"`+strings.Repeat("1", 80)+`"}`))
+	req.Header.Set(webReportHeader, "web-report-secret")
+	rec = httptest.NewRecorder()
+	h.Record(rec, req)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
 // F6 (SPEC.md 27.6): with WEB_REPORT_SECRET set, a view is taken only from the site's web
@@ -183,5 +225,7 @@ func TestPageView_StoresNothingThatNamesAVisitor(t *testing.T) {
 		columns = append(columns, c)
 	}
 	require.NoError(t, rows.Err())
-	assert.Equal(t, []string{"id", "content_group", "traffic_class", "traffic_reason", "occurred_at"}, columns)
+	// source_key (000148) is the day's HMAC of address and user agent, 16 hex characters; the
+	// address and the user agent themselves are never columns.
+	assert.Equal(t, []string{"id", "content_group", "traffic_class", "traffic_reason", "occurred_at", "source_key"}, columns)
 }

@@ -18,7 +18,7 @@ import (
 )
 
 // mountV1Routes mounts all v1 API routes.
-func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingService services.EmbeddingService) handlers.PostModerator {
+func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingService services.EmbeddingService, ops *contentOps) handlers.PostModerator {
 	limitPosts, limitContributions := createRateLimits(pool, loadRateLimitConfig(pool)) // per-author hourly create limits (W3)
 	// Create repositories and handlers
 	var agentRepo handlers.AgentRepositoryInterface
@@ -523,6 +523,9 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			r.Get("/blog/{slug}", blogHandler.GetBySlug)
 		})
 		r.Post("/blog/{slug}/view", blogHandler.RecordView)
+		if ops != nil {
+			r.Get("/blog/{slug}/cover.jpg", ops.covers.Get) // the post's generated cover (router_admin_content.go)
+		}
 
 		// The legacy typed reads (GET /v1/{problems,questions,ideas}, their single-post reads, the
 		// problem's approaches, approach history and export, the question's answers, the idea's
@@ -562,6 +565,11 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 
 			// Blog write endpoints (PRD-v5: authenticated writes)
 			r.With(limitPosts).Post("/blog", blogHandler.Create)
+			if ops != nil {
+				// The author's own cover (SEO audit 2026-11-08, B1); it wins over a drawn one.
+				r.Put("/blog/{slug}/cover", ops.covers.Upload)
+				r.Delete("/blog/{slug}/cover", ops.covers.Remove)
+			}
 			r.Patch("/blog/{slug}", blogHandler.Update)
 			r.Delete("/blog/{slug}", blogHandler.Delete)
 			r.Post("/blog/{slug}/vote", blogHandler.Vote)

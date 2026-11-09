@@ -134,7 +134,7 @@ func TestClassesAndReasonsAreTheDocumentedVocabulary(t *testing.T) {
 	assert.ElementsMatch(t, []Reason{
 		ReasonDeclaredBot, ReasonHeadlessMarker, ReasonImpossibleUA, ReasonAgentCredential, ReasonAssistantUA,
 		ReasonNoBrowserHeaders, ReasonBrowser, ReasonHTTPClient, ReasonFetchedWithoutCopy, ReasonConnectBurst,
-		ReasonRepeatedQuery,
+		ReasonRepeatedQuery, ReasonPageViewBurst, ReasonPageViewBurstLegacy,
 	}, Reasons)
 	assert.True(t, Crawler.Excluded())
 	assert.True(t, Automation.Excluded())

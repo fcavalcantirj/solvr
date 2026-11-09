@@ -36,8 +36,8 @@ func (c Class) Excluded() bool {
 // Reason is why a row got its class, as stored in traffic_reason.
 type Reason string
 
-// The reasons. The first eight come from what one request said (Classify); the last three
-// from how several rows behaved together (the behavioural rules, db/traffic_rules.go).
+// The reasons. The first eight come from what one request said (Classify); the rest from how
+// several rows behaved together (the behavioural rules, db/traffic_rules.go).
 const (
 	ReasonDeclaredBot      Reason = "declared_bot"
 	ReasonHeadlessMarker   Reason = "headless_marker"
@@ -53,13 +53,19 @@ const (
 	ReasonConnectBurst Reason = "connect_burst"
 	// ReasonRepeatedQuery is B3: one address sent one query twenty or more times in one clock hour.
 	ReasonRepeatedQuery Reason = "repeated_query"
+	// ReasonPageViewBurst is B4: more than five page views from one source key in one minute
+	// (db.PageViewBurstThreshold); a browser does not open six pages in a minute, a script does.
+	ReasonPageViewBurst Reason = "page_view_burst"
+	// ReasonPageViewBurstLegacy is B4 for the rows stored before source keys existed, judged by
+	// the minute's total instead, on the operator's call only.
+	ReasonPageViewBurstLegacy Reason = "page_view_burst_legacy"
 )
 
 // Reasons is every reason.
 var Reasons = []Reason{
 	ReasonDeclaredBot, ReasonHeadlessMarker, ReasonImpossibleUA, ReasonAgentCredential, ReasonAssistantUA,
 	ReasonNoBrowserHeaders, ReasonBrowser, ReasonHTTPClient, ReasonFetchedWithoutCopy, ReasonConnectBurst,
-	ReasonRepeatedQuery,
+	ReasonRepeatedQuery, ReasonPageViewBurst, ReasonPageViewBurstLegacy,
 }
 
 // Surface is where a request was measured.

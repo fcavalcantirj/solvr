@@ -21,7 +21,6 @@ import (
 	"github.com/fcavalcantirj/solvr/internal/services"
 )
 
-
 func main() {
 	// Load configuration
 	cfg, err := config.Load()
@@ -223,6 +222,17 @@ func main() {
 		log.Println("Traffic classify job started (runs every 15 minutes)")
 	}
 
+	// Blog covers (SEO audit 2026-11-08, B1): a post published without a cover gets one drawn
+	// 24 h later, at most three a run, one run at a time (api.NewBlogCoverJob: nil without
+	// OPENAI_API_KEY).
+	var blogCoverCancel context.CancelFunc
+	if coverJob := api.NewBlogCoverJob(pool); coverJob != nil {
+		var coverCtx context.Context
+		coverCtx, blogCoverCancel = context.WithCancel(context.Background())
+		go coverJob.RunScheduled(coverCtx, jobs.DefaultBlogCoverInterval)
+		log.Println("Blog cover job started (runs every hour; draws 24 h after publication)")
+	}
+
 	// Start health check monitoring job if database is available
 	var healthCheckCancel context.CancelFunc
 	if pool != nil {
@@ -309,6 +319,9 @@ func main() {
 	}
 	if trafficClassifyCancel != nil {
 		trafficClassifyCancel()
+	}
+	if blogCoverCancel != nil {
+		blogCoverCancel()
 	}
 	if webhookDeliveryCancel != nil {
 		webhookDeliveryCancel()

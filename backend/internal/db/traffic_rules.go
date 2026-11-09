@@ -25,13 +25,19 @@ import (
 //	                         of them is automation.
 //	B3 repeated_query        one address sending one query twenty or more times in one clock
 //	                         hour: each of those searches is automation.
+//	B4 page_view_burst       more than five page views from one source key (the day's HMAC of
+//	                         address and user agent, 000148) in one clock minute: each of them
+//	                         is automation. Rows with no key (stored before the key existed)
+//	                         are judged only by the operator's legacy rule, by the minute's
+//	                         total (ApplyLegacyPageViewBurst).
 //
 // One code path runs them: the job every 15 minutes over a trailing window
 // (jobs.TrafficClassifyJob) and the operator's backfill (POST /admin/traffic/reclassify),
 // which may ask for a dry run. A run is one transaction, recomputed from the rows: B1 and B2
 // are undone first for every row of the window they flagged, then applied again, so a copy
 // that arrived after a flag gives the flow back to a person (the start) and an agent (its
-// fetch). B3 never undoes: a clock hour's count of a query only grows. A run also classifies
+// fetch); B4 likewise, so a threshold change re-judges the window. B3 never undoes: a clock
+// hour's count of a query only grows. A run also classifies
 // the searches stored before classification existed from their stored user agent.
 //
 // Rows are flagged, never deleted. Confirmed server steps are never judged.
@@ -47,6 +53,12 @@ const ConnectBurstThreshold = 5
 // hour make B3.
 const RepeatedQueryThreshold = 20
 
+// PageViewBurstThreshold is how many page views from one source key in one clock minute a
+// person may make; more are B4. Measured 2026-11-08 over 30 days of production: minutes with
+// 1-5 views held the calm traffic (4,870 minutes); minutes with 6 or more held 41,122 views
+// in 2,216 minutes, the headless bursts.
+const PageViewBurstThreshold = 5
+
 // The steps of a run, as TrafficRun.Rules counts the rows each one set.
 const (
 	RuleStoredUserAgents   = "stored_user_agents"
@@ -54,6 +66,8 @@ const (
 	RuleFetchedWithoutCopy = string(traffic.ReasonFetchedWithoutCopy)
 	RuleConnectBurst       = string(traffic.ReasonConnectBurst)
 	RuleRepeatedQuery      = string(traffic.ReasonRepeatedQuery)
+	RulePageViewReset      = "page_view_reset"
+	RulePageViewBurst      = string(traffic.ReasonPageViewBurst)
 )
 
 // TrafficCount is how many rows of a table carry one class and reason.
@@ -79,6 +93,7 @@ type TrafficRun struct {
 	Rules         map[string]int     `json:"rules"`
 	FunnelEvents  TrafficTableCounts `json:"funnel_events"`
 	SearchQueries TrafficTableCounts `json:"search_queries"`
+	PageViews     TrafficTableCounts `json:"page_view_events"`
 	DryRun        bool               `json:"dry_run"`
 }
 
@@ -128,6 +143,9 @@ func (r *TrafficRules) Apply(ctx context.Context, from, to time.Time, dryRun boo
 	if run.SearchQueries.Before, err = trafficCounts(ctx, tx, searchTrafficCountsSQL, run.From, run.To); err != nil {
 		return run, err
 	}
+	if run.PageViews.Before, err = trafficCounts(ctx, tx, pageViewTrafficCountsSQL, run.From, run.To); err != nil {
+		return run, err
+	}
 	if run.Rules[RuleStoredUserAgents], err = classifyStoredSearches(ctx, tx, run.From, run.To); err != nil {
 		return run, err
 	}
@@ -139,6 +157,8 @@ func (r *TrafficRules) Apply(ctx context.Context, from, to time.Time, dryRun boo
 		{RuleFetchedWithoutCopy, fetchedWithoutCopySQL, nil},
 		{RuleConnectBurst, connectBurstSQL, []any{ConnectBurstThreshold}},
 		{RuleRepeatedQuery, repeatedQuerySQL, []any{RepeatedQueryThreshold}},
+		{RulePageViewReset, resetPageViewFlagsSQL, nil},
+		{RulePageViewBurst, pageViewBurstSQL, []any{PageViewBurstThreshold}},
 	} {
 		tag, execErr := tx.Exec(ctx, step.sql, append([]any{run.From, run.To}, step.args...)...)
 		if execErr != nil {
@@ -151,6 +171,9 @@ func (r *TrafficRules) Apply(ctx context.Context, from, to time.Time, dryRun boo
 		return run, err
 	}
 	if run.SearchQueries.After, err = trafficCounts(ctx, tx, searchTrafficCountsSQL, run.From, run.To); err != nil {
+		return run, err
+	}
+	if run.PageViews.After, err = trafficCounts(ctx, tx, pageViewTrafficCountsSQL, run.From, run.To); err != nil {
 		return run, err
 	}
 	if dryRun {
@@ -170,6 +193,11 @@ const funnelTrafficCountsSQL = `
 const searchTrafficCountsSQL = `
 	SELECT traffic_class, COALESCE(traffic_reason, ''), count(*)::int
 	  FROM search_queries WHERE searched_at >= $1 AND searched_at < $2
+	 GROUP BY 1, 2 ORDER BY 1, 2`
+
+const pageViewTrafficCountsSQL = `
+	SELECT traffic_class, COALESCE(traffic_reason, ''), count(*)::int
+	  FROM page_view_events WHERE occurred_at >= $1 AND occurred_at < $2
 	 GROUP BY 1, 2 ORDER BY 1, 2`
 
 func trafficCounts(ctx context.Context, tx Tx, sql string, from, to time.Time) ([]TrafficCount, error) {
@@ -290,3 +318,70 @@ const repeatedQuerySQL = `
 	   AND date_trunc('hour', s.searched_at, 'UTC') = rep.h
 	   AND s.ip_address = rep.ip_address AND s.query_normalized = rep.query_normalized
 	   AND s.traffic_class IN ('human', 'agent', 'unclassified')`
+
+// resetPageViewFlagsSQL undoes B4 in the window before it is applied again: a flagged view
+// goes back to a person's. The legacy flag is not undone here: it is the operator's.
+const resetPageViewFlagsSQL = `
+	UPDATE page_view_events
+	   SET traffic_class = 'human', traffic_reason = 'browser'
+	 WHERE occurred_at >= $1 AND occurred_at < $2 AND traffic_reason = 'page_view_burst'`
+
+// pageViewBurstSQL is B4. Every view of a source's minute counts toward the burst, whatever
+// its class; only a person's are flagged. A row with no source key is never grouped. $3 is
+// PageViewBurstThreshold.
+const pageViewBurstSQL = `
+	UPDATE page_view_events v
+	   SET traffic_class = 'automation', traffic_reason = 'page_view_burst'
+	  FROM (SELECT source_key, date_trunc('minute', occurred_at, 'UTC') AS m
+	          FROM page_view_events
+	         WHERE occurred_at >= $1 AND occurred_at < $2 AND source_key IS NOT NULL
+	         GROUP BY 1, 2 HAVING count(*) > $3) burst
+	 WHERE v.occurred_at >= $1 AND v.occurred_at < $2
+	   AND v.source_key = burst.source_key AND date_trunc('minute', v.occurred_at, 'UTC') = burst.m
+	   AND v.traffic_class = 'human'`
+
+// legacyPageViewBurstSQL judges the rows stored before source keys existed: a minute with more
+// than $3 human views in all, counting only keyless rows, is a burst, and its keyless human
+// views are automation (page_view_burst_legacy). It never undoes.
+const legacyPageViewBurstSQL = `
+	UPDATE page_view_events v
+	   SET traffic_class = 'automation', traffic_reason = 'page_view_burst_legacy'
+	  FROM (SELECT date_trunc('minute', occurred_at, 'UTC') AS m
+	          FROM page_view_events
+	         WHERE occurred_at >= $1 AND occurred_at < $2 AND source_key IS NULL AND traffic_class = 'human'
+	         GROUP BY 1 HAVING count(*) > $3) burst
+	 WHERE v.occurred_at >= $1 AND v.occurred_at < $2 AND v.source_key IS NULL
+	   AND date_trunc('minute', v.occurred_at, 'UTC') = burst.m
+	   AND v.traffic_class = 'human'`
+
+// ApplyLegacyPageViewBurst runs the legacy B4 over [from, to) on the operator's call (POST
+// /admin/traffic/reclassify with legacy_page_views): the keyless human views of every minute
+// with more than PageViewBurstThreshold of them become automation. It answers how many rows a
+// run sets; with dryRun it writes nothing. The 15-minute job never runs it: a live row has a
+// key, and a person's minute is never judged by the minute's total.
+func (r *TrafficRules) ApplyLegacyPageViewBurst(ctx context.Context, from, to time.Time, dryRun bool) (int, error) {
+	if !from.Before(to) {
+		return 0, fmt.Errorf("traffic rules: the window [%s, %s) is empty", from, to)
+	}
+	tx, err := r.pool.BeginTx(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer func() {
+		if rbErr := tx.Rollback(ctx); rbErr != nil && !errors.Is(rbErr, pgx.ErrTxClosed) {
+			LogQueryError(ctx, "TrafficRules.Rollback", "page_view_events", rbErr)
+		}
+	}()
+	tag, err := tx.Exec(ctx, legacyPageViewBurstSQL, from.UTC(), to.UTC(), PageViewBurstThreshold)
+	if err != nil {
+		LogQueryError(ctx, "TrafficRules.page_view_burst_legacy", "page_view_events", err)
+		return 0, fmt.Errorf("traffic rule page_view_burst_legacy: %w", err)
+	}
+	if dryRun {
+		return int(tag.RowsAffected()), nil // the deferred rollback writes nothing
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, fmt.Errorf("traffic rules: commit: %w", err)
+	}
+	return int(tag.RowsAffected()), nil
+}

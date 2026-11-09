@@ -2,11 +2,13 @@ package handlers
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/subtle"
 	"encoding/json"
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/fcavalcantirj/solvr/internal/db"
@@ -20,8 +22,9 @@ import (
 // whether it was a client-side navigation or a prefetch. The API decides everything: a prefetch
 // is not a view and is dropped; the path is reduced to the kind of page it is
 // (traffic.ContentGroupForPath) and the view is classified (traffic.Classify). Only the kind,
-// the class and the reason are stored: no path, address, user agent or cookie, and no consent
-// is needed (SPEC.md 27.7). A row that could not be written is a statistic briefly short,
+// the class and the reason are stored, with the day's source key of the address and user agent
+// (traffic.PageViewSourceKey, for the burst rule): no path, address, user agent or cookie, and
+// no consent is needed (SPEC.md 27.7). A row that could not be written is a statistic briefly short,
 // never an error the web server must handle. When the API has WEB_REPORT_SECRET, a report is
 // taken only with that secret in X-Solvr-Web-Report, which the web server alone has (F6).
 
@@ -35,10 +38,14 @@ const pageViewHeaderMax = 200
 // pageViewTokenMax bounds Sec-Fetch-Mode and Sec-Fetch-Dest, one short word each.
 const pageViewTokenMax = 20
 
-// PageViewRecorder stores one classified page view (db.PageViewRepository).
+// PageViewRecorder stores one classified page view (db.PageViewRepository) with its day's
+// source key, or none.
 type PageViewRecorder interface {
-	Record(ctx context.Context, contentGroup string, label db.TrafficLabel) error
+	Record(ctx context.Context, contentGroup string, label db.TrafficLabel, sourceKey string) error
 }
+
+// pageViewClientIPMax bounds client_ip: an IPv6 address in text is at most 45 characters.
+const pageViewClientIPMax = 45
 
 // webReportHeader carries the web server's secret on each page-view report.
 const webReportHeader = "X-Solvr-Web-Report"
@@ -47,12 +54,23 @@ const webReportHeader = "X-Solvr-Web-Report"
 type PageViewHandler struct {
 	repo   PageViewRecorder
 	secret []byte
+	// keySalt keys the source key (traffic.PageViewSourceKey): the web report secret, or,
+	// with none set, a value drawn at start, so keys still agree within one process and day.
+	keySalt []byte
+	now     func() time.Time
 }
 
 // NewPageViewHandler wires the handler to the page view store. secret is WEB_REPORT_SECRET:
 // when it is set, a report is taken only if it carries the secret; empty takes any report.
 func NewPageViewHandler(repo PageViewRecorder, secret string) *PageViewHandler {
-	return &PageViewHandler{repo: repo, secret: []byte(secret)}
+	salt := []byte(secret)
+	if len(salt) == 0 {
+		salt = make([]byte, 32)
+		if _, err := rand.Read(salt); err != nil {
+			slog.Warn("page views: no random salt for the source key; keys are derived from the day alone", "error", err)
+		}
+	}
+	return &PageViewHandler{repo: repo, secret: []byte(secret), keySalt: salt, now: time.Now}
 }
 
 // pageViewReport is the web server's report of one page it served.
@@ -65,6 +83,9 @@ type pageViewReport struct {
 	AcceptLanguage bool   `json:"accept_language"`
 	RSC            bool   `json:"rsc"`
 	Prefetch       bool   `json:"prefetch"`
+	// ClientIP is the visitor's address as the web server saw it (Cloudflare's header). It is
+	// turned into the day's source key and never stored or logged.
+	ClientIP string `json:"client_ip"`
 }
 
 // Record handles POST /v1/analytics/pageview. With a secret set, a report without it is
@@ -95,7 +116,8 @@ func (h *PageViewHandler) Record(w http.ResponseWriter, r *http.Request) {
 		FetchMode:    report.RequestMode,
 		HeadersKnown: true,
 	})
-	if err := h.repo.Record(r.Context(), traffic.ContentGroupForPath(report.Path), label); err != nil {
+	sourceKey := traffic.PageViewSourceKey(h.keySalt, h.now(), report.ClientIP, report.UserAgent)
+	if err := h.repo.Record(r.Context(), traffic.ContentGroupForPath(report.Path), label, sourceKey); err != nil {
 		slog.Warn("failed to record a page view", "error", err)
 		writeJSON(w, http.StatusAccepted, map[string]bool{"recorded": false})
 		return
@@ -116,6 +138,8 @@ func (p *pageViewReport) problem() string {
 		return "request_mode is too long"
 	case len(p.FetchDest) > pageViewTokenMax:
 		return "fetch_dest is too long"
+	case len(p.ClientIP) > pageViewClientIPMax:
+		return "client_ip is too long to be an address"
 	}
 	return ""
 }

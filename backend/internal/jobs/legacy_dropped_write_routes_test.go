@@ -2,6 +2,7 @@ package jobs_test
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -283,7 +284,18 @@ func judgeWriteProbe(before, after []writeProbeResult) writeProbeVerdict {
 
 func TestLegacyDroppedDatabase_WriteRoutesExposeOnlyLegacyRouteFamilies(t *testing.T) {
 	t.Setenv("ADMIN_API_KEY", routeProbeAdminKey)
-	t.Setenv("GROQ_API_KEY", "")                   // no external moderation or translation calls
+	t.Setenv("GROQ_API_KEY", "") // no external moderation or translation calls
+	// Blog covers (SEO audit 2026-11-08): the image model is a fake that answers one tiny JPEG,
+	// so the admin cover routes complete without a network call.
+	fakeImages := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if _, err := fmt.Fprintf(w, `{"data":[{"b64_json":%q}]}`, base64.StdEncoding.EncodeToString([]byte{0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3, 4})); err != nil {
+			t.Error(err)
+		}
+	}))
+	t.Cleanup(fakeImages.Close)
+	t.Setenv("OPENAI_API_KEY", "probe")
+	t.Setenv("OPENAI_BASE_URL", fakeImages.URL+"/v1")
 	t.Setenv("RESEND_API_KEY", "")                 // never send email
 	t.Setenv("FROM_EMAIL_TRANSACTIONAL", "")       // no notice sender either
 	t.Setenv("RESEND_WEBHOOK_SECRET", "")          // the Resend webhook refuses every call

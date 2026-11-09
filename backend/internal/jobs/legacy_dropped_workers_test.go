@@ -208,7 +208,7 @@ func newMigratedScratchURL(t *testing.T, prefix string) string {
 // tables and not a column or table the head code uses regardless of the archive.
 var archiveIndependentMigrations = []string{"000139_api_request_duration.up.sql", "000141_featured_rooms.up.sql",
 	"000144_search_failures.up.sql", "000145_rooms_listed.up.sql", "000146_traffic_classes.up.sql",
-	"000147_email_delivery.up.sql"}
+	"000147_email_delivery.up.sql", "000148_page_view_source_key_blog_covers.up.sql"}
 
 // splitArchiveIndependent separates archiveIndependentMigrations out of the migrations
 // from the legacy archive on, keeping order, and fails if one of them is missing.
@@ -458,7 +458,22 @@ func scheduledWorkers(pool *db.Pool, tracer *dbErrorTracer) []probeWorker {
 				t.Errorf("traffic classify job = %+v, %v; want a clean run", run, err)
 			}
 		}},
+		{"job:BlogCoverJob", func(ctx context.Context, t *testing.T) {
+			// No grace, so the seeded published post is listed; the probe drawer refuses, which
+			// counts an attempt: lock, list and counter all run their SQL.
+			run := jobs.NewBlogCoverJob(db.NewBlogCoverRepository(pool), probeCoverDrawer{}, 0, 3).RunOnce(ctx)
+			if run.Busy {
+				t.Errorf("blog cover job = %+v; want a run, not a busy lock", run)
+			}
+		}},
 	}
+}
+
+// probeCoverDrawer draws nothing: the probe exercises the job's SQL, not the image model.
+type probeCoverDrawer struct{}
+
+func (probeCoverDrawer) Make(context.Context, *db.BlogCoverBrief) (string, error) {
+	return "", errors.New("the probe draws no cover")
 }
 
 // seedScheduledWorkerData seeds the rows the data-gated worker paths need and returns the

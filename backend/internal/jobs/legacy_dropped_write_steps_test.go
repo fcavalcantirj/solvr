@@ -397,7 +397,11 @@ var writeProbeSteps = []func(s *writeProbeState) []writeProbeCall{
 			call("PUT /admin/rooms/{slug}/featured", "admin", "/admin/rooms/"+or(s.roomSlug)+"/featured", `{}`),
 			call("DELETE /admin/rooms/{slug}/featured", "admin", "/admin/rooms/"+or(s.roomSlug)+"/featured", ""),
 			call("POST /admin/traffic/reclassify", "admin", "/admin/traffic/reclassify",
-				j(map[string]any{"from": "2026-10-01T00:00:00Z", "to": "2026-10-02T00:00:00Z", "dry_run": true})),
+				j(map[string]any{"from": "2026-10-01T00:00:00Z", "to": "2026-10-02T00:00:00Z", "dry_run": true, "legacy_page_views": true})),
+			// The operator's decision on a post (SEO audit 2026-11-08): the probe's saved post is open,
+			// so the route answers 409 NOT_PENDING after reading it; the read is what is probed.
+			call("POST /admin/posts/{id}/moderation", "admin", "/admin/posts/"+or(s.savedPostID)+"/moderation",
+				j(map[string]any{"decision": "approve", "note": "route probe"})),
 		}
 	},
 	func(s *writeProbeState) []writeProbeCall {
@@ -406,6 +410,12 @@ var writeProbeSteps = []func(s *writeProbeState) []writeProbeCall{
 			call("PATCH /v1/blog/{slug}", "human", blog, j(map[string]any{"excerpt": "route probe excerpt"})),
 			call("POST /v1/blog/{slug}/vote", "agent", blog+"/vote", j(map[string]any{"direction": "up"})),
 			call("POST /v1/blog/{slug}/view", "anonymous", blog+"/view", `{}`),
+			// Blog covers (SEO audit 2026-11-08): the operator draws one (the fake image model
+			// answers), lists the backfill dry, the author uploads their own, then removes it.
+			call("POST /admin/blog/{slug}/cover", "admin", "/admin/blog/"+or(s.blogSlug)+"/cover", `{}`),
+			call("POST /admin/blog/covers/backfill", "admin", "/admin/blog/covers/backfill", j(map[string]any{"limit": 3, "dry_run": true})),
+			coverUpload("PUT /v1/blog/{slug}/cover", "human", blog+"/cover"),
+			call("DELETE /v1/blog/{slug}/cover", "human", blog+"/cover", ""),
 			call("DELETE /v1/blog/{slug}", "human", blog, ""),
 		}
 	},
@@ -471,4 +481,24 @@ var writeProbeSteps = []func(s *writeProbeState) []writeProbeCall{
 			call("DELETE /admin/users/{id}", "admin", "/admin/users/"+or(s.human2ID), ""),
 		}
 	},
+}
+
+// coverUpload is a multipart PUT of a small PNG as the blog post's cover.
+func coverUpload(route, caller, path string) writeProbeCall {
+	body := &bytes.Buffer{}
+	mw := multipart.NewWriter(body)
+	part, err := mw.CreateFormFile("image", "cover.png")
+	if err != nil {
+		panic(err)
+	}
+	png := append([]byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A}, make([]byte, 32)...)
+	if _, err := part.Write(png); err != nil {
+		panic(err)
+	}
+	if err := mw.Close(); err != nil {
+		panic(err)
+	}
+	c := call(route, caller, path, body.String())
+	c.contentType = mw.FormDataContentType()
+	return c
 }

@@ -6966,10 +6966,18 @@ they behaved together:
   class. Each of them that is `human` or `unclassified` becomes `automation`.
 - **B3 `repeated_query`**: one `ip_address` sending one `query_normalized` twenty or more times in one UTC
   clock hour. Each of those searches that is `human`, `agent` or `unclassified` becomes `automation`.
+- **B4 `page_view_burst`** (000148, SEO audit 2026-11-08): more than five page views from one `source_key` in
+  one UTC clock minute, whatever their class. Each of them that is `human` becomes `automation`. A row with
+  no key is never grouped. Measured over the 30 days before the rule: minutes with 1-5 views held 4,870
+  minutes of calm traffic; minutes with 6 or more held 41,122 views in 2,216 minutes, the headless bursts.
+- **B4 legacy `page_view_burst_legacy`**: the keyless rows stored before 000148, judged by the minute's total
+  of keyless `human` views (more than five), on the operator's call only (`legacy_page_views` below). It
+  never undoes.
 
 A run covers a window whose start is rounded down to its clock hour, in one transaction. B1 and B2 are
 undone first for every row of the window they flagged, then applied again, so a copy that arrived after a
-flag gives the flow back: the start to `human`, the fetch to `agent`, with no reason. B3 never undoes: a
+flag gives the flow back: the start to `human`, the fetch to `agent`, with no reason; B4 likewise (a flagged
+view goes back to `human`/`browser`), so a threshold change re-judges the window. B3 never undoes: a
 clock hour's count of a query only grows. A run also classifies the window's `unclassified` searches from
 their stored user agent. A second run over the same rows changes nothing.
 
@@ -6977,14 +6985,43 @@ their stored user agent. A second run over the same rows changes nothing.
   instance, one run at a time (advisory lock `solvr:traffic_classify`). A post-sourced start that an agent
   fetched and nobody copied is flagged within one period, with no operator call.
 - **`POST /admin/traffic/reclassify`** (operator-only, in `OperatorReports`) runs the same code over a
-  window: body `{"from": RFC 3339, "to": RFC 3339, "dry_run": bool}`, `from` < `to` ≤ now, at most 366
-  days, else 400 `VALIDATION_ERROR`; while a run holds the lock, 409 `CLASSIFICATION_RUNNING`. It answers
-  `{"data": {"from", "to", "dry_run", "rules": {"stored_user_agents", "reset", "fetched_without_copy",
-  "connect_burst", "repeated_query"}, "funnel_events": {"before", "after"}, "search_queries": {"before",
-  "after"}}}`, each of `before`/`after` a list of `{traffic_class, traffic_reason, count}` over the window.
+  window: body `{"from": RFC 3339, "to": RFC 3339, "dry_run": bool, "legacy_page_views": bool}`, `from` <
+  `to` ≤ now, at most 366 days, else 400 `VALIDATION_ERROR`; while a run holds the lock, 409
+  `CLASSIFICATION_RUNNING`. It answers `{"data": {"from", "to", "dry_run", "rules": {"stored_user_agents",
+  "reset", "fetched_without_copy", "connect_burst", "repeated_query", "page_view_reset", "page_view_burst"
+  and, with `legacy_page_views`, "page_view_burst_legacy"}, "funnel_events": {"before", "after"},
+  "search_queries": {"before", "after"}, "page_view_events": {"before", "after"}}}`, each of
+  `before`/`after` a list of `{traffic_class, traffic_reason, count}` over the window.
   `rules` counts the rows each step set, so a row undone and flagged again counts in both. A dry run is
   the same transaction rolled back: it answers what a run would set and writes nothing. The operator runs
   the dry run first.
+
+**Content operations (SEO audit 2026-11-08, Release A; `router_admin_content.go`).**
+- **`POST /admin/posts/{id}/moderation`** (operator-only): `{"decision": "approve" | "reject", "note"}` on a post
+  the automatic moderation left in `pending_review`, `draft` or `rejected`. `approve` sets it `open`, `reject`
+  `rejected`, through `PostRepository.UpdateStatus`, the one path that derives `publication_state` and
+  `moderation_state`; the decision is a `flags` row (`system`/`operator`, reason `other`, status `actioned`,
+  the decision and note in `details`). An `open`, `closed` or `stale` post is 409 `NOT_PENDING`; an unknown
+  id 404; a decision other than the two 400. Answers `{"data": {"id", "decision", "from_status", "status"}}`.
+- **Blog covers.** The author may upload their own: **`PUT /v1/blog/{slug}/cover`** (authenticated, the
+  post's author only; multipart field `image`, JPEG/PNG/WebP by its bytes, at most 2 MB; 415 for another
+  type, 413 over the limit, 403 for anyone else) stores it and names it on the post;
+  **`DELETE /v1/blog/{slug}/cover`** removes it. A post still without a cover 24 h after publication
+  (`BLOG_COVER_GRACE`) gets one drawn by `jobs.BlogCoverJob` (hourly, at most `BLOG_COVER_PER_RUN` = 3 a run,
+  one at a time, one run at a time across instances; after 3 failed tries, `blog_posts.cover_attempts`,
+  the post is left to the operator) with OpenAI's image model (`OPENAI_API_KEY`; `OPENAI_IMAGE_MODEL`,
+  default `gpt-image-2`; JPEG, 1536×1024, quality high), from its title, excerpt and tags, in the site's
+  look and with no text, logos or people. The
+  bytes live in `blog_post_covers` (one row per post: `image`, `content_type`, `model`, `prompt`) and are
+  served at **`GET /v1/blog/{slug}/cover.jpg`** (public, `Cache-Control: public, max-age=86400,
+  s-maxage=604800`; 404 without one); the post's `cover_image_url` then names that address
+  (`PUBLIC_API_URL`, default `https://api.solvr.dev`), so the page and the link preview show it.
+  **`POST /admin/blog/{slug}/cover`** draws now and answers `{"data": {"slug", "cover_image_url"}}` (502
+  `COVER_NOT_DRAWN` when the model refuses); **`POST /admin/blog/covers/backfill`** `{"limit" ≤ 40, "dry_run"}`
+  lists the published posts without a cover, newest first, and without `dry_run` draws them one at a time
+  in the background, answering 202 `{"data": {"dry_run", "queued", "slugs"}}`. Without the key the admin
+  routes answer 503 `COVERS_NOT_CONFIGURED`. A post or blog post with no cover previews with a card the web
+  server draws (`/posts/{id}/og.png`, `/blog/{slug}/og.png`; 27.1).
 
 **One counting rule.** Two views, created by 000146, are the only place a report reads funnel steps and
 searches:
@@ -7012,7 +7049,12 @@ each), `request_mode` and `fetch_dest` (at most 20 each), `accept_language`, `rs
 (`Sec-Purpose` or `Purpose` names a prefetch). The API drops a prefetch, reduces the path to its
 `content_group` (27.7; the Go port `traffic.ContentGroupForPath` is held equal to `contentGroupForPath`
 by `contract/content-groups.json`), classifies the view and stores one `page_view_events` row:
-`content_group`, `traffic_class`, `traffic_reason`, `occurred_at`. No path, address, user agent or cookie.
+`content_group`, `traffic_class`, `traffic_reason`, `occurred_at` and, since 000148, `source_key`: the day's
+HMAC-SHA256 of the visitor's address and user agent, keyed by `WEB_REPORT_SECRET` and the UTC date, cut to 16
+hex characters (`traffic.PageViewSourceKey`). The web server sends the address as `client_ip` (Cloudflare's
+`CF-Connecting-IP`, else the first `X-Forwarded-For` hop, at most 45 characters); the API stores the key alone,
+never the address or the user agent, and the key changes every day, so two days of one visitor cannot be
+joined. No path, address, user agent or cookie.
 It answers `202 {"data": {"recorded": true|false}}`, never an error the web server must handle; a
 malformed report is 400 `VALIDATION_ERROR`. The report is never awaited and is abandoned after 3 s.
 

@@ -171,6 +171,8 @@ func NewRouter(pool *db.Pool, hubMgr *hub.HubManager, registry *hub.PresenceRegi
 	mountFeaturedRoomsAdminRoutes(r, pool, operatorOnly)
 	mountOpsRoutes(r, pool, operatorOnly)
 	mountTrafficRoutes(r, pool, operatorOnly)
+	ops := newContentOps(pool)
+	mountContentOpsAdminRoutes(r, ops, operatorOnly)
 	r.With(operatorOnly).Get("/admin/email/history", adminHandler.ListBroadcasts)
 
 	// Admin search analytics endpoints
@@ -218,7 +220,7 @@ func NewRouter(pool *db.Pool, hubMgr *hub.HubManager, registry *hub.PresenceRegi
 	if len(embeddingService) > 0 {
 		embedSvc = embeddingService[0]
 	}
-	postModerator := mountV1Routes(r, pool, ipfsAPIURL, embedSvc)
+	postModerator := mountV1Routes(r, pool, ipfsAPIURL, embedSvc, ops)
 
 	// Homepage routes (public proof of the product; see router_homepage.go)
 	mountHomepageRoutes(r, pool)

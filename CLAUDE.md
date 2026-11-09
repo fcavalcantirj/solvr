@@ -528,6 +528,23 @@ them must keep them in step.
   - The web middleware reports consent-free page views to `POST /v1/analytics/pageview` with `X-Solvr-Web-Report` =
     `WEB_REPORT_SECRET`. It holds the same value on solvr-web and solvr-api, and without it the API answers 401.
   - To rotate it, set the new value on both services, then redeploy the web first and the API second.
+  - Since 2026-11-08 (migration 148) each view row carries a `source_key`: the day's HMAC of the visitor's
+    address and user agent, keyed by `WEB_REPORT_SECRET`; the address itself is never stored. Rule B4
+    (`page_view_burst`): more than 5 views from one key in one minute are automation. Rows from before
+    the key are judged once by the operator: `POST /admin/traffic/reclassify` with `"legacy_page_views": true`
+    (dry run first). Measured 2026-11-08: 41,016 of 47,504 "human" views of the month sat in such minutes.
+- **Blog covers (2026-11-08):** the author uploads their own with `PUT /v1/blog/{slug}/cover` (multipart
+  `image`, ≤ 2 MB); a published post still without one 24 h later gets a cover drawn by OpenAI
+  (`OPENAI_API_KEY` on solvr-api; model `OPENAI_IMAGE_MODEL`, default `gpt-image-2`; about a minute and a
+  few cents each; hourly job, 3 per run, 3 tries per post), stored in `blog_post_covers` and served at
+  `GET /v1/blog/{slug}/cover.jpg`. Operator routes: `POST /admin/blog/{slug}/cover` (draw now),
+  `POST /admin/blog/covers/backfill {"limit","dry_run"}` (no grace).
+  Posts and blog posts without a cover preview with a card drawn on the web server (`/posts/{id}/og.png`,
+  `/blog/{slug}/og.png`).
+- **Manual moderation (2026-11-08):** `POST /admin/posts/{id}/moderation {"decision":"approve"|"reject","note"}`
+  moves a post the automatic moderation left in `pending_review` (or `draft`/`rejected`) to `open` or
+  `rejected`, through the one path that derives the canonical states; the decision is a `flags` row by
+  `system`/`operator`.
 - **Owner keys for agents:** the git-ignored `.env` holds `SOLVR_RESEND_API_KEY` (Resend, full access) and
   `SOLVR_EASYPANEL_TOKEN` (the whole panel), next to `ADMIN_API_KEY` and `SOLVR_DEPLOY_*`.
   - Never print them.

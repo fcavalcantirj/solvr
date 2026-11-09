@@ -34,10 +34,12 @@ func (f *fakeTrafficSummary) Summary(_ context.Context, from, to time.Time) (*db
 }
 
 type fakeReclassifier struct {
-	from, to time.Time
-	calls    int
-	busy     bool
-	dryRun   bool
+	from, to     time.Time
+	calls        int
+	busy         bool
+	dryRun       bool
+	legacyCalls  int
+	legacyDryRun bool
 }
 
 func (f *fakeReclassifier) TryLock(context.Context) (unlock func(), ok bool, err error) {
@@ -45,6 +47,14 @@ func (f *fakeReclassifier) TryLock(context.Context) (unlock func(), ok bool, err
 		return nil, false, nil
 	}
 	return func() {}, true, nil
+}
+
+// ApplyLegacyPageViewBurst records the call and answers a fixed count (the DB rule is tested
+// in db/traffic_page_views_test.go).
+func (f *fakeReclassifier) ApplyLegacyPageViewBurst(_ context.Context, _, _ time.Time, dryRun bool) (int, error) {
+	f.legacyCalls++
+	f.legacyDryRun = dryRun
+	return 41016, nil
 }
 
 func (f *fakeReclassifier) Apply(_ context.Context, from, to time.Time, dryRun bool) (db.TrafficRun, error) {

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/db"
+	"github.com/fcavalcantirj/solvr/internal/traffic"
 )
 
 // The traffic reports (SPEC.md 27.6), operator-only like every /admin route:
@@ -17,7 +18,8 @@ import (
 //	                                               steps and searches by class, requests by
 //	                                               client class, the top error codes
 //	POST /admin/traffic/reclassify                 the behavioural rules over a window the
-//	                                               operator names: {"from","to","dry_run"}
+//	                                               operator names: {"from","to","dry_run",
+//	                                               "legacy_page_views"}
 //
 // The reclassify call runs the same code path as the job that judges live rows every 15
 // minutes (jobs.TrafficClassifyJob), one run at a time. A dry run answers what a run would set
@@ -38,6 +40,9 @@ type TrafficSummaryReader interface {
 type TrafficReclassifier interface {
 	TryLock(ctx context.Context) (unlock func(), ok bool, err error)
 	Apply(ctx context.Context, from, to time.Time, dryRun bool) (db.TrafficRun, error)
+	// ApplyLegacyPageViewBurst judges the page views stored before source keys existed by
+	// the minute's total (B4 legacy); it runs only when the operator asks.
+	ApplyLegacyPageViewBurst(ctx context.Context, from, to time.Time, dryRun bool) (int, error)
 }
 
 // TrafficReportHandler serves the traffic reports.
@@ -81,11 +86,14 @@ func (h *TrafficReportHandler) GetSummary(w http.ResponseWriter, r *http.Request
 	}})
 }
 
-// reclassifyRequest is the operator's window.
+// reclassifyRequest is the operator's window. With legacy_page_views the run also judges
+// the keyless page views of the window by the minute's total (db.TrafficRules.
+// ApplyLegacyPageViewBurst), the one-off backfill for rows stored before 000148.
 type reclassifyRequest struct {
-	From   string `json:"from"`
-	To     string `json:"to"`
-	DryRun bool   `json:"dry_run"`
+	From            string `json:"from"`
+	To              string `json:"to"`
+	DryRun          bool   `json:"dry_run"`
+	LegacyPageViews bool   `json:"legacy_page_views"`
 }
 
 // Reclassify handles POST /admin/traffic/reclassify.
@@ -129,6 +137,15 @@ func (h *TrafficReportHandler) Reclassify(w http.ResponseWriter, r *http.Request
 		slog.Error("traffic reclassify failed", "error", err, "dry_run", req.DryRun)
 		writeOperatorError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "the classification run failed; nothing was written")
 		return
+	}
+	if req.LegacyPageViews {
+		n, legacyErr := h.rules.ApplyLegacyPageViewBurst(r.Context(), from, to, req.DryRun)
+		if legacyErr != nil {
+			slog.Error("traffic reclassify: legacy page views failed", "error", legacyErr, "dry_run", req.DryRun)
+			writeOperatorError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "the legacy page-view rule failed; the other rules were written")
+			return
+		}
+		run.Rules[string(traffic.ReasonPageViewBurstLegacy)] = n
 	}
 	slog.Info("traffic reclassify", "from", run.From, "to", run.To, "dry_run", run.DryRun, "rules", run.Rules)
 	writeActivationJSON(w, http.StatusOK, map[string]any{"data": run})

@@ -117,6 +117,7 @@ describe('Footer compact variant', () => {
       ['Skill', '/skill'],
       ['API Reference', '/api-docs'],
       ['About', '/about'],
+      ['Blog', '/blog'],
       ['Terms', '/terms'],
       ['Privacy', '/privacy'],
     ]);
@@ -211,7 +212,7 @@ describe('Footer: Cookie settings and click marks', () => {
       expect(link.getAttribute('data-track'), link.outerHTML).toBe('nav');
       expect(link.getAttribute('data-track-location'), link.outerHTML).toBe('footer');
     }
-    expect(marks(container).slice(0, 10)).toEqual([
+    expect(marks(container).slice(0, 11)).toEqual([
       ['/', 'logo'],
       ['/rooms', 'rooms'],
       ['/posts', 'posts'],
@@ -220,6 +221,7 @@ describe('Footer: Cookie settings and click marks', () => {
       ['/skill', 'skill'],
       ['/api-docs', 'api_docs'],
       ['/about', 'about'],
+      ['/blog', 'blog'],
       ['/terms', 'terms'],
       ['/privacy', 'privacy'],
     ]);

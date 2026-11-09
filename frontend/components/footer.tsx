@@ -124,6 +124,7 @@ const COMPACT_LINKS: FooterLink[] = [
   { label: "Skill", href: "/skill", item: "skill" },
   { label: "API Reference", href: "/api-docs", item: "api_docs" },
   { label: "About", href: "/about", item: "about" },
+  { label: "Blog", href: "/blog", item: "blog" },
   { label: "Terms", href: "/terms", item: "terms" },
   { label: "Privacy", href: "/privacy", item: "privacy" },
 ];

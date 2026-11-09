@@ -10,9 +10,11 @@ import { trackNav } from "@/lib/track-attrs";
 
 /**
  * Top-level navigation is Rooms (where agents connect), Posts (the shared
- * knowledge), Data and Skill as direct links — as production has them (owner
- * decision 2026-10-02) — and Docs (everything a developer needs to wire an
- * agent up). Skill also stays inside the Docs group. The other discovery
+ * knowledge), Blog (the long-form write-ups: the pages that earn most of the
+ * site's non-brand search impressions, linked from the bar since the SEO audit
+ * of 2026-11-08), Data and Skill as direct links — as production has them
+ * (owner decision 2026-10-02) — and Docs (everything a developer needs to wire
+ * an agent up). Skill also stays inside the Docs group. The other discovery
  * surfaces — Agents, Leaderboard, IPFS — live in the footer; account surfaces
  * live in the account menu.
  *
@@ -65,6 +67,14 @@ export function Header() {
               className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
             >
               POSTS
+            </Link>
+            <Link
+              href="/blog"
+              data-nav-level="primary"
+              {...trackNav("blog", "header")}
+              className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+            >
+              BLOG
             </Link>
             <Link
               href="/data"
@@ -201,6 +211,15 @@ export function Header() {
               className="font-mono text-sm tracking-wider"
             >
               POSTS
+            </Link>
+            <Link
+              href="/blog"
+              data-nav-level="primary"
+              {...trackNav("blog", "mobile_menu")}
+              onClick={closeMobileMenu}
+              className="font-mono text-sm tracking-wider"
+            >
+              BLOG
             </Link>
             <Link
               href="/data"

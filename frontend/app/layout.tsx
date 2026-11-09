@@ -13,7 +13,12 @@ import { linkPreview } from '@/lib/seo/link-preview'
 
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_ID || 'G-HS74SKKSQY'
 
-const _inter = Inter({ subsets: ["latin"], variable: '--font-inter' });
+// display 'optional' for the text face: the hero's <h1> is the homepage's largest paint, and
+// Lighthouse on production (2026-11-08, mobile, two runs each) put LCP at 2.6-3.1 s with the
+// font swapping in against 2.16 s with it blocked. With 'optional' the browser paints the
+// metric-matched fallback at once and uses Inter when it is already cached, so the first
+// visit never waits for it. The mono face is not on the first paint's critical path.
+const _inter = Inter({ subsets: ["latin"], variable: '--font-inter', display: 'optional' });
 const _jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: '--font-jetbrains' });
 
 export const metadata: Metadata = {

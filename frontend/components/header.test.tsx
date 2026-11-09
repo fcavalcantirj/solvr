@@ -89,11 +89,11 @@ describe('Header', () => {
     });
   });
 
-  describe('top-level navigation is Rooms, Posts, Data, Skill, Docs — in that order', () => {
-    it('exposes Rooms, Posts, Data, Skill and Docs as the top-level destinations on desktop, in that order', () => {
+  describe('top-level navigation is Rooms, Posts, Blog, Data, Skill, Docs — in that order', () => {
+    it('exposes Rooms, Posts, Blog, Data, Skill and Docs as the top-level destinations on desktop, in that order', () => {
       render(<Header />);
 
-      expect(topLevelLabels(primaryNav())).toEqual(['ROOMS', 'POSTS', 'DATA', 'SKILL', 'DOCS']);
+      expect(topLevelLabels(primaryNav())).toEqual(['ROOMS', 'POSTS', 'BLOG', 'DATA', 'SKILL', 'DOCS']);
     });
 
     it('points Rooms at /rooms and Posts at /posts', () => {
@@ -102,6 +102,16 @@ describe('Header', () => {
 
       expect(within(nav).getByRole('link', { name: 'ROOMS' })).toHaveAttribute('href', '/rooms');
       expect(within(nav).getByRole('link', { name: 'POSTS' })).toHaveAttribute('href', '/posts');
+    });
+
+    it('points Blog at /blog on desktop, styled like Rooms (the blog earns most non-brand impressions and had no link from the bar)', () => {
+      render(<Header />);
+      const nav = primaryNav();
+      const rooms = within(nav).getByRole('link', { name: 'ROOMS' });
+      const blog = within(nav).getByRole('link', { name: 'BLOG' });
+
+      expect(blog).toHaveAttribute('href', '/blog');
+      expect(blog.className).toBe(rooms.className);
     });
 
     it('points Data at /data and Skill at /skill on desktop, styled like Rooms', () => {
@@ -198,7 +208,7 @@ describe('Header', () => {
 
       fireEvent.click(within(nav).getByRole('button', { name: /docs/i }));
 
-      expect(topLevelLabels(nav)).toEqual(['ROOMS', 'POSTS', 'DATA', 'SKILL', 'DOCS']);
+      expect(topLevelLabels(nav)).toEqual(['ROOMS', 'POSTS', 'BLOG', 'DATA', 'SKILL', 'DOCS']);
     });
   });
 
@@ -266,11 +276,11 @@ describe('Header', () => {
   });
 
   describe('mobile navigation mirrors the same hierarchy', () => {
-    it('shows Rooms, Posts, Data, Skill and Docs as the top-level destinations on mobile, in the same order', () => {
+    it('shows Rooms, Posts, Blog, Data, Skill and Docs as the top-level destinations on mobile, in the same order', () => {
       render(<Header />);
       openMobileMenu();
 
-      expect(topLevelLabels(mobileNav())).toEqual(['ROOMS', 'POSTS', 'DATA', 'SKILL', 'DOCS']);
+      expect(topLevelLabels(mobileNav())).toEqual(['ROOMS', 'POSTS', 'BLOG', 'DATA', 'SKILL', 'DOCS']);
     });
 
     it('points Data at /data and Skill at /skill on mobile and closes the menu when chosen', () => {
@@ -373,12 +383,13 @@ describe('every header link is marked for the click listener', () => {
 
   // The docs menu's links are in the document while it is closed (hidden, not absent), so
   // they are among the bar's links, each marked as the docs menu's.
-  it('marks the bar: logo, the four links, the closed docs menu, log in, connect and the compact connect', () => {
+  it('marks the bar: logo, the five links, the closed docs menu, log in, connect and the compact connect', () => {
     const { container } = render(<Header />);
     expect(marks(container.querySelector('header')!)).toEqual([
       ['/', 'nav', 'logo', 'header'],
       ['/rooms', 'nav', 'rooms', 'header'],
       ['/posts', 'nav', 'posts', 'header'],
+      ['/blog', 'nav', 'blog', 'header'],
       ['/data', 'nav', 'data', 'header'],
       ['/skill', 'nav', 'skill', 'header'],
       ['/docs', 'nav', 'docs_overview', 'docs_menu'],
@@ -415,6 +426,7 @@ describe('every header link is marked for the click listener', () => {
     expect(marks(nav)).toEqual([
       ['/rooms', 'nav', 'rooms', 'mobile_menu'],
       ['/posts', 'nav', 'posts', 'mobile_menu'],
+      ['/blog', 'nav', 'blog', 'mobile_menu'],
       ['/data', 'nav', 'data', 'mobile_menu'],
       ['/skill', 'nav', 'skill', 'mobile_menu'],
       ['/docs', 'nav', 'docs_overview', 'mobile_menu'],

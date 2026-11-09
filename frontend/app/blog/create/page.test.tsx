@@ -24,9 +24,11 @@ vi.mock('@/hooks/use-auth', () => ({
 
 // Mock api
 const mockCreateBlogPost = vi.fn();
+const mockUploadBlogCover = vi.fn();
 vi.mock('@/lib/api', () => ({
   api: {
     createBlogPost: (...args: unknown[]) => mockCreateBlogPost(...args),
+    uploadBlogCover: (...args: unknown[]) => mockUploadBlogCover(...args),
   },
 }));
 
@@ -72,8 +74,9 @@ describe('CreateBlogPostPage', () => {
     expect(screen.getByLabelText(/body/i)).toBeInTheDocument();
     // Tags input
     expect(screen.getByLabelText(/tags/i)).toBeInTheDocument();
-    // Cover image URL
-    expect(screen.getByLabelText(/cover image/i)).toBeInTheDocument();
+    // Cover image: the author's file and the URL
+    expect(screen.getByLabelText(/cover image \(optional, jpeg/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/cover image url/i)).toBeInTheDocument();
     // Excerpt
     expect(screen.getByLabelText(/excerpt/i)).toBeInTheDocument();
     // Meta description
@@ -178,6 +181,37 @@ describe('CreateBlogPostPage', () => {
     await waitFor(() => {
       expect(mockPush).toHaveBeenCalledWith('/blog/my-new-blog-post');
     });
+  });
+
+  // The author's own cover (SPEC.md 27.6): chosen in the form, uploaded to the post once it exists,
+  // then the redirect. Without a file nothing is uploaded.
+  it('uploads the chosen cover file after creating the post, then redirects', async () => {
+    setupAuthenticated();
+    mockCreateBlogPost.mockResolvedValue({ data: { slug: 'my-first-post' } });
+    mockUploadBlogCover.mockResolvedValue({ data: { slug: 'my-first-post', cover_image_url: 'https://api.solvr.dev/v1/blog/my-first-post/cover.jpg' } });
+    render(<CreateBlogPostPage />);
+
+    fireEvent.change(screen.getByLabelText(/^title/i), { target: { value: 'A title long enough to pass' } });
+    fireEvent.change(screen.getByLabelText(/body/i), { target: { value: 'B'.repeat(80) } });
+    const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], 'cover.png', { type: 'image/png' });
+    fireEvent.change(screen.getByLabelText(/cover image \(optional, jpeg/i), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole('button', { name: /create/i }));
+
+    await waitFor(() => expect(mockUploadBlogCover).toHaveBeenCalledWith('my-first-post', file));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/blog/my-first-post'));
+  });
+
+  it('uploads nothing when no cover file was chosen', async () => {
+    setupAuthenticated();
+    mockCreateBlogPost.mockResolvedValue({ data: { slug: 'plain-post' } });
+    render(<CreateBlogPostPage />);
+
+    fireEvent.change(screen.getByLabelText(/^title/i), { target: { value: 'A title long enough to pass' } });
+    fireEvent.change(screen.getByLabelText(/body/i), { target: { value: 'B'.repeat(80) } });
+    fireEvent.click(screen.getByRole('button', { name: /create/i }));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/blog/plain-post'));
+    expect(mockUploadBlogCover).not.toHaveBeenCalled();
   });
 
   it('shows error on API failure', async () => {

@@ -1,6 +1,7 @@
 {
   "name": "solvr-frontend",
-  "version": "0.4.22",
+  "version": "0.4.23",
+  "license": "MIT",
   "description": "Solvr - The knowledge base for developers and AI agents. Stack Overflow for the AI age.",
   "private": true,
   "scripts": {

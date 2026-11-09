@@ -172,6 +172,12 @@ export function PrivacyTrackingSection() {
                 recorded for your account and a step for a hash of your account id.
               </p>
               <p>
+                <span className="text-foreground">Page loads.</span> Solvr&apos;s own server counts each page it
+                serves, with the kind of page and a one-day key: a hash of your address and browser that changes
+                every day, kept so that a script loading dozens of pages a minute is not counted as a person. The
+                address itself is not stored, and the key of one day cannot be tied to the next.
+              </p>
+              <p>
                 <span className="text-foreground">Searches.</span> A search is logged with its words, the number of
                 results, the IP address and the user agent of the request, and your account if you are signed in.
               </p>

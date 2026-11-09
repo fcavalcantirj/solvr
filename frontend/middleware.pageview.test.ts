@@ -35,6 +35,24 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+// SEO audit 2026-11-08, Release A: the report names the visitor's address as Cloudflare
+// hands it over (CF-Connecting-IP; the first X-Forwarded-For hop without Cloudflare), so the
+// API can derive the day's source key for the burst rule. The API stores the key, never the
+// address; the web server stores nothing.
+describe('middleware: the page-view report carries the client address for the source key', () => {
+  it.each([
+    ['CF-Connecting-IP', { 'CF-Connecting-IP': '203.0.113.7', 'X-Forwarded-For': '10.0.0.1, 203.0.113.7' }, '203.0.113.7'],
+    ['the first X-Forwarded-For hop without Cloudflare', { 'X-Forwarded-For': ' 198.51.100.4 , 10.0.0.1' }, '198.51.100.4'],
+    ['nothing when neither header is present', {}, ''],
+  ])('sends %s', (_name, headers, want) => {
+    const spy = stubFetch();
+    const { event } = fakeEvent();
+    middleware(new NextRequest('https://solvr.dev/blog', { headers: { 'User-Agent': BROWSER_UA, 'Sec-Fetch-Mode': 'navigate', ...headers } }), event);
+    const [, init] = pageViewCalls(spy)[0];
+    expect(JSON.parse(init.body as string).client_ip).toBe(want);
+  });
+});
+
 describe('middleware: a page the site serves is reported to the API', () => {
   it('reports a browser opening a room, with what the request said about itself, and passes it through', async () => {
     const spy = stubFetch();
@@ -67,6 +85,7 @@ describe('middleware: a page the site serves is reported to the API', () => {
       accept_language: true,
       rsc: false,
       prefetch: false,
+      client_ip: '',
     });
     expect(waitUntil).toHaveBeenCalledTimes(1);
     await expect(waitUntil.mock.calls[0][0]).resolves.toBeUndefined();
@@ -86,6 +105,7 @@ describe('middleware: a page the site serves is reported to the API', () => {
       accept_language: false,
       rsc: false,
       prefetch: false,
+      client_ip: '',
     });
   });
 

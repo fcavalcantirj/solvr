@@ -70,10 +70,22 @@ function reportSkillFetched(flowId: string, requestMode: string, userAgent: stri
   })
 }
 
+// clientAddress is the visitor's address as the network in front of the site reports it:
+// Cloudflare's CF-Connecting-IP, or the first X-Forwarded-For hop without Cloudflare, or
+// nothing. The API turns it into the day's source key for the burst rule (SPEC.md 27.6) and
+// stores the key alone; the address itself is never stored or logged, here or there.
+function clientAddress(request: NextRequest): string {
+  const cf = request.headers.get('cf-connecting-ip')?.trim()
+  if (cf) return cf
+  const forwarded = request.headers.get('x-forwarded-for') ?? ''
+  return forwarded.split(',')[0]?.trim() ?? ''
+}
+
 // reportPageView tells the API that a page was served (SPEC.md 27.6, 27.7): its path,
-// without the query string (it can carry a secret), and what the request said about itself.
-// The API drops a prefetch, reduces the path to the kind of page and classifies the view;
-// nothing is judged here, and nothing is stored that names the visitor.
+// without the query string (it can carry a secret), what the request said about itself, and
+// the visitor's address for the day's source key. The API drops a prefetch, reduces the path
+// to the kind of page and classifies the view; nothing is judged here, and nothing is stored
+// that names the visitor.
 function reportPageView(request: NextRequest): Promise<void> {
   const header = (name: string) => request.headers.get(name) ?? ''
   const purpose = `${header('sec-purpose')} ${header('purpose')}`.toLowerCase()
@@ -90,6 +102,7 @@ function reportPageView(request: NextRequest): Promise<void> {
       accept_language: request.headers.has('accept-language'),
       rsc: header('rsc') === '1',
       prefetch: purpose.includes('prefetch'),
+      client_ip: clientAddress(request),
     },
     secret ? { [WEB_REPORT_HEADER]: secret } : {},
   )

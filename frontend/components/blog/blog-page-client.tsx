@@ -13,12 +13,14 @@ import mosaic from "@/components/posts/posts-mosaic.module.css";
 
 interface BlogPageClientProps {
   initialBlogPosts: APIBlogPost[];
+  // The tag the URL names (/blog?tag=<name>); the server already listed that tag's posts.
+  initialTag?: string | null;
 }
 
-export function BlogPageClient({ initialBlogPosts }: BlogPageClientProps) {
+export function BlogPageClient({ initialBlogPosts, initialTag = null }: BlogPageClientProps) {
   const router = useRouter();
   const { isAuthenticated } = useAuth();
-  const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [activeTag, setActiveTag] = useState<string | null>(initialTag);
   const [searchQuery, setSearchQuery] = useState("");
 
   const initialPosts = useMemo(() => initialBlogPosts.map(transformBlogPost), [initialBlogPosts]);

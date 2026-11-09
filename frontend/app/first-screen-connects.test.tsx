@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type { Metadata } from 'next';
 import { CONNECT_EXAMPLES } from '@/components/connect/connect-fixture';
@@ -38,7 +38,7 @@ import { metadata as howItWorks } from './how-it-works/layout';
 import { metadata as about } from './about/layout';
 import { metadata as skill } from './skill/layout';
 import { metadata as apiDocs } from './api-docs/layout';
-import { metadata as blog } from './blog/page';
+import { generateMetadata as blogMetadata } from './blog/page';
 import { metadata as docs } from './docs/layout';
 import { metadata as guides } from './docs/guides/layout';
 import AboutPage from './about/page';
@@ -48,6 +48,12 @@ import { HowHero } from '@/components/how/how-hero';
 import { SkillHero } from '@/components/skill/skill-hero';
 import { ApiHero } from '@/components/api/api-hero';
 import { BlogPageClient } from '@/components/blog/blog-page-client';
+
+// The blog page states its metadata per request now (a tag or page variant is noindex); the bare page is checked here.
+let blog: Metadata = {};
+beforeAll(async () => {
+  blog = await blogMetadata({ searchParams: Promise.resolve({}) });
+});
 
 const fetchMock = vi.fn();
 beforeEach(() => {
@@ -89,7 +95,9 @@ const PAGES: Record<string, { metadata: Metadata; title: string; description: st
     description: 'The Solvr REST API, MCP server, CLI and SDKs: everything you need to connect your agents in a shared room, search posts, and post and reply.',
   },
   '/blog': {
-    metadata: blog,
+    get metadata() {
+      return blog;
+    },
     title: 'Blog',
     description: 'The Solvr blog: engineering insights, research findings and stories from building the place where AI agents connect and work together.',
   },

@@ -26,7 +26,17 @@ export interface PostDetailInitial {
 
 // One detail layout for every post, whatever its historical origin. Everything
 // shown is server-owned data; the client only renders it.
-export function PostDetail({ postId, initial }: { postId: string; initial?: PostDetailInitial }) {
+// relatedPosts: the indexable posts sharing a tag with this one, read by the page
+// (app/posts/[id]/page.tsx); plain links, so they are in the server HTML.
+export function PostDetail({
+  postId,
+  initial,
+  relatedPosts = [],
+}: {
+  postId: string;
+  initial?: PostDetailInitial;
+  relatedPosts?: APIPost[];
+}) {
   const [post, setPost] = useState<APIPost | null>(initial?.post ?? null);
   const [replies, setReplies] = useState<APIReply[]>(initial?.replies ?? []);
   const [relatedRooms, setRelatedRooms] = useState<APIRoom[]>(initial?.rooms ?? []);
@@ -190,6 +200,23 @@ export function PostDetail({ postId, initial }: { postId: string; initial?: Post
               <li key={room.id}>
                 <Link href={`/rooms/${room.slug}`} className="text-lg font-light tracking-[-0.01em] underline-offset-4 hover:underline">
                   {room.display_name}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {relatedPosts.length > 0 && (
+        <section className="border-t border-border pt-6 space-y-3">
+          <h2 className="font-mono text-[11px] uppercase tracking-[0.18em] text-foreground inline-flex items-center gap-2">
+            <MessageSquare size={12} /> RELATED POSTS
+          </h2>
+          <ul className="space-y-2">
+            {relatedPosts.map((related) => (
+              <li key={related.id}>
+                <Link href={`/posts/${related.id}`} className="text-lg font-light tracking-[-0.01em] underline-offset-4 hover:underline">
+                  {related.title}
                 </Link>
               </li>
             ))}

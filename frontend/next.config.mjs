@@ -12,6 +12,12 @@ const nextConfig = {
   },
   // Increase timeout to allow pages to render
   staticPageGenerationTimeout: 120,
+  // The link-preview cards (lib/seo/og-card.tsx) read the bundled Inter face at request
+  // time; the standalone build copies only traced files, so the font is named here.
+  outputFileTracingIncludes: {
+    '/posts/[id]/og.png': ['./assets/fonts/**/*'],
+    '/blog/[slug]/og.png': ['./assets/fonts/**/*'],
+  },
   // Title, description and canonical go in <head> for every user agent. Next streams
   // them into <body> for any agent off its "HTML-limited bots" list, Googlebot included,
   // and Google reads rel="canonical" only in <head>. This pattern is that list: every
@@ -35,7 +41,21 @@ const nextConfig = {
     const cache1d = [{ key: 'Cache-Control', value: 'public, s-maxage=86400, stale-while-revalidate=604800' }];
     const noStore = [{ key: 'Cache-Control', value: 'private, no-cache, no-store, max-age=0, must-revalidate' }];
 
+    // Every answer carries the security headers that need no nonce (SEO audit 2026-11-08):
+    // the site is never framed, referrers leave only the origin cross-site, no sensor is
+    // asked for, and types are not sniffed at the origin either (Cloudflare adds HSTS).
+    // A Content-Security-Policy is a separate task: the Google tag's inline script needs
+    // a nonce pipeline first. Next applies every matching rule, so this adds to the
+    // per-path cache rules below instead of replacing them.
+    const security = [
+      { key: 'X-Frame-Options', value: 'DENY' },
+      { key: 'X-Content-Type-Options', value: 'nosniff' },
+      { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+      { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+    ];
+
     return [
+      { source: '/:path*', headers: security },
       // The skill is a file in public/, so it has no <head> for a canonical. The connect
       // sentence links it as /skill.md?f=<flow code>, one address per visit: this header
       // tells a search engine they are all the one address. A headers() rule is applied

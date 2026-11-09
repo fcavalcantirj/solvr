@@ -33,7 +33,9 @@ export interface BlogPostData {
   userVote?: "up" | "down" | null;
 }
 
-export function BlogPostContent({ post }: { post: BlogPostData }) {
+// related: the published posts sharing a tag with this one, read by the page; plain links,
+// so they are in the server HTML (SEO audit 2026-11-08).
+export function BlogPostContent({ post, related = [] }: { post: BlogPostData; related?: { slug: string; title: string }[] }) {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Header />
@@ -130,6 +132,21 @@ export function BlogPostContent({ post }: { post: BlogPostData }) {
             <div className="min-w-0 max-w-[44rem] [overflow-wrap:anywhere]">
               <MarkdownContent content={post.body} className="mb-10 text-[1.0625rem] leading-relaxed" />
             </div>
+
+            {related.length > 0 && (
+              <section className="max-w-[44rem] border-t border-border pt-6 pb-10 space-y-3">
+                <h2 className="font-mono text-[11px] uppercase tracking-[0.18em] text-foreground">MORE FROM THE BLOG</h2>
+                <ul className="space-y-2">
+                  {related.map((item) => (
+                    <li key={item.slug}>
+                      <Link href={`/blog/${item.slug}`} className="text-lg font-light tracking-[-0.01em] underline-offset-4 hover:underline">
+                        {item.title}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
             {/* Interactive elements */}
             <div className="max-w-[44rem] border-t border-border pt-6">

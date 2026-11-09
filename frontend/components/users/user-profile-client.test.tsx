@@ -47,6 +47,26 @@ describe('a user profile that cannot be shown', () => {
     expect(hrefs(container)).not.toContain('/feed');
   });
 
+  // Search Console reported a profile as a Soft 404: when the browser's posts read fails during
+  // Google's render, the whole profile was replaced by "Failed to load profile" although the server
+  // HTML already carried the person. The profile stays; only the posts section says it could not load.
+  it('keeps the server-rendered profile when only the posts read failed', () => {
+    state.user = {
+      id: 'u1',
+      username: 'listed',
+      displayName: 'Listed User',
+      bio: 'Bio',
+      avatarUrl: null,
+      stats: { postsCreated: 3, contributions: 2, reputation: 10 },
+    };
+    state.error = 'Failed to fetch user';
+    render(<UserProfileClient id="u1" initialUserData={{ id: 'u1' }} />);
+
+    expect(screen.getByText('Listed User')).toBeInTheDocument();
+    expect(screen.queryByText('Failed to load profile')).not.toBeInTheDocument();
+    expect(screen.getByText(/posts could not be loaded/i)).toBeInTheDocument();
+  });
+
   it('leads back to Posts when there is no such user', () => {
     const { container } = render(<UserProfileClient id="u1" />);
 

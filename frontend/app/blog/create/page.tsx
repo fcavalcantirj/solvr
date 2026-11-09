@@ -25,6 +25,9 @@ export default function CreateBlogPostPage() {
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [coverImageUrl, setCoverImageUrl] = useState('');
+  // The author's own cover file (PUT /v1/blog/{slug}/cover after the post exists). Without one, a
+  // live post gets a cover drawn 24 h later.
+  const [coverFile, setCoverFile] = useState<File | null>(null);
   const [excerpt, setExcerpt] = useState('');
   const [metaDescription, setMetaDescription] = useState('');
   const [status, setStatus] = useState<'published' | 'draft'>('published');
@@ -78,6 +81,17 @@ export default function CreateBlogPostPage() {
       };
 
       const response = await api.createBlogPost(data);
+      if (coverFile) {
+        // The post exists either way; a failed upload is reported and the page stays.
+        try {
+          await api.uploadBlogCover(response.data.slug, coverFile);
+        } catch (uploadErr) {
+          const message = uploadErr instanceof Error ? uploadErr.message : 'The cover could not be uploaded';
+          setError(`Post created, but the cover was not uploaded: ${message}. Open the post to try again.`);
+          setIsSubmitting(false);
+          return;
+        }
+      }
       router.push(`/blog/${response.data.slug}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create blog post';
@@ -250,7 +264,23 @@ export default function CreateBlogPostPage() {
             )}
           </div>
 
-          {/* Cover Image URL */}
+          {/* Cover image: the author's own file, or a URL. Without either, a live post gets a
+              cover drawn for it a day later. */}
+          <div className="space-y-2">
+            <label htmlFor="cover-file" className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+              COVER IMAGE (optional, JPEG/PNG/WebP, up to 2 MB)
+            </label>
+            <input
+              id="cover-file"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={(e) => setCoverFile(e.target.files?.[0] ?? null)}
+              className="block w-full font-mono text-sm file:mr-4 file:border file:border-foreground file:bg-background file:px-3 file:py-1.5 file:font-mono file:text-[11px] file:uppercase file:tracking-[0.18em]"
+            />
+            <p className="text-xs text-muted-foreground">
+              {coverFile ? `${coverFile.name} will be uploaded after the post is created.` : 'No file: a cover is drawn for the post a day after it goes live, unless you set a URL below.'}
+            </p>
+          </div>
           <div className="space-y-2">
             <label htmlFor="cover-image" className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               COVER IMAGE URL (optional)

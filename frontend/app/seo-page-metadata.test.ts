@@ -254,6 +254,8 @@ describe('link previews of content pages', () => {
     api: Record<string, unknown>;
     load: () => Promise<Metadata>;
     path: string;
+    // The page's own drawn card (SEO audit 2026-11-08), when it has one; the site card otherwise.
+    image?: string;
     title: string;
     description: string;
     type: string;
@@ -264,6 +266,7 @@ describe('link previews of content pages', () => {
       api: { '/v1/posts/p1': POST, '/v1/posts/p1/seo': POST_SEO },
       load: () => postPage.generateMetadata({ params: Promise.resolve({ id: 'p1' }) }),
       path: '/posts/p1',
+      image: 'https://solvr.dev/posts/p1/og.png',
       // A post's and a room's search title is the whole title tag (SPEC.md 27.3).
       title: 'Hand a plan to an executor — Dev Nine',
       description: 'Hand a plan from the API',
@@ -328,6 +331,7 @@ describe('link previews of content pages', () => {
       api: { '/v1/blog/a-post': { data: BLOG_POST } },
       load: () => blogPostPage.generateMetadata({ params: Promise.resolve({ slug: 'a-post' }) }),
       path: '/blog/a-post',
+      image: 'https://solvr.dev/blog/a-post/og.png',
       title: 'A listed blog post | Solvr',
       description: 'What the post says',
       type: 'article',
@@ -353,22 +357,25 @@ describe('link previews of content pages', () => {
     },
   };
 
-  it.each(Object.entries(pages))('a %s previews under its own title, description and address, with the card', async (_kind, page) => {
+  it.each(Object.entries(pages))('a %s previews under its own title, description and address, with its card', async (_kind, page) => {
     serve(page.api);
     const metadata = await page.load();
     expect(metadata.alternates?.canonical).toBe(page.path);
     expect(previewProblems(metadata, { homeTitle: HOME_TITLE })).toEqual([]);
     const preview = readPreview(metadata);
+    const image = page.image ?? CARD;
     expect(preview).toMatchObject({
       title: page.title,
       description: page.description,
       url: `https://solvr.dev${page.path}`,
       type: page.type,
-      image: CARD,
+      image,
       twitterCard: 'summary_large_image',
-      twitterImage: CARD,
+      twitterImage: image,
     });
-    expect(preview.images[0]).toMatchObject({ width: 1200, height: 630, type: 'image/png' });
+    // The site card's size and format are known; a page's own drawn card claims none here
+    // (lib/seo/link-preview.ts), and the route that draws it answers a 1200×630 PNG.
+    if (!page.image) expect(preview.images[0]).toMatchObject({ width: 1200, height: 630, type: 'image/png' });
   });
 
   // The policy's indexable patterns (lib/seo/route-policy.ts) are pages the API counts; each

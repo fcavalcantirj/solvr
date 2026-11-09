@@ -52,6 +52,25 @@ const getRooms = cache(async (id: string): Promise<{ rooms: APIRoom[]; sourceRoo
   }
 });
 
+// The indexable posts that share a tag with this one, read on the server so the page's HTML
+// links other posts (SEO audit 2026-11-08: a post linked none). The post itself is dropped
+// and five are kept. A post with no tags asks for none; a failed read leaves the list empty.
+const RELATED_POSTS = 5;
+const getRelatedPosts = cache(async (id: string, tags: string[] | null | undefined): Promise<APIPost[]> => {
+  const wanted = (tags ?? []).filter(Boolean);
+  if (wanted.length === 0) return [];
+  try {
+    const query = new URLSearchParams({ tags: wanted.join(','), indexable: 'true', per_page: String(RELATED_POSTS + 1) });
+    const res = await serverFetch(`${API_BASE_URL}/v1/posts?${query}`, { cache: "no-store" });
+    if (!res.ok) return [];
+    const json = await res.json();
+    const list: APIPost[] = Array.isArray(json?.data) ? json.data : [];
+    return list.filter((p) => p.id !== id).slice(0, RELATED_POSTS);
+  } catch {
+    return [];
+  }
+});
+
 export async function generateMetadata({
   params,
 }: {
@@ -82,6 +101,8 @@ export async function generateMetadata({
       path,
       type: "article",
       article: { publishedTime: post.created_at, modifiedTime: post.updated_at, tags: post.tags },
+      // The post's own card, drawn by app/posts/[id]/og.png/route.tsx.
+      image: `${path}/og.png`,
     }),
   };
 }
@@ -96,7 +117,12 @@ export default async function PostDetailPage({
   const post = data?.data;
   // A post the API does not have is a real 404, not a 200 "Could not load" page.
   if (!post) notFound();
-  const [first, rooms, seo] = await Promise.all([getFirstReplies(id), getRooms(id), getPostSEO(id)]);
+  const [first, rooms, seo, relatedPosts] = await Promise.all([
+    getFirstReplies(id),
+    getRooms(id),
+    getPostSEO(id),
+    getRelatedPosts(id, post.tags),
+  ]);
   const initial: PostDetailInitial | undefined =
     post && first && rooms
       ? { post, replies: first.replies, rooms: rooms.rooms, replyPages: first.pages, sourceRoom: rooms.sourceRoom }
@@ -115,7 +141,7 @@ export default async function PostDetailPage({
       <Header />
       <main className="pt-20">
         <div className="px-4 py-12 sm:px-6 lg:px-12 lg:py-16">
-          <PostDetail postId={id} initial={initial} />
+          <PostDetail postId={id} initial={initial} relatedPosts={relatedPosts} />
         </div>
       </main>
     </div>

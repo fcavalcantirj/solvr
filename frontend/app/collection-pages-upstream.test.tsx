@@ -75,7 +75,7 @@ const PAGES: Record<string, { render: () => Promise<ReactElement>; path: string;
   '/rooms': { render: () => RoomsPage(), path: '/v1/rooms?limit=20&offset=0&sort=recent', list: [{ id: 'r1', slug: 'a-room' }] },
   '/agents': { render: () => AgentsPage(), path: '/v1/agents?sort=reputation&per_page=20', list: [{ id: 'agent_a' }] },
   '/users': { render: () => UsersPage(), path: '/v1/users?sort=reputation&limit=20', list: [{ id: 'u1' }] },
-  '/blog': { render: () => BlogPage(), path: '/v1/blog?per_page=20', list: [{ slug: 'a-blog-post' }] },
+  '/blog': { render: () => BlogPage({ searchParams: Promise.resolve({}) }), path: '/v1/blog?per_page=20', list: [{ slug: 'a-blog-post' }] },
   '/leaderboard': { render: () => LeaderboardPage(), path: '/v1/leaderboard?timeframe=all_time&per_page=50', list: [{ id: 'agent_a', rank: 1 }] },
 };
 

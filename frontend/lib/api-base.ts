@@ -149,7 +149,8 @@ export class SolvrAPIBase {
   protected async send(endpoint: string, options?: FetchOptions): Promise<Response> {
     const url = `${this.baseUrl}${endpoint}`;
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
+      // A multipart body (FormData) carries its own boundary: the browser sets that header.
+      ...(options?.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
       ...options?.headers as Record<string, string>,
     };
     if (this.authToken) {

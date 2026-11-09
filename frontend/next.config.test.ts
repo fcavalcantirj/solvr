@@ -86,6 +86,32 @@ describe('next.config skill file canonical', () => {
   });
 });
 
+/**
+ * Security headers (SEO audit 2026-11-08, item 8): the origin sent none, and Cloudflare adds
+ * only HSTS and nosniff. One catch-all rule gives every answer the four that need no
+ * nonce: no framing, a referrer policy, a permissions policy, and nosniff at the origin too.
+ * A CSP is a separate task (the Google tag's inline script needs a nonce pipeline).
+ */
+describe('next.config security headers', () => {
+  it('answers every path with the four security headers', async () => {
+    const all = await headerRuleFor('/:path*');
+
+    expect(all?.headers).toEqual([
+      { key: 'X-Frame-Options', value: 'DENY' },
+      { key: 'X-Content-Type-Options', value: 'nosniff' },
+      { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+      { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+    ]);
+  });
+
+  it('keeps the catch-all free of cache and canonical headers, which stay per path', async () => {
+    const all = await headerRuleFor('/:path*');
+
+    expect(all?.headers.map((h) => h.key)).not.toContain('Cache-Control');
+    expect(all?.headers.map((h) => h.key.toLowerCase())).not.toContain('link');
+  });
+});
+
 describe('next.config cache headers', () => {
   // The index is server-rendered with the hero numbers and revalidates every
   // ~60s (app/page.tsx). A shared cache may keep it only as long, so a cached

@@ -18,6 +18,24 @@ export const dynamic = 'force-dynamic';
 // (task idx 83, lib/seo/read-for-page.ts).
 const getBlogPost = cache(async (slug: string) => (await readForPage<any>(`/v1/blog/${encodeURIComponent(slug)}`)).data); // eslint-disable-line @typescript-eslint/no-explicit-any
 
+// The published posts that share a tag with this one, read on the server so the page's HTML
+// links other blog posts (SEO audit 2026-11-08: a blog post linked none). The post itself is
+// dropped and four are kept; no tags, or a failed read, means none.
+const RELATED_BLOG_POSTS = 4;
+export interface RelatedBlogPost { slug: string; title: string }
+const getRelatedBlogPosts = cache(async (slug: string, tags: string[] | null | undefined): Promise<RelatedBlogPost[]> => {
+  const wanted = (tags ?? []).filter(Boolean);
+  if (wanted.length === 0) return [];
+  try {
+    const query = new URLSearchParams({ tags: wanted.join(','), per_page: String(RELATED_BLOG_POSTS + 1) });
+    const { data } = await readForPage<{ data: { slug: string; title: string }[] }>(`/v1/blog?${query}`);
+    const list = Array.isArray(data?.data) ? data.data : [];
+    return list.filter((p) => p.slug !== slug).slice(0, RELATED_BLOG_POSTS).map((p) => ({ slug: p.slug, title: p.title }));
+  } catch {
+    return [];
+  }
+});
+
 export async function generateMetadata({
   params,
 }: {
@@ -46,8 +64,9 @@ export async function generateMetadata({
       path,
       type: 'article',
       article: { publishedTime: post.published_at || post.created_at, modifiedTime: post.updated_at, tags: post.tags },
-      // A post with a cover image previews with it; any other shows the card.
-      image: post.cover_image_url,
+      // A post with a cover image previews with it; any other with its own drawn card
+      // (app/blog/[slug]/og.png/route.tsx).
+      image: post.cover_image_url || `${path}/og.png`,
     }),
   };
 }
@@ -64,6 +83,7 @@ export default async function BlogPostPage({
   if (!data?.data) notFound();
 
   const raw = data.data;
+  const related = await getRelatedBlogPosts(slug, raw.tags);
 
   // Transform API response to client format (same logic as use-blog hook)
   const post = {
@@ -100,7 +120,7 @@ export default async function BlogPostPage({
         url: `https://solvr.dev/blog/${slug}`,
         description: raw.meta_description,
       })} />
-      <BlogPostContent post={post} />
+      <BlogPostContent post={post} related={related} />
     </>
   );
 }

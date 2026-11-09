@@ -66,8 +66,10 @@ export function UserProfileClient({ id, initialUserData }: UserProfileClientProp
     );
   }
 
-  // Error state
-  if (error) {
+  // Error state. With the person already in the server HTML, only the posts read can have
+  // failed: the profile stays and the posts section says so below, instead of a page that
+  // reads as a failure to a visitor and as a Soft 404 to a search engine.
+  if (error && !user) {
     return (
       <div className={`${GUTTER} py-16 lg:py-24`}>
         <AlertCircle size={32} strokeWidth={1} className="mb-6 text-destructive" />
@@ -206,7 +208,13 @@ export function UserProfileClient({ id, initialUserData }: UserProfileClientProp
       {/* Content */}
       <div className={GUTTER}>
         {activeTab === 'posts' ? (
-          <UserPostsList posts={posts} />
+          error ? (
+            <p className={cn(CAPTION, "flex items-center gap-2 py-6")}>
+              <AlertCircle size={14} /> Posts could not be loaded. Reload the page to try again.
+            </p>
+          ) : (
+            <UserPostsList posts={posts} />
+          )
         ) : (
           <ContributionsList userId={id} />
         )}

@@ -335,6 +335,21 @@ class SolvrAPI extends SolvrAPIBase {
     });
   }
 
+  // The author's own cover image (PUT /v1/blog/{slug}/cover, SPEC.md 27.6): a JPEG, PNG or WebP
+  // file of at most 2 MB, served at the returned cover_image_url. It replaces a drawn cover.
+  async uploadBlogCover(slug: string, file: File): Promise<{ data: { slug: string; cover_image_url: string } }> {
+    const form = new FormData();
+    form.append('image', file);
+    return this.fetch<{ data: { slug: string; cover_image_url: string } }>(`/v1/blog/${encodeURIComponent(slug)}/cover`, {
+      method: 'PUT',
+      body: form,
+    });
+  }
+
+  async removeBlogCover(slug: string): Promise<void> {
+    await this.send(`/v1/blog/${encodeURIComponent(slug)}/cover`, { method: 'DELETE' });
+  }
+
   async deleteBlogPost(slug: string): Promise<void> {
     await this.fetch<void>(`/v1/blog/${encodeURIComponent(slug)}`, {
       method: 'DELETE',
